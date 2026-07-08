@@ -1,0 +1,30 @@
+# Environment
+.env
+.env.local
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node
+node_modules/
+.next/
+out/
+
+# Generated/private data
+data/books/*
+!data/books/.gitkeep
+data/user/*
+!data/user/.gitkeep
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

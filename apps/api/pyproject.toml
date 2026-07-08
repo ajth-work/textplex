@@ -1,0 +1,17 @@
+[project]
+name = "textplex-api"
+version = "0.1.0"
+description = "API for the TextPlex"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "pydantic>=2",
+  "python-multipart",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "httpx", "ruff", "mypy"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

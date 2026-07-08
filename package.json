@@ -1,0 +1,5 @@
+{
+  "name": "textplex",
+  "private": true,
+  "workspaces": ["apps/web"]
+}
