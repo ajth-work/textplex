@@ -97,6 +97,19 @@ uvicorn app.main:app --reload
 npm run dev:web
 ```
 
+### Docker Desktop preview
+
+If you want the full reader in a browser with the API and web app running together, use Docker Desktop:
+
+```powershell
+docker compose up --build
+```
+
+Then open:
+
+- [Library](http://127.0.0.1:3000/library)
+- [Sample reader](http://127.0.0.1:3000/reader/book-bbd944eb715e/8)
+
 ### Tests
 
 ```powershell

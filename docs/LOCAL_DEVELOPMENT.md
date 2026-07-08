@@ -47,6 +47,21 @@ Build the web app:
 npm run build:web
 ```
 
+### Docker Desktop preview
+
+Run the reader stack locally with Docker Desktop:
+
+```powershell
+docker compose up --build
+```
+
+Then inspect:
+
+- `http://127.0.0.1:3000/library`
+- `http://127.0.0.1:3000/reader/book-bbd944eb715e/8`
+
+The API listens on `http://127.0.0.1:8000`.
+
 ## API
 
 ```powershell
