@@ -28,6 +28,16 @@ def _load_page_artifact(path: Path) -> PageExtractionArtifact | None:
     return PageExtractionArtifact.model_validate_json(path.read_text(encoding="utf-8"))
 
 
+def load_page_artifact(
+    *,
+    book_id: str,
+    page_number: int,
+    data_root: Path | None = None,
+) -> PageExtractionArtifact | None:
+    data_root = data_root or get_books_root()
+    return _load_page_artifact(_page_artifact_path(book_id, page_number, data_root))
+
+
 def _save_page_artifact(path: Path, artifact: PageExtractionArtifact) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(artifact.model_dump_json(indent=2), encoding="utf-8")

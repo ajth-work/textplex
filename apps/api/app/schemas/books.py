@@ -60,3 +60,10 @@ class BookRecord(BaseModel):
     extraction_path: str | None = None
     created_at: str
     processed_at: str | None = None
+
+
+class BookReaderPageResponse(BaseModel):
+    book: BookRecord
+    page: PageRecord
+    image_url: str
+    extraction: PageExtractionArtifact | None = None

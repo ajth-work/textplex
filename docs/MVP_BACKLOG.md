@@ -40,14 +40,14 @@ Exit criterion: processed pages can be queried as structured reading data.
 
 ## Milestone 3 - Reader vertical slice
 
-- [ ] Library screen
-- [ ] Book detail screen
-- [ ] Reader route
-- [ ] Previous/next page navigation
-- [ ] Token click interaction
-- [ ] Definition panel
-- [ ] Book frequency display
-- [ ] Page active-time tracker
+- [x] Library screen
+- [x] Book detail screen
+- [x] Reader route
+- [x] Previous/next page navigation
+- [x] Token click interaction
+- [x] Definition panel
+- [x] Book frequency display
+- [x] Page active-time tracker
 
 Exit criterion: one can read a processed book and inspect vocabulary.
 

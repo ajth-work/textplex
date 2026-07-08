@@ -85,6 +85,10 @@ The processor writes `book-extraction.json` plus one normalized page artifact pe
 
 `GET /books/{book_id}/extractions` returns the structured summary back to the caller.
 
+`GET /books/{book_id}/pages/{page_number}` returns the reader payload for one prepared page, including the image URL and the page-level extraction artifact when available.
+
+`GET /books/{book_id}/pages/{page_number}/image` streams the prepared page image for the reader UI.
+
 ## Tests
 
 Run all current Python tests from the repo root after installing the API dev dependencies:
