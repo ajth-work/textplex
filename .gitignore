@@ -17,6 +17,10 @@ node_modules/
 .next/
 out/
 .npm-cache/
+*.tsbuildinfo
+
+# Codex attachments
+.codex-remote-attachments/
 
 # Generated/private data
 data/books/*

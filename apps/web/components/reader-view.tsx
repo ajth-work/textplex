@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   apiBaseUrl,
@@ -25,10 +25,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [pageData, setPageData] = useState<BookReaderPageResponse | null>(null);
   const [summary, setSummary] = useState<BookExtractionResult | null>(null);
   const [selectedToken, setSelectedToken] = useState<TokenResult | null>(null);
+  const [selectedSentenceOrder, setSelectedSentenceOrder] = useState<number | null>(null);
+  const [showPageImage, setShowPageImage] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeSeconds, setActiveSeconds] = useState(0);
-  const [selectedSentenceOrder, setSelectedSentenceOrder] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -40,8 +41,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
           return;
         }
         setPageData(pageResult);
-        setSelectedToken(pageResult.extraction?.page.sentences[0]?.tokens[0] ?? null);
-        setSelectedSentenceOrder(pageResult.extraction?.page.sentences[0]?.order ?? null);
+        setSelectedToken(null);
+        setSelectedSentenceOrder(null);
+        setShowPageImage(false);
         try {
           const summaryResult = await fetchJson<BookExtractionResult>(`/books/${bookId}/extractions`);
           if (active) {
@@ -87,6 +89,17 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const tokenEntry = resolveEntry(summary, selectedToken);
   const imageUrl = pageData ? `${apiBaseUrl}${pageData.image_url}` : "";
   const totalPages = pageData?.book.total_pages ?? summary?.page_end ?? pageNumber;
+  const selectedSentence = useMemo(
+    () => (page ? page.sentences.find((sentence) => sentence.order === selectedSentenceOrder) ?? null : null),
+    [page, selectedSentenceOrder],
+  );
+  const definitionSummary = selectedToken && !selectedToken.definition_short && !tokenEntry ? "Dictionary wiring is pending." : null;
+  const tokenLabel = selectedToken?.surface_form ?? "";
+  const tokenDefinition =
+    selectedToken?.definition_short ??
+    (tokenEntry
+      ? `Seen ${tokenEntry.frequency_in_book} times in this book.`
+      : "Dictionary wiring is pending, but the token stays anchored to the book data.");
 
   return (
     <section className="reader-shell">
@@ -117,25 +130,103 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       {pageData && page ? (
         <div className="reader-layout">
           <article className="card reader-page">
-            <div className="reader-page-image">
-              <img src={imageUrl} alt={`Page ${pageNumber} image`} />
+            <div className="reader-card-header">
+              <div>
+                <span className="eyebrow">Reading focus</span>
+                <h2>Reflowed text</h2>
+              </div>
+              <button
+                type="button"
+                className="button button-secondary button-compact"
+                onClick={() => setShowPageImage((value) => !value)}
+              >
+                {showPageImage ? "Hide page image" : "Show page image"}
+              </button>
             </div>
-            <div className="reader-page-text">
+
+            {showPageImage ? (
+              <div className="reader-page-image">
+                <img src={imageUrl} alt={`Page ${pageNumber} image`} />
+              </div>
+            ) : (
+              <div className="page-image-placeholder">
+                <strong>Page image hidden</strong>
+                <p className="small-copy">The PDF page stays out of the way so the reflowed text can carry the reading session.</p>
+              </div>
+            )}
+
+            {selectedToken ? (
+              <div className="definition-popover" role="status" aria-live="polite">
+                <div className="definition-popover-topline">
+                  <div>
+                    <span className="eyebrow">Lookup</span>
+                    <h3>{tokenLabel}</h3>
+                  </div>
+                  <button type="button" className="ghost-link" onClick={() => setSelectedToken(null)}>
+                    Clear
+                  </button>
+                </div>
+                <p className="definition-copy">{tokenDefinition}</p>
+                <dl className="definition-grid">
+                  <div>
+                    <dt>Lemma</dt>
+                    <dd>{selectedToken.lemma ?? selectedToken.surface_form}</dd>
+                  </div>
+                  <div>
+                    <dt>Sentence</dt>
+                    <dd>{selectedSentenceOrder ?? selectedToken.order}</dd>
+                  </div>
+                  <div>
+                    <dt>Book frequency</dt>
+                    <dd>{tokenEntry?.frequency_in_book ?? 1}</dd>
+                  </div>
+                  <div>
+                    <dt>Pages</dt>
+                    <dd>
+                      {tokenEntry?.first_page ?? pageNumber}
+                      {tokenEntry?.last_page && tokenEntry.last_page !== tokenEntry.first_page ? `-${tokenEntry.last_page}` : ""}
+                    </dd>
+                  </div>
+                </dl>
+                {selectedSentence ? <p className="small-copy sentence-preview">{selectedSentence.text}</p> : null}
+                {definitionSummary ? <p className="small-copy">{definitionSummary}</p> : null}
+              </div>
+            ) : (
+              <div className="definition-popover definition-empty">
+                <span className="eyebrow">Tap a character or word</span>
+                <p>When you click text, the lookup panel will stay in view while the page remains readable.</p>
+              </div>
+            )}
+
+            <div className="reader-page-text" aria-label="Reflowed page text">
               {page.sentences.map((sentence) => (
-                <p key={sentence.order} className="sentence-row" aria-label={`Sentence ${sentence.order}`}>
-                  {sentence.tokens.map((token) => (
-                    <button
-                      key={`${sentence.order}-${token.order}-${token.surface_form}`}
-                      type="button"
-                      className={`token-chip ${selectedToken?.surface_form === token.surface_form && selectedToken?.order === token.order ? "is-selected" : ""}`}
-                      onClick={() => {
-                        setSelectedToken(token);
-                        setSelectedSentenceOrder(sentence.order);
-                      }}
-                    >
-                      {token.surface_form}
-                    </button>
-                  ))}
+                <p key={sentence.order} className="sentence-block" aria-label={`Sentence ${sentence.order}`}>
+                  {sentence.tokens.map((token) => {
+                    const isSelected = selectedToken?.surface_form === token.surface_form && selectedToken?.order === token.order;
+                    const tokenClassName = `token-inline ${isSelected ? "is-selected" : ""} ${isCjkToken(token.surface_form) ? "is-cjk" : "is-word"}`;
+                    return (
+                      <span
+                        key={`${sentence.order}-${token.order}-${token.surface_form}`}
+                        role="button"
+                        tabIndex={0}
+                        className={tokenClassName}
+                        onClick={() => {
+                          setSelectedToken(token);
+                          setSelectedSentenceOrder(sentence.order);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setSelectedToken(token);
+                            setSelectedSentenceOrder(sentence.order);
+                          }
+                        }}
+                        aria-label={`Inspect ${token.surface_form}`}
+                      >
+                        {token.surface_form}
+                      </span>
+                    );
+                  })}
                 </p>
               ))}
             </div>
@@ -143,42 +234,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
           <aside className="reader-sidebar">
             <section className="card inspector-card">
-              <h2>Definition panel</h2>
-              {selectedToken ? (
-                <>
-                  <div className="token-heading">
-                    <strong>{selectedToken.surface_form}</strong>
-                    <span>{selectedToken.lemma ?? selectedToken.surface_form}</span>
-                  </div>
-                  <p className="small-copy">
-                    {selectedToken.definition_short ?? "Definition lookup is not wired yet, but the selected token stays anchored to the book data."}
-                  </p>
-                  <dl className="inspector-grid">
-                    <div>
-                      <dt>Sentence</dt>
-                      <dd>{selectedSentenceOrder ?? selectedToken.order}</dd>
-                    </div>
-                    <div>
-                      <dt>Book frequency</dt>
-                      <dd>{tokenEntry?.frequency_in_book ?? 1}</dd>
-                    </div>
-                    <div>
-                      <dt>First page</dt>
-                      <dd>{tokenEntry?.first_page ?? pageNumber}</dd>
-                    </div>
-                    <div>
-                      <dt>Last page</dt>
-                      <dd>{tokenEntry?.last_page ?? pageNumber}</dd>
-                    </div>
-                  </dl>
-                </>
-              ) : (
-                <p className="small-copy">Tap a token in the page text to inspect it here.</p>
-              )}
-            </section>
-
-            <section className="card inspector-card">
               <h2>Book frequency</h2>
+              <p className="small-copy">Use this panel to watch book-wide vocabulary density while you read.</p>
               {summary ? (
                 <ul className="frequency-list">
                   {summary.lexical_entries.slice(0, 10).map((entry) => (
@@ -191,6 +248,14 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
               ) : (
                 <p className="small-copy">Book frequency data is unavailable until extraction finishes.</p>
               )}
+            </section>
+
+            <section className="card inspector-card">
+              <h2>Dictionary wiring</h2>
+              <p className="small-copy">
+                This panel is ready for your dictionary files and HSK lists. Once those are wired in, the popup can move from book frequency to real lookup data.
+              </p>
+              <p className="small-copy">For now, the reader uses book extraction metadata so the page still behaves like a reading surface instead of a card wall.</p>
             </section>
 
             <section className="card inspector-card">
@@ -218,4 +283,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       ) : null}
     </section>
   );
+}
+
+function isCjkToken(value: string): boolean {
+  return /[\u3400-\u4dbf\u4e00-\u9fff]/.test(value);
 }
