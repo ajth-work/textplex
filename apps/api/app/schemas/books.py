@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from processor.contracts import PageExtractionResult
+
 
 class BookImportRequest(BaseModel):
     source_path: str
@@ -10,6 +12,18 @@ class BookImportRequest(BaseModel):
     author: str | None = None
     page_start: int = Field(default=1, ge=1)
     page_count: int | None = Field(default=None, ge=1)
+
+
+class BookExtractionRequest(BaseModel):
+    page_start: int = Field(default=1, ge=1)
+    page_count: int | None = Field(default=None, ge=1)
+
+
+class PageExtractionArtifact(BaseModel):
+    source_page_sha256: str
+    processor_version: str
+    pipeline_version: str
+    page: PageExtractionResult
 
 
 class PageRecord(BaseModel):
@@ -41,5 +55,8 @@ class BookRecord(BaseModel):
     page_split_status: str = "not_started"
     page_image_count: int = 0
     pages_path: str | None = None
+    extraction_status: str = "not_started"
+    extracted_page_count: int = 0
+    extraction_path: str | None = None
     created_at: str
     processed_at: str | None = None

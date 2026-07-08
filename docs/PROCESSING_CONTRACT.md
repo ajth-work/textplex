@@ -36,6 +36,23 @@ The processor may use OCR, AI vision, local language tools, or a hybrid. All pro
 }
 ```
 
+## Persisted artifacts
+
+For each extracted page, store a normalized page artifact that includes:
+
+- `source_page_sha256`
+- `processor_version`
+- `pipeline_version`
+- the validated `PageExtractionResult`
+
+For each extraction run, also store a book-level summary containing:
+
+- the book id
+- the page range
+- the per-page extraction results
+- aggregated lexical entries
+- aggregated token occurrences
+
 ## Rules
 
 1. Preserve page order.

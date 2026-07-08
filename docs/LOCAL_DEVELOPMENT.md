@@ -72,6 +72,19 @@ To register the sample Chinese scan that started issue `#2`, POST this payload t
 
 After import, `GET /books/{book_id}` shows page-splitting status and `GET /books/{book_id}/pages` returns the deterministic page manifest.
 
+To extract structured text for the same four-page sample, POST this payload to `/books/{book_id}/extract`:
+
+```json
+{
+  "page_start": 8,
+  "page_count": 4
+}
+```
+
+The processor writes `book-extraction.json` plus one normalized page artifact per page under `data/books/<book_id>/extractions/`.
+
+`GET /books/{book_id}/extractions` returns the structured summary back to the caller.
+
 ## Tests
 
 Run all current Python tests from the repo root after installing the API dev dependencies:
