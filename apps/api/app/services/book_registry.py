@@ -5,10 +5,11 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+import fitz
 from pypdf import PdfReader
 
 from app.core.paths import get_books_root
-from app.schemas.books import BookRecord
+from app.schemas.books import BookPageManifest, BookRecord, PageRecord
 
 
 def _utc_now() -> str:
@@ -31,6 +32,65 @@ def _optional_text(value: str | None) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _page_filename(page_number: int) -> str:
+    return f"page-{page_number:04d}.png"
+
+
+def _write_manifest(manifest_path: Path, manifest: BookPageManifest) -> None:
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
+
+
+def _load_manifest(manifest_path: Path, book_id: str, source_path: str, total_pages: int) -> BookPageManifest:
+    if not manifest_path.exists():
+        return BookPageManifest(book_id=book_id, source_path=source_path, total_pages=total_pages, page_count=0, pages=[])
+    return BookPageManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
+
+
+def split_pdf_into_page_images(
+    source_path: str | Path,
+    *,
+    book_id: str,
+    total_pages: int,
+    data_root: Path | None = None,
+) -> BookPageManifest:
+    resolved_source_path = Path(source_path).expanduser().resolve()
+    data_root = data_root or get_books_root()
+    book_dir = data_root / book_id
+    pages_dir = book_dir / "pages"
+    pages_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest_path = pages_dir / "manifest.json"
+    manifest = _load_manifest(manifest_path, book_id, str(resolved_source_path), total_pages)
+    existing_pages = {page.page_number: page for page in manifest.pages}
+    with fitz.open(str(resolved_source_path)) as document:
+        for page_number in range(1, total_pages + 1):
+            image_filename = _page_filename(page_number)
+            image_path = pages_dir / image_filename
+            if not image_path.exists():
+                page = document.load_page(page_number - 1)
+                pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+                pixmap.save(str(image_path))
+
+            existing_pages[page_number] = PageRecord(
+                page_number=page_number,
+                image_filename=image_filename,
+                image_path=str(image_path),
+                status="ready",
+                created_at=_utc_now(),
+            )
+            manifest = BookPageManifest(
+                book_id=book_id,
+                source_path=str(resolved_source_path),
+                total_pages=total_pages,
+                page_count=len(existing_pages),
+                pages=[existing_pages[number] for number in sorted(existing_pages)],
+            )
+            _write_manifest(manifest_path, manifest)
+
+    return manifest
 
 
 def import_book_from_path(
@@ -57,6 +117,8 @@ def import_book_from_path(
     reader = PdfReader(str(resolved_source_path))
     pdf_title = reader.metadata.title if reader.metadata else None
     pdf_author = reader.metadata.author if reader.metadata else None
+    pages_dir = data_root / book_id / "pages"
+    pages_dir.mkdir(parents=True, exist_ok=True)
 
     record = BookRecord(
         id=book_id,
@@ -68,12 +130,30 @@ def import_book_from_path(
         source_sha256=source_sha256,
         total_pages=len(reader.pages),
         status="imported",
+        page_split_status="not_started",
+        page_image_count=0,
+        pages_path=str(pages_dir),
         created_at=_utc_now(),
         processed_at=None,
     )
 
     book_dir = data_root / book_id
     book_dir.mkdir(parents=True, exist_ok=True)
+    (book_dir / "book.json").write_text(
+        record.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
+
+    page_manifest = split_pdf_into_page_images(
+        resolved_source_path,
+        book_id=book_id,
+        total_pages=record.total_pages,
+        data_root=data_root,
+    )
+    record.page_split_status = "complete"
+    record.page_image_count = page_manifest.page_count
+    record.status = "pages_split"
+    record.processed_at = _utc_now()
     (book_dir / "book.json").write_text(
         record.model_dump_json(indent=2),
         encoding="utf-8",

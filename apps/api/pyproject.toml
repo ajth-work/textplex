@@ -9,6 +9,7 @@ dependencies = [
   "pydantic>=2",
   "python-multipart",
   "pypdf",
+  "pymupdf",
 ]
 
 [project.optional-dependencies]

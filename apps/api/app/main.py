@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 
 from app.core.paths import get_data_root
-from app.schemas.books import BookImportRequest, BookRecord
+from app.schemas.books import BookImportRequest, BookPageManifest, BookRecord
 from app.services.book_registry import import_book_from_path, load_registry
 
 
@@ -38,3 +38,11 @@ def get_book(book_id: str) -> BookRecord:
         return registry[book_id]
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Book not found: {book_id}") from exc
+
+
+@app.get("/books/{book_id}/pages", response_model=BookPageManifest)
+def get_book_pages(book_id: str) -> BookPageManifest:
+    pages_path = app.state.data_root / "books" / book_id / "pages" / "manifest.json"
+    if not pages_path.exists():
+        raise HTTPException(status_code=404, detail=f"Page manifest not found for book: {book_id}")
+    return BookPageManifest.model_validate_json(pages_path.read_text(encoding="utf-8"))

@@ -1,3 +1,3 @@
-from .books import BookImportRequest, BookRecord
+from .books import BookImportRequest, BookPageManifest, BookRecord, PageRecord
 
-__all__ = ["BookImportRequest", "BookRecord"]
+__all__ = ["BookImportRequest", "BookPageManifest", "BookRecord", "PageRecord"]
