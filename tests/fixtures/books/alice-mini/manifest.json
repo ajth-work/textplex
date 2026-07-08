@@ -1,0 +1,14 @@
+{
+  "fixture_id": "alice-mini",
+  "title": "Alice Mini Fixture",
+  "source_work": "Alice's Adventures in Wonderland",
+  "author": "Lewis Carroll",
+  "language_code": "en",
+  "license": "Public domain",
+  "page_count": 3,
+  "pages": [
+    "pages/001.txt",
+    "pages/002.txt",
+    "pages/003.txt"
+  ]
+}

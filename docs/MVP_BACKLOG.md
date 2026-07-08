@@ -1,19 +1,19 @@
 # MVP Backlog
 
-## Milestone 0 — Repository and contracts
+## Milestone 0 - Repository and contracts
 
-- [ ] Initialize git repository
-- [ ] Add web app workspace
-- [ ] Add API workspace
-- [ ] Add processor package
-- [ ] Configure linting and tests
-- [ ] Add `.env.example`
-- [ ] Freeze first database migrations
-- [ ] Add one 2–3 page legal/public-domain test fixture
+- [x] Initialize git repository
+- [x] Add web app workspace
+- [x] Add API workspace
+- [x] Add processor package
+- [x] Configure linting and tests
+- [x] Add `.env.example`
+- [x] Freeze first database migrations
+- [x] Add one 2-3 page legal/public-domain test fixture
 
 Exit criterion: web and API boot locally; processor test command runs.
 
-## Milestone 1 — Import and page preparation
+## Milestone 1 - Import and page preparation
 
 - [ ] Import one PDF
 - [ ] Hash source file
@@ -25,7 +25,7 @@ Exit criterion: web and API boot locally; processor test command runs.
 
 Exit criterion: a PDF becomes an ordered page set with durable status.
 
-## Milestone 2 — Text and token database
+## Milestone 2 - Text and token database
 
 - [ ] Implement extraction provider interface
 - [ ] Add first OCR/AI extraction adapter
@@ -38,7 +38,7 @@ Exit criterion: a PDF becomes an ordered page set with durable status.
 
 Exit criterion: processed pages can be queried as structured reading data.
 
-## Milestone 3 — Reader vertical slice
+## Milestone 3 - Reader vertical slice
 
 - [ ] Library screen
 - [ ] Book detail screen
@@ -51,7 +51,7 @@ Exit criterion: processed pages can be queried as structured reading data.
 
 Exit criterion: one can read a processed book and inspect vocabulary.
 
-## Milestone 4 — Learning profile
+## Milestone 4 - Learning profile
 
 - [ ] Create profile DB
 - [ ] Record reading sessions
@@ -63,7 +63,7 @@ Exit criterion: one can read a processed book and inspect vocabulary.
 
 Exit criterion: reading the same vocabulary across pages/books changes the learner state.
 
-## Milestone 5 — Dashboard
+## Milestone 5 - Dashboard
 
 - [ ] Reading progress
 - [ ] Unique vocabulary encountered

@@ -61,24 +61,46 @@ scripts/
 - Search: SQLite FTS5 for sentence/page retrieval
 - AI integration: isolated behind a provider interface; structured extraction results are validated before database writes
 
+## Local bootstrap
+
+### PowerShell
+
+```powershell
+.\scripts\init_local.ps1
+npm install
+```
+
+### Bash
+
+```bash
+./scripts/init_local.sh
+npm install
+```
+
+See `docs/LOCAL_DEVELOPMENT.md` for the current local workflow, fixture set, and migration strategy.
+
 ## Local development target
 
 ### API
 
-```bash
+```powershell
 cd apps/api
 python -m venv .venv
-source .venv/bin/activate
-pip install -e . -e ../../packages/processor
+.venv\Scripts\Activate.ps1
+pip install -e .[dev] -e ../../packages/processor
 uvicorn app.main:app --reload
 ```
 
 ### Web
 
-```bash
-cd apps/web
-npm install
-npm run dev
+```powershell
+npm run dev:web
+```
+
+### Tests
+
+```powershell
+python -m pytest
 ```
 
 ## First vertical slice
