@@ -12,8 +12,8 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-      args:
-        NEXT_PUBLIC_TEXTPLEX_API_URL: http://127.0.0.1:8000
+    environment:
+      TEXTPLEX_API_ORIGIN: http://api:8000
     depends_on:
       - api
     ports:

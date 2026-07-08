@@ -11,9 +11,6 @@ WORKDIR /workspace
 COPY --from=deps /workspace/node_modules ./node_modules
 COPY . .
 
-ARG NEXT_PUBLIC_TEXTPLEX_API_URL=http://127.0.0.1:8000
-ENV NEXT_PUBLIC_TEXTPLEX_API_URL=${NEXT_PUBLIC_TEXTPLEX_API_URL}
-
 RUN npm run build:web
 
 FROM node:20-bookworm-slim AS runner
