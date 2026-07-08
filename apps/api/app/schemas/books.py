@@ -8,6 +8,8 @@ class BookImportRequest(BaseModel):
     language_code: str = Field(min_length=2, max_length=12)
     title: str | None = None
     author: str | None = None
+    page_start: int = Field(default=1, ge=1)
+    page_count: int | None = Field(default=None, ge=1)
 
 
 class PageRecord(BaseModel):

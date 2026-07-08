@@ -54,6 +54,8 @@ def split_pdf_into_page_images(
     *,
     book_id: str,
     total_pages: int,
+    page_start: int = 1,
+    page_count: int | None = None,
     data_root: Path | None = None,
 ) -> BookPageManifest:
     resolved_source_path = Path(source_path).expanduser().resolve()
@@ -62,11 +64,14 @@ def split_pdf_into_page_images(
     pages_dir = book_dir / "pages"
     pages_dir.mkdir(parents=True, exist_ok=True)
 
+    start_page = max(1, page_start)
+    end_page = total_pages if page_count is None else min(total_pages, start_page + page_count - 1)
+
     manifest_path = pages_dir / "manifest.json"
     manifest = _load_manifest(manifest_path, book_id, str(resolved_source_path), total_pages)
     existing_pages = {page.page_number: page for page in manifest.pages}
     with fitz.open(str(resolved_source_path)) as document:
-        for page_number in range(1, total_pages + 1):
+        for page_number in range(start_page, end_page + 1):
             image_filename = _page_filename(page_number)
             image_path = pages_dir / image_filename
             if not image_path.exists():
@@ -99,6 +104,8 @@ def import_book_from_path(
     language_code: str,
     title: str | None = None,
     author: str | None = None,
+    page_start: int = 1,
+    page_count: int | None = None,
     data_root: Path | None = None,
 ) -> BookRecord:
     resolved_source_path = Path(source_path).expanduser().resolve()
@@ -148,6 +155,8 @@ def import_book_from_path(
         resolved_source_path,
         book_id=book_id,
         total_pages=record.total_pages,
+        page_start=page_start,
+        page_count=page_count,
         data_root=data_root,
     )
     record.page_split_status = "complete"

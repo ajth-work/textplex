@@ -22,6 +22,8 @@ def import_book(payload: BookImportRequest) -> BookRecord:
             language_code=payload.language_code,
             title=payload.title,
             author=payload.author,
+            page_start=payload.page_start,
+            page_count=payload.page_count,
             data_root=app.state.data_root / "books",
         )
     except FileNotFoundError as exc:

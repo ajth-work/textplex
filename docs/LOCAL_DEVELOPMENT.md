@@ -57,14 +57,16 @@ pip install -e .[dev] -e ../../packages/processor
 uvicorn app.main:app --reload
 ```
 
-To register the sample Chinese scan that started issue `#2`, POST this payload to `/books/import` while the API is running:
+To register the sample Chinese scan that started issue `#2`, POST this payload to `/books/import` while the API is running. This uses a four-page sample starting after the table of contents, beginning at page 8 and ending at page 11:
 
 ```json
 {
   "source_path": "Z:\\FastFoto\\Personal\\Finished Book Scans\\Chinese Books\\Three-Body Problem (ZH) (ClearScan).pdf",
   "language_code": "zh",
   "title": "三体",
-  "author": "刘慈欣"
+  "author": "刘慈欣",
+  "page_start": 8,
+  "page_count": 4
 }
 ```
 
