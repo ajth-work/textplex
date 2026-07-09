@@ -6,6 +6,14 @@ from .books import (
     PageExtractionArtifact,
     PageRecord,
 )
+from .learning import (
+    LearningProfileSummary,
+    PageReadCreateRequest,
+    PageReadRecord,
+    ReadingSessionCreateRequest,
+    ReadingSessionRecord,
+)
+from .lexicon import LexiconEntryRecord, LexiconImportRequest, LexiconImportSummary, LexiconLookupResponse
 
 __all__ = [
     "BookExtractionRequest",
@@ -14,4 +22,13 @@ __all__ = [
     "BookRecord",
     "PageExtractionArtifact",
     "PageRecord",
+    "LearningProfileSummary",
+    "PageReadCreateRequest",
+    "PageReadRecord",
+    "ReadingSessionCreateRequest",
+    "ReadingSessionRecord",
+    "LexiconEntryRecord",
+    "LexiconImportRequest",
+    "LexiconImportSummary",
+    "LexiconLookupResponse",
 ]

@@ -18,15 +18,19 @@ node_modules/
 out/
 .npm-cache/
 *.tsbuildinfo
+web-dev.log
+web-dev.err
 
 # Codex attachments
 .codex-remote-attachments/
+.gh/
 
 # Generated/private data
 data/books/*
 !data/books/.gitkeep
 data/user/*
 !data/user/.gitkeep
+data/lexicon/*
 
 # OS/editor
 .DS_Store

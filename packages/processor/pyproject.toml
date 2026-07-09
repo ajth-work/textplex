@@ -3,7 +3,7 @@ name = "textplex-processor"
 version = "0.1.0"
 description = "Book processing pipeline for the TextPlex"
 requires-python = ">=3.11"
-dependencies = ["pydantic>=2", "pillow"]
+dependencies = ["pydantic>=2", "pillow", "jieba>=0.42.1"]
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "mypy"]

@@ -6,8 +6,12 @@ from fastapi.responses import FileResponse
 
 from app.core.paths import get_data_root
 from app.schemas.books import BookExtractionRequest, BookImportRequest, BookPageManifest, BookReaderPageResponse, BookRecord
+from app.schemas.learning import LearningProfileSummary, PageReadCreateRequest, PageReadRecord, ReadingSessionCreateRequest, ReadingSessionRecord
+from app.schemas.lexicon import LexiconImportRequest, LexiconImportSummary, LexiconLookupResponse
 from app.services.book_extraction import extract_book_text, load_page_artifact
 from app.services.book_registry import import_book_from_path, load_registry, save_registry
+from app.services.learning_profile import create_reading_session, get_learning_profile_summary, record_page_read
+from app.services.lexicon import import_lexicon_from_source, lookup_lexicon_entry
 from processor.contracts import BookExtractionResult
 
 
@@ -31,6 +35,14 @@ def _registry_path() -> Path:
 
 def _load_book_registry() -> dict[str, BookRecord]:
     return load_registry(_registry_path())
+
+
+def _book_exists(book_id: str) -> BookRecord:
+    registry = _load_book_registry()
+    try:
+        return registry[book_id]
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Book not found: {book_id}") from exc
 
 
 @app.get("/health")
@@ -160,3 +172,45 @@ def get_book_extraction(book_id: str) -> BookExtractionResult:
     if not extraction_path.exists():
         raise HTTPException(status_code=404, detail=f"Extraction not found for book: {book_id}")
     return BookExtractionResult.model_validate_json(extraction_path.read_text(encoding="utf-8"))
+
+
+@app.get("/learning/profile", response_model=LearningProfileSummary)
+def get_learning_profile() -> LearningProfileSummary:
+    return get_learning_profile_summary(app.state.data_root)
+
+
+@app.post("/learning/sessions", response_model=ReadingSessionRecord)
+def open_learning_session(payload: ReadingSessionCreateRequest) -> ReadingSessionRecord:
+    _book_exists(payload.book_id)
+    return create_reading_session(app.state.data_root, payload)
+
+
+@app.post("/learning/page-reads", response_model=PageReadRecord)
+def create_page_read(payload: PageReadCreateRequest) -> PageReadRecord:
+    _book_exists(payload.book_id)
+    try:
+        return record_page_read(app.state.data_root, payload)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/lexicon/import", response_model=LexiconImportSummary)
+def import_lexicon(payload: LexiconImportRequest) -> LexiconImportSummary:
+    try:
+        return import_lexicon_from_source(
+            payload.source_root,
+            data_root=app.state.data_root,
+            language_code=payload.language_code,
+            replace_existing=payload.replace_existing,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/lexicon/lookup", response_model=LexiconLookupResponse)
+def lookup_lexicon(language_code: str, term: str) -> LexiconLookupResponse:
+    return lookup_lexicon_entry(
+        data_root=app.state.data_root,
+        language_code=language_code,
+        term=term,
+    )

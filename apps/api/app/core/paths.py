@@ -13,3 +13,7 @@ def get_data_root() -> Path:
 
 def get_books_root() -> Path:
     return get_data_root() / "books"
+
+
+def get_lexicon_source_root() -> Path:
+    return get_repo_root() / "resources" / "lexicon" / "chinese-character-recognition"

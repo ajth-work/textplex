@@ -119,6 +119,84 @@ export interface BookReaderPageResponse {
   extraction: PageExtractionArtifact | null;
 }
 
+export interface ReadingSessionCreateRequest {
+  book_id: string;
+  started_at?: string;
+}
+
+export interface ReadingSessionRecord {
+  id: string;
+  book_id: string;
+  started_at: string;
+  ended_at: string | null;
+  active_seconds: number;
+}
+
+export interface PageReadCreateRequest {
+  session_id: string;
+  book_id: string;
+  page_number: number;
+  active_seconds: number;
+  completed_at?: string;
+}
+
+export interface PageReadRecord {
+  id: number;
+  session_id: string;
+  book_id: string;
+  page_number: number;
+  active_seconds: number;
+  estimated_seconds: number;
+  completion_ratio: number;
+  counted_as_read: boolean;
+  completed_at: string;
+}
+
+export interface LearningProfileSummary {
+  database_path: string;
+  reading_sessions: number;
+  page_reads: number;
+  active_books: number;
+  vocabulary_progress_rows: number;
+}
+
+export interface LexiconImportRequest {
+  source_root: string;
+  language_code?: string;
+  replace_existing?: boolean;
+}
+
+export interface LexiconImportSummary {
+  database_path: string;
+  source_root: string;
+  vocabulary_rows: number;
+  character_rows: number;
+  imported_rows: number;
+}
+
+export interface LexiconEntryRecord {
+  id: number;
+  language_code: string;
+  entry_type: string;
+  surface_form: string;
+  pinyin: string | null;
+  tone: number | null;
+  definition: string | null;
+  radical: string | null;
+  stroke_count: number | null;
+  hsk_level: string | null;
+  frequency_rank: number | null;
+  note: string | null;
+  source_name: string | null;
+  source_path: string | null;
+}
+
+export interface LexiconLookupResponse {
+  query: string;
+  language_code: string;
+  entries: LexiconEntryRecord[];
+}
+
 function joinPath(pathname: string): string {
   return `${apiBaseUrl}${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
 }
@@ -126,6 +204,20 @@ function joinPath(pathname: string): string {
 export async function fetchJson<T>(pathname: string): Promise<T> {
   const response = await fetch(joinPath(pathname), {
     cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`Request failed (${response.status}) for ${pathname}`);
+  }
+  return (await response.json()) as T;
+}
+
+export async function postJson<T>(pathname: string, body: unknown): Promise<T> {
+  const response = await fetch(joinPath(pathname), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error(`Request failed (${response.status}) for ${pathname}`);

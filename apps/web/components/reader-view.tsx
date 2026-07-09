@@ -1,15 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   apiBaseUrl,
   fetchJson,
   formatElapsed,
+  postJson,
   type BookExtractionResult,
   type BookReaderPageResponse,
+  type LearningProfileSummary,
   type LexicalEntryResult,
+  type LexiconLookupResponse,
+  type PageReadRecord,
+  type ReadingSessionRecord,
   type TokenResult,
 } from "../lib/textplex";
 
@@ -30,6 +35,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeSeconds, setActiveSeconds] = useState(0);
+  const [profileSummary, setProfileSummary] = useState<LearningProfileSummary | null>(null);
+  const [lexiconResult, setLexiconResult] = useState<LexiconLookupResponse | null>(null);
+  const [sessionReady, setSessionReady] = useState(false);
+  const sessionIdRef = useRef<string | null>(null);
+  const activeSecondsRef = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -52,6 +62,16 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
         } catch {
           if (active) {
             setSummary(null);
+          }
+        }
+        try {
+          const profileResult = await fetchJson<LearningProfileSummary>("/learning/profile");
+          if (active) {
+            setProfileSummary(profileResult);
+          }
+        } catch {
+          if (active) {
+            setProfileSummary(null);
           }
         }
       } catch (err) {
@@ -85,21 +105,119 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     };
   }, []);
 
+  useEffect(() => {
+    activeSecondsRef.current = activeSeconds;
+  }, [activeSeconds]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadLexicon() {
+      if (!pageData || !selectedToken) {
+        if (active) {
+          setLexiconResult(null);
+        }
+        return;
+      }
+
+      try {
+        const lookup = await fetchJson<LexiconLookupResponse>(
+          `/lexicon/lookup?language_code=${encodeURIComponent(pageData.book.language_code)}&term=${encodeURIComponent(selectedToken.surface_form)}`,
+        );
+        if (active) {
+          setLexiconResult(lookup);
+        }
+      } catch {
+        if (active) {
+          setLexiconResult(null);
+        }
+      }
+    }
+
+    void loadLexicon();
+
+    return () => {
+      active = false;
+    };
+  }, [pageData, selectedToken]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function ensureSession() {
+      const storageKey = `textplex-reading-session:${bookId}`;
+      const storedSessionId = window.localStorage.getItem(storageKey);
+      if (storedSessionId) {
+        sessionIdRef.current = storedSessionId;
+        if (active) {
+          setSessionReady(true);
+        }
+        return;
+      }
+
+      const session = await postJson<ReadingSessionRecord>("/learning/sessions", {
+        book_id: bookId,
+      });
+      if (!active) {
+        return;
+      }
+
+      window.localStorage.setItem(storageKey, session.id);
+      sessionIdRef.current = session.id;
+      setSessionReady(true);
+    }
+
+    void ensureSession().catch(() => {
+      if (active) {
+        setSessionReady(false);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [bookId]);
+
+  useEffect(() => {
+    return () => {
+      const sessionId = sessionIdRef.current;
+      const seconds = activeSecondsRef.current;
+      if (!sessionId || seconds <= 0) {
+        return;
+      }
+
+      void postJson<PageReadRecord>("/learning/page-reads", {
+        session_id: sessionId,
+        book_id: bookId,
+        page_number: pageNumber,
+        active_seconds: seconds,
+      }).catch(() => {
+        // The reader stays usable even if the profile write fails.
+      });
+    };
+  }, [bookId, pageNumber]);
+
   const page = pageData?.extraction?.page ?? null;
   const tokenEntry = resolveEntry(summary, selectedToken);
+  const lexiconEntry = lexiconResult?.entries[0] ?? null;
   const imageUrl = pageData ? `${apiBaseUrl}${pageData.image_url}` : "";
   const totalPages = pageData?.book.total_pages ?? summary?.page_end ?? pageNumber;
   const selectedSentence = useMemo(
     () => (page ? page.sentences.find((sentence) => sentence.order === selectedSentenceOrder) ?? null : null),
     [page, selectedSentenceOrder],
   );
-  const definitionSummary = selectedToken && !selectedToken.definition_short && !tokenEntry ? "Dictionary wiring is pending." : null;
-  const tokenLabel = selectedToken?.surface_form ?? "";
+  const definitionSummary = selectedToken && !lexiconEntry && !tokenEntry ? "Dictionary wiring is pending." : null;
+  const tokenLabel = lexiconEntry?.surface_form ?? selectedToken?.surface_form ?? "";
   const tokenDefinition =
+    lexiconEntry?.definition ??
     selectedToken?.definition_short ??
     (tokenEntry
       ? `Seen ${tokenEntry.frequency_in_book} times in this book.`
       : "Dictionary wiring is pending, but the token stays anchored to the book data.");
+  const tokenPinyin = lexiconEntry?.pinyin ?? selectedToken?.romanization ?? null;
+  const tokenHsk = lexiconEntry?.hsk_level ?? selectedToken?.proficiency_level ?? null;
+  const tokenRadical = lexiconEntry?.radical ?? null;
+  const tokenStrokeCount = lexiconEntry?.stroke_count ?? null;
 
   return (
     <section className="reader-shell">
@@ -173,19 +291,24 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     <dd>{selectedToken.lemma ?? selectedToken.surface_form}</dd>
                   </div>
                   <div>
-                    <dt>Sentence</dt>
-                    <dd>{selectedSentenceOrder ?? selectedToken.order}</dd>
+                    <dt>Pinyin</dt>
+                    <dd>{tokenPinyin ?? "—"}</dd>
                   </div>
                   <div>
-                    <dt>Book frequency</dt>
+                    <dt>HSK</dt>
+                    <dd>{tokenHsk ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>Frequency</dt>
                     <dd>{tokenEntry?.frequency_in_book ?? 1}</dd>
                   </div>
                   <div>
-                    <dt>Pages</dt>
-                    <dd>
-                      {tokenEntry?.first_page ?? pageNumber}
-                      {tokenEntry?.last_page && tokenEntry.last_page !== tokenEntry.first_page ? `-${tokenEntry.last_page}` : ""}
-                    </dd>
+                    <dt>Radical</dt>
+                    <dd>{tokenRadical ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>Strokes</dt>
+                    <dd>{tokenStrokeCount ?? "—"}</dd>
                   </div>
                 </dl>
                 {selectedSentence ? <p className="small-copy sentence-preview">{selectedSentence.text}</p> : null}
@@ -253,9 +376,31 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             <section className="card inspector-card">
               <h2>Dictionary wiring</h2>
               <p className="small-copy">
-                This panel is ready for your dictionary files and HSK lists. Once those are wired in, the popup can move from book frequency to real lookup data.
+                This panel is ready for your dictionary files and HSK lists. Once those are imported, token clicks can resolve to the full lexicon instead of only book frequency.
               </p>
               <p className="small-copy">For now, the reader uses book extraction metadata so the page still behaves like a reading surface instead of a card wall.</p>
+            </section>
+
+            <section className="card inspector-card">
+              <h2>Learner profile</h2>
+              <p className="small-copy">Reading sessions and page reads are now written to the local profile database.</p>
+              <div className="profile-metrics">
+                <div>
+                  <span className="eyebrow">Sessions</span>
+                  <strong>{profileSummary?.reading_sessions ?? 0}</strong>
+                </div>
+                <div>
+                  <span className="eyebrow">Pages</span>
+                  <strong>{profileSummary?.page_reads ?? 0}</strong>
+                </div>
+                <div>
+                  <span className="eyebrow">Books</span>
+                  <strong>{profileSummary?.active_books ?? 0}</strong>
+                </div>
+              </div>
+              <p className="small-copy">
+                {sessionReady ? "A local reading session is active for this book." : "Opening a book starts a session automatically."}
+              </p>
             </section>
 
             <section className="card inspector-card">

@@ -47,6 +47,19 @@ Build the web app:
 npm run build:web
 ```
 
+Smoke-check the live reader and the API rewrite after the server is running:
+
+```powershell
+npm run check:web
+```
+
+By default the smoke test checks both `http://127.0.0.1:3000` and the current ZeroTier address `http://192.168.192.231:3000`. If your ZeroTier IP changes, override it with:
+
+```powershell
+$env:TEXTPLEX_WEB_BASE_URLS="http://127.0.0.1:3000,http://YOUR-ZEROTIER-IP:3000"
+npm run check:web
+```
+
 ### Docker Desktop preview
 
 Run the reader stack locally with Docker Desktop:
@@ -103,6 +116,25 @@ The processor writes `book-extraction.json` plus one normalized page artifact pe
 `GET /books/{book_id}/pages/{page_number}` returns the reader payload for one prepared page, including the image URL and the page-level extraction artifact when available.
 
 `GET /books/{book_id}/pages/{page_number}/image` streams the prepared page image for the reader UI.
+
+## Bundled lexicon source
+
+TextPlex now vendors the Chinese reference sets locally under:
+
+```text
+resources/lexicon/chinese-character-recognition/
+```
+
+The lexicon import endpoint defaults to that bundled source, so a normal import call only needs the language and overwrite flag if you want to refresh the local lookup database.
+
+Example:
+
+```json
+{
+  "language_code": "zh",
+  "replace_existing": true
+}
+```
 
 ## Tests
 

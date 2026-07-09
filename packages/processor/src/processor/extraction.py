@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-from pathlib import Path
 
 from .contracts import (
     BookExtractionResult,
@@ -14,8 +13,15 @@ from .contracts import (
 )
 
 _TOKEN_RE = re.compile(r"[\u4e00-\u9fff]|[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?")
+_CHINESE_RUN_RE = re.compile(r"[\u4e00-\u9fff]+")
+_WORDISH_RE = re.compile(r"[\u4e00-\u9fff]+|[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?")
 _WHITESPACE_RE = re.compile(r"\s+")
-_SENTENCE_ENDERS = set("。！？!?")
+_SENTENCE_ENDERS = set("\u3002\uff01\uff1f!?")
+
+try:
+    from jieba import lcut as _jieba_lcut
+except ImportError:  # pragma: no cover - exercised when jieba is unavailable
+    _jieba_lcut = None
 
 
 def normalize_text(raw_text: str) -> str:
@@ -49,10 +55,31 @@ def _normalize_token_surface(surface_form: str, language_code: str) -> str:
     return surface_form.lower()
 
 
+def _segment_chinese_chunk(chunk: str) -> list[str]:
+    if _jieba_lcut is None:
+        return list(chunk)
+    return [token.strip() for token in _jieba_lcut(chunk, cut_all=False, HMM=True) if token.strip()]
+
+
+def _tokenize_chinese_sentence(sentence: str) -> list[str]:
+    pieces: list[str] = []
+    for match in _WORDISH_RE.finditer(sentence):
+        chunk = match.group(0)
+        if _CHINESE_RUN_RE.fullmatch(chunk):
+            pieces.extend(_segment_chinese_chunk(chunk))
+        else:
+            pieces.append(chunk)
+    return pieces
+
+
 def tokenize_sentence(sentence: str, language_code: str) -> list[TokenResult]:
+    if language_code.lower().startswith("zh"):
+        surfaces = _tokenize_chinese_sentence(sentence)
+    else:
+        surfaces = [match.group(0) for match in _TOKEN_RE.finditer(sentence)]
+
     tokens: list[TokenResult] = []
-    for index, match in enumerate(_TOKEN_RE.finditer(sentence), start=1):
-        surface_form = match.group(0)
+    for index, surface_form in enumerate(surfaces, start=1):
         tokens.append(
             TokenResult(
                 order=index,
@@ -141,8 +168,14 @@ def build_book_extraction_result(
                 lexical_entries[entry.lemma] = entry.model_copy()
                 continue
             existing.frequency_in_book += entry.frequency_in_book
-            existing.first_page = min(existing.first_page or entry.first_page or page.page_number, entry.first_page or page.page_number)
-            existing.last_page = max(existing.last_page or entry.last_page or page.page_number, entry.last_page or page.page_number)
+            existing.first_page = min(
+                existing.first_page or entry.first_page or page.page_number,
+                entry.first_page or page.page_number,
+            )
+            existing.last_page = max(
+                existing.last_page or entry.last_page or page.page_number,
+                entry.last_page or page.page_number,
+            )
 
     return BookExtractionResult(
         book_id=book_id,

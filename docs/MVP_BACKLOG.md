@@ -53,9 +53,9 @@ Exit criterion: one can read a processed book and inspect vocabulary.
 
 ## Milestone 4 - Learning profile
 
-- [ ] Create profile DB
-- [ ] Record reading sessions
-- [ ] Record page-read events
+- [x] Create profile DB
+- [x] Record reading sessions
+- [x] Record page-read events
 - [ ] Create exposure ledger entries
 - [ ] Aggregate vocabulary progress
 - [ ] Record definition lookups
