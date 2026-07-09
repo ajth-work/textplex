@@ -20,6 +20,8 @@ out/
 *.tsbuildinfo
 web-dev.log
 web-dev.err
+api-dev.log
+api-dev.err
 
 # Codex attachments
 .codex-remote-attachments/
@@ -31,6 +33,7 @@ data/books/*
 data/user/*
 !data/user/.gitkeep
 data/lexicon/*
+data/uploads/*
 tests/fixtures/books/three-body-mini/
 tests/processor/test_chinese_fixture.py
 

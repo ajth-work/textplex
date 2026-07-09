@@ -87,6 +87,12 @@ pip install -e .[dev] -e ../../packages/processor
 uvicorn app.main:app --reload
 ```
 
+From the repo root, you can also start the API with:
+
+```powershell
+scripts\start_api_dev.cmd
+```
+
 To register the bundled Alice fixture, POST this payload to `/books/import` while the API is running. It points at the checked-in text fixture under `tests/fixtures/books/alice-mini/` and generates three prepared pages locally:
 
 ```json
