@@ -143,7 +143,7 @@ def extract_book(book_id: str, payload: BookExtractionRequest) -> dict[str, str]
         raise HTTPException(status_code=404, detail=f"Book not found: {book_id}") from exc
 
     try:
-        extraction_path = extract_book_text(
+        extraction_path, extracted_page_count = extract_book_text(
             book=book,
             page_start=payload.page_start,
             page_count=payload.page_count,
@@ -155,7 +155,7 @@ def extract_book(book_id: str, payload: BookExtractionRequest) -> dict[str, str]
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     book.extraction_status = "complete"
-    book.extracted_page_count = payload.page_count or max(0, book.total_pages - payload.page_start + 1)
+    book.extracted_page_count = extracted_page_count
     book.extraction_path = str(extraction_path)
     book.status = "extracted"
     registry[book_id] = book

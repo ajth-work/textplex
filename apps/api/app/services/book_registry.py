@@ -10,6 +10,13 @@ from pypdf import PdfReader
 
 from app.core.paths import get_books_root
 from app.schemas.books import BookPageManifest, BookRecord, PageRecord
+from app.services.book_sources import (
+    hash_text_fixture_source,
+    is_text_fixture_source,
+    load_text_fixture_manifest,
+    load_text_fixture_pages,
+    render_text_page_image,
+)
 
 
 def _utc_now() -> str:
@@ -65,6 +72,45 @@ def split_pdf_into_page_images(
     pages_dir.mkdir(parents=True, exist_ok=True)
 
     start_page = max(1, page_start)
+    if is_text_fixture_source(resolved_source_path):
+        text_fixture_manifest = load_text_fixture_manifest(resolved_source_path)
+        fixture_pages = load_text_fixture_pages(resolved_source_path)
+        total_pages = len(fixture_pages)
+        end_page = total_pages if page_count is None else min(total_pages, start_page + page_count - 1)
+        manifest_path = pages_dir / "manifest.json"
+        manifest = _load_manifest(manifest_path, book_id, str(resolved_source_path), total_pages)
+        existing_pages = {page.page_number: page for page in manifest.pages}
+
+        for page_number in range(start_page, end_page + 1):
+            _, _, page_text = fixture_pages[page_number - 1]
+            image_filename = _page_filename(page_number)
+            image_path = pages_dir / image_filename
+            if not image_path.exists():
+                render_text_page_image(
+                    page_text,
+                    image_path,
+                    book_title=str(text_fixture_manifest.get("title") or resolved_source_path.name),
+                    page_number=page_number,
+                )
+
+            existing_pages[page_number] = PageRecord(
+                page_number=page_number,
+                image_filename=image_filename,
+                image_path=str(image_path),
+                status="ready",
+                created_at=_utc_now(),
+            )
+            manifest = BookPageManifest(
+                book_id=book_id,
+                source_path=str(resolved_source_path),
+                total_pages=total_pages,
+                page_count=len(existing_pages),
+                pages=[existing_pages[number] for number in sorted(existing_pages)],
+            )
+            _write_manifest(manifest_path, manifest)
+
+        return manifest
+
     end_page = total_pages if page_count is None else min(total_pages, start_page + page_count - 1)
 
     manifest_path = pages_dir / "manifest.json"
@@ -110,32 +156,47 @@ def import_book_from_path(
 ) -> BookRecord:
     resolved_source_path = Path(source_path).expanduser().resolve()
     if not resolved_source_path.exists():
-        raise FileNotFoundError(f"Source PDF not found: {resolved_source_path}")
-    if resolved_source_path.suffix.lower() != ".pdf":
-        raise ValueError("TextPlex import currently accepts PDF files only.")
+        raise FileNotFoundError(f"Source file not found: {resolved_source_path}")
 
     data_root = data_root or get_books_root()
     data_root.mkdir(parents=True, exist_ok=True)
 
-    source_bytes = resolved_source_path.read_bytes()
-    source_sha256 = hashlib.sha256(source_bytes).hexdigest()
-    book_id = _book_id_from_hash(source_sha256)
+    is_fixture_source = is_text_fixture_source(resolved_source_path)
+    if not is_fixture_source and resolved_source_path.suffix.lower() != ".pdf":
+        raise ValueError("TextPlex import currently accepts PDF files or text fixture directories.")
 
-    reader = PdfReader(str(resolved_source_path))
-    pdf_title = reader.metadata.title if reader.metadata else None
-    pdf_author = reader.metadata.author if reader.metadata else None
+    if is_fixture_source:
+        fixture_manifest = load_text_fixture_manifest(resolved_source_path)
+        fixture_pages = load_text_fixture_pages(resolved_source_path)
+        source_sha256 = hash_text_fixture_source(resolved_source_path)
+        total_pages = len(fixture_pages)
+        source_title = fixture_manifest.get("title")
+        source_author = fixture_manifest.get("author")
+        source_title = source_title if isinstance(source_title, str) else None
+        source_author = source_author if isinstance(source_author, str) else None
+        source_filename = resolved_source_path.name
+    else:
+        source_bytes = resolved_source_path.read_bytes()
+        source_sha256 = hashlib.sha256(source_bytes).hexdigest()
+        reader = PdfReader(str(resolved_source_path))
+        source_title = reader.metadata.title if reader.metadata else None
+        source_author = reader.metadata.author if reader.metadata else None
+        total_pages = len(reader.pages)
+        source_filename = resolved_source_path.name
+
+    book_id = _book_id_from_hash(source_sha256)
     pages_dir = data_root / book_id / "pages"
     pages_dir.mkdir(parents=True, exist_ok=True)
 
     record = BookRecord(
         id=book_id,
-        title=_safe_text(title, _safe_text(pdf_title, resolved_source_path.stem)),
-        author=_optional_text(author) or _optional_text(pdf_author),
+        title=_safe_text(title, _safe_text(source_title, resolved_source_path.stem)),
+        author=_optional_text(author) or _optional_text(source_author),
         language_code=language_code,
-        source_filename=resolved_source_path.name,
+        source_filename=source_filename,
         source_path=str(resolved_source_path),
         source_sha256=source_sha256,
-        total_pages=len(reader.pages),
+        total_pages=total_pages,
         status="imported",
         page_split_status="not_started",
         page_image_count=0,

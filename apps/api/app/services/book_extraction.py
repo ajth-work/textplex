@@ -7,6 +7,7 @@ from pypdf import PdfReader
 
 from app.core.paths import get_books_root
 from app.schemas.books import BookRecord, PageExtractionArtifact
+from app.services.book_sources import is_text_fixture_source, load_text_fixture_pages
 from processor import build_book_extraction_result, build_page_extraction_result
 
 
@@ -60,9 +61,10 @@ def extract_book_pages(
     extraction_root.mkdir(parents=True, exist_ok=True)
 
     source_pdf = Path(book.source_path)
-    reader = PdfReader(str(source_pdf))
     start_page = max(1, page_start)
     end_page = book.total_pages if page_count is None else min(book.total_pages, start_page + page_count - 1)
+    fixture_pages = load_text_fixture_pages(source_pdf) if is_text_fixture_source(source_pdf) else None
+    reader = None if fixture_pages is not None else PdfReader(str(source_pdf))
 
     artifacts: list[PageExtractionArtifact] = []
     for page_number in range(start_page, end_page + 1):
@@ -74,7 +76,11 @@ def extract_book_pages(
             artifacts.append(existing_artifact)
             continue
 
-        raw_text = reader.pages[page_number - 1].extract_text() or ""
+        if fixture_pages is not None:
+            raw_text = fixture_pages[page_number - 1][2]
+        else:
+            assert reader is not None
+            raw_text = reader.pages[page_number - 1].extract_text() or ""
         page_result = build_page_extraction_result(
             book_id=book.id,
             page_number=page_number,
@@ -100,7 +106,7 @@ def extract_book_text(
     page_start: int = 1,
     page_count: int | None = None,
     data_root: Path | None = None,
-) -> Path:
+) -> tuple[Path, int]:
     data_root = data_root or get_books_root()
     artifacts = extract_book_pages(
         book=book,
@@ -126,4 +132,4 @@ def extract_book_text(
     book_artifact_path = _book_artifact_path(book.id, data_root)
     book_artifact_path.parent.mkdir(parents=True, exist_ok=True)
     book_artifact_path.write_text(summary.model_dump_json(indent=2), encoding="utf-8")
-    return book_artifact_path
+    return book_artifact_path, len(pages)

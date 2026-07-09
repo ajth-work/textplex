@@ -71,7 +71,7 @@ docker compose up --build
 Then inspect:
 
 - `http://127.0.0.1:3000/library`
-- `http://127.0.0.1:3000/reader/book-bbd944eb715e/8`
+- `http://127.0.0.1:3000/reader/<book-id>/1` after importing the Alice fixture
 
 The API listens on `http://127.0.0.1:8000`.
 
@@ -85,27 +85,25 @@ pip install -e .[dev] -e ../../packages/processor
 uvicorn app.main:app --reload
 ```
 
-To register the sample Chinese scan that started issue `#2`, POST this payload to `/books/import` while the API is running. This uses a four-page sample starting after the table of contents, beginning at page 8 and ending at page 11:
+To register the bundled Alice fixture, POST this payload to `/books/import` while the API is running. It points at the checked-in text fixture under `tests/fixtures/books/alice-mini/` and generates three prepared pages locally:
 
 ```json
 {
-  "source_path": "Z:\\FastFoto\\Personal\\Finished Book Scans\\Chinese Books\\Three-Body Problem (ZH) (ClearScan).pdf",
-  "language_code": "zh",
-  "title": "三体",
-  "author": "刘慈欣",
-  "page_start": 8,
-  "page_count": 4
+  "source_path": "tests/fixtures/books/alice-mini",
+  "language_code": "en",
+  "page_start": 1,
+  "page_count": 3
 }
 ```
 
 After import, `GET /books/{book_id}` shows page-splitting status and `GET /books/{book_id}/pages` returns the deterministic page manifest.
 
-To extract structured text for the same four-page sample, POST this payload to `/books/{book_id}/extract`:
+To extract structured text for the same fixture, POST this payload to `/books/{book_id}/extract`:
 
 ```json
 {
-  "page_start": 8,
-  "page_count": 4
+  "page_start": 1,
+  "page_count": 3
 }
 ```
 
@@ -156,8 +154,8 @@ python -m pytest tests/processor
 The first legal/public-domain fixture lives under `tests/fixtures/books/alice-mini/`.
 
 - It is a three-page excerpt set based on public-domain text from *Alice's Adventures in Wonderland*.
-- It is intentionally tiny and text-only for now.
-- It exists to support parser contracts, page ordering tests, and local experiments before real PDF import is implemented.
+- It is intentionally tiny and text-only, but the importer now renders page images locally so the reader can use it end to end.
+- It exists to support parser contracts, page ordering tests, and local experiments without needing the external `Z:` drive sample.
 
 ## Migration strategy
 
