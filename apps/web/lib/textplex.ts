@@ -225,6 +225,17 @@ export async function postJson<T>(pathname: string, body: unknown): Promise<T> {
   return (await response.json()) as T;
 }
 
+export async function postFormData<T>(pathname: string, body: FormData): Promise<T> {
+  const response = await fetch(joinPath(pathname), {
+    method: "POST",
+    body,
+  });
+  if (!response.ok) {
+    throw new Error(`Request failed (${response.status}) for ${pathname}`);
+  }
+  return (await response.json()) as T;
+}
+
 export function formatDateTime(value: string | null): string {
   if (!value) {
     return "Not processed yet";

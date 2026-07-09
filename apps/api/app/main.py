@@ -1,6 +1,7 @@
 from pathlib import Path
+from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
@@ -76,6 +77,46 @@ def import_book(payload: BookImportRequest) -> BookRecord:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/books/upload", response_model=BookRecord)
+async def upload_book(
+    file: UploadFile = File(...),
+    language_code: str = Form(...),
+    title: str | None = Form(default=None),
+    author: str | None = Form(default=None),
+    page_start: int = Form(default=1),
+    page_count: int | None = Form(default=None),
+) -> BookRecord:
+    filename = Path(file.filename or "uploaded.pdf").name
+    if Path(filename).suffix.lower() != ".pdf":
+        raise HTTPException(status_code=400, detail="TextPlex import currently accepts PDF files only.")
+
+    uploads_root = app.state.data_root / "uploads"
+    uploads_root.mkdir(parents=True, exist_ok=True)
+    upload_dir = uploads_root / uuid4().hex
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    upload_path = upload_dir / filename
+
+    try:
+        contents = await file.read()
+        upload_path.write_bytes(contents)
+        return import_book_from_path(
+            upload_path,
+            language_code=language_code,
+            title=title,
+            author=author,
+            source_filename=filename,
+            page_start=page_start,
+            page_count=page_count,
+            data_root=app.state.data_root / "books",
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        await file.close()
 
 
 @app.get("/books/{book_id}", response_model=BookRecord)

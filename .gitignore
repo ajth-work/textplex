@@ -31,6 +31,8 @@ data/books/*
 data/user/*
 !data/user/.gitkeep
 data/lexicon/*
+tests/fixtures/books/three-body-mini/
+tests/processor/test_chinese_fixture.py
 
 # OS/editor
 .DS_Store

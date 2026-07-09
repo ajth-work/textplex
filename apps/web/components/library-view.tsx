@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import type { ChangeEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { fetchJson, formatDateTime, type BookRecord } from "../lib/textplex";
+import { fetchJson, formatDateTime, postFormData, type BookRecord } from "../lib/textplex";
 
 function BookCard({ book }: { book: BookRecord }) {
   return (
@@ -40,6 +41,14 @@ export function LibraryView() {
   const [books, setBooks] = useState<BookRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function refreshBooks() {
+    const result = await fetchJson<BookRecord[]>("/books");
+    setBooks(result);
+  }
 
   useEffect(() => {
     let active = true;
@@ -70,6 +79,37 @@ export function LibraryView() {
     };
   }, []);
 
+  async function handleUploadFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    setUploading(true);
+    setUploadMessage(null);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("language_code", "zh");
+      formData.append("title", file.name.replace(/\.pdf$/i, ""));
+      const uploaded = await postFormData<BookRecord>("/books/upload", formData);
+      setUploadMessage(`Imported ${uploaded.title} from ${uploaded.source_filename}.`);
+      try {
+        await refreshBooks();
+      } catch (refreshError) {
+        setError(refreshError instanceof Error ? refreshError.message : "Unable to refresh books after upload.");
+      }
+    } catch (err) {
+      setUploadMessage(null);
+      setError(err instanceof Error ? err.message : "Unable to upload book.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <section className="app-shell">
       <header className="page-hero">
@@ -79,6 +119,22 @@ export function LibraryView() {
           <p className="lede">
             TextPlex keeps the source scan, page images, and extraction results aligned so you can move from book import to reading without losing context.
           </p>
+          <div className="button-row">
+            <button className="button button-primary" type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+              {uploading ? "Uploading..." : "Upload PDF"}
+            </button>
+            <input
+              ref={fileInputRef}
+              aria-label="Upload PDF"
+              accept="application/pdf,.pdf"
+              className="visually-hidden"
+              disabled={uploading}
+              onChange={handleUploadFile}
+              type="file"
+            />
+          </div>
+          <p className="small-copy">Uploads default to Chinese import mode. Pick a PDF from your machine and TextPlex will register it in the library.</p>
+          {uploadMessage ? <p className="small-copy">{uploadMessage}</p> : null}
         </div>
         <div className="hero-meta card">
           <strong>{books.length}</strong>

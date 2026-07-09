@@ -47,6 +47,8 @@ Build the web app:
 npm run build:web
 ```
 
+From the library page, the `Upload PDF` button lets you send a local PDF directly into TextPlex through the browser.
+
 Smoke-check the live reader and the API rewrite after the server is running:
 
 ```powershell
