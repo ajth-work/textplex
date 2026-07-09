@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TextPlex Reader</title>
+    <meta
+      name="description"
+      content="A browser-first TextPlex reader shell that connects to a remote processor API for library, upload, and page extraction workflows."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero card">
+        <div class="hero-copy">
+          <p class="eyebrow">TextPlex</p>
+          <h1>Books ready to read, with the processor kept off the page host.</h1>
+          <p class="lede">
+            This static shell is built for GitHub Pages. It sends uploads and page requests to a remote processor API, then renders the reader in plain HTML, CSS, and JavaScript.
+          </p>
+        </div>
+        <div class="hero-badge">
+          <span class="badge-label">Mode</span>
+          <strong id="modeBadge">Demo shell</strong>
+          <span id="modeHint" class="small-copy">Connect a processor URL to load live books.</span>
+        </div>
+      </header>
+
+      <section class="grid">
+        <section class="card settings-card">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Processor</p>
+              <h2>Remote API</h2>
+            </div>
+            <span id="connectionState" class="pill pill-warn">Not connected</span>
+          </div>
+          <p class="small-copy">
+            Set the processor base URL once and the shell will reuse it. Example: <code>https://api.example.com</code>.
+          </p>
+          <label class="field">
+            <span>Processor base URL</span>
+            <input id="processorUrl" type="url" placeholder="https://api.example.com" autocomplete="off" />
+          </label>
+          <div class="button-row">
+            <button id="saveProcessorUrl" class="button button-secondary" type="button">Save URL</button>
+            <button id="connectProcessor" class="button button-primary" type="button">Connect</button>
+          </div>
+          <p id="connectionHint" class="small-copy">
+            Leave the field blank to view the built-in demo book. The remote processor must allow CORS for GitHub Pages.
+          </p>
+        </section>
+
+        <section class="card library-card">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Library</p>
+              <h2>Import and select a book</h2>
+            </div>
+            <strong id="bookCount">0</strong>
+          </div>
+          <div class="upload-panel">
+            <div>
+              <p class="small-copy">Upload a PDF to the remote processor. In demo mode, this control is disabled.</p>
+              <form id="uploadForm" class="upload-form">
+                <label class="field">
+                  <span>Book title</span>
+                  <input id="bookTitle" type="text" placeholder="three-body-mini-slice" />
+                </label>
+                <label class="field">
+                  <span>PDF file</span>
+                  <input id="pdfFile" type="file" accept="application/pdf,.pdf" />
+                </label>
+                <button id="uploadButton" class="button button-primary" type="submit" disabled>Upload PDF</button>
+              </form>
+            </div>
+          </div>
+          <div id="libraryStatus" class="small-copy">Loading library...</div>
+          <div id="bookList" class="book-list"></div>
+        </section>
+      </section>
+
+      <section class="reader-grid">
+        <article class="card reader-card">
+          <div class="section-heading reader-heading">
+            <div>
+              <p class="eyebrow">Reader</p>
+              <h2 id="readerTitle">Select a book</h2>
+              <p id="readerMeta" class="small-copy">The page image stays hidden by default so the text can stay in focus.</p>
+            </div>
+            <div class="reader-actions">
+              <button id="toggleImage" class="button button-secondary button-compact" type="button">Show page image</button>
+              <button id="extractNow" class="button button-secondary button-compact" type="button" disabled>Extract now</button>
+            </div>
+          </div>
+
+          <div id="pageImageWrap" class="page-image-wrap is-hidden">
+            <img id="pageImage" alt="Book page preview" />
+          </div>
+
+          <div id="readerEmpty" class="empty-state">
+            <h3>No book selected</h3>
+            <p>Pick a book from the library. If the processor is configured, the reader will load the selected page and keep the extraction text in view.</p>
+          </div>
+
+          <div id="readerBody" class="reader-body is-hidden">
+            <div id="readerNotice" class="notice"></div>
+            <div id="readerText" class="reader-text" aria-live="polite"></div>
+            <div class="reader-nav">
+              <button id="prevPage" class="button button-secondary" type="button">Previous</button>
+              <button id="nextPage" class="button button-secondary" type="button">Next</button>
+            </div>
+          </div>
+        </article>
+
+        <aside class="sidebar">
+          <section class="card info-card">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Token</p>
+                <h2>Definition popover</h2>
+              </div>
+            </div>
+            <div id="tokenPanel" class="token-panel">
+              <p class="small-copy">Tap a character or word in the reader to load a dictionary-style definition panel here.</p>
+            </div>
+          </section>
+
+          <section class="card info-card">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Status</p>
+                <h2>Processor health</h2>
+              </div>
+            </div>
+            <dl class="metric-grid" id="bookMetrics">
+              <div>
+                <dt>Pages</dt>
+                <dd>0</dd>
+              </div>
+              <div>
+                <dt>Prepared</dt>
+                <dd>0</dd>
+              </div>
+              <div>
+                <dt>Extracted</dt>
+                <dd>0</dd>
+              </div>
+            </dl>
+            <p id="statusSummary" class="small-copy">The static shell can run on GitHub Pages while the processor stays on a separate server.</p>
+          </section>
+        </aside>
+      </section>
+    </main>
+
+    <template id="bookCardTemplate">
+      <article class="book-card">
+        <div class="book-card-top">
+          <span class="pill"></span>
+          <span class="muted book-status"></span>
+        </div>
+        <h3 class="book-title"></h3>
+        <p class="muted book-author"></p>
+        <dl class="metric-grid">
+          <div>
+            <dt>Pages</dt>
+            <dd class="book-pages"></dd>
+          </div>
+          <div>
+            <dt>Prepared</dt>
+            <dd class="book-prepared"></dd>
+          </div>
+          <div>
+            <dt>Extracted</dt>
+            <dd class="book-extracted"></dd>
+          </div>
+        </dl>
+        <div class="button-row">
+          <button class="button button-primary book-open" type="button">Open reader</button>
+        </div>
+      </article>
+    </template>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

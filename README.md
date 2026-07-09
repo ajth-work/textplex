@@ -35,7 +35,8 @@ AI book chat, literary analysis, spaced repetition, multi-language support, and 
 
 ```text
 apps/
-  web/                 # Next.js reader + library + dashboard
+  web/                 # Next.js reader + library + dashboard for the Docker-backed stack
+site/                  # Static HTML/CSS/JS GitHub Pages shell
   api/                 # FastAPI HTTP API
 packages/
   processor/           # PDF/page processing, extraction, enrichment
@@ -110,17 +111,11 @@ Then open:
 - [Library](http://127.0.0.1:3000/library)
 - [Sample reader](http://127.0.0.1:3000/reader/book-bbd944eb715e/8)
 
-### GitHub Pages demo
+### GitHub Pages shell
 
-If you want a static browser-only demo that can be published to GitHub Pages, build the packaged sample site:
+GitHub Pages now serves the static browser shell from `site/`. It is a plain HTML/CSS/JavaScript reader that connects to a remote processor API for book import, page loading, and extraction.
 
-```powershell
-npm run build:web:demo
-```
-
-That export uses the built-in demo book, so it is useful for layout and navigation QA even when the API is offline. For the full book-import and OCR workflow, keep using the Docker Desktop stack.
-
-If you deploy it as a GitHub Pages repository site, set `NEXT_PUBLIC_TEXTPLEX_BASE_PATH` to the repo path before building so links and assets resolve correctly.
+Open the shell, save your processor URL, and the reader will call the remote API from the browser. That keeps GitHub Pages lightweight while the processor can run in Docker, on a VPS, or anywhere else with CORS enabled.
 
 ### Tests
 
