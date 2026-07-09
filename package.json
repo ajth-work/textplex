@@ -5,8 +5,11 @@
   "scripts": {
     "dev:web": "npm --workspace apps/web run dev",
     "build:web": "npm --workspace apps/web run build",
+    "build:web:demo": "node ./scripts/build_web_demo.mjs",
     "lint:web": "npm --workspace apps/web run lint",
     "test:web": "node ./scripts/check_web_reachability.mjs",
-    "check:web": "npm run test:web"
+    "check:web": "npm run test:web",
+    "stack:up": "docker compose up --build",
+    "stack:down": "docker compose down"
   }
 }

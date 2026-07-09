@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 
-import { fetchJson, formatDateTime, postFormData, type BookRecord } from "../lib/textplex";
+import { fetchJson, formatDateTime, isDemoMode, postFormData, type BookRecord } from "../lib/textplex";
 
 function BookCard({ book }: { book: BookRecord }) {
   return (
@@ -119,21 +119,26 @@ export function LibraryView() {
           <p className="lede">
             TextPlex keeps the source scan, page images, and extraction results aligned so you can move from book import to reading without losing context.
           </p>
+          {isDemoMode ? <p className="small-copy">Demo mode is active. The library is showing the packaged GitHub Pages sample book.</p> : null}
           <div className="button-row">
-            <button className="button button-primary" type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-              {uploading ? "Uploading..." : "Upload PDF"}
+            <button className="button button-primary" type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || isDemoMode}>
+              {isDemoMode ? "Demo sample" : uploading ? "Uploading..." : "Upload PDF"}
             </button>
             <input
               ref={fileInputRef}
               aria-label="Upload PDF"
               accept="application/pdf,.pdf"
               className="visually-hidden"
-              disabled={uploading}
+              disabled={uploading || isDemoMode}
               onChange={handleUploadFile}
               type="file"
             />
           </div>
-          <p className="small-copy">Uploads default to Chinese import mode. Pick a PDF from your machine and TextPlex will register it in the library.</p>
+          <p className="small-copy">
+            {isDemoMode
+              ? "Uploads are disabled in demo mode. Deploy the Docker-backed stack for real imports and extraction."
+              : "Uploads default to Chinese import mode. Pick a PDF from your machine and TextPlex will register it in the library."}
+          </p>
           {uploadMessage ? <p className="small-copy">{uploadMessage}</p> : null}
         </div>
         <div className="hero-meta card">

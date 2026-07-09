@@ -1,4 +1,4 @@
-CREATE TABLE reading_sessions (
+CREATE TABLE IF NOT EXISTS reading_sessions (
     id TEXT PRIMARY KEY,
     book_id TEXT NOT NULL,
     started_at TEXT NOT NULL,
@@ -6,7 +6,7 @@ CREATE TABLE reading_sessions (
     active_seconds INTEGER DEFAULT 0
 );
 
-CREATE TABLE page_reads (
+CREATE TABLE IF NOT EXISTS page_reads (
     id INTEGER PRIMARY KEY,
     session_id TEXT NOT NULL,
     book_id TEXT NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE page_reads (
     completed_at TEXT NOT NULL
 );
 
-CREATE TABLE word_interactions (
+CREATE TABLE IF NOT EXISTS word_interactions (
     id INTEGER PRIMARY KEY,
     book_id TEXT NOT NULL,
     page_number INTEGER NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE word_interactions (
     occurred_at TEXT NOT NULL
 );
 
-CREATE TABLE exposure_ledger (
+CREATE TABLE IF NOT EXISTS exposure_ledger (
     id INTEGER PRIMARY KEY,
     language_code TEXT NOT NULL,
     lemma TEXT NOT NULL,
@@ -40,7 +40,7 @@ CREATE TABLE exposure_ledger (
     UNIQUE(language_code, lemma, book_id, page_number, exposure_type)
 );
 
-CREATE TABLE vocabulary_progress (
+CREATE TABLE IF NOT EXISTS vocabulary_progress (
     language_code TEXT NOT NULL,
     lemma TEXT NOT NULL,
     raw_exposures INTEGER DEFAULT 0,

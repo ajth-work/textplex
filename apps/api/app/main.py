@@ -188,6 +188,7 @@ def extract_book(book_id: str, payload: BookExtractionRequest) -> dict[str, str]
             book=book,
             page_start=payload.page_start,
             page_count=payload.page_count,
+            force=payload.force,
             data_root=app.state.data_root / "books",
         )
     except FileNotFoundError as exc:

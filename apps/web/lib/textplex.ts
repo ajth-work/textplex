@@ -1,4 +1,7 @@
+import { getDemoFetchResponse, getDemoPostResponse } from "./demo-data";
+
 export const apiBaseUrl = process.env.NEXT_PUBLIC_TEXTPLEX_API_URL ?? "/api";
+export const isDemoMode = process.env.NEXT_PUBLIC_TEXTPLEX_DEMO_MODE === "true";
 
 export interface BookRecord {
   id: string;
@@ -96,6 +99,8 @@ export interface PageExtractionResult {
 
 export interface PageExtractionArtifact {
   source_page_sha256: string;
+  text_source: string;
+  text_source_signature: string;
   processor_version: string;
   pipeline_version: string;
   page: PageExtractionResult;
@@ -197,11 +202,43 @@ export interface LexiconLookupResponse {
   entries: LexiconEntryRecord[];
 }
 
+export interface BookExtractionTriggerResponse {
+  status: string;
+  extraction_path: string;
+}
+
+export interface BookExtractionTriggerRequest {
+  page_start: number;
+  page_count: number | null;
+  force?: boolean;
+}
+
+export function resolveResourceUrl(pathname: string): string {
+  if (
+    pathname.startsWith("data:") ||
+    pathname.startsWith("http://") ||
+    pathname.startsWith("https://") ||
+    pathname.startsWith("/demo/")
+  ) {
+    return pathname;
+  }
+
+  return `${apiBaseUrl}${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
+}
+
 function joinPath(pathname: string): string {
   return `${apiBaseUrl}${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
 }
 
 export async function fetchJson<T>(pathname: string): Promise<T> {
+  if (isDemoMode) {
+    const response = getDemoFetchResponse(pathname);
+    if (response !== null) {
+      return response as T;
+    }
+    throw new Error(`Demo mode does not provide data for ${pathname}`);
+  }
+
   const response = await fetch(joinPath(pathname), {
     cache: "no-store",
   });
@@ -212,6 +249,14 @@ export async function fetchJson<T>(pathname: string): Promise<T> {
 }
 
 export async function postJson<T>(pathname: string, body: unknown): Promise<T> {
+  if (isDemoMode) {
+    const response = getDemoPostResponse(pathname, body);
+    if (response !== null) {
+      return response as T;
+    }
+    throw new Error(`Demo mode does not support ${pathname}`);
+  }
+
   const response = await fetch(joinPath(pathname), {
     method: "POST",
     headers: {
@@ -225,7 +270,18 @@ export async function postJson<T>(pathname: string, body: unknown): Promise<T> {
   return (await response.json()) as T;
 }
 
+export async function triggerBookExtraction(
+  bookId: string,
+  body: BookExtractionTriggerRequest,
+): Promise<BookExtractionTriggerResponse> {
+  return postJson<BookExtractionTriggerResponse>(`/books/${bookId}/extract`, body);
+}
+
 export async function postFormData<T>(pathname: string, body: FormData): Promise<T> {
+  if (isDemoMode) {
+    throw new Error("Demo mode does not support file uploads.");
+  }
+
   const response = await fetch(joinPath(pathname), {
     method: "POST",
     body,

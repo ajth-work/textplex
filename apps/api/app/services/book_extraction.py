@@ -8,7 +8,11 @@ from pypdf import PdfReader
 from app.core.paths import get_books_root
 from app.schemas.books import BookRecord, PageExtractionArtifact
 from app.services.book_sources import is_text_fixture_source, load_text_fixture_pages
+from app.services.ocr import get_text_source_signature, resolve_page_text
 from processor import build_book_extraction_result, build_page_extraction_result
+
+FIXTURE_TEXT_SOURCE = "fixture"
+FIXTURE_TEXT_SIGNATURE = "fixture-text-v1"
 
 
 def _artifact_dir(book_id: str, data_root: Path) -> Path:
@@ -53,6 +57,7 @@ def extract_book_pages(
     book: BookRecord,
     page_start: int = 1,
     page_count: int | None = None,
+    force: bool = False,
     data_root: Path | None = None,
 ) -> tuple[PageExtractionArtifact, ...]:
     data_root = data_root or get_books_root()
@@ -65,6 +70,11 @@ def extract_book_pages(
     end_page = book.total_pages if page_count is None else min(book.total_pages, start_page + page_count - 1)
     fixture_pages = load_text_fixture_pages(source_pdf) if is_text_fixture_source(source_pdf) else None
     reader = None if fixture_pages is not None else PdfReader(str(source_pdf))
+    current_text_source, current_text_source_signature = (
+        (FIXTURE_TEXT_SOURCE, FIXTURE_TEXT_SIGNATURE)
+        if fixture_pages is not None
+        else get_text_source_signature()
+    )
 
     artifacts: list[PageExtractionArtifact] = []
     for page_number in range(start_page, end_page + 1):
@@ -72,15 +82,30 @@ def extract_book_pages(
         page_hash = _page_image_hash(page_image_path)
         artifact_path = _page_artifact_path(book.id, page_number, data_root)
         existing_artifact = _load_page_artifact(artifact_path)
-        if existing_artifact and existing_artifact.source_page_sha256 == page_hash:
+        if (
+            not force
+            and existing_artifact
+            and existing_artifact.source_page_sha256 == page_hash
+            and existing_artifact.text_source == current_text_source
+            and existing_artifact.text_source_signature == current_text_source_signature
+        ):
             artifacts.append(existing_artifact)
             continue
 
         if fixture_pages is not None:
             raw_text = fixture_pages[page_number - 1][2]
+            text_source = FIXTURE_TEXT_SOURCE
+            text_source_signature = FIXTURE_TEXT_SIGNATURE
         else:
             assert reader is not None
-            raw_text = reader.pages[page_number - 1].extract_text() or ""
+            fallback_text = reader.pages[page_number - 1].extract_text() or ""
+            raw_text, text_source, text_source_signature = resolve_page_text(
+                fallback_text=fallback_text,
+                page_image_path=page_image_path,
+                book_title=book.title,
+                language_code=book.language_code,
+                page_number=page_number,
+            )
         page_result = build_page_extraction_result(
             book_id=book.id,
             page_number=page_number,
@@ -90,6 +115,8 @@ def extract_book_pages(
         )
         artifact = PageExtractionArtifact(
             source_page_sha256=page_hash,
+            text_source=text_source,
+            text_source_signature=text_source_signature,
             processor_version=page_result.processor_version,
             pipeline_version=page_result.pipeline_version,
             page=page_result,
@@ -105,6 +132,7 @@ def extract_book_text(
     book: BookRecord,
     page_start: int = 1,
     page_count: int | None = None,
+    force: bool = False,
     data_root: Path | None = None,
 ) -> tuple[Path, int]:
     data_root = data_root or get_books_root()
@@ -112,6 +140,7 @@ def extract_book_text(
         book=book,
         page_start=page_start,
         page_count=page_count,
+        force=force,
         data_root=data_root,
     )
     pages = [artifact.page for artifact in artifacts]

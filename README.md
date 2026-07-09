@@ -110,6 +110,18 @@ Then open:
 - [Library](http://127.0.0.1:3000/library)
 - [Sample reader](http://127.0.0.1:3000/reader/book-bbd944eb715e/8)
 
+### GitHub Pages demo
+
+If you want a static browser-only demo that can be published to GitHub Pages, build the packaged sample site:
+
+```powershell
+npm run build:web:demo
+```
+
+That export uses the built-in demo book, so it is useful for layout and navigation QA even when the API is offline. For the full book-import and OCR workflow, keep using the Docker Desktop stack.
+
+If you deploy it as a GitHub Pages repository site, set `NEXT_PUBLIC_TEXTPLEX_BASE_PATH` to the repo path before building so links and assets resolve correctly.
+
 ### Tests
 
 ```powershell

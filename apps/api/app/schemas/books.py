@@ -17,10 +17,13 @@ class BookImportRequest(BaseModel):
 class BookExtractionRequest(BaseModel):
     page_start: int = Field(default=1, ge=1)
     page_count: int | None = Field(default=None, ge=1)
+    force: bool = False
 
 
 class PageExtractionArtifact(BaseModel):
     source_page_sha256: str
+    text_source: str = "pypdf"
+    text_source_signature: str = "pypdf-text-v1"
     processor_version: str
     pipeline_version: str
     page: PageExtractionResult

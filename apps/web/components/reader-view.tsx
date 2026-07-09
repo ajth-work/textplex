@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  apiBaseUrl,
   fetchJson,
   formatElapsed,
   postJson,
+  resolveResourceUrl,
+  triggerBookExtraction,
+  isDemoMode,
   type BookExtractionResult,
   type BookReaderPageResponse,
   type LearningProfileSummary,
@@ -38,11 +40,15 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [profileSummary, setProfileSummary] = useState<LearningProfileSummary | null>(null);
   const [lexiconResult, setLexiconResult] = useState<LexiconLookupResponse | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const sessionIdRef = useRef<string | null>(null);
   const activeSecondsRef = useRef(0);
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
 
     async function loadPage() {
       try {
@@ -91,7 +97,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     return () => {
       active = false;
     };
-  }, [bookId, pageNumber]);
+  }, [bookId, pageNumber, refreshNonce]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -200,7 +206,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const page = pageData?.extraction?.page ?? null;
   const tokenEntry = resolveEntry(summary, selectedToken);
   const lexiconEntry = lexiconResult?.entries[0] ?? null;
-  const imageUrl = pageData ? `${apiBaseUrl}${pageData.image_url}` : "";
+  const imageUrl = pageData ? resolveResourceUrl(pageData.image_url) : "";
   const totalPages = pageData?.book.total_pages ?? summary?.page_end ?? pageNumber;
   const selectedSentence = useMemo(
     () => (page ? page.sentences.find((sentence) => sentence.order === selectedSentenceOrder) ?? null : null),
@@ -218,6 +224,30 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const tokenHsk = lexiconEntry?.hsk_level ?? selectedToken?.proficiency_level ?? null;
   const tokenRadical = lexiconEntry?.radical ?? null;
   const tokenStrokeCount = lexiconEntry?.stroke_count ?? null;
+  const needsExtraction = (pageData?.book.extracted_page_count ?? 0) <= 0;
+  const extractionSource = pageData?.extraction?.text_source ?? null;
+  const extractionSourceLabel = extractionSource ? extractionSource.toUpperCase() : "UNAVAILABLE";
+
+  async function handleExtractNow() {
+    if (!pageData || extracting) {
+      return;
+    }
+
+    setExtracting(true);
+    setExtractError(null);
+    try {
+      await triggerBookExtraction(bookId, {
+        page_start: 1,
+        page_count: pageData.book.total_pages,
+        force: true,
+      });
+      setRefreshNonce((value) => value + 1);
+    } catch (err) {
+      setExtractError(err instanceof Error ? err.message : "Unable to start extraction.");
+    } finally {
+      setExtracting(false);
+    }
+  }
 
   return (
     <section className="reader-shell">
@@ -228,12 +258,25 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
           <p className="muted">
             Page {pageNumber} of {totalPages}
           </p>
+          {isDemoMode ? <p className="small-copy">Demo mode is active. This reader is running from packaged sample data.</p> : null}
         </div>
         <div className="reader-topbar-actions">
           <div className="timer-chip">
             <span className="muted">Active</span>
             <strong>{formatElapsed(activeSeconds)}</strong>
           </div>
+          <div className="timer-chip">
+            <span className="muted">Source</span>
+            <strong>{extractionSourceLabel}</strong>
+          </div>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => void handleExtractNow()}
+            disabled={extracting || loading || !pageData}
+          >
+            {extracting ? "Refreshing..." : pageData?.book.extracted_page_count ? "Refresh extraction" : "Extract now"}
+          </button>
           {pageData?.book ? (
             <Link className="button button-secondary" href={`/books/${bookId}`}>
               Book detail
@@ -244,6 +287,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
       {loading ? <div className="card">Loading reader page...</div> : null}
       {error ? <div className="card error-card">{error}</div> : null}
+      {extractError ? <div className="card error-card">{extractError}</div> : null}
 
       {pageData && page ? (
         <div className="reader-layout">
@@ -359,6 +403,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             <section className="card inspector-card">
               <h2>Book frequency</h2>
               <p className="small-copy">Use this panel to watch book-wide vocabulary density while you read.</p>
+              <p className="small-copy">
+                Source: <strong>{extractionSourceLabel}</strong>
+              </p>
               {summary ? (
                 <ul className="frequency-list">
                   {summary.lexical_entries.slice(0, 10).map((entry) => (
@@ -424,6 +471,26 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
         <div className="card empty-state">
           <h2>Page text is not available yet</h2>
           <p>This page image is ready, but the structured extraction summary has not been generated for it yet.</p>
+          {needsExtraction ? (
+            <div className="button-row">
+              <button type="button" className="button button-primary" onClick={() => void handleExtractNow()} disabled={extracting || loading}>
+                {extracting ? "Extracting..." : "Extract now"}
+              </button>
+              <Link className="button button-secondary" href={`/books/${bookId}`}>
+                Back to book detail
+              </Link>
+            </div>
+          ) : null}
+          {!needsExtraction ? (
+            <div className="button-row">
+              <button type="button" className="button button-secondary" onClick={() => void handleExtractNow()} disabled={extracting || loading}>
+                {extracting ? "Refreshing..." : "Refresh extraction"}
+              </button>
+              <Link className="button button-secondary" href={`/books/${bookId}`}>
+                Back to book detail
+              </Link>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>

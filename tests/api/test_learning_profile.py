@@ -39,3 +39,27 @@ def test_learning_profile_records_session_and_page_read(imported_real_scan: tupl
     assert summary["reading_sessions"] == 1
     assert summary["page_reads"] == 1
     assert summary["active_books"] == 1
+
+
+def test_learning_profile_database_is_idempotent_across_multiple_sessions(
+    imported_real_scan: tuple[Path, BookRecord],
+) -> None:
+    data_root, record = imported_real_scan
+
+    app.state.data_root = data_root
+    client = TestClient(app)
+
+    baseline_response = client.get("/learning/profile")
+    assert baseline_response.status_code == 200
+    baseline = baseline_response.json()
+
+    first_session = client.post("/learning/sessions", json={"book_id": record.id})
+    second_session = client.post("/learning/sessions", json={"book_id": record.id})
+
+    assert first_session.status_code == 200
+    assert second_session.status_code == 200
+
+    summary_response = client.get("/learning/profile")
+    assert summary_response.status_code == 200
+    summary = summary_response.json()
+    assert summary["reading_sessions"] == baseline["reading_sessions"] + 2
