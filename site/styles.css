@@ -765,8 +765,8 @@ a {
   gap: 2px;
   justify-items: center;
   align-items: end;
-  border-radius: 999px;
-  padding: 3px 4px 4px;
+  border-radius: 12px;
+  padding: 5px 7px 6px;
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
@@ -803,6 +803,7 @@ a {
 .token-inline.is-selected {
   background: rgba(49, 170, 112, 0.18);
   border-color: rgba(49, 170, 112, 0.35);
+  padding-inline: 10px;
 }
 
 .token-inline:hover,
