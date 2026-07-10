@@ -116,8 +116,8 @@ a {
 }
 
 .site-nav {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: nowrap;
   gap: 6px;
   justify-content: stretch;
 }
@@ -130,7 +130,11 @@ a {
   font-weight: 700;
   color: rgba(29, 36, 48, 0.82);
   text-align: center;
+  min-width: 0;
+  flex: 1 1 0;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .nav-link.is-active {
@@ -637,10 +641,6 @@ a {
 
   .topbar-status {
     transform: translateY(1px);
-  }
-
-  .site-nav {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .reader-topline {
