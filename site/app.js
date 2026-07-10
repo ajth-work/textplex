@@ -463,7 +463,7 @@ function renderTokenPanel(page) {
     elements.tokenPanel.innerHTML = `
       <div class="token-panel-header">
         <span class="eyebrow">Lookup</span>
-        <button id="closeTokenPanel" class="icon-button" type="button" aria-label="Close definition">×</button>
+        <button id="closeTokenPanel" class="icon-button" type="button" aria-label="Close definition">Ã—</button>
       </div>
       <div class="token-lookup-card">
         <span class="token-lookup-term">${escapeHtml(token.surface_form)}</span>
@@ -471,7 +471,6 @@ function renderTokenPanel(page) {
       </div>
       <dl class="definition-grid">
         <div><dt>Lemma</dt><dd>${escapeHtml(lexiconEntry?.surface_form ?? token.lemma ?? token.surface_form)}</dd></div>
-        <div><dt>Pinyin</dt><dd>${escapeHtml(lexiconEntry?.pinyin ?? token.romanization ?? "-")}</dd></div>
         <div><dt>HSK</dt><dd>${escapeHtml(lexiconEntry?.hsk_level ?? token.proficiency_level ?? "-")}</dd></div>
         <div><dt>Frequency</dt><dd>${escapeHtml(String(entry?.frequency_in_book ?? 1))}</dd></div>
         <div><dt>Radical</dt><dd>${escapeHtml(lexiconEntry?.radical ?? "-")}</dd></div>
