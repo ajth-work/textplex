@@ -411,8 +411,7 @@ function renderTokenPanel(page) {
 
   if (!token) {
     elements.tokenPanel.innerHTML = `
-      <p class="small-copy">Tap a character or word in the reader to load a dictionary-style definition panel here.</p>
-      <p class="small-copy">The processor can keep the page visible while the lookup stays in a separate layer.</p>
+      <p class="small-copy">Select a word to see its definition.</p>
     `;
   } else {
     elements.tokenPanel.innerHTML = `
