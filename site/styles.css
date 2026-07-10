@@ -598,7 +598,7 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .reader-toolbar-actions {
@@ -614,6 +614,10 @@ a {
   display: inline-grid;
   place-items: center;
   font-size: 1rem;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-dark);
 }
 
 .reader-nav-button.is-active {
@@ -624,18 +628,18 @@ a {
 .reader-hero {
   display: grid;
   gap: 10px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .reader-hero-meta {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   justify-items: center;
   text-align: center;
 }
 
 .reader-hero-meta h2 {
-  font-size: clamp(1.8rem, 3vw, 2.3rem);
+  font-size: clamp(1.75rem, 2.8vw, 2.15rem);
   line-height: 1;
 }
 
@@ -677,13 +681,25 @@ a {
 }
 
 .reader-sheet {
-  border-radius: 30px 30px 24px 24px;
-  padding-top: 14px;
-  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.08), var(--shadow);
+  position: relative;
+  margin-top: 2px;
+  border-radius: 32px 32px 24px 24px;
+  padding-top: 18px;
+  box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.08), var(--shadow);
+}
+
+.reader-sheet::before {
+  content: "";
+  display: block;
+  width: 52px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(29, 36, 48, 0.24);
+  margin: 0 auto 12px;
 }
 
 .reader-sheet .section-heading {
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
 .page-image-wrap {
@@ -703,13 +719,13 @@ a {
 
 .reader-body {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .reader-page {
   display: grid;
-  gap: 12px;
-  padding-top: 4px;
+  gap: 14px;
+  padding-top: 0;
 }
 
 .notice {
@@ -723,17 +739,17 @@ a {
 
 .reader-text {
   display: grid;
-  gap: 8px;
-  border-radius: 26px;
+  gap: 10px;
+  border-radius: 28px;
   background: var(--surface-strong);
   border: 1px solid var(--surface-border);
-  min-height: 160px;
-  padding: 12px 10px 10px;
+  min-height: 172px;
+  padding: 18px 14px 14px;
 }
 
 .sentence-card {
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
 
 .sentence-pinyin,
@@ -741,13 +757,14 @@ a {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-start;
-  gap: 8px 6px;
+  gap: 10px 8px;
 }
 
 .sentence-pinyin-token {
-  min-width: 30px;
+  min-width: 28px;
   text-align: center;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
   color: var(--muted);
   line-height: 1.1;
 }
@@ -757,7 +774,7 @@ a {
   gap: 0;
   justify-items: center;
   border-radius: 999px;
-  padding: 2px 5px 3px;
+  padding: 1px 4px 2px;
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
@@ -765,13 +782,13 @@ a {
 }
 
 .token-inline.is-cjk {
-  font-size: 1rem;
+  font-size: 1.05rem;
 }
 
 .token-romanization {
   display: block;
   min-height: 0.9em;
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   line-height: 1;
   color: var(--muted);
   transform: translateY(1px);
@@ -779,7 +796,7 @@ a {
 
 .token-surface {
   display: block;
-  font-size: 1rem;
+  font-size: 1.02rem;
   line-height: 1.2;
   color: var(--text-dark);
 }
@@ -811,13 +828,13 @@ a {
   display: grid;
   gap: 6px;
   border-radius: 24px;
-  background: var(--surface-note);
-  border: 1px dashed var(--surface-dash);
+  background: var(--surface-strong);
+  border: 1px solid var(--surface-border);
 }
 
 .reader-translation {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   padding: 2px 4px 0;
 }
 
@@ -829,10 +846,10 @@ a {
 }
 
 .reader-translation-text {
-  font-size: 1rem;
-  line-height: 1.55;
+  font-size: 1.06rem;
+  line-height: 1.6;
   color: var(--text-dark);
-  max-width: 34ch;
+  max-width: 30ch;
 }
 
 .token-panel-header {
@@ -860,7 +877,7 @@ a {
 }
 
 .token-panel h3 {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
 }
 
 .definition-grid {
