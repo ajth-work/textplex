@@ -496,6 +496,30 @@ a {
   border: 1px dashed rgba(29, 36, 48, 0.14);
 }
 
+.token-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.icon-button {
+  border: 0;
+  background: transparent;
+  color: var(--text-dark);
+  font-size: 1.6rem;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.icon-button:hover,
+.icon-button:focus-visible {
+  background: rgba(240, 123, 24, 0.12);
+  outline: none;
+}
+
 .token-panel h3 {
   font-size: 1.25rem;
 }

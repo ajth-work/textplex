@@ -401,7 +401,10 @@ function renderTokenPanel(page) {
     `;
   } else {
     elements.tokenPanel.innerHTML = `
-      <span class="eyebrow">Lookup</span>
+      <div class="token-panel-header">
+        <span class="eyebrow">Lookup</span>
+        <button id="closeTokenPanel" class="icon-button" type="button" aria-label="Close definition">×</button>
+      </div>
       <h3>${escapeHtml(token.surface_form)}</h3>
       <p class="small-copy">${escapeHtml(lexiconEntry?.definition ?? token.definition_short ?? entry?.lemma ?? "No definition returned yet.")}</p>
       <dl class="definition-grid">
@@ -413,6 +416,10 @@ function renderTokenPanel(page) {
         <div><dt>Strokes</dt><dd>${escapeHtml(String(lexiconEntry?.stroke_count ?? "-"))}</dd></div>
       </dl>
     `;
+    const closeButton = elements.tokenPanel.querySelector("#closeTokenPanel");
+    closeButton?.addEventListener("click", () => {
+      setActiveView("reader");
+    });
   }
 
   if (page?.lexical_entries?.length) {
