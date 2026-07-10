@@ -28,6 +28,7 @@
           <a href="#library" class="nav-link" data-nav="library">Library</a>
           <a href="#reader" class="nav-link" data-nav="reader">Reader</a>
           <a href="#tools" class="nav-link" data-nav="tools">Tools</a>
+          <a href="#options" class="nav-link" data-nav="options">Options</a>
         </nav>
       </header>
 
@@ -199,6 +200,79 @@
             </div>
           </dl>
           <p id="statusSummary" class="small-copy">GitHub Pages serves the shell. A remote processor serves the content.</p>
+        </article>
+      </section>
+
+      <section id="optionsView" class="view tools-grid is-hidden" data-view="options">
+        <article class="card panel options-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Options</p>
+              <h2>Color suites</h2>
+            </div>
+            <span id="themeStatus" class="pill">Paper</span>
+          </div>
+          <p class="small-copy">Choose a palette for daylight, low light, or a more playful reading vibe.</p>
+
+          <div class="theme-group">
+            <h3>Daylight</h3>
+            <div class="theme-grid">
+              <button class="theme-card" type="button" data-theme-choice="paper">
+                <span class="theme-samples theme-samples-paper" aria-hidden="true"></span>
+                <span class="theme-card-label">
+                  <strong>Paper</strong>
+                  <span>Warm white, cream cards, soft contrast.</span>
+                </span>
+              </button>
+              <button class="theme-card" type="button" data-theme-choice="slate">
+                <span class="theme-samples theme-samples-slate" aria-hidden="true"></span>
+                <span class="theme-card-label">
+                  <strong>Slate</strong>
+                  <span>Cool gray-white with a cleaner, quieter tone.</span>
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div class="theme-group">
+            <h3>Dark</h3>
+            <div class="theme-grid">
+              <button class="theme-card" type="button" data-theme-choice="night">
+                <span class="theme-samples theme-samples-night" aria-hidden="true"></span>
+                <span class="theme-card-label">
+                  <strong>Night</strong>
+                  <span>Pitch black background with crisp white text.</span>
+                </span>
+              </button>
+              <button class="theme-card" type="button" data-theme-choice="midnight">
+                <span class="theme-samples theme-samples-midnight" aria-hidden="true"></span>
+                <span class="theme-card-label">
+                  <strong>Midnight</strong>
+                  <span>Blue-black dark mode with a softer reading glow.</span>
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div class="theme-group">
+            <h3>Fun</h3>
+            <div class="theme-grid">
+              <button class="theme-card" type="button" data-theme-choice="sunset">
+                <span class="theme-samples theme-samples-sunset" aria-hidden="true"></span>
+                <span class="theme-card-label">
+                  <strong>Sunset</strong>
+                  <span>Warm orange and rose tones for a brighter feel.</span>
+                </span>
+              </button>
+              <button class="theme-card" type="button" data-theme-choice="mint">
+                <span class="theme-samples theme-samples-mint" aria-hidden="true"></span>
+                <span class="theme-card-label">
+                  <strong>Mint</strong>
+                  <span>Teal, mint, and a little playful energy.</span>
+                </span>
+              </button>
+            </div>
+          </div>
         </article>
       </section>
     </main>

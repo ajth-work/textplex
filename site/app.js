@@ -1,11 +1,16 @@
 import { DEMO_BOOKS, DEMO_LEXICON, DEMO_PAGE } from "./demo-data.js";
 
 const storageKey = "textplex.processorBaseUrl";
+const themeStorageKey = "textplex.theme";
 const defaultView = "home";
-const viewNames = new Set(["home", "library", "reader", "tools"]);
+const defaultTheme = "paper";
+const themeNames = new Set(["paper", "slate", "night", "midnight", "sunset", "mint"]);
+const viewNames = new Set(["home", "library", "reader", "tools", "options"]);
 
 const elements = {
   navLinks: Array.from(document.querySelectorAll("[data-nav]")),
+  themeChoices: Array.from(document.querySelectorAll("[data-theme-choice]")),
+  themeStatus: document.getElementById("themeStatus"),
   viewSections: Array.from(document.querySelectorAll("[data-view]")),
   modeBadge: document.getElementById("modeBadge"),
   connectionState: document.getElementById("connectionState"),
@@ -47,6 +52,7 @@ const elements = {
 
 const state = {
   apiBaseUrl: normalizeBaseUrl(window.localStorage.getItem(storageKey) ?? ""),
+  theme: resolveTheme(window.localStorage.getItem(themeStorageKey) ?? defaultTheme),
   books: [],
   selectedBookId: null,
   selectedPageNumber: 1,
@@ -89,12 +95,19 @@ function bindEvents() {
       setActiveView(view);
     });
   });
+  elements.themeChoices.forEach((button) => {
+    button.addEventListener("click", () => {
+      const theme = resolveTheme(button.dataset.themeChoice ?? defaultTheme);
+      setTheme(theme);
+    });
+  });
   window.addEventListener("hashchange", () => {
     setActiveView(resolveView(window.location.hash), { syncHash: false });
   });
 }
 
 async function boot() {
+  applyTheme(state.theme);
   setActiveView(state.activeView, { syncHash: false });
   await connectFromCurrentValue();
 }
@@ -312,6 +325,7 @@ function renderAll() {
   renderViews();
   renderHome();
   renderVocabularyPanel();
+  renderOptions();
 }
 
 function renderBooks() {
@@ -530,6 +544,18 @@ function renderViews() {
   }
 }
 
+function renderOptions() {
+  elements.themeChoices.forEach((button) => {
+    const theme = resolveTheme(button.dataset.themeChoice ?? defaultTheme);
+    button.classList.toggle("is-active", theme === state.theme);
+    button.setAttribute("aria-pressed", String(theme === state.theme));
+  });
+
+  if (elements.themeStatus) {
+    elements.themeStatus.textContent = themeLabel(state.theme);
+  }
+}
+
 function updateModeChrome() {
   if (state.apiBaseUrl) {
     elements.modeBadge.textContent = "Live";
@@ -538,6 +564,18 @@ function updateModeChrome() {
   }
 
   elements.uploadButton.disabled = Boolean(state.busy || !state.apiBaseUrl);
+}
+
+function setTheme(theme) {
+  const resolved = resolveTheme(theme);
+  state.theme = resolved;
+  window.localStorage.setItem(themeStorageKey, resolved);
+  applyTheme(resolved);
+  renderOptions();
+}
+
+function applyTheme(theme) {
+  document.body.dataset.theme = resolveTheme(theme);
 }
 
 function setBusy(value) {
@@ -562,6 +600,28 @@ function setActiveView(view, options = {}) {
 function resolveView(hash) {
   const value = hash.replace(/^#/, "").trim().toLowerCase();
   return viewNames.has(value) ? value : defaultView;
+}
+
+function resolveTheme(value) {
+  return themeNames.has(value) ? value : defaultTheme;
+}
+
+function themeLabel(theme) {
+  switch (resolveTheme(theme)) {
+    case "slate":
+      return "Slate";
+    case "night":
+      return "Night";
+    case "midnight":
+      return "Midnight";
+    case "sunset":
+      return "Sunset";
+    case "mint":
+      return "Mint";
+    case "paper":
+    default:
+      return "Paper";
+  }
 }
 
 async function requestJson(pathname, options = {}) {
