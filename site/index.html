@@ -109,10 +109,20 @@
       </section>
 
       <section id="readerView" class="view card is-hidden" data-view="reader">
+        <div class="reader-toolbar">
+          <button id="readerBack" class="icon-button reader-nav-button" type="button" aria-label="Back to library">←</button>
+          <div class="reader-toolbar-actions">
+            <button id="toggleImage" class="icon-button reader-nav-button" type="button" aria-label="Toggle page image">🖼</button>
+            <button id="extractNow" class="icon-button reader-nav-button" type="button" aria-label="Extract now" disabled>＋</button>
+            <button class="icon-button reader-nav-button" type="button" aria-label="Bookmark">☆</button>
+            <button class="icon-button reader-nav-button" type="button" aria-label="More options">⋯</button>
+          </div>
+        </div>
         <div class="section-heading reader-heading">
           <div>
             <p class="eyebrow">Reader</p>
             <h2 id="readerTitle">Select a book</h2>
+            <p id="readerAuthor" class="small-copy">Pick a book from the library.</p>
           </div>
           <div class="reader-topline">
             <span id="readerProgress" class="reader-progress">P1 | S1/1</span>
@@ -121,11 +131,6 @@
               <button id="nextPage" class="button button-secondary button-compact" type="button" aria-label="Next sentence">▶</button>
             </div>
           </div>
-        </div>
-
-        <div class="reader-actions">
-          <button id="toggleImage" class="button button-secondary button-compact" type="button">Image</button>
-          <button id="extractNow" class="button button-secondary button-compact" type="button" disabled>Extract</button>
         </div>
 
         <div id="pageImageWrap" class="page-image-wrap is-hidden">
@@ -140,6 +145,7 @@
         <div id="readerBody" class="reader-body is-hidden">
           <div id="readerNotice" class="notice"></div>
           <div id="readerText" class="reader-text" aria-live="polite"></div>
+          <div id="readerTranslation" class="reader-translation"></div>
         </div>
 
         <article class="card panel reader-definition">

@@ -28,11 +28,14 @@ const elements = {
   libraryStatus: document.getElementById("libraryStatus"),
   bookList: document.getElementById("bookList"),
   readerTitle: document.getElementById("readerTitle"),
+  readerAuthor: document.getElementById("readerAuthor"),
   readerProgress: document.getElementById("readerProgress"),
   readerEmpty: document.getElementById("readerEmpty"),
   readerBody: document.getElementById("readerBody"),
   readerText: document.getElementById("readerText"),
+  readerTranslation: document.getElementById("readerTranslation"),
   readerNotice: document.getElementById("readerNotice"),
+  readerBack: document.getElementById("readerBack"),
   toggleImage: document.getElementById("toggleImage"),
   extractNow: document.getElementById("extractNow"),
   pageImageWrap: document.getElementById("pageImageWrap"),
@@ -86,6 +89,7 @@ function bindEvents() {
     state.showImage = !state.showImage;
     renderReader();
   });
+  elements.readerBack.addEventListener("click", () => setActiveView("library"));
   elements.extractNow.addEventListener("click", () => void extractSelectedBook());
   elements.prevPage.addEventListener("click", () => void moveSentence(-1));
   elements.nextPage.addEventListener("click", () => void moveSentence(1));
@@ -363,10 +367,13 @@ function renderReader() {
   elements.readerEmpty.classList.toggle("is-hidden", Boolean(page));
   elements.readerBody.classList.toggle("is-hidden", !page);
   elements.readerTitle.textContent = book?.title ?? "Select a book";
+  elements.readerAuthor.textContent = book?.author ?? "Pick a book from the library.";
   elements.readerProgress.textContent = page
     ? `P${state.selectedPageNumber} | S${currentSentence ? state.selectedSentenceIndex + 1 : 0}/${sentences.length || 0}`
     : "P1 | S1/1";
-  elements.toggleImage.textContent = state.showImage ? "Hide page image" : "Show page image";
+  elements.toggleImage.classList.toggle("is-active", state.showImage);
+  elements.toggleImage.setAttribute("aria-label", state.showImage ? "Hide page image" : "Show page image");
+  elements.toggleImage.title = state.showImage ? "Hide page image" : "Show page image";
   elements.pageImageWrap.classList.toggle("is-hidden", !state.showImage || !page);
   elements.pageImage.src = state.pageData?.image_url ?? "";
   const atFirstSentence = state.selectedSentenceIndex <= 0;
@@ -382,6 +389,7 @@ function renderReader() {
 
   if (!page) {
     elements.readerNotice.style.display = "none";
+    elements.readerTranslation.replaceChildren();
     return;
   }
 
@@ -396,26 +404,48 @@ function renderReader() {
   }
 
   if (currentSentence) {
-    const block = document.createElement("p");
-    block.className = "sentence-block";
+    const block = document.createElement("article");
+    block.className = "sentence-card";
     block.setAttribute("aria-label", `Sentence ${currentSentence.order}`);
+
+    const pinyinRow = document.createElement("div");
+    pinyinRow.className = "sentence-pinyin";
+
+    const chineseRow = document.createElement("div");
+    chineseRow.className = "sentence-chinese";
+
     for (const token of currentSentence.tokens) {
-      const span = document.createElement("span");
-      span.className = `token-inline ${isCjk(token.surface_form) ? "is-cjk" : "is-word"}`;
-      span.textContent = token.surface_form;
-      span.role = "button";
-      span.tabIndex = 0;
-      span.addEventListener("click", () => void inspectToken(token));
-      span.addEventListener("keydown", (event) => {
+      const tokenButton = document.createElement("button");
+      tokenButton.type = "button";
+      tokenButton.className = `token-inline ${isCjk(token.surface_form) ? "is-cjk" : "is-word"} ${token.romanization ? "" : "is-punct"}`.trim();
+      tokenButton.innerHTML = `
+        <span class="token-romanization">${escapeHtml(token.romanization ?? "")}</span>
+        <span class="token-surface">${escapeHtml(token.surface_form)}</span>
+      `;
+      tokenButton.addEventListener("click", () => void inspectToken(token));
+      tokenButton.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           void inspectToken(token);
         }
       });
-      block.appendChild(span);
+      const pinyin = document.createElement("span");
+      pinyin.className = "sentence-pinyin-token";
+      pinyin.textContent = token.romanization ?? " ";
+      pinyinRow.appendChild(pinyin);
+      chineseRow.appendChild(tokenButton);
     }
+    block.appendChild(pinyinRow);
+    block.appendChild(chineseRow);
     elements.readerText.appendChild(block);
   }
+
+  elements.readerTranslation.innerHTML = currentSentence
+    ? `
+      <p class="reader-translation-label">Translation</p>
+      <p class="reader-translation-text">${escapeHtml(currentSentence.translation ?? "Translation will appear here once the processor returns it.")}</p>
+    `
+    : "";
 }
 
 function renderTokenPanel(page) {

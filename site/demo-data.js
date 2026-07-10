@@ -51,6 +51,7 @@ export const DEMO_PAGE = {
         {
           order: 1,
           text: "我一直觉得宇宙像一张巨大而安静的网。",
+          translation: "I always feel the universe is like a huge, quiet net.",
           tokens: [
             token(1, "我", "I", "wǒ", "personal pronoun"),
             token(2, "一直", "all the time", "yīzhí", "always"),
@@ -70,6 +71,7 @@ export const DEMO_PAGE = {
         {
           order: 2,
           text: "它看不见，却一直在拉扯着所有人。",
+          translation: "It cannot be seen, yet it is always pulling at everyone.",
           tokens: [
             token(1, "它", "it", "tā", "third-person pronoun"),
             token(2, "看不见", "cannot be seen", "kàn bú jiàn", "invisible"),
@@ -87,6 +89,7 @@ export const DEMO_PAGE = {
         {
           order: 3,
           text: "可是只有在黑暗里，人才能看清星光。",
+          translation: "Only in darkness can people truly see the starlight.",
           tokens: [
             token(1, "可是", "however", "kěshì", "however"),
             token(2, "只有", "only", "zhǐyǒu", "only"),
