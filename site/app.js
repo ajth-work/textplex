@@ -70,6 +70,8 @@ const state = {
   theme: resolveTheme(window.localStorage.getItem(themeStorageKey) ?? defaultTheme),
   books: [],
   localEntries: loadLocalEntries(),
+  localReaderEntryId: null,
+  localReaderSentenceIndex: 0,
   selectedBookId: null,
   selectedPageNumber: 1,
   selectedSentenceIndex: 0,
@@ -156,7 +158,10 @@ function loadLocalEntries() {
       return [];
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.map((entry) => normalizeLocalEntry(entry)).filter(Boolean);
   } catch {
     return [];
   }
@@ -168,6 +173,53 @@ function saveLocalEntries() {
 
 function normalizeTag(value) {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function normalizeLocalEntry(entry) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  const body = typeof entry.body === "string" ? entry.body.trim() : "";
+  if (!body) {
+    return null;
+  }
+
+  const kind = entryKinds.has(entry.kind) ? entry.kind : defaultEntryKind;
+  const tags = Array.isArray(entry.tags) ? entry.tags.map((tag) => normalizeTag(String(tag))).filter(Boolean) : [];
+  const uniqueTags = [kind, ...tags].filter((tag, index, all) => all.indexOf(tag) === index);
+  const title = typeof entry.title === "string" && entry.title.trim() ? entry.title.trim() : summarizeText(body, 42);
+  const createdAt = typeof entry.created_at === "string" ? entry.created_at : new Date().toISOString();
+  const sentences = Array.isArray(entry.sentences) && entry.sentences.length ? entry.sentences : splitTextIntoSentences(body);
+
+  return {
+    id: typeof entry.id === "string" && entry.id ? entry.id : crypto.randomUUID(),
+    title,
+    body,
+    kind,
+    tags: uniqueTags,
+    created_at: createdAt,
+    sentences,
+  };
+}
+
+function splitTextIntoSentences(value) {
+  const compact = value.replace(/\r\n/g, "\n").trim();
+  if (!compact) {
+    return [];
+  }
+
+  const segmenter = typeof Intl !== "undefined" && typeof Intl.Segmenter === "function" ? new Intl.Segmenter("zh", { granularity: "sentence" }) : null;
+  if (segmenter) {
+    const pieces = Array.from(segmenter.segment(compact), (item) => item.segment.trim()).filter(Boolean);
+    if (pieces.length) {
+      return pieces;
+    }
+  }
+
+  const normalized = compact.replace(/\s+/g, " ");
+  const pieces = normalized.match(/[^。！？!?；;…]+[。！？!?；;…]?/g);
+  return (pieces ?? [normalized]).map((item) => item.trim()).filter(Boolean);
 }
 
 function summarizeText(value, maxLength = 180) {
@@ -235,16 +287,17 @@ function handleTextEntrySubmit(event) {
   const uniqueTags = [primaryTag, ...state.draftEntryTags].filter((tag, index, all) => all.indexOf(tag) === index);
 
   state.localEntries = [
-    {
+    normalizeLocalEntry({
       id: crypto.randomUUID(),
       title: resolvedTitle,
       body,
       kind: primaryTag,
       tags: uniqueTags,
       created_at: new Date().toISOString(),
-    },
+      sentences: splitTextIntoSentences(body),
+    }),
     ...state.localEntries,
-  ];
+  ].filter(Boolean);
   saveLocalEntries();
 
   elements.textEntryTitle.value = "";
@@ -252,7 +305,7 @@ function handleTextEntrySubmit(event) {
   elements.textEntryTagInput.value = "";
   state.draftEntryKind = primaryTag;
   state.draftEntryTags = [];
-  renderAll();
+  openLocalEntryReader(state.localEntries[0].id, 0);
 }
 
 async function saveProcessorUrl() {
@@ -271,6 +324,8 @@ async function connectFromCurrentValue(forceRemote = false) {
   state.error = null;
   state.pageError = null;
   state.pageData = null;
+  state.localReaderEntryId = null;
+  state.localReaderSentenceIndex = 0;
   state.selectedToken = null;
   state.selectedBookEntry = null;
   state.lexicon = null;
@@ -286,6 +341,7 @@ async function connectFromCurrentValue(forceRemote = false) {
     state.books = DEMO_BOOKS.slice();
     state.selectedBookId = DEMO_BOOKS[0]?.id ?? null;
     state.pageData = DEMO_PAGE;
+    state.localReaderEntryId = null;
     elements.connectionState.textContent = "Demo mode";
     elements.connectionState.className = "pill";
     elements.connectionHint.textContent = "Enter a processor URL to switch from the demo book to a live processor.";
@@ -358,6 +414,7 @@ async function handleUpload(event) {
 }
 
 async function loadReader(bookId, pageNumber, sentenceIndex = 0) {
+  state.localReaderEntryId = null;
   state.selectedBookId = bookId;
   state.selectedPageNumber = pageNumber;
   state.pageError = null;
@@ -381,6 +438,11 @@ async function loadReader(bookId, pageNumber, sentenceIndex = 0) {
 }
 
 async function moveSentence(delta) {
+  if (state.localReaderEntryId) {
+    moveLocalSentence(delta);
+    return;
+  }
+
   const book = state.pageData?.book ?? null;
   const sentences = state.pageData?.extraction?.page?.sentences ?? [];
   if (!book || !sentences.length) {
@@ -457,6 +519,38 @@ async function inspectToken(token) {
     state.lexicon = null;
   }
   renderReader();
+}
+
+function openLocalEntryReader(entryId, sentenceIndex = 0) {
+  const entry = state.localEntries.find((item) => item.id === entryId);
+  if (!entry) {
+    return;
+  }
+
+  state.localReaderEntryId = entryId;
+  state.localReaderSentenceIndex = Math.max(0, Math.min(sentenceIndex, Math.max((entry.sentences?.length ?? 1) - 1, 0)));
+  state.selectedBookId = null;
+  state.pageData = null;
+  state.selectedToken = null;
+  state.selectedBookEntry = null;
+  state.lexicon = null;
+  state.pageError = null;
+  setActiveView("reader");
+  renderAll();
+}
+
+function moveLocalSentence(delta) {
+  const entry = state.localEntries.find((item) => item.id === state.localReaderEntryId);
+  if (!entry) {
+    return;
+  }
+
+  const sentences = entry.sentences ?? [];
+  const next = state.localReaderSentenceIndex + delta;
+  if (next >= 0 && next < sentences.length) {
+    state.localReaderSentenceIndex = next;
+    renderReader();
+  }
 }
 
 function renderAll() {
@@ -546,10 +640,12 @@ function renderLocalEntries() {
 
     const tags = Array.isArray(entry.tags) ? entry.tags : [];
     const kind = entry.kind ?? tags[0] ?? defaultEntryKind;
+    const sentences = Array.isArray(entry.sentences) ? entry.sentences : splitTextIntoSentences(entry.body ?? "");
     node.querySelector(".text-entry-kind").textContent = kind;
     node.querySelector(".text-entry-date").textContent = formatLocalDate(entry.created_at);
     node.querySelector(".text-entry-title").textContent = entry.title;
     node.querySelector(".text-entry-snippet").textContent = summarizeText(entry.body);
+    node.querySelector(".text-entry-sentence-count").textContent = `${sentences.length} sentences`;
 
     const tagsWrap = node.querySelector(".text-entry-tags");
     const primaryTag = tags[0] ?? kind;
@@ -582,6 +678,10 @@ function renderLocalEntries() {
       tagsWrap.appendChild(chip);
     }
 
+    node.querySelector(".text-entry-open")?.addEventListener("click", () => {
+      openLocalEntryReader(entry.id, 0);
+    });
+
     node.querySelector(".text-entry-copy")?.addEventListener("click", async () => {
       await copyTextToClipboard(entry.body);
     });
@@ -596,35 +696,40 @@ function renderHome() {
 }
 
 function renderReader() {
-  const page = state.pageData?.extraction?.page ?? null;
-  const book = state.pageData?.book ?? null;
-  const sentences = page?.sentences ?? [];
-  const currentSentence = sentences[state.selectedSentenceIndex] ?? null;
+  const localEntry = state.localEntries.find((item) => item.id === state.localReaderEntryId) ?? null;
+  const page = localEntry ? null : state.pageData?.extraction?.page ?? null;
+  const book = localEntry ? null : state.pageData?.book ?? null;
+  const localSentences = localEntry?.sentences ?? [];
+  const remoteSentences = page?.sentences ?? [];
+  const currentSentence = localEntry ? localSentences[state.localReaderSentenceIndex] ?? null : remoteSentences[state.selectedSentenceIndex] ?? null;
+  const currentSentenceCount = localEntry ? localSentences.length : remoteSentences.length;
+  const currentSentenceNumber = localEntry ? state.localReaderSentenceIndex + 1 : state.selectedSentenceIndex + 1;
 
-  elements.readerEmpty.classList.toggle("is-hidden", Boolean(page));
-  elements.readerBody.classList.toggle("is-hidden", !page);
-  elements.readerTitle.textContent = book?.title ?? "Select a book";
-  elements.readerAuthor.textContent = book?.author ?? "Pick a book from the library.";
-  elements.readerProgress.textContent = page
-    ? `P${state.selectedPageNumber} | S${currentSentence ? state.selectedSentenceIndex + 1 : 0}/${sentences.length || 0}`
-    : "P1 | S1/1";
+  elements.readerEmpty.classList.toggle("is-hidden", Boolean(page || localEntry));
+  elements.readerBody.classList.toggle("is-hidden", !(page || localEntry));
+  elements.readerTitle.textContent = localEntry?.title ?? book?.title ?? "Select a book";
+  elements.readerAuthor.textContent = localEntry ? `Local text · ${localEntry.kind}` : book?.author ?? "Pick a book from the library.";
+  elements.readerProgress.textContent = page || localEntry ? `${localEntry ? "TXT" : `P${state.selectedPageNumber}`} | S${currentSentence ? currentSentenceNumber : 0}/${currentSentenceCount || 0}` : "P1 | S1/1";
   elements.toggleImage.classList.toggle("is-active", state.showImage);
   elements.toggleImage.setAttribute("aria-label", state.showImage ? "Hide page image" : "Show page image");
   elements.toggleImage.title = state.showImage ? "Hide page image" : "Show page image";
   elements.pageImageWrap.classList.toggle("is-hidden", !state.showImage || !page);
   elements.pageImage.src = state.pageData?.image_url ?? "";
-  const atFirstSentence = state.selectedSentenceIndex <= 0;
-  const atLastSentence = state.selectedSentenceIndex >= Math.max(sentences.length - 1, 0);
-  elements.prevPage.disabled = !book || (state.selectedPageNumber <= 1 && atFirstSentence);
-  elements.nextPage.disabled = !book || (state.selectedPageNumber >= (book?.total_pages ?? 1) && atLastSentence);
-  elements.extractNow.disabled = !state.selectedBookId || Boolean(state.busy);
+
+  const atFirstSentence = localEntry ? state.localReaderSentenceIndex <= 0 : state.selectedSentenceIndex <= 0;
+  const atLastSentence = localEntry
+    ? state.localReaderSentenceIndex >= Math.max(localSentences.length - 1, 0)
+    : state.selectedSentenceIndex >= Math.max(remoteSentences.length - 1, 0);
+  elements.prevPage.disabled = Boolean(state.busy) || (!localEntry && !book) || (localEntry ? atFirstSentence : state.selectedPageNumber <= 1 && atFirstSentence);
+  elements.nextPage.disabled = Boolean(state.busy) || (!localEntry && !book) || (localEntry ? atLastSentence : state.selectedPageNumber >= (book?.total_pages ?? 1) && atLastSentence);
+  elements.extractNow.disabled = !state.selectedBookId || Boolean(state.busy) || Boolean(localEntry);
 
   renderMetrics(book);
-  renderTokenPanel(page);
+  renderTokenPanel(page, localEntry);
 
   elements.readerText.replaceChildren();
 
-  if (!page) {
+  if (!(page || localEntry)) {
     elements.readerNotice.style.display = "none";
     elements.readerTranslation.replaceChildren();
     return;
@@ -635,50 +740,108 @@ function renderReader() {
     elements.readerNotice.textContent = state.pageError;
   } else if (!currentSentence) {
     elements.readerNotice.style.display = "block";
-    elements.readerNotice.textContent = "This page is ready, but no sentence is available yet.";
+    elements.readerNotice.textContent = localEntry
+      ? "This text is ready, but no sentence was extracted yet."
+      : "This page is ready, but no sentence is available yet.";
   } else {
     elements.readerNotice.style.display = "none";
   }
 
   if (currentSentence) {
-    const block = document.createElement("article");
-    block.className = "sentence-card";
-    block.setAttribute("aria-label", `Sentence ${currentSentence.order}`);
+    if (localEntry) {
+      const block = document.createElement("article");
+      block.className = "sentence-card local-sentence-card";
+      block.setAttribute("aria-label", `Sentence ${currentSentenceNumber}`);
 
-    const chineseRow = document.createElement("div");
-    chineseRow.className = "sentence-chinese";
-
-    for (const token of currentSentence.tokens) {
-      const tokenButton = document.createElement("button");
-      tokenButton.type = "button";
-      const isSelected = state.selectedToken && state.selectedToken.surface_form === token.surface_form && state.selectedToken.order === token.order;
-      tokenButton.className = `token-inline ${isCjk(token.surface_form) ? "is-cjk" : "is-word"} ${token.romanization ? "" : "is-punct"}${isSelected ? " is-selected" : ""}`.trim();
-      tokenButton.innerHTML = `
-        <span class="token-romanization">${escapeHtml(token.romanization ?? "")}</span>
-        <span class="token-surface">${escapeHtml(token.surface_form)}</span>
+      const header = document.createElement("div");
+      header.className = "local-sentence-meta";
+      header.innerHTML = `
+        <span class="eyebrow">Sentence</span>
+        <strong>${currentSentenceNumber}/${currentSentenceCount || 0}</strong>
       `;
-      tokenButton.addEventListener("click", () => void inspectToken(token));
-      tokenButton.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          void inspectToken(token);
-        }
-      });
-      chineseRow.appendChild(tokenButton);
+
+      const sentenceText = document.createElement("div");
+      sentenceText.className = "local-sentence-text";
+      sentenceText.textContent = currentSentence;
+
+      block.appendChild(header);
+      block.appendChild(sentenceText);
+      elements.readerText.appendChild(block);
+    } else {
+      const block = document.createElement("article");
+      block.className = "sentence-card";
+      block.setAttribute("aria-label", `Sentence ${currentSentence.order}`);
+
+      const chineseRow = document.createElement("div");
+      chineseRow.className = "sentence-chinese";
+
+      for (const token of currentSentence.tokens) {
+        const tokenButton = document.createElement("button");
+        tokenButton.type = "button";
+        const isSelected = state.selectedToken && state.selectedToken.surface_form === token.surface_form && state.selectedToken.order === token.order;
+        tokenButton.className = `token-inline ${isCjk(token.surface_form) ? "is-cjk" : "is-word"} ${token.romanization ? "" : "is-punct"}${isSelected ? " is-selected" : ""}`.trim();
+        tokenButton.innerHTML = `
+          <span class="token-romanization">${escapeHtml(token.romanization ?? "")}</span>
+          <span class="token-surface">${escapeHtml(token.surface_form)}</span>
+        `;
+        tokenButton.addEventListener("click", () => void inspectToken(token));
+        tokenButton.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            void inspectToken(token);
+          }
+        });
+        chineseRow.appendChild(tokenButton);
+      }
+      block.appendChild(chineseRow);
+      elements.readerText.appendChild(block);
     }
-    block.appendChild(chineseRow);
-    elements.readerText.appendChild(block);
   }
 
-  elements.readerTranslation.innerHTML = currentSentence
+  elements.readerTranslation.innerHTML = localEntry
     ? `
-      <p class="reader-translation-label">Translation</p>
-      <p class="reader-translation-text">${escapeHtml(currentSentence.translation ?? "Translation will appear here once the processor returns it.")}</p>
+      <p class="reader-translation-label">Parsed text</p>
+      <p class="reader-translation-text">${escapeHtml(`${currentSentenceCount || 0} sentences extracted from the pasted text.`)}</p>
     `
-    : "";
+    : currentSentence
+      ? `
+        <p class="reader-translation-label">Translation</p>
+        <p class="reader-translation-text">${escapeHtml(currentSentence.translation ?? "Translation will appear here once the processor returns it.")}</p>
+      `
+      : "";
 }
 
-function renderTokenPanel(page) {
+function renderTokenPanel(page, localEntry = null) {
+  if (localEntry) {
+    elements.tokenPanel.classList.remove("has-selection");
+    elements.tokenPanel.innerHTML = `
+      <div class="token-panel-header">
+        <span class="eyebrow">Lookup</span>
+        <button id="closeTokenPanel" class="icon-button" type="button" aria-label="Close text view">×</button>
+      </div>
+      <div class="token-lookup-card">
+        <span class="token-lookup-term">${escapeHtml(localEntry.kind)}</span>
+        <p class="token-lookup-definition">${escapeHtml(summarizeText(localEntry.body, 220))}</p>
+      </div>
+      <dl class="definition-grid">
+        <div><dt>Sentences</dt><dd>${escapeHtml(String(localEntry.sentences?.length ?? 0))}</dd></div>
+        <div><dt>Tags</dt><dd>${escapeHtml(String(localEntry.tags?.length ?? 0))}</dd></div>
+        <div><dt>Type</dt><dd>${escapeHtml(localEntry.kind)}</dd></div>
+        <div><dt>Created</dt><dd>${escapeHtml(formatLocalDate(localEntry.created_at))}</dd></div>
+        <div><dt>Copy</dt><dd>Available</dd></div>
+        <div><dt>Status</dt><dd>Parsed</dd></div>
+      </dl>
+    `;
+    const closeButton = elements.tokenPanel.querySelector("#closeTokenPanel");
+    closeButton?.addEventListener("click", () => {
+      state.localReaderEntryId = null;
+      state.localReaderSentenceIndex = 0;
+      setActiveView("library");
+      renderAll();
+    });
+    return;
+  }
+
   const token = state.selectedToken;
   const entry = state.selectedBookEntry;
   const lexiconEntry = state.lexicon?.entries?.[0] ?? null;
