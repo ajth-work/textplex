@@ -408,9 +408,6 @@ function renderReader() {
     block.className = "sentence-card";
     block.setAttribute("aria-label", `Sentence ${currentSentence.order}`);
 
-    const pinyinRow = document.createElement("div");
-    pinyinRow.className = "sentence-pinyin";
-
     const chineseRow = document.createElement("div");
     chineseRow.className = "sentence-chinese";
 
@@ -420,6 +417,7 @@ function renderReader() {
       const isSelected = state.selectedToken && state.selectedToken.surface_form === token.surface_form && state.selectedToken.order === token.order;
       tokenButton.className = `token-inline ${isCjk(token.surface_form) ? "is-cjk" : "is-word"} ${token.romanization ? "" : "is-punct"}${isSelected ? " is-selected" : ""}`.trim();
       tokenButton.innerHTML = `
+        <span class="token-romanization">${escapeHtml(token.romanization ?? "")}</span>
         <span class="token-surface">${escapeHtml(token.surface_form)}</span>
       `;
       tokenButton.addEventListener("click", () => void inspectToken(token));
@@ -429,13 +427,8 @@ function renderReader() {
           void inspectToken(token);
         }
       });
-      const pinyin = document.createElement("span");
-      pinyin.className = "sentence-pinyin-token";
-      pinyin.textContent = token.romanization ?? " ";
-      pinyinRow.appendChild(pinyin);
       chineseRow.appendChild(tokenButton);
     }
-    block.appendChild(pinyinRow);
     block.appendChild(chineseRow);
     elements.readerText.appendChild(block);
   }

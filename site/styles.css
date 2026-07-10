@@ -752,29 +752,21 @@ a {
   gap: 10px;
 }
 
-.sentence-pinyin,
 .sentence-chinese {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-start;
-  gap: 8px 8px;
-}
-
-.sentence-pinyin-token {
-  min-width: 28px;
-  text-align: center;
-  font-size: 0.72rem;
-  letter-spacing: 0.03em;
-  color: var(--muted);
-  line-height: 1.1;
+  align-items: flex-end;
+  gap: 14px 16px;
 }
 
 .token-inline {
   display: inline-grid;
-  gap: 0;
+  gap: 2px;
   justify-items: center;
+  align-items: end;
   border-radius: 999px;
-  padding: 1px 4px 2px;
+  padding: 3px 4px 4px;
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
@@ -785,11 +777,23 @@ a {
   font-size: 1.05rem;
 }
 
+.token-romanization {
+  display: block;
+  min-height: 0.95em;
+  font-size: 0.72rem;
+  line-height: 1;
+  color: var(--muted);
+}
+
 .token-surface {
   display: block;
   font-size: 1.02rem;
   line-height: 1.2;
   color: var(--text-dark);
+}
+
+.token-inline.is-punct .token-romanization {
+  display: none;
 }
 
 .token-inline.is-punct .token-surface {
