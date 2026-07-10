@@ -23,7 +23,7 @@ const elements = {
   libraryStatus: document.getElementById("libraryStatus"),
   bookList: document.getElementById("bookList"),
   readerTitle: document.getElementById("readerTitle"),
-  readerMeta: document.getElementById("readerMeta"),
+  readerProgress: document.getElementById("readerProgress"),
   readerEmpty: document.getElementById("readerEmpty"),
   readerBody: document.getElementById("readerBody"),
   readerText: document.getElementById("readerText"),
@@ -50,6 +50,7 @@ const state = {
   books: [],
   selectedBookId: null,
   selectedPageNumber: 1,
+  selectedSentenceIndex: 0,
   pageData: null,
   selectedToken: null,
   selectedBookEntry: null,
@@ -80,8 +81,8 @@ function bindEvents() {
     renderReader();
   });
   elements.extractNow.addEventListener("click", () => void extractSelectedBook());
-  elements.prevPage.addEventListener("click", () => void movePage(-1));
-  elements.nextPage.addEventListener("click", () => void movePage(1));
+  elements.prevPage.addEventListener("click", () => void moveSentence(-1));
+  elements.nextPage.addEventListener("click", () => void moveSentence(1));
   elements.navLinks.forEach((link) => {
     link.addEventListener("click", () => {
       const view = resolveView(link.getAttribute("href") ?? "");
@@ -121,6 +122,7 @@ async function connectFromCurrentValue(forceRemote = false) {
   state.vocabError = null;
   state.selectedBookId = null;
   state.selectedPageNumber = 1;
+  state.selectedSentenceIndex = 0;
 
   updateModeChrome();
 
@@ -199,7 +201,7 @@ async function handleUpload(event) {
   }
 }
 
-async function loadReader(bookId, pageNumber) {
+async function loadReader(bookId, pageNumber, sentenceIndex = 0) {
   state.selectedBookId = bookId;
   state.selectedPageNumber = pageNumber;
   state.pageError = null;
@@ -208,6 +210,11 @@ async function loadReader(bookId, pageNumber) {
   state.lexicon = null;
   try {
     state.pageData = await requestJson(`/books/${encodeURIComponent(bookId)}/pages/${pageNumber}`);
+    const sentences = state.pageData?.extraction?.page?.sentences ?? [];
+    state.selectedSentenceIndex =
+      sentenceIndex === -1
+        ? Math.max(sentences.length - 1, 0)
+        : Math.min(Math.max(0, sentenceIndex), Math.max(sentences.length - 1, 0));
     setActiveView("reader");
     renderAll();
   } catch (error) {
@@ -217,15 +224,26 @@ async function loadReader(bookId, pageNumber) {
   }
 }
 
-async function movePage(delta) {
-  if (!state.pageData?.book) {
+async function moveSentence(delta) {
+  const book = state.pageData?.book ?? null;
+  const sentences = state.pageData?.extraction?.page?.sentences ?? [];
+  if (!book || !sentences.length) {
     return;
   }
-  const nextPage = Math.min(Math.max(1, state.selectedPageNumber + delta), state.pageData.book.total_pages);
-  if (nextPage === state.selectedPageNumber) {
+
+  const nextSentence = state.selectedSentenceIndex + delta;
+  if (nextSentence >= 0 && nextSentence < sentences.length) {
+    state.selectedSentenceIndex = nextSentence;
+    state.selectedToken = null;
+    renderReader();
     return;
   }
-  await loadReader(state.selectedBookId, nextPage);
+
+  if (delta > 0 && state.selectedPageNumber < book.total_pages) {
+    await loadReader(state.selectedBookId, state.selectedPageNumber + 1, 0);
+  } else if (delta < 0 && state.selectedPageNumber > 1) {
+    await loadReader(state.selectedBookId, state.selectedPageNumber - 1, -1);
+  }
 }
 
 async function extractSelectedBook() {
@@ -270,9 +288,7 @@ async function inspectToken(token) {
   if (!state.apiBaseUrl) {
     state.lexicon = lookupDemoLexicon(token.surface_form);
     state.vocabLookup = state.lexicon;
-    setActiveView("tools");
     renderReader();
-    renderVocabularyPanel();
     return;
   }
 
@@ -280,16 +296,11 @@ async function inspectToken(token) {
     state.lexicon = await requestJson(
       `/lexicon/lookup?language_code=${encodeURIComponent(book.language_code)}&term=${encodeURIComponent(token.surface_form)}`,
     );
-    state.vocabLookup = state.lexicon;
     state.vocabError = null;
   } catch {
     state.lexicon = null;
-    state.vocabLookup = null;
-    state.vocabError = "No vocabulary match returned.";
   }
-  setActiveView("tools");
   renderReader();
-  renderVocabularyPanel();
 }
 
 function renderAll() {
@@ -332,16 +343,22 @@ function renderHome() {
 function renderReader() {
   const page = state.pageData?.extraction?.page ?? null;
   const book = state.pageData?.book ?? null;
+  const sentences = page?.sentences ?? [];
+  const currentSentence = sentences[state.selectedSentenceIndex] ?? null;
 
   elements.readerEmpty.classList.toggle("is-hidden", Boolean(page));
   elements.readerBody.classList.toggle("is-hidden", !page);
   elements.readerTitle.textContent = book?.title ?? "Select a book";
-  elements.readerMeta.textContent = "";
+  elements.readerProgress.textContent = page
+    ? `P${state.selectedPageNumber} | S${currentSentence ? state.selectedSentenceIndex + 1 : 0}/${sentences.length || 0}`
+    : "P1 | S1/1";
   elements.toggleImage.textContent = state.showImage ? "Hide page image" : "Show page image";
   elements.pageImageWrap.classList.toggle("is-hidden", !state.showImage || !page);
   elements.pageImage.src = state.pageData?.image_url ?? "";
-  elements.prevPage.disabled = !book || state.selectedPageNumber <= 1;
-  elements.nextPage.disabled = !book || state.selectedPageNumber >= (book?.total_pages ?? 1);
+  const atFirstSentence = state.selectedSentenceIndex <= 0;
+  const atLastSentence = state.selectedSentenceIndex >= Math.max(sentences.length - 1, 0);
+  elements.prevPage.disabled = !book || (state.selectedPageNumber <= 1 && atFirstSentence);
+  elements.nextPage.disabled = !book || (state.selectedPageNumber >= (book?.total_pages ?? 1) && atLastSentence);
   elements.extractNow.disabled = !state.selectedBookId || Boolean(state.busy);
 
   renderMetrics(book);
@@ -357,35 +374,33 @@ function renderReader() {
   if (state.pageError) {
     elements.readerNotice.style.display = "block";
     elements.readerNotice.textContent = state.pageError;
-  } else if (!page.sentences?.length) {
+  } else if (!currentSentence) {
     elements.readerNotice.style.display = "block";
-    elements.readerNotice.textContent = "This page image is ready, but the structured extraction summary has not been generated yet.";
+    elements.readerNotice.textContent = "This page is ready, but no sentence is available yet.";
   } else {
     elements.readerNotice.style.display = "none";
   }
 
-  if (page.sentences?.length) {
-    for (const sentence of page.sentences) {
-      const block = document.createElement("p");
-      block.className = "sentence-block";
-      block.setAttribute("aria-label", `Sentence ${sentence.order}`);
-      for (const token of sentence.tokens) {
-        const span = document.createElement("span");
-        span.className = `token-inline ${isCjk(token.surface_form) ? "is-cjk" : "is-word"}`;
-        span.textContent = token.surface_form;
-        span.role = "button";
-        span.tabIndex = 0;
-        span.addEventListener("click", () => void inspectToken(token));
-        span.addEventListener("keydown", (event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            void inspectToken(token);
-          }
-        });
-        block.appendChild(span);
-      }
-      elements.readerText.appendChild(block);
+  if (currentSentence) {
+    const block = document.createElement("p");
+    block.className = "sentence-block";
+    block.setAttribute("aria-label", `Sentence ${currentSentence.order}`);
+    for (const token of currentSentence.tokens) {
+      const span = document.createElement("span");
+      span.className = `token-inline ${isCjk(token.surface_form) ? "is-cjk" : "is-word"}`;
+      span.textContent = token.surface_form;
+      span.role = "button";
+      span.tabIndex = 0;
+      span.addEventListener("click", () => void inspectToken(token));
+      span.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          void inspectToken(token);
+        }
+      });
+      block.appendChild(span);
     }
+    elements.readerText.appendChild(block);
   }
 }
 
@@ -418,7 +433,10 @@ function renderTokenPanel(page) {
     `;
     const closeButton = elements.tokenPanel.querySelector("#closeTokenPanel");
     closeButton?.addEventListener("click", () => {
-      setActiveView("reader");
+      state.selectedToken = null;
+      state.selectedBookEntry = null;
+      state.lexicon = null;
+      renderReader();
     });
   }
 

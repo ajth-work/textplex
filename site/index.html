@@ -112,12 +112,19 @@
           <div>
             <p class="eyebrow">Reader</p>
             <h2 id="readerTitle">Select a book</h2>
-            <p id="readerMeta" class="small-copy is-hidden"></p>
           </div>
-          <div class="reader-actions">
-            <button id="toggleImage" class="button button-secondary button-compact" type="button">Image</button>
-            <button id="extractNow" class="button button-secondary button-compact" type="button" disabled>Extract</button>
+          <div class="reader-topline">
+            <span id="readerProgress" class="reader-progress">P1 | S1/1</span>
+            <div class="reader-sentence-nav">
+              <button id="prevPage" class="button button-secondary button-compact" type="button" aria-label="Previous sentence">◀</button>
+              <button id="nextPage" class="button button-secondary button-compact" type="button" aria-label="Next sentence">▶</button>
+            </div>
           </div>
+        </div>
+
+        <div class="reader-actions">
+          <button id="toggleImage" class="button button-secondary button-compact" type="button">Image</button>
+          <button id="extractNow" class="button button-secondary button-compact" type="button" disabled>Extract</button>
         </div>
 
         <div id="pageImageWrap" class="page-image-wrap is-hidden">
@@ -132,15 +139,9 @@
         <div id="readerBody" class="reader-body is-hidden">
           <div id="readerNotice" class="notice"></div>
           <div id="readerText" class="reader-text" aria-live="polite"></div>
-          <div class="reader-nav">
-            <button id="prevPage" class="button button-secondary" type="button">Previous</button>
-            <button id="nextPage" class="button button-secondary" type="button">Next</button>
-          </div>
         </div>
-      </section>
 
-      <section id="toolsView" class="view tools-grid is-hidden" data-view="tools">
-        <article class="card panel">
+        <article class="card panel reader-definition">
           <div class="section-heading">
             <div>
               <p class="eyebrow">Token</p>
@@ -151,7 +152,9 @@
             <p class="small-copy">Tap a word for a definition.</p>
           </div>
         </article>
+      </section>
 
+      <section id="toolsView" class="view tools-grid is-hidden" data-view="tools">
         <article class="card panel">
           <div class="section-heading">
             <div>
