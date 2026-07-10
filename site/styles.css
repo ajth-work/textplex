@@ -326,6 +326,10 @@ a {
   margin-top: 8px;
 }
 
+.vocab-form {
+  margin-top: 0;
+}
+
 .book-list {
   display: grid;
   gap: 12px;
@@ -503,6 +507,25 @@ a {
   margin-top: 10px;
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.46);
+}
+
+.vocab-results {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.vocab-result {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(29, 36, 48, 0.08);
+}
+
+.vocab-grid {
+  margin-top: 2px;
 }
 
 .hidden,

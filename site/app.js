@@ -37,6 +37,11 @@ const elements = {
   statusSummary: document.getElementById("statusSummary"),
   prevPage: document.getElementById("prevPage"),
   nextPage: document.getElementById("nextPage"),
+  vocabForm: document.getElementById("vocabForm"),
+  vocabTerm: document.getElementById("vocabTerm"),
+  vocabSearchButton: document.getElementById("vocabSearchButton"),
+  vocabStatus: document.getElementById("vocabStatus"),
+  vocabResults: document.getElementById("vocabResults"),
   bookCardTemplate: document.getElementById("bookCardTemplate"),
 };
 
@@ -49,6 +54,8 @@ const state = {
   selectedToken: null,
   selectedBookEntry: null,
   lexicon: null,
+  vocabLookup: null,
+  vocabError: null,
   showImage: false,
   busy: false,
   error: null,
@@ -64,6 +71,10 @@ function bindEvents() {
   elements.saveProcessorUrl.addEventListener("click", saveProcessorUrl);
   elements.connectProcessor.addEventListener("click", connectProcessor);
   elements.uploadForm.addEventListener("submit", handleUpload);
+  elements.vocabForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void lookupVocabulary(elements.vocabTerm.value.trim());
+  });
   elements.toggleImage.addEventListener("click", () => {
     state.showImage = !state.showImage;
     renderReader();
@@ -106,6 +117,8 @@ async function connectFromCurrentValue(forceRemote = false) {
   state.selectedToken = null;
   state.selectedBookEntry = null;
   state.lexicon = null;
+  state.vocabLookup = null;
+  state.vocabError = null;
   state.selectedBookId = null;
   state.selectedPageNumber = 1;
 
@@ -252,11 +265,14 @@ async function inspectToken(token) {
 
   state.selectedToken = token;
   state.selectedBookEntry = page?.lexical_entries?.find((item) => item.lemma === (token.lemma ?? token.surface_form)) ?? null;
+  elements.vocabTerm.value = token.surface_form;
 
   if (!state.apiBaseUrl) {
     state.lexicon = lookupDemoLexicon(token.surface_form);
+    state.vocabLookup = state.lexicon;
     setActiveView("tools");
     renderReader();
+    renderVocabularyPanel();
     return;
   }
 
@@ -264,11 +280,16 @@ async function inspectToken(token) {
     state.lexicon = await requestJson(
       `/lexicon/lookup?language_code=${encodeURIComponent(book.language_code)}&term=${encodeURIComponent(token.surface_form)}`,
     );
+    state.vocabLookup = state.lexicon;
+    state.vocabError = null;
   } catch {
     state.lexicon = null;
+    state.vocabLookup = null;
+    state.vocabError = "No vocabulary match returned.";
   }
   setActiveView("tools");
   renderReader();
+  renderVocabularyPanel();
 }
 
 function renderAll() {
@@ -279,6 +300,7 @@ function renderAll() {
   renderNavigation();
   renderViews();
   renderHome();
+  renderVocabularyPanel();
 }
 
 function renderBooks() {
@@ -410,6 +432,44 @@ function renderTokenPanel(page) {
   }
 }
 
+function renderVocabularyPanel() {
+  const lookup = state.vocabLookup;
+
+  if (state.vocabError) {
+    elements.vocabStatus.innerHTML = `<p class="small-copy">${escapeHtml(state.vocabError)}</p>`;
+  } else if (!lookup) {
+    elements.vocabStatus.innerHTML = `<p class="small-copy">Search the lexicon directly.</p>`;
+  } else {
+    elements.vocabStatus.innerHTML = `<p class="small-copy">Results for <strong>${escapeHtml(lookup.query)}</strong></p>`;
+  }
+
+  elements.vocabResults.replaceChildren();
+
+  if (!lookup?.entries?.length) {
+    return;
+  }
+
+  for (const entry of lookup.entries.slice(0, 8)) {
+    const result = document.createElement("article");
+    result.className = "vocab-result";
+    result.innerHTML = `
+      <div class="book-card-top">
+        <span class="pill">${escapeHtml(entry.entry_type)}</span>
+        <span class="muted">${escapeHtml(entry.hsk_level ?? "-")}</span>
+      </div>
+      <h3>${escapeHtml(entry.surface_form)}</h3>
+      <p class="small-copy">${escapeHtml(entry.definition ?? "No definition returned.")}</p>
+      <dl class="definition-grid vocab-grid">
+        <div><dt>Pinyin</dt><dd>${escapeHtml(entry.pinyin ?? "-")}</dd></div>
+        <div><dt>Radical</dt><dd>${escapeHtml(entry.radical ?? "-")}</dd></div>
+        <div><dt>Strokes</dt><dd>${escapeHtml(String(entry.stroke_count ?? "-"))}</dd></div>
+        <div><dt>Rank</dt><dd>${escapeHtml(String(entry.frequency_rank ?? "-"))}</dd></div>
+      </dl>
+    `;
+    elements.vocabResults.appendChild(result);
+  }
+}
+
 function renderMetrics(book) {
   const totalPages = book?.total_pages ?? 0;
   const prepared = book?.page_image_count ?? 0;
@@ -464,6 +524,7 @@ function setBusy(value) {
   elements.saveProcessorUrl.disabled = value;
   elements.connectProcessor.disabled = value;
   elements.extractNow.disabled = value;
+  elements.vocabSearchButton.disabled = value;
 }
 
 function setActiveView(view, options = {}) {
@@ -504,6 +565,33 @@ async function requestJson(pathname, options = {}) {
   }
 
   return response.json();
+}
+
+async function lookupVocabulary(term) {
+  const normalized = term.trim();
+  if (!normalized) {
+    state.vocabError = "Enter a search term.";
+    state.vocabLookup = null;
+    renderVocabularyPanel();
+    return;
+  }
+
+  const book = state.pageData?.book ?? state.books[0] ?? null;
+  const languageCode = book?.language_code ?? "zh";
+
+  try {
+    setBusy(true);
+    state.vocabLookup = await requestJson(
+      `/lexicon/lookup?language_code=${encodeURIComponent(languageCode)}&term=${encodeURIComponent(normalized)}`,
+    );
+    state.vocabError = null;
+  } catch (error) {
+    state.vocabLookup = null;
+    state.vocabError = error instanceof Error ? error.message : "Vocabulary lookup failed.";
+  } finally {
+    setBusy(false);
+    renderVocabularyPanel();
+  }
 }
 
 function demoRequest(pathname, options = {}) {
