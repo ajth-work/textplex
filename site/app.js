@@ -8,7 +8,6 @@ const elements = {
   navLinks: Array.from(document.querySelectorAll("[data-nav]")),
   viewSections: Array.from(document.querySelectorAll("[data-view]")),
   modeBadge: document.getElementById("modeBadge"),
-  modeHint: document.getElementById("modeHint"),
   connectionState: document.getElementById("connectionState"),
   connectionHint: document.getElementById("connectionHint"),
   processorUrl: document.getElementById("processorUrl"),
@@ -451,11 +450,9 @@ function renderViews() {
 
 function updateModeChrome() {
   if (state.apiBaseUrl) {
-    elements.modeBadge.textContent = "Remote processor";
-    elements.modeHint.textContent = "GitHub Pages only serves the HTML/CSS/JS shell.";
+    elements.modeBadge.textContent = "Live";
   } else {
-    elements.modeBadge.textContent = "Demo shell";
-    elements.modeHint.textContent = "The demo book keeps the layout testable without a backend.";
+    elements.modeBadge.textContent = "Demo";
   }
 
   elements.uploadButton.disabled = Boolean(state.busy || !state.apiBaseUrl);
