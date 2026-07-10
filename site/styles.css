@@ -75,13 +75,13 @@ a {
 .topbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 20px;
+  gap: 14px;
   align-items: center;
-  padding: 18px 22px;
+  padding: 16px 18px;
 }
 
 .topbar h1 {
-  font-size: 1.85rem;
+  font-size: 1.5rem;
 }
 
 .topbar-brand {
@@ -90,10 +90,10 @@ a {
 
 .topbar-status {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   align-content: start;
-  min-width: 220px;
-  padding: 16px;
+  min-width: 180px;
+  padding: 14px;
   border-radius: 22px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.33));
 }
@@ -106,7 +106,7 @@ a {
 }
 
 .nav-link {
-  padding: 10px 14px;
+  padding: 9px 12px;
   border-radius: 999px;
   border: 1px solid rgba(29, 36, 48, 0.12);
   background: rgba(255, 255, 255, 0.6);
@@ -139,7 +139,7 @@ a {
 }
 
 .view {
-  padding: 22px;
+  padding: 18px;
 }
 
 .view.is-hidden {
@@ -151,23 +151,23 @@ a {
 }
 
 .hero-copy h2 {
-  font-size: clamp(2.3rem, 4vw, 4.6rem);
+  font-size: clamp(2rem, 3.6vw, 4rem);
   line-height: 0.95;
   max-width: 12ch;
 }
 
 .lede {
-  margin-top: 18px;
-  font-size: 1.1rem;
-  line-height: 1.65;
+  margin-top: 14px;
+  font-size: 1rem;
+  line-height: 1.55;
   color: rgba(29, 36, 48, 0.88);
 }
 
 .hero-stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 22px;
+  gap: 12px;
+  margin-top: 18px;
 }
 
 .stat-card,
@@ -181,12 +181,12 @@ a {
 
 .stat-card {
   display: grid;
-  gap: 10px;
-  padding: 18px;
+  gap: 8px;
+  padding: 14px;
 }
 
 .stat-card strong {
-  font-size: 2rem;
+  font-size: 1.6rem;
   color: var(--text-dark);
 }
 
@@ -199,17 +199,17 @@ a {
 }
 
 .section-heading h2 {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
 }
 
 .section-heading h3 {
-  font-size: 1.05rem;
+  font-size: 0.98rem;
 }
 
 .split-grid,
 .tools-grid {
   display: grid;
-  gap: 18px;
+  gap: 14px;
 }
 
 .split-grid {
@@ -227,7 +227,7 @@ a {
 .book-card,
 .page-image-wrap,
 .reader-text {
-  padding: 18px;
+  padding: 14px;
 }
 
 .field {
@@ -261,7 +261,7 @@ a {
 .button {
   border: 0;
   border-radius: 999px;
-  padding: 14px 20px;
+  padding: 12px 18px;
   font-weight: 700;
   font-size: 0.96rem;
   cursor: pointer;
@@ -291,7 +291,7 @@ a {
 }
 
 .button-compact {
-  padding: 10px 14px;
+  padding: 9px 13px;
 }
 
 .pill {
@@ -312,14 +312,14 @@ a {
 
 .upload-form {
   display: grid;
-  gap: 12px;
-  margin-top: 10px;
+  gap: 10px;
+  margin-top: 8px;
 }
 
 .book-list {
   display: grid;
-  gap: 16px;
-  margin-top: 18px;
+  gap: 12px;
+  margin-top: 14px;
 }
 
 .book-card {
@@ -336,18 +336,18 @@ a {
 }
 
 .book-title {
-  margin-top: 12px;
-  font-size: 1.8rem;
+  margin-top: 10px;
+  font-size: 1.55rem;
 }
 
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .metric-grid > div {
-  padding: 14px;
+  padding: 12px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.58);
   border: 1px solid rgba(29, 36, 48, 0.08);
@@ -361,8 +361,8 @@ a {
 }
 
 .metric-grid dd {
-  margin: 6px 0 0;
-  font-size: 1.45rem;
+  margin: 4px 0 0;
+  font-size: 1.25rem;
   font-weight: 800;
 }
 
@@ -387,14 +387,14 @@ a {
 
 .page-image-wrap img {
   width: 100%;
-  max-height: 480px;
+  max-height: 420px;
   object-fit: contain;
   border-radius: 16px;
 }
 
 .reader-body {
   display: grid;
-  gap: 18px;
+  gap: 14px;
 }
 
 .notice {
@@ -408,19 +408,19 @@ a {
 
 .reader-text {
   display: grid;
-  gap: 14px;
+  gap: 12px;
   border-radius: 26px;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(29, 36, 48, 0.08);
-  min-height: 260px;
+  min-height: 220px;
 }
 
 .sentence-block {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  line-height: 1.95;
-  font-size: 1.08rem;
+  gap: 4px;
+  line-height: 1.8;
+  font-size: 1rem;
 }
 
 .token-inline {
@@ -435,7 +435,7 @@ a {
 }
 
 .token-inline.is-cjk {
-  font-size: 1.18rem;
+  font-size: 1.08rem;
 }
 
 .token-inline:hover,
@@ -448,31 +448,31 @@ a {
 
 .reader-nav {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .empty-state,
 .token-panel {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.65);
   border: 1px dashed rgba(29, 36, 48, 0.14);
 }
 
 .token-panel h3 {
-  font-size: 1.55rem;
+  font-size: 1.25rem;
 }
 
 .definition-grid {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .definition-grid > div {
-  padding: 12px;
+  padding: 10px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.6);
 }
@@ -485,12 +485,12 @@ a {
 }
 
 .definition-grid dd {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   font-weight: 700;
 }
 
 .library-note {
-  margin-top: 12px;
+  margin-top: 10px;
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.46);
 }
@@ -520,7 +520,7 @@ a {
 
   .topbar,
   .view {
-    padding: 18px;
+    padding: 14px;
   }
 
   .hero-stats,

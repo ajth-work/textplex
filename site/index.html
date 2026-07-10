@@ -15,10 +15,7 @@
       <header class="topbar card">
         <div class="topbar-brand">
           <p class="eyebrow">TextPlex</p>
-          <h1>Reader workspace</h1>
-          <p class="small-copy">
-            Separate views for home, library, reader, and tools so the app feels like a small suite instead of one endless page.
-          </p>
+          <h1>Reader</h1>
         </div>
 
         <nav class="site-nav" aria-label="Primary">
@@ -31,28 +28,26 @@
         <div class="topbar-status">
           <span class="badge-label">Mode</span>
           <strong id="modeBadge">Demo shell</strong>
-          <span id="modeHint" class="small-copy">Connect a processor URL to load live books.</span>
+          <span id="modeHint" class="small-copy">Connect a processor URL.</span>
         </div>
       </header>
 
       <section id="homeView" class="view card" data-view="home">
         <div class="hero-copy">
           <p class="eyebrow">Home</p>
-          <h2>Books ready to read, with the processor kept off the page host.</h2>
-          <p class="lede">
-            This static shell is built for GitHub Pages. It sends uploads and page requests to a remote processor API, then renders the reader in plain HTML, CSS, and JavaScript.
-          </p>
+          <h2>Books ready to read.</h2>
+          <p class="lede">GitHub Pages hosts the shell. A remote processor handles uploads and text extraction.</p>
         </div>
         <div class="hero-stats">
           <div class="stat-card">
             <span class="badge-label">Books</span>
             <strong id="homeBookCount">0</strong>
-            <span class="small-copy">Imported books in the local registry</span>
+            <span class="small-copy">In library</span>
           </div>
           <div class="stat-card">
             <span class="badge-label">Pages</span>
             <strong id="homePageCount">0</strong>
-            <span class="small-copy">Ready for reading in the current book</span>
+            <span class="small-copy">In view</span>
           </div>
         </div>
       </section>
@@ -74,9 +69,7 @@
               </div>
               <span id="connectionState" class="pill pill-warn">Not connected</span>
             </div>
-            <p class="small-copy">
-              Set the processor base URL once and the shell will reuse it. Example: <code>https://api.example.com</code>.
-            </p>
+            <p class="small-copy">Set the processor URL once. Example: <code>https://api.example.com</code>.</p>
             <label class="field">
               <span>Processor base URL</span>
               <input id="processorUrl" type="url" placeholder="https://api.example.com" autocomplete="off" />
@@ -85,9 +78,7 @@
               <button id="saveProcessorUrl" class="button button-secondary" type="button">Save URL</button>
               <button id="connectProcessor" class="button button-primary" type="button">Connect</button>
             </div>
-            <p id="connectionHint" class="small-copy">
-              Leave the field blank to view the built-in demo book. The remote processor must allow CORS for GitHub Pages.
-            </p>
+            <p id="connectionHint" class="small-copy">Leave blank for the demo book.</p>
           </section>
 
           <section class="panel">
@@ -96,7 +87,7 @@
                 <h3>Upload</h3>
               </div>
             </div>
-            <p class="small-copy">Upload a PDF to the remote processor. In demo mode, this control is disabled.</p>
+            <p class="small-copy">Upload a PDF to the processor.</p>
             <form id="uploadForm" class="upload-form">
               <label class="field">
                 <span>Book title</span>
@@ -109,7 +100,7 @@
               <button id="uploadButton" class="button button-primary" type="submit" disabled>Upload PDF</button>
             </form>
             <div class="library-note">
-              <p id="libraryStatus" class="small-copy">Loading library...</p>
+              <p id="libraryStatus" class="small-copy">Loading...</p>
             </div>
           </section>
         </div>
@@ -122,11 +113,11 @@
           <div>
             <p class="eyebrow">Reader</p>
             <h2 id="readerTitle">Select a book</h2>
-            <p id="readerMeta" class="small-copy">The page image stays hidden by default so the text can stay in focus.</p>
+            <p id="readerMeta" class="small-copy">Page text first.</p>
           </div>
           <div class="reader-actions">
-            <button id="toggleImage" class="button button-secondary button-compact" type="button">Show page image</button>
-            <button id="extractNow" class="button button-secondary button-compact" type="button" disabled>Extract now</button>
+            <button id="toggleImage" class="button button-secondary button-compact" type="button">Image</button>
+            <button id="extractNow" class="button button-secondary button-compact" type="button" disabled>Extract</button>
           </div>
         </div>
 
@@ -136,7 +127,7 @@
 
         <div id="readerEmpty" class="empty-state">
           <h3>No book selected</h3>
-          <p>Pick a book from the library. If the processor is configured, the reader will load the selected page and keep the extraction text in view.</p>
+          <p>Pick a book from the library.</p>
         </div>
 
         <div id="readerBody" class="reader-body is-hidden">
@@ -154,11 +145,11 @@
           <div class="section-heading">
             <div>
               <p class="eyebrow">Token</p>
-              <h2>Definition popover</h2>
+              <h2>Definition</h2>
             </div>
           </div>
           <div id="tokenPanel" class="token-panel">
-            <p class="small-copy">Tap a character or word in the reader to load a dictionary-style definition panel here.</p>
+            <p class="small-copy">Tap a word for a definition.</p>
           </div>
         </article>
 
@@ -166,7 +157,7 @@
           <div class="section-heading">
             <div>
               <p class="eyebrow">Status</p>
-              <h2>Processor health</h2>
+              <h2>Status</h2>
             </div>
           </div>
           <dl class="metric-grid" id="bookMetrics">
@@ -183,7 +174,7 @@
               <dd>0</dd>
             </div>
           </dl>
-          <p id="statusSummary" class="small-copy">The static shell can run on GitHub Pages while the processor stays on a separate server.</p>
+          <p id="statusSummary" class="small-copy">GitHub Pages serves the shell. A remote processor serves the content.</p>
         </article>
       </section>
     </main>
