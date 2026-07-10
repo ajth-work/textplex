@@ -628,6 +628,17 @@ a {
   color: #8d4705;
 }
 
+.pill-primary {
+  background: rgba(38, 145, 91, 0.16);
+  color: #175f39;
+}
+
+.status-panel {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+
 .upload-form {
   display: grid;
   gap: 10px;

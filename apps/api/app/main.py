@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 from uuid import uuid4
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -6,10 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from app.core.paths import get_data_root
-from app.schemas.books import BookExtractionRequest, BookImportRequest, BookPageManifest, BookReaderPageResponse, BookRecord
+from app.schemas.books import BookExtractionRequest, BookImportRequest, BookPageManifest, BookReaderPageResponse, BookRecord, PageExtractionArtifact, TextParseRequest
 from app.schemas.learning import LearningProfileSummary, PageReadCreateRequest, PageReadRecord, ReadingSessionCreateRequest, ReadingSessionRecord
 from app.schemas.lexicon import LexiconImportRequest, LexiconImportSummary, LexiconLookupResponse
-from app.services.book_extraction import extract_book_text, load_page_artifact
+from app.services.book_extraction import extract_book_text, load_page_artifact, parse_text_into_page_artifact
 from app.services.book_registry import import_book_from_path, load_registry, save_registry
 from app.services.learning_profile import create_reading_session, get_learning_profile_summary, record_page_read
 from app.services.lexicon import import_lexicon_from_source, lookup_lexicon_entry
@@ -18,12 +19,12 @@ from processor.contracts import BookExtractionResult
 
 app = FastAPI(title="TextPlex API", version="0.1.0")
 app.state.data_root = get_data_root()
+cors_origins = [origin.strip() for origin in os.getenv("TEXTPLEX_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,https://ajth-work.github.io").split(",") if origin.strip()]
+cors_origin_regex = os.getenv("TEXTPLEX_CORS_ORIGIN_REGEX") or None
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -206,6 +207,15 @@ def extract_book(book_id: str, payload: BookExtractionRequest) -> dict[str, str]
     book_path = app.state.data_root / "books" / book_id / "book.json"
     book_path.write_text(book.model_dump_json(indent=2), encoding="utf-8")
     return {"status": "complete", "extraction_path": str(extraction_path)}
+
+
+@app.post("/texts/parse", response_model=PageExtractionArtifact)
+def parse_text(payload: TextParseRequest) -> PageExtractionArtifact:
+    return parse_text_into_page_artifact(
+        text=payload.text,
+        language_code=payload.language_code,
+        title=payload.title,
+    )
 
 
 @app.get("/books/{book_id}/extractions", response_model=BookExtractionResult)

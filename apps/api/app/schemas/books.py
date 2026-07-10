@@ -14,6 +14,12 @@ class BookImportRequest(BaseModel):
     page_count: int | None = Field(default=None, ge=1)
 
 
+class TextParseRequest(BaseModel):
+    text: str = Field(min_length=1)
+    language_code: str = Field(default="zh", min_length=2, max_length=12)
+    title: str | None = None
+
+
 class BookExtractionRequest(BaseModel):
     page_start: int = Field(default=1, ge=1)
     page_count: int | None = Field(default=None, ge=1)

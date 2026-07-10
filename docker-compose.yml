@@ -3,6 +3,12 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+    environment:
+      APP_ENV: development
+      BOOK_DATA_DIR: /workspace/data/books
+      USER_DATA_DIR: /workspace/data/user
+      DEFAULT_LANGUAGE: zh
+      TEXTPLEX_CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://192.168.192.231:3000,https://ajth-work.github.io
     ports:
       - "8000:8000"
     volumes:
@@ -14,6 +20,7 @@ services:
       dockerfile: apps/web/Dockerfile
     environment:
       TEXTPLEX_API_ORIGIN: http://api:8000
+      TEXTPLEX_API_URL: http://api:8000
     depends_on:
       - api
     ports:

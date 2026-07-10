@@ -43,6 +43,24 @@ def load_page_artifact(
     return _load_page_artifact(_page_artifact_path(book_id, page_number, data_root))
 
 
+def parse_text_into_page_artifact(*, text: str, language_code: str, title: str | None = None) -> PageExtractionArtifact:
+    page_result = build_page_extraction_result(
+        book_id=(title or "local-text").strip().replace(" ", "-").lower() or "local-text",
+        page_number=1,
+        language_code=language_code,
+        raw_text=text,
+        source_page_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+    )
+    return PageExtractionArtifact(
+        source_page_sha256=page_result.source_page_sha256 or hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        text_source="paste",
+        text_source_signature="paste-text-v1",
+        processor_version=page_result.processor_version,
+        pipeline_version=page_result.pipeline_version,
+        page=page_result,
+    )
+
+
 def _save_page_artifact(path: Path, artifact: PageExtractionArtifact) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(artifact.model_dump_json(indent=2), encoding="utf-8")

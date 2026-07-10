@@ -22,6 +22,8 @@ web-dev.log
 web-dev.err
 api-dev.log
 api-dev.err
+wake-helper.log
+wake-helper.err
 
 # Codex attachments
 .codex-remote-attachments/

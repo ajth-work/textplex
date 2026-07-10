@@ -42,3 +42,25 @@ def test_get_reader_page_returns_page_payload_and_image(imported_real_scan: tupl
     image_response = client.get(f"/books/{record.id}/pages/1/image")
     assert image_response.status_code == 200
     assert image_response.headers["content-type"] == "image/png"
+
+
+def test_parse_text_endpoint_returns_tokenized_sentences(tmp_path: Path) -> None:
+    app.state.data_root = tmp_path
+    client = TestClient(app)
+
+    response = client.post(
+        "/texts/parse",
+        json={
+            "text": "我一直觉得宇宙像一张巨大而安静的网。它看不见，却一直在拉扯着所有人。",
+            "language_code": "zh",
+            "title": "Local article",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["text_source"] == "paste"
+    assert payload["page"]["book_id"] == "local-article"
+    assert payload["page"]["page_number"] == 1
+    assert len(payload["page"]["sentences"]) == 2
+    assert len(payload["page"]["sentences"][0]["tokens"]) > 0

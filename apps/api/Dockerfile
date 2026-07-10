@@ -15,7 +15,9 @@ RUN pip install --no-cache-dir \
     pydantic>=2 \
     python-multipart \
     pypdf \
-    pymupdf
+    pymupdf \
+    pillow \
+    jieba>=0.42.1
 
 EXPOSE 8000
 
