@@ -336,9 +336,7 @@ function renderReader() {
   elements.readerEmpty.classList.toggle("is-hidden", Boolean(page));
   elements.readerBody.classList.toggle("is-hidden", !page);
   elements.readerTitle.textContent = book?.title ?? "Select a book";
-  elements.readerMeta.textContent = book
-    ? `Page ${state.selectedPageNumber} of ${book.total_pages}. The PDF image can stay hidden while the reflowed text stays first.`
-    : "The page image stays hidden by default so the text can stay in focus.";
+  elements.readerMeta.textContent = "";
   elements.toggleImage.textContent = state.showImage ? "Hide page image" : "Show page image";
   elements.pageImageWrap.classList.toggle("is-hidden", !state.showImage || !page);
   elements.pageImage.src = state.pageData?.image_url ?? "";

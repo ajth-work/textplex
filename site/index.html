@@ -13,8 +13,14 @@
   <body>
     <main class="shell">
       <header class="topbar card">
-        <div class="topbar-brand">
-          <h1>TextPlex</h1>
+        <div class="topbar-row">
+          <div class="topbar-brand">
+            <h1>TextPlex</h1>
+          </div>
+          <div class="topbar-status">
+            <span class="badge-label">Mode</span>
+            <strong id="modeBadge">Demo</strong>
+          </div>
         </div>
 
         <nav class="site-nav" aria-label="Primary">
@@ -23,11 +29,6 @@
           <a href="#reader" class="nav-link" data-nav="reader">Reader</a>
           <a href="#tools" class="nav-link" data-nav="tools">Tools</a>
         </nav>
-
-        <div class="topbar-status">
-          <span class="badge-label">Mode</span>
-          <strong id="modeBadge">Demo</strong>
-        </div>
       </header>
 
       <section id="homeView" class="view card" data-view="home">
@@ -111,7 +112,7 @@
           <div>
             <p class="eyebrow">Reader</p>
             <h2 id="readerTitle">Select a book</h2>
-            <p id="readerMeta" class="small-copy">Page text first.</p>
+            <p id="readerMeta" class="small-copy is-hidden"></p>
           </div>
           <div class="reader-actions">
             <button id="toggleImage" class="button button-secondary button-compact" type="button">Image</button>

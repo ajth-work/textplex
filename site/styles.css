@@ -74,10 +74,16 @@ a {
 
 .topbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
   padding: 14px 16px;
+}
+
+.topbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .topbar h1 {
@@ -85,16 +91,12 @@ a {
   letter-spacing: 0.02em;
 }
 
-.topbar-brand {
-  max-width: 56ch;
-}
-
 .topbar-status {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.48));
 }
@@ -205,7 +207,7 @@ a {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .section-heading h2 {
@@ -382,6 +384,10 @@ a {
 
 .reader-heading {
   margin-bottom: 0;
+}
+
+.reader-heading .small-copy.is-hidden {
+  display: none;
 }
 
 .reader-actions {
