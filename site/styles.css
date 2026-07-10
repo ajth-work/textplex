@@ -34,7 +34,8 @@ body {
 
 body,
 button,
-input {
+input,
+a {
   font-family: "Avenir Next", "Segoe UI", "Trebuchet MS", sans-serif;
 }
 
@@ -50,10 +51,17 @@ p {
   margin: 0;
 }
 
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
 .shell {
   width: min(var(--max), calc(100vw - 32px));
   margin: 0 auto;
   padding: 24px 0 40px;
+  display: grid;
+  gap: 22px;
 }
 
 .card {
@@ -64,27 +72,52 @@ p {
   border: 1px solid rgba(255, 255, 255, 0.26);
 }
 
-.hero {
+.topbar {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 20px;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  align-items: start;
-  padding: 28px;
+  align-items: center;
+  padding: 18px 22px;
 }
 
-.hero h1 {
-  font-size: clamp(2.4rem, 4vw, 4.9rem);
-  line-height: 0.95;
-  max-width: 11ch;
+.topbar h1 {
+  font-size: 1.85rem;
 }
 
-.hero-badge {
+.topbar-brand {
+  max-width: 56ch;
+}
+
+.topbar-status {
   display: grid;
   gap: 8px;
   align-content: start;
-  padding: 18px;
+  min-width: 220px;
+  padding: 16px;
   border-radius: 22px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.33));
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.nav-link {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(29, 36, 48, 0.12);
+  background: rgba(255, 255, 255, 0.6);
+  font-weight: 700;
+  color: rgba(29, 36, 48, 0.82);
+}
+
+.nav-link.is-active {
+  color: #fff;
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  border-color: transparent;
 }
 
 .badge-label,
@@ -95,34 +128,66 @@ p {
   color: var(--muted);
 }
 
+.small-copy,
+.muted {
+  color: rgba(29, 36, 48, 0.72);
+}
+
+.small-copy {
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.view {
+  padding: 22px;
+}
+
+.view.is-hidden {
+  display: none !important;
+}
+
+.hero-copy {
+  max-width: 62ch;
+}
+
+.hero-copy h2 {
+  font-size: clamp(2.3rem, 4vw, 4.6rem);
+  line-height: 0.95;
+  max-width: 12ch;
+}
+
 .lede {
   margin-top: 18px;
-  max-width: 62ch;
   font-size: 1.1rem;
   line-height: 1.65;
   color: rgba(29, 36, 48, 0.88);
 }
 
-.grid,
-.reader-grid {
+.hero-stats {
   display: grid;
-  gap: 22px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
   margin-top: 22px;
 }
 
-.grid {
-  grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
+.stat-card,
+.panel,
+.empty-state,
+.token-panel {
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(29, 36, 48, 0.08);
 }
 
-.reader-grid {
-  grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.55fr);
+.stat-card {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
 }
 
-.settings-card,
-.library-card,
-.reader-card,
-.info-card {
-  padding: 22px;
+.stat-card strong {
+  font-size: 2rem;
+  color: var(--text-dark);
 }
 
 .section-heading {
@@ -137,30 +202,32 @@ p {
   font-size: 1.25rem;
 }
 
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border-radius: 999px;
-  padding: 8px 12px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  background: rgba(25, 34, 45, 0.08);
+.section-heading h3 {
+  font-size: 1.05rem;
 }
 
-.pill-warn {
-  background: rgba(240, 123, 24, 0.2);
-  color: #8d4705;
+.split-grid,
+.tools-grid {
+  display: grid;
+  gap: 18px;
 }
 
-.small-copy,
-.muted {
-  color: rgba(29, 36, 48, 0.72);
+.split-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.small-copy {
-  font-size: 0.92rem;
-  line-height: 1.5;
+.tools-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.panel,
+.library-note,
+.empty-state,
+.token-panel,
+.book-card,
+.page-image-wrap,
+.reader-text {
+  padding: 18px;
 }
 
 .field {
@@ -227,11 +294,20 @@ p {
   padding: 10px 14px;
 }
 
-.upload-panel {
-  padding: 16px;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.42);
-  border: 1px solid rgba(29, 36, 48, 0.08);
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: rgba(25, 34, 45, 0.08);
+}
+
+.pill-warn {
+  background: rgba(240, 123, 24, 0.2);
+  color: #8d4705;
 }
 
 .upload-form {
@@ -247,7 +323,6 @@ p {
 }
 
 .book-card {
-  padding: 18px;
   border-radius: 24px;
   background: linear-gradient(180deg, #f7f0e6, #ebdfd0);
   border: 1px solid rgba(29, 36, 48, 0.08);
@@ -263,11 +338,6 @@ p {
 .book-title {
   margin-top: 12px;
   font-size: 1.8rem;
-}
-
-.book-card .metric-grid,
-.info-card .metric-grid {
-  margin-top: 16px;
 }
 
 .metric-grid {
@@ -296,11 +366,6 @@ p {
   font-weight: 800;
 }
 
-.reader-card {
-  display: grid;
-  gap: 18px;
-}
-
 .reader-heading {
   margin-bottom: 0;
 }
@@ -315,7 +380,6 @@ p {
 .page-image-wrap {
   display: grid;
   place-items: center;
-  padding: 16px;
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.66);
   border: 1px solid rgba(29, 36, 48, 0.08);
@@ -345,7 +409,6 @@ p {
 .reader-text {
   display: grid;
   gap: 14px;
-  padding: 16px;
   border-radius: 26px;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(29, 36, 48, 0.08);
@@ -376,7 +439,9 @@ p {
 }
 
 .token-inline:hover,
-.token-inline.is-selected {
+.token-inline.is-selected,
+.nav-link:focus-visible,
+.button:focus-visible {
   background: rgba(240, 123, 24, 0.12);
   border-color: rgba(240, 123, 24, 0.35);
 }
@@ -391,7 +456,6 @@ p {
 .token-panel {
   display: grid;
   gap: 12px;
-  padding: 20px;
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.65);
   border: 1px dashed rgba(29, 36, 48, 0.14);
@@ -425,20 +489,21 @@ p {
   font-weight: 700;
 }
 
-.token-panel .small-copy {
-  font-size: 0.88rem;
+.library-note {
+  margin-top: 12px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.46);
 }
 
-.book-open,
 .hidden,
 .is-hidden {
   display: none !important;
 }
 
 @media (max-width: 1080px) {
-  .hero,
-  .grid,
-  .reader-grid {
+  .topbar,
+  .split-grid,
+  .tools-grid {
     grid-template-columns: 1fr;
   }
 
@@ -453,18 +518,13 @@ p {
     padding: 10px 0 24px;
   }
 
-  .hero,
-  .settings-card,
-  .library-card,
-  .reader-card,
-  .info-card {
+  .topbar,
+  .view {
     padding: 18px;
   }
 
-  .metric-grid {
-    grid-template-columns: 1fr;
-  }
-
+  .hero-stats,
+  .metric-grid,
   .definition-grid {
     grid-template-columns: 1fr;
   }

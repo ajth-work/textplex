@@ -1,8 +1,12 @@
 import { DEMO_BOOKS, DEMO_LEXICON, DEMO_PAGE } from "./demo-data.js";
 
 const storageKey = "textplex.processorBaseUrl";
+const defaultView = "home";
+const viewNames = new Set(["home", "library", "reader", "tools"]);
 
 const elements = {
+  navLinks: Array.from(document.querySelectorAll("[data-nav]")),
+  viewSections: Array.from(document.querySelectorAll("[data-view]")),
   modeBadge: document.getElementById("modeBadge"),
   modeHint: document.getElementById("modeHint"),
   connectionState: document.getElementById("connectionState"),
@@ -15,6 +19,8 @@ const elements = {
   pdfFile: document.getElementById("pdfFile"),
   uploadButton: document.getElementById("uploadButton"),
   bookCount: document.getElementById("bookCount"),
+  homeBookCount: document.getElementById("homeBookCount"),
+  homePageCount: document.getElementById("homePageCount"),
   libraryStatus: document.getElementById("libraryStatus"),
   bookList: document.getElementById("bookList"),
   readerTitle: document.getElementById("readerTitle"),
@@ -48,6 +54,7 @@ const state = {
   busy: false,
   error: null,
   pageError: null,
+  activeView: resolveView(window.location.hash),
 };
 
 elements.processorUrl.value = state.apiBaseUrl;
@@ -65,9 +72,19 @@ function bindEvents() {
   elements.extractNow.addEventListener("click", () => void extractSelectedBook());
   elements.prevPage.addEventListener("click", () => void movePage(-1));
   elements.nextPage.addEventListener("click", () => void movePage(1));
+  elements.navLinks.forEach((link) => {
+    link.addEventListener("click", () => {
+      const view = resolveView(link.getAttribute("href") ?? "");
+      setActiveView(view);
+    });
+  });
+  window.addEventListener("hashchange", () => {
+    setActiveView(resolveView(window.location.hash), { syncHash: false });
+  });
 }
 
 async function boot() {
+  setActiveView(state.activeView, { syncHash: false });
   await connectFromCurrentValue();
 }
 
@@ -161,6 +178,7 @@ async function handleUpload(event) {
     elements.libraryStatus.textContent = "Uploading and registering the scan...";
     await requestJson("/books/upload", { method: "POST", body: formData, isFormData: true });
     await loadBooks();
+    setActiveView("library");
   } catch (error) {
     state.error = error instanceof Error ? error.message : "Unable to upload the PDF.";
     renderAll();
@@ -178,6 +196,7 @@ async function loadReader(bookId, pageNumber) {
   state.lexicon = null;
   try {
     state.pageData = await requestJson(`/books/${encodeURIComponent(bookId)}/pages/${pageNumber}`);
+    setActiveView("reader");
     renderAll();
   } catch (error) {
     state.pageError = error instanceof Error ? error.message : "Unable to load reader page.";
@@ -216,6 +235,7 @@ async function extractSelectedBook() {
       },
     });
     await loadBooks();
+    setActiveView("reader");
   } catch (error) {
     state.pageError = error instanceof Error ? error.message : "Unable to trigger extraction.";
   } finally {
@@ -236,6 +256,7 @@ async function inspectToken(token) {
 
   if (!state.apiBaseUrl) {
     state.lexicon = lookupDemoLexicon(token.surface_form);
+    setActiveView("tools");
     renderReader();
     return;
   }
@@ -247,6 +268,7 @@ async function inspectToken(token) {
   } catch {
     state.lexicon = null;
   }
+  setActiveView("tools");
   renderReader();
 }
 
@@ -255,6 +277,9 @@ function renderAll() {
   renderBooks();
   renderReader();
   renderState();
+  renderNavigation();
+  renderViews();
+  renderHome();
 }
 
 function renderBooks() {
@@ -276,6 +301,11 @@ function renderBooks() {
 
     elements.bookList.appendChild(node);
   }
+}
+
+function renderHome() {
+  elements.homeBookCount.textContent = String(state.books.length);
+  elements.homePageCount.textContent = String(state.pageData?.book?.total_pages ?? state.books[0]?.total_pages ?? 0);
 }
 
 function renderReader() {
@@ -405,6 +435,20 @@ function renderState() {
   }
 }
 
+function renderNavigation() {
+  for (const link of elements.navLinks) {
+    const view = resolveView(link.getAttribute("href") ?? "");
+    link.classList.toggle("is-active", view === state.activeView);
+  }
+}
+
+function renderViews() {
+  for (const section of elements.viewSections) {
+    const view = section.dataset.view ?? "";
+    section.classList.toggle("is-hidden", view !== state.activeView);
+  }
+}
+
 function updateModeChrome() {
   if (state.apiBaseUrl) {
     elements.modeBadge.textContent = "Remote processor";
@@ -423,6 +467,21 @@ function setBusy(value) {
   elements.saveProcessorUrl.disabled = value;
   elements.connectProcessor.disabled = value;
   elements.extractNow.disabled = value;
+}
+
+function setActiveView(view, options = {}) {
+  const resolved = viewNames.has(view) ? view : defaultView;
+  state.activeView = resolved;
+  if (options.syncHash !== false && window.location.hash !== `#${resolved}`) {
+    window.location.hash = resolved;
+  }
+  renderNavigation();
+  renderViews();
+}
+
+function resolveView(hash) {
+  const value = hash.replace(/^#/, "").trim().toLowerCase();
+  return viewNames.has(value) ? value : defaultView;
 }
 
 async function requestJson(pathname, options = {}) {
