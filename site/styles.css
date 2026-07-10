@@ -64,9 +64,9 @@ a {
 .shell {
   width: min(var(--max), calc(100vw - 24px));
   margin: 0 auto;
-  padding: 24px 0 40px;
+  padding: 18px 0 28px;
   display: grid;
-  gap: 22px;
+  gap: 14px;
 }
 
 .card {
@@ -80,8 +80,8 @@ a {
 .topbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 8px;
+  padding: 12px 14px;
 }
 
 .topbar-row {
@@ -118,12 +118,12 @@ a {
 .site-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   justify-content: flex-start;
 }
 
 .nav-link {
-  padding: 8px 10px;
+  padding: 7px 9px;
   border-radius: 999px;
   border: 1px solid rgba(29, 36, 48, 0.12);
   background: rgba(255, 255, 255, 0.6);
@@ -167,7 +167,7 @@ a {
 }
 
 .view {
-  padding: 18px;
+  padding: 14px;
 }
 
 .view.is-hidden {
@@ -194,8 +194,8 @@ a {
 .hero-stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 18px;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .stat-card,
@@ -209,8 +209,8 @@ a {
 
 .stat-card {
   display: grid;
-  gap: 8px;
-  padding: 14px;
+  gap: 6px;
+  padding: 12px;
 }
 
 .stat-card strong {
@@ -223,7 +223,7 @@ a {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .section-heading h2 {
@@ -255,13 +255,13 @@ a {
 .book-card,
 .page-image-wrap,
 .reader-text {
-  padding: 14px;
+  padding: 10px;
 }
 
 .field {
   display: grid;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 10px;
 }
 
 .field span {
@@ -282,8 +282,8 @@ a {
 .button-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 16px;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .button {
@@ -350,8 +350,8 @@ a {
 
 .book-list {
   display: grid;
-  gap: 12px;
-  margin-top: 14px;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .book-card {
@@ -368,18 +368,18 @@ a {
 }
 
 .book-title {
-  margin-top: 10px;
-  font-size: 1.55rem;
+  margin-top: 8px;
+  font-size: 1.45rem;
 }
 
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .metric-grid > div {
-  padding: 12px;
+  padding: 10px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.58);
   border: 1px solid rgba(29, 36, 48, 0.08);
@@ -393,8 +393,8 @@ a {
 }
 
 .metric-grid dd {
-  margin: 4px 0 0;
-  font-size: 1.25rem;
+  margin: 3px 0 0;
+  font-size: 1.12rem;
   font-weight: 800;
 }
 
@@ -405,7 +405,7 @@ a {
 .reader-topline {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -413,7 +413,7 @@ a {
 .reader-progress {
   display: inline-flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 7px 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(29, 36, 48, 0.08);
@@ -424,19 +424,19 @@ a {
 
 .reader-sentence-nav {
   display: inline-flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .reader-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
   justify-content: flex-end;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .reader-definition {
-  margin-top: 4px;
+  margin-top: 0;
 }
 
 .page-image-wrap {
@@ -449,14 +449,14 @@ a {
 
 .page-image-wrap img {
   width: 100%;
-  max-height: 420px;
+  max-height: 360px;
   object-fit: contain;
   border-radius: 16px;
 }
 
 .reader-body {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .notice {
@@ -470,19 +470,19 @@ a {
 
 .reader-text {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   border-radius: 26px;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(29, 36, 48, 0.08);
-  min-height: 220px;
+  min-height: 160px;
 }
 
 .sentence-block {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  line-height: 1.8;
-  font-size: 1rem;
+  gap: 3px;
+  line-height: 1.65;
+  font-size: 0.96rem;
 }
 
 .token-inline {
@@ -497,7 +497,7 @@ a {
 }
 
 .token-inline.is-cjk {
-  font-size: 1.08rem;
+  font-size: 1rem;
 }
 
 .token-inline:hover,
@@ -510,14 +510,14 @@ a {
 
 .reader-nav {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .empty-state,
 .token-panel {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.65);
   border: 1px dashed rgba(29, 36, 48, 0.14);
@@ -527,7 +527,7 @@ a {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 .icon-button {
@@ -553,12 +553,12 @@ a {
 
 .definition-grid {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .definition-grid > div {
-  padding: 10px;
+  padding: 8px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.6);
 }
@@ -576,21 +576,21 @@ a {
 }
 
 .library-note {
-  margin-top: 10px;
+  margin-top: 8px;
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.46);
 }
 
 .vocab-results {
   display: grid;
-  gap: 12px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .vocab-result {
   display: grid;
-  gap: 10px;
-  padding: 14px;
+  gap: 8px;
+  padding: 10px;
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.68);
   border: 1px solid rgba(29, 36, 48, 0.08);
@@ -620,12 +620,12 @@ a {
 @media (max-width: 720px) {
   .shell {
     width: min(100vw - 14px, var(--max));
-    padding: 10px 0 24px;
+    padding: 8px 0 18px;
   }
 
   .topbar,
   .view {
-    padding: 14px;
+    padding: 10px;
   }
 
   .topbar-row {
