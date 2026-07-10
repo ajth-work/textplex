@@ -290,6 +290,12 @@ a {
   margin-top: 10px;
 }
 
+.button-row-tight {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .button {
   border: 0;
   border-radius: 999px;
@@ -432,10 +438,9 @@ a {
 }
 
 .reader-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  justify-content: flex-end;
   margin-bottom: 8px;
 }
 
@@ -618,10 +623,6 @@ a {
   .tools-grid {
     grid-template-columns: 1fr;
   }
-
-  .reader-actions {
-    justify-content: flex-start;
-  }
 }
 
 @media (max-width: 720px) {
@@ -645,13 +646,6 @@ a {
 
   .reader-topline {
     justify-content: flex-start;
-  }
-
-  .reader-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    align-items: stretch;
   }
 
   .button,
