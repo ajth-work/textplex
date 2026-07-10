@@ -62,7 +62,7 @@
         </div>
 
         <div class="split-grid">
-          <section class="panel">
+          <section class="panel library-processor">
             <div class="section-heading">
               <div>
                 <h3>Processor</h3>
@@ -81,7 +81,7 @@
             <p id="connectionHint" class="small-copy">Leave blank for the demo book.</p>
           </section>
 
-          <section class="panel">
+          <section class="panel library-upload">
             <div class="section-heading">
               <div>
                 <h3>Upload</h3>
@@ -103,9 +103,53 @@
               <p id="libraryStatus" class="small-copy">Loading...</p>
             </div>
           </section>
+
+          <section class="panel library-composer">
+            <div class="section-heading">
+              <div>
+                <h3>Paste text</h3>
+              </div>
+              <span class="pill">Local</span>
+            </div>
+            <p class="small-copy">Paste a body of text, give it a default type, and add custom tags with the plus button.</p>
+            <form id="textEntryForm" class="upload-form text-entry-form">
+              <label class="field">
+                <span>Title</span>
+                <input id="textEntryTitle" type="text" placeholder="text clip title" autocomplete="off" />
+              </label>
+              <label class="field">
+                <span>Body</span>
+                <textarea id="textEntryBody" class="text-entry-body" rows="7" placeholder="Paste text here"></textarea>
+              </label>
+              <div class="field">
+                <span>Default tag</span>
+                <div class="segmented-control" id="textEntryKinds" role="tablist" aria-label="Default tag">
+                  <button class="segmented-option is-active" type="button" data-entry-kind="book">Book</button>
+                  <button class="segmented-option" type="button" data-entry-kind="article">Article</button>
+                </div>
+              </div>
+              <div class="field">
+                <span>Extra tags</span>
+                <div class="tag-row">
+                  <input id="textEntryTagInput" type="text" placeholder="Add a tag" autocomplete="off" />
+                  <button id="addTextEntryTag" class="button button-secondary button-compact" type="button">+</button>
+                </div>
+                <div id="textEntryTagChips" class="tag-chip-list"></div>
+              </div>
+              <button id="saveTextEntry" class="button button-primary" type="submit">Save text</button>
+            </form>
+          </section>
         </div>
 
         <div id="bookList" class="book-list"></div>
+        <div class="section-heading library-section-heading">
+          <div>
+            <p class="eyebrow">Text clips</p>
+            <h3>Copied entries</h3>
+          </div>
+          <strong id="localEntryCount">0</strong>
+        </div>
+        <div id="localEntryList" class="book-list"></div>
       </section>
 
       <section id="readerView" class="view card is-hidden" data-view="reader">
@@ -291,6 +335,7 @@
         </div>
         <h3 class="book-title"></h3>
         <p class="muted book-author"></p>
+        <div class="tag-chip-list book-tags"></div>
         <dl class="metric-grid">
           <div>
             <dt>Pages</dt>
@@ -307,6 +352,21 @@
         </dl>
         <div class="button-row">
           <button class="button button-primary book-open" type="button">Open reader</button>
+        </div>
+      </article>
+    </template>
+
+    <template id="textEntryCardTemplate">
+      <article class="book-card text-entry-card">
+        <div class="book-card-top">
+          <span class="pill text-entry-kind"></span>
+          <span class="muted text-entry-date"></span>
+        </div>
+        <h3 class="book-title text-entry-title"></h3>
+        <p class="muted text-entry-snippet"></p>
+        <div class="tag-chip-list text-entry-tags"></div>
+        <div class="button-row">
+          <button class="button button-secondary text-entry-copy" type="button">Copy text</button>
         </div>
       </article>
     </template>

@@ -2,8 +2,11 @@ import { DEMO_BOOKS, DEMO_LEXICON, DEMO_PAGE } from "./demo-data.js";
 
 const storageKey = "textplex.processorBaseUrl";
 const themeStorageKey = "textplex.theme";
+const localEntriesStorageKey = "textplex.localTextEntries";
 const defaultView = "home";
 const defaultTheme = "paper";
+const defaultEntryKind = "book";
+const entryKinds = new Set(["book", "article"]);
 const themeNames = new Set(["paper", "slate", "night", "midnight", "sunset", "mint"]);
 const viewNames = new Set(["home", "library", "reader", "tools", "options"]);
 
@@ -22,6 +25,15 @@ const elements = {
   bookTitle: document.getElementById("bookTitle"),
   pdfFile: document.getElementById("pdfFile"),
   uploadButton: document.getElementById("uploadButton"),
+  textEntryForm: document.getElementById("textEntryForm"),
+  textEntryTitle: document.getElementById("textEntryTitle"),
+  textEntryBody: document.getElementById("textEntryBody"),
+  textEntryKinds: document.getElementById("textEntryKinds"),
+  textEntryTagInput: document.getElementById("textEntryTagInput"),
+  addTextEntryTag: document.getElementById("addTextEntryTag"),
+  textEntryTagChips: document.getElementById("textEntryTagChips"),
+  localEntryCount: document.getElementById("localEntryCount"),
+  localEntryList: document.getElementById("localEntryList"),
   bookCount: document.getElementById("bookCount"),
   homeBookCount: document.getElementById("homeBookCount"),
   homePageCount: document.getElementById("homePageCount"),
@@ -57,6 +69,7 @@ const state = {
   apiBaseUrl: normalizeBaseUrl(window.localStorage.getItem(storageKey) ?? ""),
   theme: resolveTheme(window.localStorage.getItem(themeStorageKey) ?? defaultTheme),
   books: [],
+  localEntries: loadLocalEntries(),
   selectedBookId: null,
   selectedPageNumber: 1,
   selectedSentenceIndex: 0,
@@ -71,6 +84,8 @@ const state = {
   error: null,
   pageError: null,
   activeView: resolveView(window.location.hash),
+  draftEntryKind: defaultEntryKind,
+  draftEntryTags: [],
 };
 
 elements.processorUrl.value = state.apiBaseUrl;
@@ -81,6 +96,23 @@ function bindEvents() {
   elements.saveProcessorUrl.addEventListener("click", saveProcessorUrl);
   elements.connectProcessor.addEventListener("click", connectProcessor);
   elements.uploadForm.addEventListener("submit", handleUpload);
+  elements.textEntryForm.addEventListener("submit", handleTextEntrySubmit);
+  elements.addTextEntryTag.addEventListener("click", addDraftTagFromInput);
+  elements.textEntryTagInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void addDraftTagFromInput();
+    }
+  });
+  elements.textEntryKinds.addEventListener("click", (event) => {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const kind = target?.dataset.entryKind;
+    if (!kind || !entryKinds.has(kind)) {
+      return;
+    }
+    state.draftEntryKind = kind;
+    renderLibraryComposer();
+  });
   elements.vocabForm.addEventListener("submit", (event) => {
     event.preventDefault();
     void lookupVocabulary(elements.vocabTerm.value.trim());
@@ -112,8 +144,115 @@ function bindEvents() {
 
 async function boot() {
   applyTheme(state.theme);
+  renderLibraryComposer();
   setActiveView(state.activeView, { syncHash: false });
   await connectFromCurrentValue();
+}
+
+function loadLocalEntries() {
+  try {
+    const raw = window.localStorage.getItem(localEntriesStorageKey);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalEntries() {
+  window.localStorage.setItem(localEntriesStorageKey, JSON.stringify(state.localEntries));
+}
+
+function normalizeTag(value) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function summarizeText(value, maxLength = 180) {
+  const compact = value.replace(/\s+/g, " ").trim();
+  if (compact.length <= maxLength) {
+    return compact;
+  }
+  return `${compact.slice(0, maxLength - 1)}…`;
+}
+
+function formatLocalDate(value) {
+  if (!value) {
+    return "Local";
+  }
+  try {
+    return new Intl.DateTimeFormat("en", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(new Date(value));
+  } catch {
+    return "Local";
+  }
+}
+
+async function copyTextToClipboard(value) {
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    const fallback = document.createElement("textarea");
+    fallback.value = value;
+    fallback.setAttribute("readonly", "true");
+    fallback.style.position = "fixed";
+    fallback.style.opacity = "0";
+    document.body.appendChild(fallback);
+    fallback.select();
+    document.execCommand("copy");
+    fallback.remove();
+  }
+}
+
+async function addDraftTagFromInput() {
+  const raw = elements.textEntryTagInput.value;
+  const tag = normalizeTag(raw);
+  if (!tag) {
+    return;
+  }
+  if (!state.draftEntryTags.includes(tag) && tag !== state.draftEntryKind) {
+    state.draftEntryTags = [...state.draftEntryTags, tag];
+  }
+  elements.textEntryTagInput.value = "";
+  renderLibraryComposer();
+}
+
+function handleTextEntrySubmit(event) {
+  event.preventDefault();
+  const title = elements.textEntryTitle.value.trim();
+  const body = elements.textEntryBody.value.trim();
+  if (!body) {
+    return;
+  }
+
+  const primaryTag = entryKinds.has(state.draftEntryKind) ? state.draftEntryKind : defaultEntryKind;
+  const resolvedTitle = title || summarizeText(body, 42) || "Untitled text";
+  const uniqueTags = [primaryTag, ...state.draftEntryTags].filter((tag, index, all) => all.indexOf(tag) === index);
+
+  state.localEntries = [
+    {
+      id: crypto.randomUUID(),
+      title: resolvedTitle,
+      body,
+      kind: primaryTag,
+      tags: uniqueTags,
+      created_at: new Date().toISOString(),
+    },
+    ...state.localEntries,
+  ];
+  saveLocalEntries();
+
+  elements.textEntryTitle.value = "";
+  elements.textEntryBody.value = "";
+  elements.textEntryTagInput.value = "";
+  state.draftEntryKind = primaryTag;
+  state.draftEntryTags = [];
+  renderAll();
 }
 
 async function saveProcessorUrl() {
@@ -323,6 +462,8 @@ async function inspectToken(token) {
 function renderAll() {
   updateModeChrome();
   renderBooks();
+  renderLocalEntries();
+  renderLibraryComposer();
   renderReader();
   renderState();
   renderNavigation();
@@ -342,6 +483,14 @@ function renderBooks() {
     node.querySelector(".book-status").textContent = book.status.replaceAll("_", " ");
     node.querySelector(".book-title").textContent = book.title;
     node.querySelector(".book-author").textContent = book.author ?? "Unknown author";
+    const bookTags = node.querySelector(".book-tags");
+    if (bookTags) {
+      bookTags.replaceChildren();
+      const chip = document.createElement("span");
+      chip.className = "tag-chip tag-chip-primary";
+      chip.textContent = "book";
+      bookTags.appendChild(chip);
+    }
     node.querySelector(".book-pages").textContent = String(book.total_pages);
     node.querySelector(".book-prepared").textContent = String(book.page_image_count);
     node.querySelector(".book-extracted").textContent = String(book.extracted_page_count);
@@ -350,6 +499,94 @@ function renderBooks() {
     openButton.addEventListener("click", () => void loadReader(book.id, 1));
 
     elements.bookList.appendChild(node);
+  }
+}
+
+function renderLibraryComposer() {
+  if (!elements.textEntryKinds) {
+    return;
+  }
+
+  elements.textEntryKinds.querySelectorAll("[data-entry-kind]").forEach((button) => {
+    const kind = button.dataset.entryKind;
+    button.classList.toggle("is-active", kind === state.draftEntryKind);
+  });
+
+  elements.textEntryTagChips.replaceChildren();
+
+  const primaryChip = document.createElement("span");
+  primaryChip.className = "tag-chip tag-chip-primary";
+  primaryChip.textContent = state.draftEntryKind;
+  elements.textEntryTagChips.appendChild(primaryChip);
+
+  for (const tag of state.draftEntryTags) {
+    const chip = document.createElement("span");
+    chip.className = "tag-chip";
+    chip.innerHTML = `
+      <span>${escapeHtml(tag)}</span>
+      <button type="button" class="tag-chip-remove" aria-label="Remove tag ${escapeHtml(tag)}">x</button>
+    `;
+    chip.querySelector(".tag-chip-remove")?.addEventListener("click", () => {
+      state.draftEntryTags = state.draftEntryTags.filter((item) => item !== tag);
+      renderLibraryComposer();
+    });
+    elements.textEntryTagChips.appendChild(chip);
+  }
+}
+
+function renderLocalEntries() {
+  elements.localEntryCount.textContent = String(state.localEntries.length);
+  elements.localEntryList.replaceChildren();
+
+  for (const entry of state.localEntries) {
+    const node = document.getElementById("textEntryCardTemplate")?.content?.cloneNode(true);
+    if (!node) {
+      continue;
+    }
+
+    const tags = Array.isArray(entry.tags) ? entry.tags : [];
+    const kind = entry.kind ?? tags[0] ?? defaultEntryKind;
+    node.querySelector(".text-entry-kind").textContent = kind;
+    node.querySelector(".text-entry-date").textContent = formatLocalDate(entry.created_at);
+    node.querySelector(".text-entry-title").textContent = entry.title;
+    node.querySelector(".text-entry-snippet").textContent = summarizeText(entry.body);
+
+    const tagsWrap = node.querySelector(".text-entry-tags");
+    const primaryTag = tags[0] ?? kind;
+    const extraTags = tags.slice(1);
+
+    const primaryChip = document.createElement("span");
+    primaryChip.className = "tag-chip tag-chip-primary";
+    primaryChip.textContent = primaryTag;
+    tagsWrap.appendChild(primaryChip);
+
+    for (const tag of extraTags) {
+      const chip = document.createElement("span");
+      chip.className = "tag-chip";
+      chip.innerHTML = `
+        <span>${escapeHtml(tag)}</span>
+        <button type="button" class="tag-chip-remove" aria-label="Remove tag ${escapeHtml(tag)}">x</button>
+      `;
+      chip.querySelector(".tag-chip-remove")?.addEventListener("click", () => {
+        state.localEntries = state.localEntries.map((item) =>
+          item.id === entry.id
+            ? {
+                ...item,
+                tags: (item.tags ?? []).filter((currentTag) => currentTag === primaryTag || currentTag !== tag),
+              }
+            : item,
+        );
+        saveLocalEntries();
+        renderAll();
+      });
+      tagsWrap.appendChild(chip);
+    }
+
+    node.querySelector(".text-entry-copy")?.addEventListener("click", async () => {
+      await copyTextToClipboard(entry.body);
+    });
+
+    elements.localEntryList.appendChild(node);
   }
 }
 

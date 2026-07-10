@@ -429,6 +429,19 @@ a {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.library-processor {
+  order: 1;
+}
+
+.library-upload {
+  order: 2;
+}
+
+.library-composer {
+  order: 3;
+  grid-column: 1 / -1;
+}
+
 .tools-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -462,6 +475,92 @@ a {
   font-size: 1rem;
   color: var(--text-dark);
   background: var(--surface-input);
+}
+
+.field textarea {
+  border: 1px solid var(--surface-border-strong);
+  border-radius: 16px;
+  padding: 14px 16px;
+  font-size: 0.96rem;
+  line-height: 1.55;
+  color: var(--text-dark);
+  background: var(--surface-input);
+  resize: vertical;
+  min-height: 130px;
+}
+
+.field textarea::placeholder,
+.field input::placeholder {
+  color: var(--muted);
+}
+
+.segmented-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.segmented-option {
+  border: 1px solid var(--surface-border-strong);
+  border-radius: 999px;
+  background: var(--surface-button);
+  color: var(--text-dark);
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.segmented-option.is-active {
+  color: #fff;
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  border-color: transparent;
+}
+
+.tag-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.tag-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tag-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: var(--surface-tile);
+  border: 1px solid var(--surface-border);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.tag-chip-primary {
+  background: rgba(240, 123, 24, 0.12);
+  border-color: rgba(240, 123, 24, 0.22);
+}
+
+.tag-chip-remove {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
 }
 
 .button-row {
@@ -543,6 +642,22 @@ a {
   display: grid;
   gap: 10px;
   margin-top: 10px;
+}
+
+.library-section-heading {
+  margin-top: 18px;
+}
+
+.text-entry-card {
+  gap: 10px;
+}
+
+.text-entry-snippet {
+  line-height: 1.55;
+}
+
+.text-entry-tags {
+  margin-top: 0;
 }
 
 .book-card {
@@ -1141,5 +1256,10 @@ a {
 
   .theme-grid {
     grid-template-columns: 1fr;
+  }
+
+  .tag-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
