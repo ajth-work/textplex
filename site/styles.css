@@ -739,17 +739,17 @@ a {
 
 .reader-text {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   border-radius: 28px;
   background: var(--surface-strong);
   border: 1px solid var(--surface-border);
-  min-height: 172px;
-  padding: 18px 14px 14px;
+  min-height: 0;
+  padding: 16px 14px 12px;
 }
 
 .sentence-card {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .sentence-pinyin,
@@ -757,7 +757,7 @@ a {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-start;
-  gap: 10px 8px;
+  gap: 8px 8px;
 }
 
 .sentence-pinyin-token {
@@ -785,15 +785,6 @@ a {
   font-size: 1.05rem;
 }
 
-.token-romanization {
-  display: block;
-  min-height: 0.9em;
-  font-size: 0.66rem;
-  line-height: 1;
-  color: var(--muted);
-  transform: translateY(1px);
-}
-
 .token-surface {
   display: block;
   font-size: 1.02rem;
@@ -801,20 +792,25 @@ a {
   color: var(--text-dark);
 }
 
-.token-inline.is-punct .token-romanization {
-  opacity: 0;
-}
-
 .token-inline.is-punct .token-surface {
   font-size: 1.2rem;
 }
 
+.token-inline.is-selected {
+  background: rgba(49, 170, 112, 0.18);
+  border-color: rgba(49, 170, 112, 0.35);
+}
+
 .token-inline:hover,
-.token-inline.is-selected,
 .nav-link:focus-visible,
 .button:focus-visible {
   background: rgba(240, 123, 24, 0.12);
   border-color: rgba(240, 123, 24, 0.35);
+}
+
+.token-inline.is-selected:hover {
+  background: rgba(49, 170, 112, 0.22);
+  border-color: rgba(49, 170, 112, 0.4);
 }
 
 .reader-nav {
@@ -835,7 +831,7 @@ a {
 .reader-translation {
   display: grid;
   gap: 6px;
-  padding: 2px 4px 0;
+  padding: 0 2px 0;
 }
 
 .reader-translation-label {
@@ -857,6 +853,35 @@ a {
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+}
+
+.token-panel.has-selection {
+  gap: 10px;
+}
+
+.token-lookup-card {
+  display: grid;
+  gap: 6px;
+  padding: 8px 0 4px;
+}
+
+.token-lookup-term {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(49, 170, 112, 0.16);
+  border: 1px solid rgba(49, 170, 112, 0.28);
+  color: var(--text-dark);
+  font-size: 1.08rem;
+  font-weight: 800;
+}
+
+.token-lookup-definition {
+  font-size: 0.94rem;
+  line-height: 1.45;
+  color: var(--text-dark);
 }
 
 .icon-button {
