@@ -52,6 +52,16 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.post("/texts/parse", response_model=PageExtractionArtifact)
+def parse_text(payload: TextParseRequest) -> PageExtractionArtifact:
+    return parse_text_into_page_artifact(
+        text=payload.text,
+        language_code=payload.language_code,
+        title=payload.title,
+        data_root=app.state.data_root,
+    )
+
+
 @app.get("/books", response_model=list[BookRecord])
 def list_books() -> list[BookRecord]:
     registry = _load_book_registry()

@@ -8,6 +8,7 @@ WORKDIR /workspace
 
 COPY apps/api /workspace/apps/api
 COPY packages/processor /workspace/packages/processor
+COPY resources/lexicon /workspace/resources/lexicon
 
 RUN pip install --no-cache-dir \
     fastapi \
