@@ -236,6 +236,7 @@ async function archiveRemoteBook(book) {
       languageCode: book.language_code,
       pageCount: book.total_pages,
       extractedCount: book.extracted_page_count ?? 0,
+      sourcePath: book.source_path ?? "",
     });
 
     state.archivedItems = [archivedItem, ...state.archivedItems.filter((item) => item.sourceId !== book.id)];
@@ -286,6 +287,69 @@ function deleteArchivedItem(itemId) {
   state.archivedItems = state.archivedItems.filter((item) => item.id !== itemId);
   saveArchivedItems();
   renderAll();
+}
+
+async function restoreArchivedItem(itemId) {
+  const item = state.archivedItems.find((entry) => entry.id === itemId);
+  if (!item) {
+    return;
+  }
+
+  try {
+    setBusy(true);
+    if (item.sourceType === "book") {
+      if (!state.apiBaseUrl) {
+        throw new Error("Connect a processor URL before restoring books.");
+      }
+      if (!item.sourcePath) {
+        throw new Error("This archived book does not include a source path to restore from.");
+      }
+
+      await requestJson("/books/import", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          source_path: item.sourcePath,
+          language_code: item.languageCode ?? "zh",
+          title: item.title,
+          author: item.author ?? undefined,
+        }),
+      });
+      await loadBooks();
+    } else {
+      const restoredEntry = normalizeLocalEntry({
+        id: item.sourceId ?? crypto.randomUUID(),
+        title: item.title,
+        body: item.body,
+        kind: entryKinds.has(item.kind) ? item.kind : defaultEntryKind,
+        language_code: item.languageCode ?? "zh",
+        tags: Array.isArray(item.tags) && item.tags.length ? item.tags : [item.kind ?? defaultEntryKind],
+        created_at: item.archivedAt ?? new Date().toISOString(),
+        extraction: null,
+      });
+      if (!restoredEntry) {
+        throw new Error("This archived text clip could not be restored.");
+      }
+
+      state.localEntries = [
+        restoredEntry,
+        ...state.localEntries.filter((entry) => entry.id !== restoredEntry.id),
+      ];
+      saveLocalEntries();
+    }
+
+    state.archivedItems = state.archivedItems.filter((entry) => entry.id !== itemId);
+    saveArchivedItems();
+    state.error = null;
+    renderAll();
+  } catch (error) {
+    state.error = error instanceof Error ? error.message : "Unable to restore the archived item.";
+    renderAll();
+  } finally {
+    setBusy(false);
+  }
 }
 
 function normalizeTag(value) {
@@ -352,6 +416,7 @@ function normalizeArchivedItem(item) {
     languageCode: typeof item.languageCode === "string" ? item.languageCode : null,
     pageCount: typeof item.pageCount === "number" ? item.pageCount : null,
     extractedCount: typeof item.extractedCount === "number" ? item.extractedCount : null,
+    sourcePath: typeof item.sourcePath === "string" ? item.sourcePath : "",
   };
 }
 
@@ -1650,6 +1715,8 @@ function renderArchivePanel() {
   for (const item of state.archivedItems) {
     const card = document.createElement("article");
     card.className = "archive-item";
+    const canRestore = item.sourceType === "text" || (Boolean(state.apiBaseUrl) && Boolean(item.sourcePath));
+    const restoreLabel = item.sourceType === "book" ? "Restore book" : "Restore text";
     card.innerHTML = `
       <div class="archive-item-top">
         <span class="pill">${escapeHtml(item.sourceType === "book" ? "Book" : "Text")}</span>
@@ -1662,9 +1729,13 @@ function renderArchivePanel() {
       ${item.details ? `<p class="archive-item-body">${escapeHtml(item.details)}</p>` : ""}
       <div class="archive-item-actions">
         <span class="small-copy">${escapeHtml(item.kind)}</span>
-        <button class="button button-secondary button-compact archive-delete" type="button">Delete forever</button>
+        <div class="archive-action-row">
+          <button class="button button-secondary button-compact archive-restore" type="button"${canRestore ? "" : " disabled"}>${escapeHtml(restoreLabel)}</button>
+          <button class="button button-secondary button-compact archive-delete" type="button">Delete forever</button>
+        </div>
       </div>
     `;
+    card.querySelector(".archive-restore")?.addEventListener("click", () => void restoreArchivedItem(item.id));
     card.querySelector(".archive-delete")?.addEventListener("click", () => deleteArchivedItem(item.id));
     elements.archiveList.appendChild(card);
   }

@@ -795,6 +795,13 @@ a {
   flex-wrap: wrap;
 }
 
+.archive-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .archive-item-title {
   font-size: 1rem;
   font-weight: 800;
