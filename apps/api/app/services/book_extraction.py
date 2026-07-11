@@ -9,7 +9,9 @@ from app.core.paths import get_books_root
 from app.schemas.books import BookRecord, PageExtractionArtifact
 from app.services.book_sources import is_text_fixture_source, load_text_fixture_pages
 from app.services.ocr import get_text_source_signature, resolve_page_text
+from app.services.lexicon import lookup_lexicon_pinyin_map
 from processor import build_book_extraction_result, build_page_extraction_result
+from processor.contracts import PageExtractionResult
 
 FIXTURE_TEXT_SOURCE = "fixture"
 FIXTURE_TEXT_SIGNATURE = "fixture-text-v1"
@@ -43,13 +45,24 @@ def load_page_artifact(
     return _load_page_artifact(_page_artifact_path(book_id, page_number, data_root))
 
 
-def parse_text_into_page_artifact(*, text: str, language_code: str, title: str | None = None) -> PageExtractionArtifact:
+def parse_text_into_page_artifact(
+    *,
+    text: str,
+    language_code: str,
+    title: str | None = None,
+    data_root: Path | None = None,
+) -> PageExtractionArtifact:
+    lexicon_root = data_root or get_books_root().parent
     page_result = build_page_extraction_result(
         book_id=(title or "local-text").strip().replace(" ", "-").lower() or "local-text",
         page_number=1,
         language_code=language_code,
         raw_text=text,
         source_page_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+    )
+    page_result = _enrich_page_romanization(
+        page_result,
+        data_root=lexicon_root,
     )
     return PageExtractionArtifact(
         source_page_sha256=page_result.source_page_sha256 or hashlib.sha256(text.encode("utf-8")).hexdigest(),
@@ -70,6 +83,35 @@ def _page_image_hash(page_image_path: Path) -> str:
     return hashlib.sha256(page_image_path.read_bytes()).hexdigest()
 
 
+def _enrich_page_romanization(page_result: PageExtractionResult, *, data_root: Path) -> PageExtractionResult:
+    if page_result.language_code.lower() != "zh":
+        return page_result
+
+    surface_forms = {
+        token.surface_form
+        for sentence in page_result.sentences
+        for token in sentence.tokens
+        if token.surface_form
+    }
+    pinyin_map = lookup_lexicon_pinyin_map(
+        data_root=data_root,
+        language_code=page_result.language_code,
+        terms=surface_forms,
+    )
+    if not pinyin_map:
+        return page_result
+
+    sentences = []
+    for sentence in page_result.sentences:
+        tokens = []
+        for token in sentence.tokens:
+            romanization = token.romanization or pinyin_map.get(token.surface_form)
+            tokens.append(token.model_copy(update={"romanization": romanization}))
+        sentences.append(sentence.model_copy(update={"tokens": tokens}))
+
+    return page_result.model_copy(update={"sentences": sentences})
+
+
 def extract_book_pages(
     *,
     book: BookRecord,
@@ -79,6 +121,7 @@ def extract_book_pages(
     data_root: Path | None = None,
 ) -> tuple[PageExtractionArtifact, ...]:
     data_root = data_root or get_books_root()
+    lexicon_root = data_root.parent if data_root.name == "books" else data_root
     pages_root = Path(book.pages_path) if book.pages_path else data_root / book.id / "pages"
     extraction_root = _artifact_dir(book.id, data_root) / "pages"
     extraction_root.mkdir(parents=True, exist_ok=True)
@@ -131,6 +174,7 @@ def extract_book_pages(
             raw_text=raw_text,
             source_page_sha256=page_hash,
         )
+        page_result = _enrich_page_romanization(page_result, data_root=lexicon_root)
         artifact = PageExtractionArtifact(
             source_page_sha256=page_hash,
             text_source=text_source,

@@ -343,3 +343,37 @@ def lookup_lexicon_entry(
             for row in rows
         ],
     )
+
+
+def lookup_lexicon_pinyin_map(
+    *,
+    data_root: Path,
+    language_code: str,
+    terms: Iterable[str],
+) -> dict[str, str]:
+    normalized_terms = [term.strip() for term in terms if isinstance(term, str) and term.strip()]
+    if not normalized_terms:
+        return {}
+
+    db_path = ensure_lexicon_database(data_root)
+    placeholders = ", ".join("?" for _ in normalized_terms)
+    with sqlite3.connect(db_path) as connection:
+        connection.row_factory = sqlite3.Row
+        rows = connection.execute(
+            f"""
+            SELECT surface_form, pinyin
+            FROM lexicon_entries
+            WHERE language_code = ? AND surface_form IN ({placeholders}) AND pinyin IS NOT NULL AND pinyin != ''
+            ORDER BY CASE entry_type WHEN 'word' THEN 0 ELSE 1 END, frequency_rank IS NULL, frequency_rank ASC, id ASC
+            """,
+            [language_code, *normalized_terms],
+        ).fetchall()
+
+    pinyin_map: dict[str, str] = {}
+    for row in rows:
+        surface_form = row["surface_form"]
+        pinyin = row["pinyin"]
+        if surface_form not in pinyin_map and pinyin:
+            pinyin_map[surface_form] = pinyin
+
+    return pinyin_map

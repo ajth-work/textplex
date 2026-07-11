@@ -225,6 +225,7 @@ def parse_text(payload: TextParseRequest) -> PageExtractionArtifact:
         text=payload.text,
         language_code=payload.language_code,
         title=payload.title,
+        data_root=app.state.data_root,
     )
 
 
