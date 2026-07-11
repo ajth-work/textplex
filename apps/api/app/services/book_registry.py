@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -253,3 +254,11 @@ def save_registry(registry_path: Path, registry: dict[str, BookRecord]) -> None:
         json.dumps(payload, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+
+
+def delete_book_from_path(book_id: str, data_root: Path) -> None:
+    registry_path = data_root / "registry.json"
+    registry = load_registry(registry_path)
+    registry.pop(book_id, None)
+    save_registry(registry_path, registry)
+    shutil.rmtree(data_root / book_id, ignore_errors=True)

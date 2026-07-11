@@ -44,6 +44,24 @@ def test_get_reader_page_returns_page_payload_and_image(imported_real_scan: tupl
     assert image_response.headers["content-type"] == "image/png"
 
 
+def test_delete_book_removes_registry_entry(imported_real_scan: tuple[Path, BookRecord]) -> None:
+    data_root, record = imported_real_scan
+
+    app.state.data_root = data_root
+    client = TestClient(app)
+
+    delete_response = client.delete(f"/books/{record.id}")
+    assert delete_response.status_code == 200
+    assert delete_response.json()["status"] == "deleted"
+
+    list_response = client.get("/books")
+    assert list_response.status_code == 200
+    assert all(book["id"] != record.id for book in list_response.json())
+
+    missing_response = client.get(f"/books/{record.id}")
+    assert missing_response.status_code == 404
+
+
 def test_parse_text_endpoint_returns_tokenized_sentences(tmp_path: Path) -> None:
     app.state.data_root = tmp_path
     client = TestClient(app)

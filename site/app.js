@@ -4,6 +4,7 @@ const storageKey = "textplex.processorBaseUrl";
 const wakeHelperStorageKey = "textplex.processorWakeHelperUrl";
 const themeStorageKey = "textplex.theme";
 const localEntriesStorageKey = "textplex.localTextEntries";
+const archiveItemsStorageKey = "textplex.archiveItems";
 const defaultView = "home";
 const defaultTheme = "paper";
 const defaultEntryKind = "book";
@@ -40,6 +41,8 @@ const elements = {
   textEntryTagChips: document.getElementById("textEntryTagChips"),
   localEntryCount: document.getElementById("localEntryCount"),
   localEntryList: document.getElementById("localEntryList"),
+  archiveCount: document.getElementById("archiveCount"),
+  archiveList: document.getElementById("archiveList"),
   bookCount: document.getElementById("bookCount"),
   homeBookCount: document.getElementById("homeBookCount"),
   homePageCount: document.getElementById("homePageCount"),
@@ -82,6 +85,7 @@ const state = {
   theme: resolveTheme(window.localStorage.getItem(themeStorageKey) ?? defaultTheme),
   books: [],
   localEntries: loadLocalEntries(),
+  archivedItems: loadArchivedItems(),
   localReaderEntryId: null,
   localReaderSentenceIndex: 0,
   selectedBookId: null,
@@ -189,8 +193,99 @@ function loadLocalEntries() {
   }
 }
 
+function loadArchivedItems() {
+  try {
+    const raw = window.localStorage.getItem(archiveItemsStorageKey);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.map((item) => normalizeArchivedItem(item)).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 function saveLocalEntries() {
   window.localStorage.setItem(localEntriesStorageKey, JSON.stringify(state.localEntries));
+}
+
+function saveArchivedItems() {
+  window.localStorage.setItem(archiveItemsStorageKey, JSON.stringify(state.archivedItems));
+}
+
+async function archiveRemoteBook(book) {
+  try {
+    if (state.apiBaseUrl) {
+      setBusy(true);
+      await requestJson(`/books/${encodeURIComponent(book.id)}`, { method: "DELETE" });
+    }
+
+    const archivedItem = normalizeArchivedItem({
+      id: `book:${book.id}`,
+      sourceType: "book",
+      sourceId: book.id,
+      title: book.title,
+      subtitle: book.author ?? "Unknown author",
+      details: `${book.language_code.toUpperCase()} · ${book.total_pages} pages`,
+      kind: "book",
+      author: book.author ?? null,
+      languageCode: book.language_code,
+      pageCount: book.total_pages,
+      extractedCount: book.extracted_page_count ?? 0,
+    });
+
+    state.archivedItems = [archivedItem, ...state.archivedItems.filter((item) => item.sourceId !== book.id)];
+    saveArchivedItems();
+    state.books = state.books.filter((item) => item.id !== book.id);
+    if (state.selectedBookId === book.id) {
+      state.selectedBookId = null;
+      state.pageData = null;
+      state.selectedSentenceIndex = 0;
+    }
+    renderAll();
+  } catch (error) {
+    state.error = error instanceof Error ? error.message : "Unable to archive the book.";
+    renderAll();
+  } finally {
+    if (state.apiBaseUrl) {
+      setBusy(false);
+    }
+  }
+}
+
+function archiveLocalEntry(entry) {
+  const archivedItem = normalizeArchivedItem({
+    id: `text:${entry.id}`,
+    sourceType: "text",
+    sourceId: entry.id,
+    title: entry.title,
+    subtitle: entry.kind,
+    details: summarizeText(entry.body, 120),
+    kind: entry.kind,
+    body: entry.body,
+    tags: entry.tags ?? [],
+    languageCode: entry.language_code ?? "zh",
+  });
+
+  state.archivedItems = [archivedItem, ...state.archivedItems.filter((item) => item.sourceId !== entry.id)];
+  saveArchivedItems();
+  state.localEntries = state.localEntries.filter((item) => item.id !== entry.id);
+  if (state.localReaderEntryId === entry.id) {
+    state.localReaderEntryId = null;
+    state.localReaderSentenceIndex = 0;
+  }
+  saveLocalEntries();
+  renderAll();
+}
+
+function deleteArchivedItem(itemId) {
+  state.archivedItems = state.archivedItems.filter((item) => item.id !== itemId);
+  saveArchivedItems();
+  renderAll();
 }
 
 function normalizeTag(value) {
@@ -226,6 +321,37 @@ function normalizeLocalEntry(entry) {
     created_at: createdAt,
     sentences,
     extraction,
+  };
+}
+
+function normalizeArchivedItem(item) {
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+
+  const sourceType = item.sourceType === "book" ? "book" : "text";
+  const id = typeof item.id === "string" && item.id ? item.id : crypto.randomUUID();
+  const title = typeof item.title === "string" && item.title.trim() ? item.title.trim() : "Untitled";
+  const subtitle = typeof item.subtitle === "string" ? item.subtitle.trim() : "";
+  const details = typeof item.details === "string" ? item.details.trim() : "";
+  const kind = typeof item.kind === "string" && item.kind.trim() ? item.kind.trim() : sourceType;
+  const archivedAt = typeof item.archivedAt === "string" ? item.archivedAt : new Date().toISOString();
+
+  return {
+    id,
+    sourceType,
+    title,
+    subtitle,
+    details,
+    kind,
+    archivedAt,
+    sourceId: typeof item.sourceId === "string" ? item.sourceId : null,
+    body: typeof item.body === "string" ? item.body : "",
+    tags: Array.isArray(item.tags) ? item.tags.map((tag) => normalizeTag(String(tag))).filter(Boolean) : [],
+    author: typeof item.author === "string" ? item.author : null,
+    languageCode: typeof item.languageCode === "string" ? item.languageCode : null,
+    pageCount: typeof item.pageCount === "number" ? item.pageCount : null,
+    extractedCount: typeof item.extractedCount === "number" ? item.extractedCount : null,
   };
 }
 
@@ -1008,22 +1134,17 @@ function renderBooks() {
     const node = elements.bookCardTemplate.content.cloneNode(true);
     node.querySelector(".pill").textContent = book.language_code.toUpperCase();
     node.querySelector(".book-status").textContent = book.status.replaceAll("_", " ");
+    node.querySelector(".book-status").className = "muted book-status";
     node.querySelector(".book-title").textContent = book.title;
     node.querySelector(".book-author").textContent = book.author ?? "Unknown author";
-    const bookTags = node.querySelector(".book-tags");
-    if (bookTags) {
-      bookTags.replaceChildren();
-      const chip = document.createElement("span");
-      chip.className = "tag-chip tag-chip-primary";
-      chip.textContent = "book";
-      bookTags.appendChild(chip);
-    }
+    node.querySelector(".book-kind").textContent = "book";
     node.querySelector(".book-pages").textContent = String(book.total_pages);
     node.querySelector(".book-prepared").textContent = String(book.page_image_count);
     node.querySelector(".book-extracted").textContent = String(book.extracted_page_count);
 
     const openButton = node.querySelector(".book-open");
     openButton.addEventListener("click", () => void loadReader(book.id, 1));
+    node.querySelector(".book-archive")?.addEventListener("click", () => void archiveRemoteBook(book));
 
     elements.bookList.appendChild(node);
   }
@@ -1078,18 +1199,13 @@ function renderLocalEntries() {
     node.querySelector(".text-entry-date").textContent = formatLocalDate(entry.created_at);
     node.querySelector(".text-entry-title").textContent = entry.title;
     node.querySelector(".text-entry-snippet").textContent = summarizeText(entry.body);
-    node.querySelector(".text-entry-sentence-count").textContent = `${sentences.length} sentences`;
+    node.querySelector(".text-entry-sentence-count-value").textContent = String(sentences.length);
+    node.querySelector(".text-entry-tag-count").textContent = String(tags.length);
+    node.querySelector(".text-entry-type").textContent = kind;
+    node.querySelector(".text-entry-type-value").textContent = kind;
 
     const tagsWrap = node.querySelector(".text-entry-tags");
-    const primaryTag = tags[0] ?? kind;
-    const extraTags = tags.slice(1);
-
-    const primaryChip = document.createElement("span");
-    primaryChip.className = "tag-chip tag-chip-primary";
-    primaryChip.textContent = primaryTag;
-    tagsWrap.appendChild(primaryChip);
-
-    for (const tag of extraTags) {
+    for (const tag of tags.slice(1)) {
       const chip = document.createElement("span");
       chip.className = "tag-chip";
       chip.innerHTML = `
@@ -1101,7 +1217,7 @@ function renderLocalEntries() {
           item.id === entry.id
             ? {
                 ...item,
-                tags: (item.tags ?? []).filter((currentTag) => currentTag === primaryTag || currentTag !== tag),
+                tags: (item.tags ?? []).filter((currentTag) => currentTag !== tag),
               }
             : item,
         );
@@ -1118,6 +1234,7 @@ function renderLocalEntries() {
     node.querySelector(".text-entry-copy")?.addEventListener("click", async () => {
       await copyTextToClipboard(entry.body);
     });
+    node.querySelector(".text-entry-archive")?.addEventListener("click", () => archiveLocalEntry(entry));
 
     elements.localEntryList.appendChild(node);
   }
@@ -1509,6 +1626,47 @@ function renderOptions() {
 
   if (elements.themeStatus) {
     elements.themeStatus.textContent = themeLabel(state.theme);
+  }
+
+  renderArchivePanel();
+}
+
+function renderArchivePanel() {
+  if (!elements.archiveList || !elements.archiveCount) {
+    return;
+  }
+
+  elements.archiveCount.textContent = String(state.archivedItems.length);
+  elements.archiveList.replaceChildren();
+
+  if (!state.archivedItems.length) {
+    const empty = document.createElement("p");
+    empty.className = "small-copy";
+    empty.textContent = "No archived items yet.";
+    elements.archiveList.appendChild(empty);
+    return;
+  }
+
+  for (const item of state.archivedItems) {
+    const card = document.createElement("article");
+    card.className = "archive-item";
+    card.innerHTML = `
+      <div class="archive-item-top">
+        <span class="pill">${escapeHtml(item.sourceType === "book" ? "Book" : "Text")}</span>
+        <span class="muted">${escapeHtml(formatLocalDate(item.archivedAt))}</span>
+      </div>
+      <div class="archive-item-meta">
+        <strong class="archive-item-title">${escapeHtml(item.title)}</strong>
+        ${item.subtitle ? `<span class="muted">${escapeHtml(item.subtitle)}</span>` : ""}
+      </div>
+      ${item.details ? `<p class="archive-item-body">${escapeHtml(item.details)}</p>` : ""}
+      <div class="archive-item-actions">
+        <span class="small-copy">${escapeHtml(item.kind)}</span>
+        <button class="button button-secondary button-compact archive-delete" type="button">Delete forever</button>
+      </div>
+    `;
+    card.querySelector(".archive-delete")?.addEventListener("click", () => deleteArchivedItem(item.id));
+    elements.archiveList.appendChild(card);
   }
 }
 

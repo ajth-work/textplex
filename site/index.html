@@ -280,14 +280,14 @@
 
       <section id="optionsView" class="view tools-grid is-hidden" data-view="options">
         <article class="card panel options-panel">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Options</p>
-              <h2>Color suites</h2>
-            </div>
-            <span id="themeStatus" class="pill">Paper</span>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Options</p>
+            <h2>Color suites</h2>
           </div>
-          <p class="small-copy">Choose a palette for daylight, low light, or a more playful reading vibe.</p>
+          <span id="themeStatus" class="pill">Paper</span>
+        </div>
+        <p class="small-copy">Choose a palette for daylight, low light, or a more playful reading vibe.</p>
 
           <div class="theme-group">
             <h3>Daylight</h3>
@@ -348,6 +348,17 @@
               </button>
             </div>
           </div>
+
+          <div class="theme-group archive-group">
+            <div class="section-heading">
+              <div>
+                <h3>Archive</h3>
+                <p class="small-copy">Archived books and text clips stay here until you delete them forever.</p>
+              </div>
+              <span id="archiveCount" class="pill">0</span>
+            </div>
+            <div id="archiveList" class="archive-list"></div>
+          </div>
         </article>
       </section>
     </main>
@@ -356,26 +367,31 @@
       <article class="book-card">
         <div class="book-card-top">
           <span class="pill"></span>
-          <span class="muted book-status"></span>
+          <div class="book-card-actions">
+            <span class="muted book-status"></span>
+            <button class="button button-secondary button-compact book-archive" type="button">Archive</button>
+          </div>
         </div>
-        <h3 class="book-title"></h3>
-        <p class="muted book-author"></p>
-        <div class="tag-chip-list book-tags"></div>
-        <dl class="metric-grid">
-          <div>
-            <dt>Pages</dt>
-            <dd class="book-pages"></dd>
+        <div class="book-summary-row">
+          <h3 class="book-title"></h3>
+          <p class="muted book-author"></p>
+          <span class="pill book-kind"></span>
+        </div>
+        <div class="book-metrics">
+          <div class="book-metric">
+            <span>Pages</span>
+            <strong class="book-pages"></strong>
           </div>
-          <div>
-            <dt>Prepared</dt>
-            <dd class="book-prepared"></dd>
+          <div class="book-metric">
+            <span>Prepared</span>
+            <strong class="book-prepared"></strong>
           </div>
-          <div>
-            <dt>Extracted</dt>
-            <dd class="book-extracted"></dd>
+          <div class="book-metric">
+            <span>Extracted</span>
+            <strong class="book-extracted"></strong>
           </div>
-        </dl>
-        <div class="button-row">
+        </div>
+        <div class="button-row button-row-single">
           <button class="button button-primary book-open" type="button">Open reader</button>
         </div>
       </article>
@@ -385,13 +401,32 @@
       <article class="book-card text-entry-card">
         <div class="book-card-top">
           <span class="pill text-entry-kind"></span>
-          <span class="muted text-entry-date"></span>
+          <div class="book-card-actions">
+            <span class="muted text-entry-date"></span>
+            <button class="button button-secondary button-compact text-entry-archive" type="button">Archive</button>
+          </div>
         </div>
-        <h3 class="book-title text-entry-title"></h3>
-        <p class="muted text-entry-snippet"></p>
-        <p class="muted text-entry-sentence-count"></p>
+        <div class="book-summary-row">
+          <h3 class="book-title text-entry-title"></h3>
+          <p class="muted text-entry-snippet"></p>
+          <span class="pill text-entry-type"></span>
+        </div>
+        <div class="book-metrics">
+          <div class="book-metric">
+            <span>Sentences</span>
+            <strong class="text-entry-sentence-count-value"></strong>
+          </div>
+          <div class="book-metric">
+            <span>Tags</span>
+            <strong class="text-entry-tag-count"></strong>
+          </div>
+          <div class="book-metric">
+            <span>Type</span>
+            <strong class="text-entry-type-value"></strong>
+          </div>
+        </div>
         <div class="tag-chip-list text-entry-tags"></div>
-        <div class="button-row">
+        <div class="button-row button-row-tight">
           <button class="button button-primary text-entry-open" type="button">Open reader</button>
           <button class="button button-secondary text-entry-copy" type="button">Copy text</button>
         </div>

@@ -11,7 +11,7 @@ from app.schemas.books import BookExtractionRequest, BookImportRequest, BookPage
 from app.schemas.learning import LearningProfileSummary, PageReadCreateRequest, PageReadRecord, ReadingSessionCreateRequest, ReadingSessionRecord
 from app.schemas.lexicon import LexiconImportRequest, LexiconImportSummary, LexiconLookupResponse
 from app.services.book_extraction import extract_book_text, load_page_artifact, parse_text_into_page_artifact
-from app.services.book_registry import import_book_from_path, load_registry, save_registry
+from app.services.book_registry import delete_book_from_path, import_book_from_path, load_registry, save_registry
 from app.services.learning_profile import create_reading_session, get_learning_profile_summary, record_page_read
 from app.services.lexicon import import_lexicon_from_source, lookup_lexicon_entry
 from processor.contracts import BookExtractionResult
@@ -173,6 +173,16 @@ def get_book_page_image(book_id: str, page_number: int) -> FileResponse:
     if not image_path.exists():
         raise HTTPException(status_code=404, detail=f"Page image not found: {page_number}")
     return FileResponse(image_path, media_type="image/png", filename=image_path.name)
+
+
+@app.delete("/books/{book_id}")
+def delete_book(book_id: str) -> dict[str, str]:
+    registry = _load_book_registry()
+    if book_id not in registry:
+        raise HTTPException(status_code=404, detail=f"Book not found: {book_id}")
+
+    delete_book_from_path(book_id, app.state.data_root / "books")
+    return {"status": "deleted", "book_id": book_id}
 
 
 @app.post("/books/{book_id}/extract")
