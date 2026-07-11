@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TextPlex Progress Preview</title>
+    <meta
+      name="description"
+      content="A standalone progress dashboard mockup for TextPlex, packaged for GitHub Pages."
+    />
+    <style>
+      :root {
+        --bg: #f7f4ee;
+        --surface: rgba(255, 255, 255, 0.9);
+        --surface-strong: #ffffff;
+        --text: #1f2430;
+        --muted: #7b8191;
+        --line: rgba(31, 36, 48, 0.08);
+        --shadow: 0 18px 40px rgba(20, 24, 35, 0.08);
+        --shadow-soft: 0 10px 24px rgba(20, 24, 35, 0.06);
+        --accent: #1f335f;
+        --green: #3f9b68;
+        --blue: #6e8fe6;
+        --violet: #8e82db;
+        --orange: #d59c4c;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { min-height: 100%; }
+      body {
+        margin: 0;
+        color: var(--text);
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(255,255,255,0.95), transparent 42%),
+          linear-gradient(180deg, #fbf9f5 0%, #f3efe7 100%);
+      }
+
+      .app {
+        max-width: 430px;
+        min-height: 100vh;
+        margin: 0 auto;
+        padding: 18px 16px 24px;
+      }
+
+      .status-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 14px;
+        color: #121826;
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .status-icons {
+        display: flex;
+        gap: 8px;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+
+      .title {
+        margin: 0;
+        font-size: 28px;
+        line-height: 1;
+        font-weight: 900;
+        letter-spacing: -0.04em;
+      }
+
+      .icon-btn {
+        width: 42px;
+        height: 42px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: #2a3140;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+      }
+
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid rgba(31, 36, 48, 0.06);
+        border-radius: 22px;
+        box-shadow: var(--shadow);
+      }
+
+      .summary-card {
+        min-height: 118px;
+        padding: 14px;
+        display: grid;
+        align-content: space-between;
+      }
+
+      .summary-card h3,
+      .stat-card h3,
+      .panel-title {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 900;
+        letter-spacing: -0.03em;
+      }
+
+      .summary-card strong {
+        display: block;
+        font-size: 34px;
+        line-height: 1;
+        font-weight: 900;
+        letter-spacing: -0.04em;
+      }
+
+      .summary-card span {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .green-surface { background: linear-gradient(180deg, #eef7f0, #e7f1ea); }
+      .blue-surface { background: linear-gradient(180deg, #eef3fb, #e5ebf9); }
+      .violet-surface { background: linear-gradient(180deg, #f3eefc, #ece5fa); }
+
+      .section-title {
+        margin: 18px 0 10px;
+        font-size: 18px;
+        font-weight: 900;
+        letter-spacing: -0.03em;
+      }
+
+      .main-card {
+        background: var(--surface);
+        border: 1px solid rgba(31, 36, 48, 0.06);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+        padding: 16px;
+      }
+
+      .goal-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr 1fr;
+        gap: 10px;
+      }
+
+      .goal-card {
+        min-height: 120px;
+        padding: 14px;
+        display: grid;
+        align-content: space-between;
+      }
+
+      .goal-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .goal-top h3 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      .ring {
+        width: 58px;
+        height: 58px;
+        border-radius: 50%;
+        background: conic-gradient(var(--green) 67%, rgba(0,0,0,0.08) 0);
+        display: grid;
+        place-items: center;
+        position: relative;
+        flex: 0 0 auto;
+      }
+
+      .ring::before {
+        content: "";
+        position: absolute;
+        inset: 6px;
+        background: #fff;
+        border-radius: 50%;
+      }
+
+      .ring span {
+        position: relative;
+        z-index: 1;
+        font-size: 16px;
+        font-weight: 900;
+      }
+
+      .large-value {
+        font-size: 30px;
+        font-weight: 900;
+        letter-spacing: -0.04em;
+      }
+
+      .subtle {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .icon-badge {
+        font-size: 18px;
+      }
+
+      .growth-card {
+        margin-top: 12px;
+        padding: 14px;
+      }
+
+      .growth-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+
+      .growth-head h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 900;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 5px 10px;
+        border-radius: 999px;
+        background: rgba(63, 155, 104, 0.12);
+        color: #2f7d53;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .bar-chart {
+        height: 112px;
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+        padding: 10px 4px 0;
+      }
+
+      .bar {
+        flex: 1 1 0;
+        border-radius: 999px;
+        background: linear-gradient(180deg, rgba(63,155,104,0.55), rgba(63,155,104,1));
+      }
+
+      .bar:nth-child(1) { height: 24px; }
+      .bar:nth-child(2) { height: 36px; }
+      .bar:nth-child(3) { height: 42px; }
+      .bar:nth-child(4) { height: 66px; background: linear-gradient(180deg, rgba(14,154,196,0.65), rgba(14,154,196,1)); }
+      .bar:nth-child(5) { height: 70px; }
+      .bar:nth-child(6) { height: 82px; }
+      .bar:nth-child(7) { height: 96px; }
+
+      .bar-labels {
+        display: flex;
+        justify-content: space-between;
+        color: #8b92a0;
+        font-size: 12px;
+        font-weight: 700;
+        margin-top: 4px;
+        padding: 0 2px;
+      }
+
+      .line-card {
+        margin-top: 12px;
+        padding: 14px;
+      }
+
+      .line-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+
+      .line-head h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 900;
+      }
+
+      .line-area {
+        position: relative;
+        height: 130px;
+        background: linear-gradient(180deg, rgba(245,247,248,0.8), rgba(255,255,255,0.95));
+        border-radius: 18px;
+        overflow: hidden;
+        padding: 10px 12px 8px;
+      }
+
+      .line-axes {
+        position: absolute;
+        inset: 0;
+        padding: 30px 0 24px;
+        display: grid;
+        grid-template-rows: repeat(4, 1fr);
+      }
+
+      .line-axes span {
+        border-top: 1px solid rgba(31,36,48,0.06);
+      }
+
+      .line-svg {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        height: 100%;
+      }
+
+      .line-tag {
+        position: absolute;
+        right: 12px;
+        top: 36px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: var(--green);
+        color: white;
+        font-size: 12px;
+        font-weight: 900;
+        box-shadow: 0 10px 20px rgba(63, 155, 104, 0.22);
+      }
+
+      .recommend-card {
+        margin-top: 12px;
+        padding: 16px;
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .star {
+        color: #e6a12f;
+        font-size: 24px;
+      }
+
+      .recommend-card h3 {
+        margin: 0 0 4px;
+        font-size: 15px;
+        font-weight: 900;
+      }
+
+      .recommend-card p {
+        margin: 0;
+        color: #475061;
+        font-size: 14px;
+        line-height: 1.45;
+        font-weight: 700;
+      }
+
+      .cta {
+        border: 0;
+        border-radius: 14px;
+        padding: 14px 18px;
+        color: white;
+        background: linear-gradient(180deg, #173a74, #12325f);
+        box-shadow: 0 16px 30px rgba(18, 50, 95, 0.28);
+        font-weight: 900;
+        font-size: 15px;
+      }
+
+      @media (max-width: 390px) {
+        .app { padding-inline: 12px; }
+        .goal-grid { grid-template-columns: 1fr; }
+        .grid-3 { grid-template-columns: 1fr 1fr; }
+        .recommend-card { grid-template-columns: 24px minmax(0, 1fr); }
+        .cta { grid-column: 1 / -1; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <div class="status-row">
+        <div>9:41</div>
+        <div class="status-icons" aria-hidden="true">
+          <svg width="20" height="14" viewBox="0 0 20 14" fill="currentColor"><path d="M1 10h3v3H1v-3Zm5-4h3v7H6V6Zm5-4h3v11h-3V2Zm5-2h3v13h-3V0Z"/></svg>
+          <svg width="18" height="14" viewBox="0 0 18 14" fill="currentColor"><path d="M9 12.5 3.1 6.6a6.5 6.5 0 0 1 11.8 0L9 12.5Zm0-3.2 3.2-3.2A4.5 4.5 0 0 0 5.8 6L9 9.3Z"/></svg>
+          <svg width="25" height="14" viewBox="0 0 25 14" fill="currentColor"><rect x="1" y="1" width="20" height="12" rx="3" stroke="currentColor" fill="none" stroke-width="1.5"/><rect x="22" y="5" width="2" height="4" rx="1" fill="currentColor"/><rect x="3" y="3" width="15" height="8" rx="2" fill="currentColor"/></svg>
+        </div>
+      </div>
+
+      <header class="topbar">
+        <h1 class="title">Your Progress</h1>
+        <button class="icon-btn" type="button" aria-label="Calendar">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="17" rx="2" />
+            <path d="M8 2v4M16 2v4M3 9h18" />
+          </svg>
+        </button>
+      </header>
+
+      <section class="goal-grid">
+        <article class="card goal-card">
+          <div class="goal-top">
+            <div>
+              <h3>Weekly Reading Goal</h3>
+              <div class="large-value">4 <span style="font-size: 14px; color: var(--muted); font-weight: 800;">/ 6 texts</span></div>
+            </div>
+            <div class="ring"><span>67%</span></div>
+          </div>
+        </article>
+
+        <article class="card goal-card">
+          <div class="goal-top">
+            <div>
+              <h3>Streak</h3>
+              <div class="large-value">12</div>
+              <div class="subtle">days</div>
+            </div>
+            <div class="icon-badge">🔥</div>
+          </div>
+        </article>
+
+        <article class="card goal-card">
+          <div class="goal-top">
+            <div>
+              <h3>Minutes Read</h3>
+              <div class="large-value">245</div>
+              <div class="subtle">this week</div>
+            </div>
+            <div class="icon-badge" style="color: var(--green);">◔</div>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid-3" style="margin-top: 10px;">
+        <article class="card summary-card green-surface">
+          <h3>Texts Completed</h3>
+          <strong>18</strong>
+          <span>+3 this week</span>
+        </article>
+        <article class="card summary-card blue-surface">
+          <h3>Words Learned</h3>
+          <strong>132</strong>
+          <span>+18 this week</span>
+        </article>
+        <article class="card summary-card violet-surface">
+          <h3>Reviews Done</h3>
+          <strong>86</strong>
+          <span>+21 this week</span>
+        </article>
+      </section>
+
+      <article class="card growth-card">
+        <div class="growth-head">
+          <h3>Vocabulary Growth</h3>
+          <span class="tag">HSK 2-5</span>
+        </div>
+        <div class="bar-chart" aria-hidden="true">
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+        </div>
+        <div class="bar-labels"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+      </article>
+
+      <article class="card line-card">
+        <div class="line-head">
+          <h3>Level Progress</h3>
+          <span class="subtle">HSK 3 → 4</span>
+        </div>
+        <div class="line-area">
+          <div class="line-axes" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <svg class="line-svg" viewBox="0 0 320 130" aria-hidden="true">
+            <path d="M28 102 L64 92 L100 82 L134 81 L168 74 L202 58 L236 42 L268 34 L296 28" fill="none" stroke="rgba(63,155,104,0.9)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+            <g fill="#fff" stroke="rgba(63,155,104,0.95)" stroke-width="3">
+              <circle cx="28" cy="102" r="4.5"></circle>
+              <circle cx="64" cy="92" r="4.5"></circle>
+              <circle cx="100" cy="82" r="4.5"></circle>
+              <circle cx="134" cy="81" r="4.5"></circle>
+              <circle cx="168" cy="74" r="4.5"></circle>
+              <circle cx="202" cy="58" r="4.5"></circle>
+              <circle cx="236" cy="42" r="4.5"></circle>
+              <circle cx="268" cy="34" r="4.5"></circle>
+              <circle cx="296" cy="28" r="4.5"></circle>
+            </g>
+          </svg>
+          <div class="line-tag">HSK 3.6</div>
+        </div>
+      </article>
+
+      <article class="card recommend-card">
+        <div class="star">☆</div>
+        <div>
+          <h3>Recommended Next Goal</h3>
+          <p>Read 2 more texts this week to hit your goal.</p>
+        </div>
+        <button class="cta" type="button">Set Goal</button>
+      </article>
+    </main>
+  </body>
+</html>
