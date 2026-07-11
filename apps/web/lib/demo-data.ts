@@ -11,6 +11,7 @@ import type {
   PageExtractionResult,
   PageReadRecord,
   ReadingSessionRecord,
+  SentenceReadRecord,
   SentenceResult,
   TokenOccurrenceResult,
   TokenResult,
@@ -400,8 +401,19 @@ export const demoLearningProfileSummary: LearningProfileSummary = {
   database_path: "demo/profile.sqlite3",
   reading_sessions: 1,
   page_reads: 0,
+  sentence_reads: 0,
+  token_exposures: 0,
+  word_exposures: 0,
+  character_exposures: 0,
   active_books: 1,
+  unique_words_seen: demoSummary.lexical_entries.length,
+  unique_characters_seen: 12,
   vocabulary_progress_rows: demoSummary.lexical_entries.length,
+  today_sentence_reads: 0,
+  today_token_exposures: 0,
+  average_seconds_per_sentence: null,
+  average_seconds_per_word: null,
+  average_seconds_per_character: null,
 };
 
 export function getDemoPageNumbers(): number[] {
@@ -502,6 +514,22 @@ export function getDemoPostResponse(pathname: string, body: unknown): unknown | 
       counted_as_read: true,
       completed_at: "2026-07-09T00:00:00Z",
     } satisfies PageReadRecord;
+  }
+
+  if (route === "/learning/sentence-reads") {
+    const request = body as { session_id?: string; book_id?: string; page_number?: number; sentence_order?: number; sentence_text?: string; token_count?: number; character_count?: number; active_seconds?: number } | null;
+    return {
+      id: 1,
+      session_id: request?.session_id ?? "demo-session",
+      book_id: request?.book_id ?? DEMO_BOOK_ID,
+      page_number: request?.page_number ?? 1,
+      sentence_order: request?.sentence_order ?? 1,
+      sentence_text: request?.sentence_text ?? "",
+      token_count: request?.token_count ?? 0,
+      character_count: request?.character_count ?? 0,
+      active_seconds: request?.active_seconds ?? 0,
+      completed_at: "2026-07-09T00:00:00Z",
+    } satisfies SentenceReadRecord;
   }
 
   return null;

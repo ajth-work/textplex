@@ -17,6 +17,8 @@ import {
   type LexiconLookupResponse,
   type PageReadRecord,
   type ReadingSessionRecord,
+  type SentenceReadCreateRequest,
+  type SentenceReadRecord,
   type TokenResult,
 } from "../lib/textplex";
 
@@ -43,8 +45,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [sentenceActiveSeconds, setSentenceActiveSeconds] = useState(0);
   const sessionIdRef = useRef<string | null>(null);
   const activeSecondsRef = useRef(0);
+  const sentenceActiveSecondsRef = useRef(0);
+  const sentenceTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -114,6 +119,10 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   useEffect(() => {
     activeSecondsRef.current = activeSeconds;
   }, [activeSeconds]);
+
+  useEffect(() => {
+    sentenceActiveSecondsRef.current = sentenceActiveSeconds;
+  }, [sentenceActiveSeconds]);
 
   useEffect(() => {
     let active = true;
@@ -212,6 +221,64 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     () => (page ? page.sentences.find((sentence) => sentence.order === selectedSentenceOrder) ?? null : null),
     [page, selectedSentenceOrder],
   );
+
+  useEffect(() => {
+    if (page?.sentences.length && selectedSentenceOrder == null) {
+      setSelectedSentenceOrder(page.sentences[0].order);
+    }
+  }, [page?.sentences, selectedSentenceOrder]);
+
+  useEffect(() => {
+    if (!page || selectedSentenceOrder == null || !selectedSentence) {
+      sentenceTimerRef.current = null;
+      setSentenceActiveSeconds(0);
+      return;
+    }
+
+    sentenceTimerRef.current = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        sentenceActiveSecondsRef.current += 1;
+        setSentenceActiveSeconds(sentenceActiveSecondsRef.current);
+      }
+    }, 1000);
+    sentenceActiveSecondsRef.current = 0;
+    setSentenceActiveSeconds(0);
+
+    return () => {
+      if (sentenceTimerRef.current !== null) {
+        window.clearInterval(sentenceTimerRef.current);
+        sentenceTimerRef.current = null;
+      }
+
+      const sessionId = sessionIdRef.current;
+      if (!sessionId || !page || !selectedSentence || sentenceActiveSecondsRef.current <= 0) {
+        return;
+      }
+
+      const payload: SentenceReadCreateRequest = {
+        session_id: sessionId,
+        book_id: bookId,
+        page_number: page.page_number,
+        sentence_order: selectedSentence.order,
+        sentence_text: selectedSentence.text,
+        token_count: selectedSentence.tokens.filter((token) => !isSentencePunctuation(token.surface_form)).length,
+        character_count: selectedSentence.tokens.reduce((total, token) => total + countReadableCharacters(token.surface_form), 0),
+        active_seconds: sentenceActiveSecondsRef.current,
+        tokens: selectedSentence.tokens
+          .filter((token) => !isSentencePunctuation(token.surface_form))
+          .map((token) => ({
+            surface_form: token.surface_form,
+            lemma: token.lemma ?? token.surface_form,
+            token_kind: "word",
+          })),
+      };
+
+      void postJson<SentenceReadRecord>("/learning/sentence-reads", payload).catch(() => {
+        // Sentence tracking is best-effort so the reader stays usable offline.
+      });
+    };
+  }, [bookId, page, pageNumber, selectedSentence, selectedSentenceOrder]);
+
   const definitionSummary = selectedToken && !lexiconEntry && !tokenEntry ? "Dictionary wiring is pending." : null;
   const tokenLabel = lexiconEntry?.surface_form ?? selectedToken?.surface_form ?? "";
   const tokenDefinition =
@@ -227,6 +294,22 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const needsExtraction = (pageData?.book.extracted_page_count ?? 0) <= 0;
   const extractionSource = pageData?.extraction?.text_source ?? null;
   const extractionSourceLabel = extractionSource ? extractionSource.toUpperCase() : "UNAVAILABLE";
+  const selectedSentenceIndex = useMemo(() => {
+    if (!page?.sentences.length) {
+      return -1;
+    }
+    if (selectedSentenceOrder == null) {
+      return 0;
+    }
+    return page.sentences.findIndex((sentence) => sentence.order === selectedSentenceOrder);
+  }, [page?.sentences, selectedSentenceOrder]);
+  const selectedSentencePosition = selectedSentenceIndex >= 0 ? selectedSentenceIndex + 1 : 0;
+  const selectedSentenceTokenCount = selectedSentence ? selectedSentence.tokens.filter((token) => !isSentencePunctuation(token.surface_form)).length : 0;
+  const selectedSentenceCharacterCount = selectedSentence
+    ? selectedSentence.tokens.reduce((total, token) => total + countReadableCharacters(token.surface_form), 0)
+    : 0;
+  const selectedSentenceSecondsPerCharacter = selectedSentenceCharacterCount > 0 ? sentenceActiveSeconds / selectedSentenceCharacterCount : null;
+  const selectedSentenceSecondsPerToken = selectedSentenceTokenCount > 0 ? sentenceActiveSeconds / selectedSentenceTokenCount : null;
 
   async function handleExtractNow() {
     if (!pageData || extracting) {
@@ -247,6 +330,19 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     } finally {
       setExtracting(false);
     }
+  }
+
+  function focusSentence(nextIndex: number) {
+    if (!page?.sentences.length) {
+      return;
+    }
+    const clampedIndex = Math.max(0, Math.min(nextIndex, page.sentences.length - 1));
+    const nextSentence = page.sentences[clampedIndex];
+    if (!nextSentence) {
+      return;
+    }
+    setSelectedSentenceOrder(nextSentence.order);
+    setSelectedToken(null);
   }
 
   return (
@@ -317,6 +413,40 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
               </div>
             )}
 
+            <div className="reading-progress-card">
+              <div>
+                <span className="eyebrow">Sentence focus</span>
+                <h3>
+                  S{selectedSentencePosition || 1}/{page.sentences.length}
+                </h3>
+                <p className="small-copy">
+                  Active {formatElapsed(sentenceActiveSeconds)} · {selectedSentenceCharacterCount} chars · {selectedSentenceTokenCount} words
+                </p>
+                <p className="small-copy">
+                  Avg {selectedSentenceSecondsPerCharacter ? `${selectedSentenceSecondsPerCharacter.toFixed(2)} sec/char` : "—"} ·{" "}
+                  {selectedSentenceSecondsPerToken ? `${selectedSentenceSecondsPerToken.toFixed(2)} sec/word` : "—"}
+                </p>
+              </div>
+              <div className="button-row button-row-tight">
+                <button
+                  type="button"
+                  className="button button-secondary button-compact"
+                  onClick={() => focusSentence((selectedSentenceIndex > 0 ? selectedSentenceIndex : 0) - 1)}
+                  disabled={selectedSentenceIndex <= 0}
+                >
+                  Previous sentence
+                </button>
+                <button
+                  type="button"
+                  className="button button-secondary button-compact"
+                  onClick={() => focusSentence((selectedSentenceIndex >= 0 ? selectedSentenceIndex : 0) + 1)}
+                  disabled={selectedSentenceIndex < 0 || selectedSentenceIndex >= page.sentences.length - 1}
+                >
+                  Next sentence
+                </button>
+              </div>
+            </div>
+
             {selectedToken ? (
               <div className="definition-popover" role="status" aria-live="polite">
                 <div className="definition-popover-topline">
@@ -367,7 +497,12 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
             <div className="reader-page-text" aria-label="Reflowed page text">
               {page.sentences.map((sentence) => (
-                <p key={sentence.order} className="sentence-block" aria-label={`Sentence ${sentence.order}`}>
+                <p
+                  key={sentence.order}
+                  className={`sentence-block ${selectedSentenceOrder === sentence.order ? "is-focused" : ""}`}
+                  aria-label={`Sentence ${sentence.order}`}
+                  onClick={() => setSelectedSentenceOrder(sentence.order)}
+                >
                   {sentence.tokens.map((token) => {
                     const isSelected = selectedToken?.surface_form === token.surface_form && selectedToken?.order === token.order;
                     const tokenClassName = `token-inline ${isSelected ? "is-selected" : ""} ${isCjkToken(token.surface_form) ? "is-cjk" : "is-word"}`;
@@ -429,20 +564,34 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             </section>
 
             <section className="card inspector-card">
-              <h2>Learner profile</h2>
-              <p className="small-copy">Reading sessions and page reads are now written to the local profile database.</p>
+              <h2>Reading profile</h2>
+              <p className="small-copy">The local profile records sessions, sentence dwell time, and token exposures without a cloud account.</p>
               <div className="profile-metrics">
                 <div>
-                  <span className="eyebrow">Sessions</span>
-                  <strong>{profileSummary?.reading_sessions ?? 0}</strong>
+                  <span className="eyebrow">Sentences</span>
+                  <strong>{profileSummary?.sentence_reads ?? 0}</strong>
                 </div>
                 <div>
-                  <span className="eyebrow">Pages</span>
-                  <strong>{profileSummary?.page_reads ?? 0}</strong>
+                  <span className="eyebrow">Words</span>
+                  <strong>{profileSummary?.unique_words_seen ?? 0}</strong>
                 </div>
                 <div>
-                  <span className="eyebrow">Books</span>
-                  <strong>{profileSummary?.active_books ?? 0}</strong>
+                  <span className="eyebrow">Chars</span>
+                  <strong>{profileSummary?.unique_characters_seen ?? 0}</strong>
+                </div>
+              </div>
+              <div className="profile-metrics profile-metrics-secondary">
+                <div>
+                  <span className="eyebrow">Avg sec/char</span>
+                  <strong>{profileSummary?.average_seconds_per_character?.toFixed(2) ?? "—"}</strong>
+                </div>
+                <div>
+                  <span className="eyebrow">Avg sec/word</span>
+                  <strong>{profileSummary?.average_seconds_per_word?.toFixed(2) ?? "—"}</strong>
+                </div>
+                <div>
+                  <span className="eyebrow">Today</span>
+                  <strong>{profileSummary?.today_sentence_reads ?? 0}</strong>
                 </div>
               </div>
               <p className="small-copy">
@@ -499,4 +648,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
 function isCjkToken(value: string): boolean {
   return /[\u3400-\u4dbf\u4e00-\u9fff]/.test(value);
+}
+
+function isSentencePunctuation(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.length === 0 || /^[\s.,!?;:，。！？；：、…“”‘’（）()《》〈〉【】\[\]\-—]+$/.test(trimmed);
+}
+
+function countReadableCharacters(value: string): number {
+  return Array.from(value).filter((character) => !isSentencePunctuation(character)).length;
 }

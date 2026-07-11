@@ -8,11 +8,19 @@ from fastapi.responses import FileResponse
 
 from app.core.paths import get_data_root
 from app.schemas.books import BookExtractionRequest, BookImportRequest, BookPageManifest, BookReaderPageResponse, BookRecord, PageExtractionArtifact, TextParseRequest
-from app.schemas.learning import LearningProfileSummary, PageReadCreateRequest, PageReadRecord, ReadingSessionCreateRequest, ReadingSessionRecord
+from app.schemas.learning import (
+    LearningProfileSummary,
+    PageReadCreateRequest,
+    PageReadRecord,
+    ReadingSessionCreateRequest,
+    ReadingSessionRecord,
+    SentenceReadCreateRequest,
+    SentenceReadRecord,
+)
 from app.schemas.lexicon import LexiconImportRequest, LexiconImportSummary, LexiconLookupResponse
 from app.services.book_extraction import extract_book_text, load_page_artifact, parse_text_into_page_artifact
 from app.services.book_registry import delete_book_from_path, import_book_from_path, load_registry, save_registry
-from app.services.learning_profile import create_reading_session, get_learning_profile_summary, record_page_read
+from app.services.learning_profile import create_reading_session, get_learning_profile_summary, record_page_read, record_sentence_read
 from app.services.lexicon import import_lexicon_from_source, lookup_lexicon_entry
 from processor.contracts import BookExtractionResult
 
@@ -263,6 +271,15 @@ def create_page_read(payload: PageReadCreateRequest) -> PageReadRecord:
     _book_exists(payload.book_id)
     try:
         return record_page_read(app.state.data_root, payload)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/learning/sentence-reads", response_model=SentenceReadRecord)
+def create_sentence_read(payload: SentenceReadCreateRequest) -> SentenceReadRecord:
+    _book_exists(payload.book_id)
+    try:
+        return record_sentence_read(app.state.data_root, payload)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

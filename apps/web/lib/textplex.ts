@@ -157,12 +157,55 @@ export interface PageReadRecord {
   completed_at: string;
 }
 
+export interface SentenceReadTokenInput {
+  surface_form: string;
+  lemma: string | null;
+  token_kind: "word" | "character";
+}
+
+export interface SentenceReadCreateRequest {
+  session_id: string;
+  book_id: string;
+  page_number: number;
+  sentence_order: number;
+  sentence_text: string;
+  token_count: number;
+  character_count: number;
+  active_seconds: number;
+  tokens: SentenceReadTokenInput[];
+  completed_at?: string;
+}
+
+export interface SentenceReadRecord {
+  id: number;
+  session_id: string;
+  book_id: string;
+  page_number: number;
+  sentence_order: number;
+  sentence_text: string;
+  token_count: number;
+  character_count: number;
+  active_seconds: number;
+  completed_at: string;
+}
+
 export interface LearningProfileSummary {
   database_path: string;
   reading_sessions: number;
   page_reads: number;
+  sentence_reads: number;
+  token_exposures: number;
+  word_exposures: number;
+  character_exposures: number;
   active_books: number;
+  unique_words_seen: number;
+  unique_characters_seen: number;
   vocabulary_progress_rows: number;
+  today_sentence_reads: number;
+  today_token_exposures: number;
+  average_seconds_per_sentence: number | null;
+  average_seconds_per_word: number | null;
+  average_seconds_per_character: number | null;
 }
 
 export interface LexiconImportRequest {

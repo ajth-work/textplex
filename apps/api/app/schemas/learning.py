@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -36,9 +38,52 @@ class PageReadRecord(BaseModel):
     completed_at: str
 
 
+class SentenceReadTokenInput(BaseModel):
+    surface_form: str = Field(min_length=1)
+    lemma: str | None = None
+    token_kind: Literal["word", "character"] = "word"
+
+
+class SentenceReadCreateRequest(BaseModel):
+    session_id: str = Field(min_length=1)
+    book_id: str = Field(min_length=1)
+    page_number: int = Field(ge=1)
+    sentence_order: int = Field(ge=1)
+    sentence_text: str = Field(min_length=1)
+    token_count: int = Field(ge=0)
+    character_count: int = Field(ge=0)
+    active_seconds: int = Field(ge=0)
+    tokens: list[SentenceReadTokenInput] = Field(default_factory=list)
+    completed_at: str | None = None
+
+
+class SentenceReadRecord(BaseModel):
+    id: int
+    session_id: str
+    book_id: str
+    page_number: int
+    sentence_order: int
+    sentence_text: str
+    token_count: int
+    character_count: int
+    active_seconds: int
+    completed_at: str
+
+
 class LearningProfileSummary(BaseModel):
     database_path: str
     reading_sessions: int
     page_reads: int
+    sentence_reads: int
+    token_exposures: int
+    word_exposures: int
+    character_exposures: int
     active_books: int
+    unique_words_seen: int
+    unique_characters_seen: int
     vocabulary_progress_rows: int
+    today_sentence_reads: int
+    today_token_exposures: int
+    average_seconds_per_sentence: float | None = None
+    average_seconds_per_word: float | None = None
+    average_seconds_per_character: float | None = None

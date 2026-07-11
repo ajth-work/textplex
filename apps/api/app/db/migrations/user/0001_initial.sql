@@ -18,6 +18,33 @@ CREATE TABLE IF NOT EXISTS page_reads (
     completed_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS sentence_reads (
+    id INTEGER PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    book_id TEXT NOT NULL,
+    page_number INTEGER NOT NULL,
+    sentence_order INTEGER NOT NULL,
+    sentence_text TEXT NOT NULL,
+    token_count INTEGER NOT NULL,
+    character_count INTEGER NOT NULL,
+    active_seconds INTEGER NOT NULL,
+    completed_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS token_exposures (
+    id INTEGER PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    book_id TEXT NOT NULL,
+    page_number INTEGER NOT NULL,
+    sentence_order INTEGER NOT NULL,
+    token_kind TEXT NOT NULL,
+    surface_form TEXT NOT NULL,
+    normalized_form TEXT NOT NULL,
+    character_count INTEGER NOT NULL,
+    active_seconds INTEGER NOT NULL,
+    occurred_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS word_interactions (
     id INTEGER PRIMARY KEY,
     book_id TEXT NOT NULL,
