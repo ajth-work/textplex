@@ -1,0 +1,764 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TextPlex Home Preview</title>
+    <meta
+      name="description"
+      content="A standalone mobile home-screen mockup for TextPlex, packaged for GitHub Pages."
+    />
+    <style>
+      :root {
+        --bg: #f7f4ee;
+        --surface: rgba(255, 255, 255, 0.84);
+        --surface-strong: #ffffff;
+        --text: #1f2430;
+        --muted: #7b8191;
+        --line: rgba(31, 36, 48, 0.08);
+        --shadow: 0 18px 40px rgba(20, 24, 35, 0.08);
+        --shadow-soft: 0 10px 24px rgba(20, 24, 35, 0.06);
+        --accent: #1f335f;
+        --green: #3f9b68;
+        --blue: #5c7fe6;
+        --orange: #f0a44a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(255, 255, 255, 0.96), transparent 42%),
+          linear-gradient(180deg, #fbf9f5 0%, #f3efe7 100%);
+      }
+
+      .app {
+        max-width: 430px;
+        min-height: 100vh;
+        margin: 0 auto;
+        padding: 18px 16px 112px;
+        position: relative;
+      }
+
+      .status-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin-bottom: 14px;
+        color: #121826;
+      }
+
+      .status-icons {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        color: #121826;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 18px;
+      }
+
+      .brand {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 34px;
+        line-height: 1;
+        letter-spacing: -0.04em;
+        color: var(--accent);
+      }
+
+      .icon-btn {
+        width: 44px;
+        height: 44px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: #222;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+      }
+
+      .search {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 18px;
+        border-radius: 999px;
+        background: var(--surface);
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        box-shadow: var(--shadow-soft);
+        backdrop-filter: blur(14px);
+        margin-bottom: 28px;
+      }
+
+      .search input {
+        width: 100%;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        font-size: 15px;
+        color: var(--text);
+      }
+
+      .search input::placeholder {
+        color: #8a909e;
+        font-weight: 500;
+      }
+
+      .section {
+        margin-bottom: 30px;
+      }
+
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 14px;
+      }
+
+      .section-title {
+        margin: 0;
+        font-size: 21px;
+        line-height: 1.1;
+        letter-spacing: -0.03em;
+        font-weight: 800;
+        color: #232936;
+      }
+
+      .section-link {
+        border: 0;
+        background: transparent;
+        color: #9aa0ad;
+        font-weight: 700;
+        font-size: 14px;
+        cursor: pointer;
+      }
+
+      .carousel {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: 100%;
+        gap: 14px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scroll-snap-type: x mandatory;
+        scrollbar-width: none;
+      }
+
+      .carousel::-webkit-scrollbar {
+        display: none;
+      }
+
+      .continue-card {
+        scroll-snap-align: start;
+        display: grid;
+        grid-template-columns: 138px 1fr;
+        min-height: 146px;
+        border-radius: 24px;
+        overflow: hidden;
+        background: linear-gradient(180deg, #fbf8f0, #f6f1e7);
+        box-shadow: var(--shadow);
+        border: 1px solid rgba(31, 36, 48, 0.05);
+        position: relative;
+      }
+
+      .continue-art {
+        position: relative;
+        overflow: hidden;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0.12)),
+          linear-gradient(180deg, #f4efe7 0%, #d8dbd7 42%, #9da8a7 100%);
+      }
+
+      .continue-art::before,
+      .thumb::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at 75% 58%, rgba(255, 255, 255, 0.96) 0 16%, transparent 17%),
+          radial-gradient(circle at 72% 65%, rgba(255, 255, 255, 0.72) 0 28%, transparent 29%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.08));
+        mix-blend-mode: screen;
+        opacity: 0.92;
+      }
+
+      .continue-art::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at 70% 30%, rgba(255, 255, 255, 0.92) 0 6px, transparent 7px),
+          radial-gradient(circle at 54% 18%, rgba(255, 255, 255, 0.86) 0 4px, transparent 5px),
+          radial-gradient(circle at 40% 22%, rgba(255, 255, 255, 0.86) 0 5px, transparent 6px),
+          radial-gradient(circle at 24% 28%, rgba(255, 255, 255, 0.84) 0 4px, transparent 5px),
+          linear-gradient(160deg, rgba(13, 34, 56, 0.06), rgba(13, 34, 56, 0.18));
+      }
+
+      .continue-body {
+        padding: 18px 16px 16px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-width: 0;
+      }
+
+      .bookmark {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        width: 22px;
+        height: 22px;
+        opacity: 0.7;
+      }
+
+      .book-title {
+        margin: 0 0 4px;
+        font-size: 34px;
+        line-height: 1;
+        letter-spacing: -0.08em;
+        font-family: Georgia, "Times New Roman", serif;
+      }
+
+      .book-author-cn {
+        margin: 0 0 14px;
+        color: #727784;
+        font-weight: 700;
+        font-size: 16px;
+      }
+
+      .book-title-en {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 700;
+        color: #303748;
+      }
+
+      .book-author {
+        margin: 2px 0 16px;
+        color: #7a8090;
+        font-size: 14px;
+      }
+
+      .progress-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #515766;
+        font-weight: 700;
+        font-size: 14px;
+        margin-bottom: 8px;
+      }
+
+      .progress-bar {
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(31, 36, 48, 0.08);
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        width: 72%;
+        border-radius: inherit;
+        background: #111827;
+      }
+
+      .analysis-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .analysis-row {
+        display: grid;
+        grid-template-columns: 56px minmax(0, 1fr) 56px;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 2px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .analysis-row:last-child {
+        border-bottom: 0;
+      }
+
+      .thumb {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.08);
+      }
+
+      .thumb.one {
+        background: linear-gradient(180deg, #f5efdf 0%, #b8c4ca 100%);
+      }
+
+      .thumb.two {
+        background: linear-gradient(180deg, #8db5d7 0%, #567ea7 100%);
+      }
+
+      .thumb.three {
+        background: linear-gradient(180deg, #d6dde6 0%, #99a6b6 100%);
+      }
+
+      .analysis-main {
+        min-width: 0;
+      }
+
+      .analysis-title {
+        margin: 0 0 4px;
+        font-size: 18px;
+        line-height: 1.15;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+      }
+
+      .analysis-sub {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+        margin-top: 8px;
+        width: fit-content;
+        background: #f7efe2;
+        color: #c7862a;
+      }
+
+      .score {
+        justify-self: end;
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: conic-gradient(var(--ring, var(--green)) calc(var(--pct) * 1%), rgba(0, 0, 0, 0.08) 0);
+        position: relative;
+        font-weight: 800;
+        color: #353b47;
+      }
+
+      .score::before {
+        content: "";
+        position: absolute;
+        inset: 4px;
+        background: #fff;
+        border-radius: 50%;
+      }
+
+      .score span {
+        position: relative;
+        z-index: 1;
+        font-size: 14px;
+      }
+
+      .score-meta {
+        margin-top: 4px;
+        text-align: center;
+        font-size: 11px;
+        color: #8b91a0;
+        font-weight: 700;
+      }
+
+      .goals-grid {
+        display: grid;
+        grid-template-columns: 1.6fr 1fr;
+        gap: 12px;
+      }
+
+      .goal-card {
+        background: var(--surface-strong);
+        border-radius: 22px;
+        padding: 16px;
+        border: 1px solid rgba(31, 36, 48, 0.06);
+        box-shadow: var(--shadow-soft);
+        min-height: 120px;
+      }
+
+      .goal-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .goal-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+      }
+
+      .goal-value {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 900;
+        letter-spacing: -0.04em;
+      }
+
+      .goal-sub {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .goal-ring {
+        width: 74px;
+        height: 74px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: conic-gradient(var(--green) 67%, rgba(0, 0, 0, 0.08) 0);
+        position: relative;
+        flex: 0 0 auto;
+      }
+
+      .goal-ring::before {
+        content: "";
+        position: absolute;
+        inset: 6px;
+        background: white;
+        border-radius: 50%;
+      }
+
+      .goal-ring span {
+        position: relative;
+        z-index: 1;
+        font-size: 18px;
+        font-weight: 900;
+      }
+
+      .streak {
+        display: grid;
+        place-items: start;
+      }
+
+      .flame {
+        width: 34px;
+        height: 34px;
+        margin-top: 4px;
+        color: var(--orange);
+      }
+
+      .bottom-nav {
+        position: fixed;
+        left: 50%;
+        bottom: 10px;
+        transform: translateX(-50%);
+        width: min(430px, calc(100vw - 20px));
+        background: rgba(255, 255, 255, 0.84);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(31, 36, 48, 0.08);
+        border-radius: 28px;
+        box-shadow: 0 20px 50px rgba(17, 24, 39, 0.1);
+        padding: 12px 14px 10px;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        align-items: end;
+        z-index: 20;
+      }
+
+      .nav-item {
+        border: 0;
+        background: transparent;
+        color: #8a909e;
+        display: grid;
+        justify-items: center;
+        gap: 4px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .nav-item.active {
+        color: #111827;
+      }
+
+      .nav-item svg {
+        width: 24px;
+        height: 24px;
+      }
+
+      .nav-center {
+        transform: translateY(-18px);
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: white;
+        box-shadow: 0 16px 30px rgba(31, 51, 95, 0.35);
+        display: grid;
+        place-items: center;
+        border: 5px solid rgba(255, 255, 255, 0.95);
+        justify-self: center;
+      }
+
+      .nav-center svg {
+        width: 24px;
+        height: 24px;
+      }
+
+      @media (max-width: 390px) {
+        .app {
+          padding-inline: 12px;
+        }
+
+        .goals-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .continue-card {
+          grid-template-columns: 116px 1fr;
+        }
+
+        .book-title {
+          font-size: 28px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <div class="status-row">
+        <div>9:41</div>
+        <div class="status-icons" aria-hidden="true">
+          <svg width="20" height="14" viewBox="0 0 20 14" fill="currentColor"><path d="M1 10h3v3H1v-3Zm5-4h3v7H6V6Zm5-4h3v11h-3V2Zm5-2h3v13h-3V0Z"/></svg>
+          <svg width="18" height="14" viewBox="0 0 18 14" fill="currentColor"><path d="M9 12.5 3.1 6.6a6.5 6.5 0 0 1 11.8 0L9 12.5Zm0-3.2 3.2-3.2A4.5 4.5 0 0 0 5.8 6L9 9.3Z"/></svg>
+          <svg width="25" height="14" viewBox="0 0 25 14" fill="currentColor"><rect x="1" y="1" width="20" height="12" rx="3" stroke="currentColor" fill="none" stroke-width="1.5"/><rect x="22" y="5" width="2" height="4" rx="1" fill="currentColor"/><rect x="3" y="3" width="15" height="8" rx="2" fill="currentColor"/></svg>
+        </div>
+      </div>
+
+      <header class="header">
+        <h1 class="brand">TextPlex</h1>
+        <button class="icon-btn" aria-label="Notifications">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 17H9m9-4V11a6 6 0 10-12 0v2l-2 3h16l-2-3Z"/>
+            <path d="M10 19a2 2 0 0 0 4 0"/>
+          </svg>
+        </button>
+      </header>
+
+      <label class="search" aria-label="Search texts, authors, topics">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="7"></circle>
+          <path d="M20 20l-3.5-3.5"></path>
+        </svg>
+        <input type="search" placeholder="Search texts, authors, topics..." />
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M4 6h16M7 12h10M10 18h4"/>
+          <circle cx="9" cy="6" r="2" fill="white"></circle>
+          <circle cx="15" cy="12" r="2" fill="white"></circle>
+          <circle cx="12" cy="18" r="2" fill="white"></circle>
+        </svg>
+      </label>
+
+      <section class="section">
+        <div class="section-head">
+          <h2 class="section-title">Continue Reading</h2>
+          <button class="section-link" type="button">See All</button>
+        </div>
+
+        <div class="carousel" id="continueRail"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2 class="section-title">Recent Analyses</h2>
+          <button class="section-link" type="button">See All</button>
+        </div>
+
+        <div class="analysis-list" id="analysisList"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2 class="section-title">Goals</h2>
+          <button class="section-link" type="button">Edit</button>
+        </div>
+
+        <div class="goals-grid">
+          <article class="goal-card">
+            <div class="goal-top">
+              <div>
+                <h3 class="goal-title">Weekly Reading Goal</h3>
+                <p class="goal-value">4 <span style="font-size:14px;font-weight:700;color:var(--muted)">/ 6 texts</span></p>
+              </div>
+              <div class="goal-ring">
+                <span>67%</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="goal-card streak">
+            <h3 class="goal-title">Streak</h3>
+            <p class="goal-value" style="margin-top:8px;">12</p>
+            <p class="goal-sub">days</p>
+            <svg class="flame" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M13.5 2c.3 2.5-.9 4.1-2.3 5.5C9.8 8.8 8 10.8 8 14c0 2.8 2.2 5 5 5s5-2.2 5-5c0-1.8-.8-3.5-2.3-5 0 1.9-1 3.2-2.5 4.3.2-2.8-.3-5.1-1.7-7.3Z"/>
+            </svg>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Primary">
+      <button class="nav-item active" type="button">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11.2 12 4l9 7.2V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-8.8Z"/></svg>
+        <span>Home</span>
+      </button>
+      <button class="nav-item" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+        <span>Library</span>
+      </button>
+
+      <button class="nav-item nav-center" aria-label="Add" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+      </button>
+
+      <button class="nav-item" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 13a6 6 0 0 0 12 0c0-2.5-1.5-4.4-3.5-5.8L12 3l-2.5 4.2C7.5 8.6 6 10.5 6 13Z"/><path d="M12 10v6"/></svg>
+        <span>Insights</span>
+      </button>
+      <button class="nav-item" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.2"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
+        <span>Profile</span>
+      </button>
+    </nav>
+
+    <script>
+      const continueItems = [
+        {
+          titleCn: "春晓",
+          authorCn: "孟浩然",
+          titleEn: "Spring Dawn",
+          author: "Meng Haoran",
+          progress: 72,
+        },
+        {
+          titleCn: "夜泊牛渚怀古",
+          authorCn: "李白",
+          titleEn: "Moonlit Harbor",
+          author: "Li Bai",
+          progress: 48,
+        },
+      ];
+
+      const analysisItems = [
+        {
+          title: "滕王阁序",
+          author: "Wang Bo",
+          tag: "HSK 5",
+          score: 78,
+          date: "May 8",
+          ring: "#3f9b68",
+          thumbClass: "one",
+        },
+        {
+          title: "The Little Prince",
+          author: "Antoine de Saint-Exupéry",
+          tag: "B1",
+          score: 85,
+          date: "May 7",
+          ring: "#3f9b68",
+          thumbClass: "two",
+        },
+        {
+          title: "설국 (雪國)",
+          author: "가와바타 야스나리",
+          tag: "TOPIK 5",
+          score: 72,
+          date: "May 1",
+          ring: "#5c7fe6",
+          thumbClass: "three",
+        },
+      ];
+
+      const continueRail = document.getElementById("continueRail");
+      const analysisList = document.getElementById("analysisList");
+
+      continueRail.innerHTML = continueItems
+        .map(
+          (item) => `
+            <article class="continue-card">
+              <div class="continue-art"></div>
+              <div class="continue-body">
+                <button class="icon-btn bookmark" aria-label="Bookmark" type="button">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M6 4.5A2.5 2.5 0 0 1 8.5 2h7A2.5 2.5 0 0 1 18 4.5V21l-5.5-3.5L7 21V4.5Z"/>
+                  </svg>
+                </button>
+                <div>
+                  <h3 class="book-title">${item.titleCn}</h3>
+                  <p class="book-author-cn">${item.authorCn}</p>
+                  <p class="book-title-en">${item.titleEn}</p>
+                  <p class="book-author">${item.author}</p>
+                </div>
+                <div>
+                  <div class="progress-meta">${item.progress}% • 3 min left</div>
+                  <div class="progress-bar"><div class="progress-fill" style="width:${item.progress}%"></div></div>
+                </div>
+              </div>
+            </article>
+          `,
+        )
+        .join("");
+
+      analysisList.innerHTML = analysisItems
+        .map(
+          (item) => `
+            <article class="analysis-row">
+              <div class="thumb ${item.thumbClass}"></div>
+              <div class="analysis-main">
+                <h3 class="analysis-title">${item.title}</h3>
+                <p class="analysis-sub">${item.author}</p>
+                <span class="chip">${item.tag}</span>
+              </div>
+              <div>
+                <div class="score" style="--pct:${item.score}; --ring:${item.ring}">
+                  <span>${item.score}</span>
+                </div>
+                <div class="score-meta">${item.date}</div>
+              </div>
+            </article>
+          `,
+        )
+        .join("");
+    </script>
+  </body>
+</html>
