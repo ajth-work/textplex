@@ -37,6 +37,19 @@ def ensure_lexicon_database(data_root: Path) -> Path:
     return db_path
 
 
+def _lexicon_entry_count(data_root: Path) -> int:
+    db_path = ensure_lexicon_database(data_root)
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute("SELECT COUNT(*) FROM lexicon_entries").fetchone()
+    return int(row[0] if row else 0)
+
+
+def _ensure_seeded_lexicon(data_root: Path) -> None:
+    if _lexicon_entry_count(data_root) > 0:
+        return
+    import_lexicon_from_source(None, data_root=data_root, replace_existing=False)
+
+
 def _connect(data_root: Path) -> sqlite3.Connection:
     db_path = ensure_lexicon_database(data_root)
     connection = sqlite3.connect(db_path)
@@ -307,6 +320,7 @@ def lookup_lexicon_entry(
     language_code: str,
     term: str,
 ) -> LexiconLookupResponse:
+    _ensure_seeded_lexicon(data_root)
     db_path = ensure_lexicon_database(data_root)
     with sqlite3.connect(db_path) as connection:
         connection.row_factory = sqlite3.Row
@@ -355,6 +369,7 @@ def lookup_lexicon_pinyin_map(
     if not normalized_terms:
         return {}
 
+    _ensure_seeded_lexicon(data_root)
     db_path = ensure_lexicon_database(data_root)
     placeholders = ", ".join("?" for _ in normalized_terms)
     with sqlite3.connect(db_path) as connection:
@@ -369,11 +384,46 @@ def lookup_lexicon_pinyin_map(
             [language_code, *normalized_terms],
         ).fetchall()
 
-    pinyin_map: dict[str, str] = {}
-    for row in rows:
-        surface_form = row["surface_form"]
-        pinyin = row["pinyin"]
-        if surface_form not in pinyin_map and pinyin:
-            pinyin_map[surface_form] = pinyin
+        pinyin_map: dict[str, str] = {}
+        for row in rows:
+            surface_form = row["surface_form"]
+            pinyin = row["pinyin"]
+            if surface_form not in pinyin_map and pinyin:
+                pinyin_map[surface_form] = pinyin
+
+        missing_terms = [term for term in normalized_terms if term not in pinyin_map]
+        if missing_terms:
+            missing_characters = sorted({character for term in missing_terms for character in term})
+            if missing_characters:
+                character_placeholders = ", ".join("?" for _ in missing_characters)
+                character_rows = connection.execute(
+                    f"""
+                    SELECT surface_form, pinyin
+                    FROM lexicon_entries
+                    WHERE language_code = ?
+                      AND entry_type = 'character'
+                      AND surface_form IN ({character_placeholders})
+                      AND pinyin IS NOT NULL
+                      AND pinyin != ''
+                    ORDER BY id ASC
+                    """,
+                    [language_code, *missing_characters],
+                ).fetchall()
+
+                character_map: dict[str, str] = {}
+                for character_row in character_rows:
+                    character_surface = character_row["surface_form"]
+                    character_pinyin = character_row["pinyin"]
+                    if character_surface and character_surface not in character_map and character_pinyin:
+                        character_map[character_surface] = character_pinyin
+
+                for term in missing_terms:
+                    if len(term) < 2:
+                        continue
+                    if not all("\u4e00" <= character <= "\u9fff" for character in term):
+                        continue
+                    romanized_tokens = [character_map.get(character) for character in term if character_map.get(character)]
+                    if romanized_tokens:
+                        pinyin_map.setdefault(term, " ".join(romanized_tokens))
 
     return pinyin_map

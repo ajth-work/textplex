@@ -118,3 +118,25 @@ def test_parse_text_endpoint_uses_imported_lexicon_pinyin(tmp_path: Path) -> Non
     token = payload["page"]["sentences"][0]["tokens"][0]
     assert token["surface_form"] == "宇宙"
     assert token["romanization"] == "yǔzhòu"
+
+
+def test_parse_text_endpoint_auto_seeds_bundled_lexicon_and_falls_back_to_characters(tmp_path: Path) -> None:
+    app.state.data_root = tmp_path
+    client = TestClient(app)
+
+    response = client.post(
+        "/texts/parse",
+        json={
+            "text": "我一直觉得宇宙像一张巨大而安静的网。",
+            "language_code": "zh",
+            "title": "Auto seed sample",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    tokens = [token for sentence in payload["page"]["sentences"] for token in sentence["tokens"]]
+    romanization_by_surface = {token["surface_form"]: token.get("romanization") for token in tokens}
+
+    assert romanization_by_surface["一直"] == "yìzhí"
+    assert romanization_by_surface["宇宙"] == "yǔ zhòu"
