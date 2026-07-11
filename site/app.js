@@ -1475,10 +1475,12 @@ function renderTokenPanel(page, localEntry = null) {
         </div>
         <div class="token-lookup-card">
           <span class="token-lookup-term">${escapeHtml(token.surface_form)}</span>
+          <p class="token-lookup-pinyin">${escapeHtml(lexiconEntry?.pinyin ?? token.romanization ?? "-")}</p>
           <p class="token-lookup-definition">${escapeHtml(lexiconEntry?.definition ?? token.definition_short ?? "No definition returned yet.")}</p>
         </div>
         <dl class="definition-grid">
           <div><dt>Lemma</dt><dd>${escapeHtml(lexiconEntry?.surface_form ?? token.lemma ?? token.surface_form)}</dd></div>
+          <div><dt>Pinyin</dt><dd>${escapeHtml(lexiconEntry?.pinyin ?? token.romanization ?? "-")}</dd></div>
           <div><dt>HSK</dt><dd>${escapeHtml(lexiconEntry?.hsk_level ?? token.proficiency_level ?? "-")}</dd></div>
           <div><dt>Frequency</dt><dd>${escapeHtml(String(lexiconEntry?.frequency_in_book ?? 1))}</dd></div>
           <div><dt>Radical</dt><dd>${escapeHtml(lexiconEntry?.radical ?? "-")}</dd></div>
@@ -1497,6 +1499,7 @@ function renderTokenPanel(page, localEntry = null) {
       elements.tokenPanel.innerHTML = `
         <div class="token-lookup-card">
           <span class="token-lookup-term">${escapeHtml(localEntry.kind)}</span>
+          <p class="token-lookup-pinyin">${escapeHtml(token?.romanization ?? "-")}</p>
           <p class="token-lookup-definition">${escapeHtml(summarizeText(localEntry.body, 220))}</p>
         </div>
         <dl class="definition-grid">
@@ -1545,10 +1548,12 @@ function renderTokenPanel(page, localEntry = null) {
       </div>
       <div class="token-lookup-card">
         <span class="token-lookup-term">${escapeHtml(token.surface_form)}</span>
+        <p class="token-lookup-pinyin">${escapeHtml(lexiconEntry?.pinyin ?? token.romanization ?? "-")}</p>
         <p class="token-lookup-definition">${escapeHtml(lexiconEntry?.definition ?? token.definition_short ?? entry?.lemma ?? "No definition returned yet.")}</p>
       </div>
       <dl class="definition-grid">
         <div><dt>Lemma</dt><dd>${escapeHtml(lexiconEntry?.surface_form ?? token.lemma ?? token.surface_form)}</dd></div>
+        <div><dt>Pinyin</dt><dd>${escapeHtml(lexiconEntry?.pinyin ?? token.romanization ?? "-")}</dd></div>
         <div><dt>HSK</dt><dd>${escapeHtml(lexiconEntry?.hsk_level ?? token.proficiency_level ?? "-")}</dd></div>
         <div><dt>Frequency</dt><dd>${escapeHtml(String(entry?.frequency_in_book ?? 1))}</dd></div>
         <div><dt>Radical</dt><dd>${escapeHtml(lexiconEntry?.radical ?? "-")}</dd></div>
