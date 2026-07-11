@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TextPlex Reader Preview</title>
+    <meta
+      name="description"
+      content="A standalone mobile reading view for TextPlex, packaged for GitHub Pages."
+    />
+    <style>
+      :root {
+        --bg: #f6f2eb;
+        --surface: rgba(255, 255, 255, 0.9);
+        --surface-strong: #ffffff;
+        --surface-muted: #f5f1ea;
+        --text: #202633;
+        --muted: #787f8d;
+        --accent: #1f335f;
+        --green: #3f9b68;
+        --line: rgba(31, 36, 48, 0.08);
+        --shadow: 0 18px 40px rgba(20, 24, 35, 0.08);
+        --shadow-soft: 0 10px 24px rgba(20, 24, 35, 0.06);
+      }
+
+      * { box-sizing: border-box; }
+      html, body { min-height: 100%; }
+      body {
+        margin: 0;
+        color: var(--text);
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(255,255,255,0.95), transparent 42%),
+          linear-gradient(180deg, #fbf9f4 0%, #f1ece4 100%);
+      }
+
+      .app {
+        max-width: 430px;
+        min-height: 100vh;
+        margin: 0 auto;
+        padding: 18px 16px 22px;
+      }
+
+      .status-row, .topbar, .tool-row, .info-line, .pill-row, .bottom-actions {
+        display: flex;
+        align-items: center;
+      }
+
+      .status-row {
+        justify-content: space-between;
+        margin-bottom: 12px;
+        color: #121826;
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .status-icons {
+        display: flex;
+        gap: 8px;
+      }
+
+      .topbar {
+        justify-content: space-between;
+        margin-bottom: 18px;
+      }
+
+      .icon-btn {
+        width: 42px;
+        height: 42px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: #2a3140;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+      }
+
+      .tool-row {
+        gap: 10px;
+      }
+
+      .title-wrap {
+        text-align: center;
+        flex: 1;
+      }
+
+      .poem-title {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 30px;
+        line-height: 1;
+        letter-spacing: -0.05em;
+      }
+
+      .poet {
+        margin: 8px 0 0;
+        color: #787f8d;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .reading-surface {
+        background: var(--surface);
+        border: 1px solid rgba(31, 36, 48, 0.05);
+        box-shadow: var(--shadow);
+        border-radius: 30px;
+        overflow: hidden;
+      }
+
+      .reading-body {
+        padding: 14px 14px 18px;
+      }
+
+      .annotated-line {
+        margin: 18px 0 28px;
+      }
+
+      .pinyin-row {
+        display: grid;
+        grid-template-columns: repeat(10, minmax(0, 1fr));
+        gap: 4px;
+        margin-bottom: 6px;
+        color: #8d9199;
+        font-size: 11px;
+        font-weight: 700;
+        text-align: center;
+        letter-spacing: 0.02em;
+      }
+
+      .sentence-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 4px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 26px;
+        line-height: 1.5;
+        letter-spacing: 0.02em;
+      }
+
+      .char {
+        position: relative;
+        display: inline-grid;
+        place-items: center;
+        min-width: 30px;
+        padding: 0 2px;
+      }
+
+      .char.highlight {
+        background: rgba(109, 199, 163, 0.22);
+        border-radius: 8px;
+      }
+
+      .translation {
+        margin: 22px 0 0;
+        color: #465064;
+        font-size: 19px;
+        line-height: 1.55;
+        font-weight: 600;
+      }
+
+      .translation p {
+        margin: 0 0 10px;
+      }
+
+      .sheet-handle {
+        width: 42px;
+        height: 5px;
+        margin: 12px auto 0;
+        border-radius: 999px;
+        background: rgba(31, 36, 48, 0.22);
+      }
+
+      .vocab-sheet {
+        margin-top: 14px;
+        background: var(--surface-strong);
+        border: 1px solid rgba(31, 36, 48, 0.06);
+        border-radius: 30px;
+        box-shadow: var(--shadow);
+        padding: 18px 16px 18px;
+      }
+
+      .vocab-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .vocab-head {
+        display: grid;
+        gap: 4px;
+      }
+
+      .vocab-char {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 40px;
+        line-height: 1;
+        letter-spacing: -0.05em;
+      }
+
+      .vocab-pinyin {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 8px 0 0;
+        font-size: 24px;
+        font-weight: 700;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 11px;
+        border-radius: 999px;
+        background: rgba(63, 155, 104, 0.14);
+        color: #2f7d53;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .vocab-definition {
+        margin: 14px 0 0;
+        color: #475061;
+        font-size: 16px;
+        line-height: 1.55;
+      }
+
+      .example-box {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+      }
+
+      .example-cn {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 700;
+        line-height: 1.45;
+      }
+
+      .example-en {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .bottom-actions {
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .button {
+        border: 0;
+        border-radius: 14px;
+        padding: 14px 18px;
+        font-weight: 800;
+        font-size: 15px;
+        cursor: pointer;
+      }
+
+      .button-primary {
+        flex: 1;
+        color: white;
+        background: linear-gradient(180deg, var(--accent), #182847);
+        box-shadow: 0 14px 28px rgba(31, 51, 95, 0.25);
+      }
+
+      .button-secondary {
+        width: 58px;
+        color: #2a3140;
+        background: var(--surface);
+        border: 1px solid rgba(31, 36, 48, 0.08);
+      }
+
+      .bottom-spacer {
+        height: 8px;
+      }
+
+      @media (max-width: 390px) {
+        .app { padding-inline: 12px; }
+        .sentence-row { font-size: 24px; }
+        .vocab-char { font-size: 36px; }
+        .vocab-pinyin { font-size: 22px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <div class="status-row">
+        <div>9:41</div>
+        <div class="status-icons" aria-hidden="true">
+          <svg width="20" height="14" viewBox="0 0 20 14" fill="currentColor"><path d="M1 10h3v3H1v-3Zm5-4h3v7H6V6Zm5-4h3v11h-3V2Zm5-2h3v13h-3V0Z"/></svg>
+          <svg width="18" height="14" viewBox="0 0 18 14" fill="currentColor"><path d="M9 12.5 3.1 6.6a6.5 6.5 0 0 1 11.8 0L9 12.5Zm0-3.2 3.2-3.2A4.5 4.5 0 0 0 5.8 6L9 9.3Z"/></svg>
+          <svg width="25" height="14" viewBox="0 0 25 14" fill="currentColor"><rect x="1" y="1" width="20" height="12" rx="3" stroke="currentColor" fill="none" stroke-width="1.5"/><rect x="22" y="5" width="2" height="4" rx="1" fill="currentColor"/><rect x="3" y="3" width="15" height="8" rx="2" fill="currentColor"/></svg>
+        </div>
+      </div>
+
+      <header class="topbar">
+        <button class="icon-btn" type="button" aria-label="Back">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <div class="title-wrap">
+          <h1 class="poem-title">春晓</h1>
+          <p class="poet">孟浩然</p>
+        </div>
+        <div class="tool-row">
+          <button class="icon-btn" type="button" aria-label="Text size">AA</button>
+          <button class="icon-btn" type="button" aria-label="Bookmark">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 3h12v18l-6-4-6 4V3z" />
+            </svg>
+          </button>
+          <button class="icon-btn" type="button" aria-label="More options">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="5" cy="12" r="1.8" />
+              <circle cx="12" cy="12" r="1.8" />
+              <circle cx="19" cy="12" r="1.8" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <article class="reading-surface">
+        <div class="reading-body">
+          <div class="annotated-line">
+            <div class="pinyin-row">
+              <span>chūn</span><span>mián</span><span>bù</span><span>jué</span><span>xiǎo</span><span></span><span>chù</span><span>chù</span><span>wén</span><span>tí</span><span>niǎo</span>
+            </div>
+            <div class="sentence-row" aria-label="Spring sleep poem line 1">
+              <span class="char">春</span>
+              <span class="char">眠</span>
+              <span class="char">不</span>
+              <span class="char highlight">觉</span>
+              <span class="char">晓</span>
+              <span class="char">，</span>
+              <span class="char">处</span>
+              <span class="char">处</span>
+              <span class="char">闻</span>
+              <span class="char">啼</span>
+              <span class="char">鸟</span>
+              <span class="char">。</span>
+            </div>
+          </div>
+
+          <div class="annotated-line" style="margin-top: 10px;">
+            <div class="pinyin-row">
+              <span>yè</span><span>lái</span><span>fēng</span><span>yǔ</span><span>shēng</span><span></span><span>huā</span><span>luò</span><span>zhī</span><span>duō</span><span>shǎo</span>
+            </div>
+            <div class="sentence-row" aria-label="Spring sleep poem line 2">
+              <span class="char">夜</span>
+              <span class="char">来</span>
+              <span class="char">风</span>
+              <span class="char">雨</span>
+              <span class="char">声</span>
+              <span class="char">，</span>
+              <span class="char">花</span>
+              <span class="char">落</span>
+              <span class="char">知</span>
+              <span class="char">多</span>
+              <span class="char">少</span>
+              <span class="char">。</span>
+            </div>
+          </div>
+
+          <div class="translation">
+            <p>In spring, I sleep and know not the dawn has come.</p>
+            <p>I hear the birds that sing around;</p>
+            <p>Last night, the wind and rain beat down:</p>
+            <p>How many are the fallen flowers?</p>
+          </div>
+        </div>
+      </article>
+
+      <div class="sheet-handle" aria-hidden="true"></div>
+
+      <article class="vocab-sheet">
+        <div class="vocab-top">
+          <div class="vocab-head">
+            <h2 class="vocab-char">觉</h2>
+            <div class="vocab-pinyin">
+              <span>jué</span>
+              <span aria-hidden="true">🔊</span>
+              <span class="tag">HSK 3</span>
+            </div>
+          </div>
+          <button class="icon-btn" type="button" aria-label="Favorite">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 21.3l-6.7 3.7 1.3-7.5L1 12l7.5-1.1L12 4l3.5 6.9L23 12l-5.6 5.5 1.3 7.5z" transform="scale(0.8) translate(3 0)" />
+            </svg>
+          </button>
+        </div>
+
+        <p class="vocab-definition">v. to feel; to sense; to realize; to wake up</p>
+
+        <div class="example-box">
+          <p class="example-cn">感觉（gǎnjué）– feeling; sensation</p>
+          <p class="example-en">我意识到问题了。<br />I realized the problem.</p>
+        </div>
+
+        <div class="bottom-actions">
+          <button class="button button-primary" type="button">＋ Save to Vocabulary</button>
+          <button class="button button-secondary" type="button" aria-label="More actions">⋯</button>
+        </div>
+      </article>
+
+      <div class="bottom-spacer"></div>
+    </main>
+  </body>
+</html>
