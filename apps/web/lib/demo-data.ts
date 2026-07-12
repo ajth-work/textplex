@@ -341,7 +341,7 @@ function buildSummary(pages: PageExtractionResult[]): BookExtractionResult {
   };
 }
 
-const demoBookRecord: BookRecord = {
+export const demoBookRecord: BookRecord = {
   id: DEMO_BOOK_ID,
   title: "三体",
   author: "刘慈欣",

@@ -1,4 +1,5 @@
 import { AnalysisSurfaceView } from "../../../components/surface-views";
+import { MockAnalysisSurfaceView } from "../../../components/mock-route-views";
 import { DEMO_BOOK_ID } from "../../../lib/demo-data";
 import { isDemoMode } from "../../../lib/textplex";
 
@@ -11,5 +12,5 @@ export function generateStaticParams(): Array<{ bookId: string }> {
 }
 
 export default function AnalysisPage({ params }: { params: { bookId: string } }) {
-  return <AnalysisSurfaceView bookId={params.bookId} />;
+  return isDemoMode ? <MockAnalysisSurfaceView bookId={params.bookId} /> : <AnalysisSurfaceView bookId={params.bookId} />;
 }
