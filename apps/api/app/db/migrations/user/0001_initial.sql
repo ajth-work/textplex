@@ -82,3 +82,9 @@ CREATE TABLE IF NOT EXISTS vocabulary_progress (
     manual_override TEXT,
     PRIMARY KEY(language_code, lemma)
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);

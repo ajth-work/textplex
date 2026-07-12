@@ -4,6 +4,10 @@ import type {
   BookExtractionTriggerResponse,
 } from "../../../packages/shared/src";
 export type {
+  ActivityEvent,
+  ActivitySurfaceResponse,
+  AnalysisLexicalEntrySummary,
+  BookAnalysisSurfaceResponse,
   BookExtractionResult,
   BookExtractionTriggerRequest,
   BookExtractionTriggerResponse,
@@ -12,11 +16,20 @@ export type {
   BookRecord,
   BoundingBox,
   LearningProfileSummary,
+  ImportRecentBook,
+  ImportSurfaceResponse,
   LexicalEntryResult,
   LexiconEntryRecord,
   LexiconImportRequest,
   LexiconImportSummary,
   LexiconLookupResponse,
+  ProgressBookSummary,
+  ProgressSurfaceResponse,
+  SearchResult,
+  SearchSurfaceResponse,
+  SettingEntry,
+  SettingsSurfaceResponse,
+  SettingsUpdateRequest,
   PageExtractionArtifact,
   PageExtractionResult,
   PageReadCreateRequest,
@@ -24,6 +37,8 @@ export type {
   PageRecord,
   ReadingSessionCreateRequest,
   ReadingSessionRecord,
+  StudyQueueItem,
+  StudySurfaceResponse,
   SentenceReadCreateRequest,
   SentenceReadRecord,
   SentenceReadTokenInput,
@@ -81,6 +96,32 @@ export async function postJson<T>(pathname: string, body: unknown): Promise<T> {
 
   const response = await fetch(joinPath(pathname), {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`Request failed (${response.status}) for ${pathname}`);
+  }
+  return (await response.json()) as T;
+}
+
+export async function putJson<T>(pathname: string, body: unknown): Promise<T> {
+  if (isDemoMode) {
+    if (pathname === "/settings") {
+      const request = body as { entries?: Array<{ key: string; value: string }> } | null;
+      return { entries: request?.entries ?? [] } as T;
+    }
+    const response = getDemoPostResponse(pathname, body);
+    if (response !== null) {
+      return response as T;
+    }
+    throw new Error(`Demo mode does not support ${pathname}`);
+  }
+
+  const response = await fetch(joinPath(pathname), {
+    method: "PUT",
     headers: {
       "Content-Type": "application/json",
     },

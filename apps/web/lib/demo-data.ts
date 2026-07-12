@@ -1,16 +1,23 @@
 import type {
+  ActivitySurfaceResponse,
   BookExtractionResult,
+  BookAnalysisSurfaceResponse,
   BookExtractionTriggerResponse,
   BookPageManifest,
   BookRecord,
   BookReaderPageResponse,
+  ImportSurfaceResponse,
   LearningProfileSummary,
   LexiconEntryRecord,
   LexiconLookupResponse,
+  ProgressSurfaceResponse,
+  SearchSurfaceResponse,
   PageExtractionArtifact,
   PageExtractionResult,
   PageReadRecord,
+  SettingsSurfaceResponse,
   ReadingSessionRecord,
+  StudySurfaceResponse,
   SentenceReadRecord,
   SentenceResult,
   TokenOccurrenceResult,
@@ -448,6 +455,171 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
 
   if (route === "/learning/profile") {
     return demoLearningProfileSummary;
+  }
+
+  if (route === "/analysis/" + DEMO_BOOK_ID) {
+    return {
+      book_id: DEMO_BOOK_ID,
+      title: demoBookRecord.title,
+      author: demoBookRecord.author,
+      language_code: demoBookRecord.language_code,
+      total_pages: demoBookRecord.total_pages,
+      extracted_page_count: demoBookRecord.extracted_page_count,
+      sentence_count: demoSummary.pages.reduce((total, page) => total + page.sentences.length, 0),
+      lexical_entry_count: demoSummary.lexical_entries.length,
+      token_occurrence_count: demoSummary.token_occurrences.length,
+      has_extraction: true,
+      top_lexical_entries: demoSummary.lexical_entries.slice(0, 10),
+    } satisfies BookAnalysisSurfaceResponse;
+  }
+
+  if (route === "/activity") {
+    return {
+      event_count: 3,
+      events: [
+        {
+          kind: "reading_session",
+          occurred_at: "2026-07-09T12:00:00Z",
+          book_id: DEMO_BOOK_ID,
+          page_number: null,
+          sentence_order: null,
+          title: demoBookRecord.title,
+          detail: "Session active for 420s",
+        },
+        {
+          kind: "page_read",
+          occurred_at: "2026-07-09T12:05:00Z",
+          book_id: DEMO_BOOK_ID,
+          page_number: 2,
+          sentence_order: null,
+          title: demoBookRecord.title,
+          detail: "Page 2 read for 45s",
+        },
+        {
+          kind: "sentence_read",
+          occurred_at: "2026-07-09T12:06:00Z",
+          book_id: DEMO_BOOK_ID,
+          page_number: 2,
+          sentence_order: 1,
+          title: demoBookRecord.title,
+          detail: "Demo sentence focus",
+        },
+      ],
+    } satisfies ActivitySurfaceResponse;
+  }
+
+  if (route === "/import") {
+    return {
+      default_language: "zh",
+      supported_inputs: ["pdf", "paste"],
+      can_upload_pdf: true,
+      can_paste_text: true,
+      recent_books: [
+        {
+          book_id: demoBookRecord.id,
+          title: demoBookRecord.title,
+          status: demoBookRecord.status,
+          language_code: demoBookRecord.language_code,
+          created_at: demoBookRecord.created_at,
+          processed_at: demoBookRecord.processed_at,
+        },
+      ],
+    } satisfies ImportSurfaceResponse;
+  }
+
+  if (route === "/progress") {
+    return {
+      profile: demoLearningProfileSummary,
+      books: [
+        {
+          book_id: demoBookRecord.id,
+          title: demoBookRecord.title,
+          page_reads: 1,
+          sentence_reads: 2,
+          active_seconds: 120,
+        },
+      ],
+    } satisfies ProgressSurfaceResponse;
+  }
+
+  if (route === "/settings") {
+    return {
+      entries: [
+        { key: "theme", value: "night" },
+        { key: "readerMode", value: "sentence" },
+      ],
+    } satisfies SettingsSurfaceResponse;
+  }
+
+  if (route === "/study") {
+    return {
+      queue_size: 2,
+      queued_items: [
+        {
+          language_code: "zh",
+          lemma: "我",
+          raw_exposures: 5,
+          weighted_exposure: 2.4,
+          unique_pages: 2,
+          unique_books: 1,
+          help_requests: 0,
+          state: "learning",
+          confidence_score: 0.42,
+          manual_override: null,
+          first_seen_at: "2026-07-09T12:00:00Z",
+          last_seen_at: "2026-07-09T12:10:00Z",
+        },
+        {
+          language_code: "zh",
+          lemma: "宇宙",
+          raw_exposures: 3,
+          weighted_exposure: 1.8,
+          unique_pages: 1,
+          unique_books: 1,
+          help_requests: 0,
+          state: "new",
+          confidence_score: 0.2,
+          manual_override: null,
+          first_seen_at: "2026-07-09T12:15:00Z",
+          last_seen_at: "2026-07-09T12:15:00Z",
+        },
+      ],
+    } satisfies StudySurfaceResponse;
+  }
+
+  if (route === "/search") {
+    const query = url.searchParams.get("query") ?? "";
+    const normalized = query.trim();
+    return {
+      query: normalized,
+      result_count: normalized ? 2 : 0,
+      results: normalized
+        ? [
+            {
+              kind: "book",
+              book_id: demoBookRecord.id,
+              book_title: demoBookRecord.title,
+              page_number: null,
+              sentence_order: null,
+              lemma: null,
+              surface_form: null,
+              snippet: `${demoBookRecord.title} - ${demoBookRecord.author}`,
+              score: 100,
+            },
+            {
+              kind: "lexical_entry",
+              book_id: demoBookRecord.id,
+              book_title: demoBookRecord.title,
+              page_number: 1,
+              sentence_order: 1,
+              lemma: normalized,
+              surface_form: normalized,
+              snippet: `Demo search hit for ${normalized}`,
+              score: 90,
+            },
+          ]
+        : [],
+    } satisfies SearchSurfaceResponse;
   }
 
   const lexiconMatch = route === "/lexicon/lookup" ? url.searchParams.get("term") : null;

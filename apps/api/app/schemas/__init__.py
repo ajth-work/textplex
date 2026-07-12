@@ -14,6 +14,23 @@ from .learning import (
     ReadingSessionRecord,
 )
 from .lexicon import LexiconEntryRecord, LexiconImportRequest, LexiconImportSummary, LexiconLookupResponse
+from .surfaces import (
+    ActivityEvent,
+    ActivitySurfaceResponse,
+    AnalysisLexicalEntrySummary,
+    BookAnalysisSurfaceResponse,
+    ImportRecentBook,
+    ImportSurfaceResponse,
+    ProgressBookSummary,
+    ProgressSurfaceResponse,
+    SearchResult,
+    SearchSurfaceResponse,
+    SettingEntry,
+    SettingsSurfaceResponse,
+    SettingsUpdateRequest,
+    StudyQueueItem,
+    StudySurfaceResponse,
+)
 
 __all__ = [
     "BookExtractionRequest",
@@ -31,4 +48,19 @@ __all__ = [
     "LexiconImportRequest",
     "LexiconImportSummary",
     "LexiconLookupResponse",
+    "ActivityEvent",
+    "ActivitySurfaceResponse",
+    "AnalysisLexicalEntrySummary",
+    "BookAnalysisSurfaceResponse",
+    "ImportRecentBook",
+    "ImportSurfaceResponse",
+    "ProgressBookSummary",
+    "ProgressSurfaceResponse",
+    "SearchResult",
+    "SearchSurfaceResponse",
+    "SettingEntry",
+    "SettingsSurfaceResponse",
+    "SettingsUpdateRequest",
+    "StudyQueueItem",
+    "StudySurfaceResponse",
 ]

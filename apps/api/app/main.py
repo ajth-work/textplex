@@ -18,10 +18,12 @@ from app.schemas.learning import (
     SentenceReadRecord,
 )
 from app.schemas.lexicon import LexiconImportRequest, LexiconImportSummary, LexiconLookupResponse
+from app.schemas.surfaces import BookAnalysisSurfaceResponse, ImportSurfaceResponse, ProgressSurfaceResponse, SearchSurfaceResponse, SettingsSurfaceResponse, SettingsUpdateRequest, StudySurfaceResponse, ActivitySurfaceResponse
 from app.services.book_extraction import extract_book_text, load_page_artifact, parse_text_into_page_artifact
 from app.services.book_registry import delete_book_from_path, import_book_from_path, load_registry, save_registry
 from app.services.learning_profile import create_reading_session, get_learning_profile_summary, record_page_read, record_sentence_read
 from app.services.lexicon import import_lexicon_from_source, lookup_lexicon_entry
+from app.services.surfaces import get_activity_surface, get_book_analysis_surface, get_import_surface, get_progress_surface, get_study_surface, load_settings_surface, search_surfaces, update_settings_surface
 from processor.contracts import BookExtractionResult
 
 
@@ -237,16 +239,6 @@ def extract_book(book_id: str, payload: BookExtractionRequest) -> dict[str, str]
     return {"status": "complete", "extraction_path": str(extraction_path)}
 
 
-@app.post("/texts/parse", response_model=PageExtractionArtifact)
-def parse_text(payload: TextParseRequest) -> PageExtractionArtifact:
-    return parse_text_into_page_artifact(
-        text=payload.text,
-        language_code=payload.language_code,
-        title=payload.title,
-        data_root=app.state.data_root,
-    )
-
-
 @app.get("/books/{book_id}/extractions", response_model=BookExtractionResult)
 def get_book_extraction(book_id: str) -> BookExtractionResult:
     extraction_path = app.state.data_root / "books" / book_id / "extractions" / "book-extraction.json"
@@ -304,3 +296,46 @@ def lookup_lexicon(language_code: str, term: str) -> LexiconLookupResponse:
         language_code=language_code,
         term=term,
     )
+
+
+@app.get("/analysis/{book_id}", response_model=BookAnalysisSurfaceResponse)
+def get_analysis_surface(book_id: str) -> BookAnalysisSurfaceResponse:
+    try:
+        return get_book_analysis_surface(app.state.data_root, book_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/search", response_model=SearchSurfaceResponse)
+def search_surface(query: str, limit: int = 20) -> SearchSurfaceResponse:
+    return search_surfaces(app.state.data_root, query=query, limit=limit)
+
+
+@app.get("/study", response_model=StudySurfaceResponse)
+def study_surface(language_code: str | None = None, limit: int = 50) -> StudySurfaceResponse:
+    return get_study_surface(app.state.data_root, language_code=language_code, limit=limit)
+
+
+@app.get("/progress", response_model=ProgressSurfaceResponse)
+def progress_surface() -> ProgressSurfaceResponse:
+    return get_progress_surface(app.state.data_root)
+
+
+@app.get("/activity", response_model=ActivitySurfaceResponse)
+def activity_surface(limit: int = 50) -> ActivitySurfaceResponse:
+    return get_activity_surface(app.state.data_root, limit=limit)
+
+
+@app.get("/import", response_model=ImportSurfaceResponse)
+def import_surface() -> ImportSurfaceResponse:
+    return get_import_surface(app.state.data_root, default_language=os.getenv("DEFAULT_LANGUAGE", "zh"))
+
+
+@app.get("/settings", response_model=SettingsSurfaceResponse)
+def get_settings_surface() -> SettingsSurfaceResponse:
+    return load_settings_surface(app.state.data_root)
+
+
+@app.put("/settings", response_model=SettingsSurfaceResponse)
+def put_settings_surface(payload: SettingsUpdateRequest) -> SettingsSurfaceResponse:
+    return update_settings_surface(app.state.data_root, payload)

@@ -250,3 +250,121 @@ export interface BookExtractionTriggerRequest {
   page_count: number | null;
   force?: boolean;
 }
+
+export interface AnalysisLexicalEntrySummary {
+  lemma: string;
+  display_form: string;
+  frequency_in_book: number;
+  first_page: number | null;
+  last_page: number | null;
+}
+
+export interface BookAnalysisSurfaceResponse {
+  book_id: string;
+  title: string;
+  author: string | null;
+  language_code: string;
+  total_pages: number;
+  extracted_page_count: number;
+  sentence_count: number;
+  lexical_entry_count: number;
+  token_occurrence_count: number;
+  has_extraction: boolean;
+  top_lexical_entries: AnalysisLexicalEntrySummary[];
+}
+
+export interface SearchResult {
+  kind: "book" | "sentence" | "lexical_entry";
+  book_id: string | null;
+  book_title: string | null;
+  page_number: number | null;
+  sentence_order: number | null;
+  lemma: string | null;
+  surface_form: string | null;
+  snippet: string;
+  score: number;
+}
+
+export interface SearchSurfaceResponse {
+  query: string;
+  result_count: number;
+  results: SearchResult[];
+}
+
+export interface StudyQueueItem {
+  language_code: string;
+  lemma: string;
+  raw_exposures: number;
+  weighted_exposure: number;
+  unique_pages: number;
+  unique_books: number;
+  help_requests: number;
+  state: string;
+  confidence_score: number;
+  manual_override: string | null;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+}
+
+export interface StudySurfaceResponse {
+  queue_size: number;
+  queued_items: StudyQueueItem[];
+}
+
+export interface ProgressBookSummary {
+  book_id: string;
+  title: string;
+  page_reads: number;
+  sentence_reads: number;
+  active_seconds: number;
+}
+
+export interface ProgressSurfaceResponse {
+  profile: LearningProfileSummary;
+  books: ProgressBookSummary[];
+}
+
+export interface ActivityEvent {
+  kind: "page_read" | "sentence_read" | "definition_lookup" | "reading_session";
+  occurred_at: string;
+  book_id: string;
+  page_number: number | null;
+  sentence_order: number | null;
+  title: string | null;
+  detail: string;
+}
+
+export interface ActivitySurfaceResponse {
+  event_count: number;
+  events: ActivityEvent[];
+}
+
+export interface ImportRecentBook {
+  book_id: string;
+  title: string;
+  status: string;
+  language_code: string;
+  created_at: string;
+  processed_at: string | null;
+}
+
+export interface ImportSurfaceResponse {
+  default_language: string;
+  supported_inputs: string[];
+  can_upload_pdf: boolean;
+  can_paste_text: boolean;
+  recent_books: ImportRecentBook[];
+}
+
+export interface SettingEntry {
+  key: string;
+  value: string;
+}
+
+export interface SettingsSurfaceResponse {
+  entries: SettingEntry[];
+}
+
+export interface SettingsUpdateRequest {
+  entries: SettingEntry[];
+}

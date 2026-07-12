@@ -166,6 +166,10 @@ main {
   gap: 0.75rem;
 }
 
+.button-row .text-input {
+  flex: 1 1 280px;
+}
+
 .button {
   display: inline-flex;
   align-items: center;
@@ -379,6 +383,45 @@ dt {
 .page-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: 1rem;
+}
+
+.surface-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.surface-list-item {
+  padding: 0.85rem 0.9rem;
+  border-radius: var(--radius-md);
+  background: rgba(10, 15, 24, 0.05);
+  border: 1px solid var(--line);
+}
+
+.surface-list-item p {
+  margin: 0.35rem 0 0;
+}
+
+.surface-form {
+  display: grid;
+  gap: 0.85rem;
+  max-width: 42rem;
+}
+
+.surface-form label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.text-input {
+  width: 100%;
+  min-height: 2.8rem;
+  padding: 0.75rem 0.95rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
 }
 
 .page-tile {
@@ -729,5 +772,10 @@ code {
 
   .definition-grid {
     grid-template-columns: 1fr;
+  }
+
+  .surface-form .button,
+  .surface-form .text-input {
+    width: 100%;
   }
 }
