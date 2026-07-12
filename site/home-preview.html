@@ -96,6 +96,11 @@
         cursor: pointer;
       }
 
+      .icon-btn.is-active {
+        color: var(--accent);
+        background: rgba(31, 51, 95, 0.1);
+      }
+
       .search {
         display: flex;
         align-items: center;
@@ -150,6 +155,63 @@
         font-weight: 700;
         font-size: 14px;
         cursor: pointer;
+      }
+
+      .section-link:hover,
+      .section-link:focus-visible {
+        color: var(--accent);
+      }
+
+      .interactive-card,
+      .analysis-row {
+        cursor: pointer;
+      }
+
+      .interactive-card:focus-visible,
+      .analysis-row:focus-visible,
+      .nav-item:focus-visible,
+      .section-link:focus-visible,
+      .icon-btn:focus-visible {
+        outline: 3px solid rgba(92, 127, 230, 0.45);
+        outline-offset: 3px;
+      }
+
+      .is-filtered {
+        display: none;
+      }
+
+      .empty-state {
+        margin: 0;
+        padding: 18px;
+        border: 1px dashed var(--line);
+        border-radius: 18px;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 94px;
+        z-index: 30;
+        max-width: min(360px, calc(100vw - 32px));
+        padding: 12px 16px;
+        border-radius: 999px;
+        background: #1f335f;
+        color: white;
+        box-shadow: 0 16px 36px rgba(31, 51, 95, 0.28);
+        font-size: 14px;
+        font-weight: 700;
+        opacity: 0;
+        pointer-events: none;
+        transform: translate(-50%, 12px);
+        transition: opacity 160ms ease, transform 160ms ease;
+      }
+
+      .toast.is-visible {
+        opacity: 1;
+        transform: translate(-50%, 0);
       }
 
       .carousel {
@@ -496,6 +558,7 @@
         border: 0;
         background: transparent;
         color: #8a909e;
+        text-decoration: none;
         display: grid;
         justify-items: center;
         gap: 4px;
@@ -564,7 +627,7 @@
 
       <header class="header">
         <h1 class="brand">TextPlex</h1>
-        <button class="icon-btn" aria-label="Notifications">
+        <button id="notificationButton" class="icon-btn" aria-label="Notifications" type="button">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M15 17H9m9-4V11a6 6 0 10-12 0v2l-2 3h16l-2-3Z"/>
             <path d="M10 19a2 2 0 0 0 4 0"/>
@@ -578,18 +641,20 @@
           <path d="M20 20l-3.5-3.5"></path>
         </svg>
         <input type="search" placeholder="Search texts, authors, topics..." />
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M4 6h16M7 12h10M10 18h4"/>
-          <circle cx="9" cy="6" r="2" fill="white"></circle>
-          <circle cx="15" cy="12" r="2" fill="white"></circle>
-          <circle cx="12" cy="18" r="2" fill="white"></circle>
-        </svg>
+        <button id="searchFilters" class="icon-btn" aria-label="Show search filters" type="button">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M4 6h16M7 12h10M10 18h4"/>
+            <circle cx="9" cy="6" r="2" fill="white"></circle>
+            <circle cx="15" cy="12" r="2" fill="white"></circle>
+            <circle cx="12" cy="18" r="2" fill="white"></circle>
+          </svg>
+        </button>
       </label>
 
       <section class="section">
         <div class="section-head">
           <h2 class="section-title">Continue Reading</h2>
-          <button class="section-link" type="button">See All</button>
+          <a class="section-link" href="./library-detail-preview.html">See All</a>
         </div>
 
         <div class="carousel" id="continueRail"></div>
@@ -598,7 +663,7 @@
       <section class="section">
         <div class="section-head">
           <h2 class="section-title">Recent Analyses</h2>
-          <button class="section-link" type="button">See All</button>
+          <a class="section-link" href="./analysis-preview.html">See All</a>
         </div>
 
         <div class="analysis-list" id="analysisList"></div>
@@ -607,7 +672,7 @@
       <section class="section">
         <div class="section-head">
           <h2 class="section-title">Goals</h2>
-          <button class="section-link" type="button">Edit</button>
+          <button id="editGoals" class="section-link" type="button">Edit</button>
         </div>
 
         <div class="goals-grid">
@@ -636,30 +701,32 @@
     </main>
 
     <nav class="bottom-nav" aria-label="Primary">
-      <button class="nav-item active" type="button">
+      <a class="nav-item active" href="./home-preview.html">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11.2 12 4l9 7.2V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-8.8Z"/></svg>
         <span>Home</span>
-      </button>
-      <button class="nav-item" type="button">
+      </a>
+      <a class="nav-item" href="./library-detail-preview.html">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
         <span>Library</span>
-      </button>
+      </a>
 
-      <button class="nav-item nav-center" aria-label="Add" type="button">
+      <a class="nav-item nav-center" aria-label="Add" href="./import-preview.html">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
           <path d="M12 5v14M5 12h14"/>
         </svg>
-      </button>
+      </a>
 
-      <button class="nav-item" type="button">
+      <a class="nav-item" href="./progress-preview.html">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 13a6 6 0 0 0 12 0c0-2.5-1.5-4.4-3.5-5.8L12 3l-2.5 4.2C7.5 8.6 6 10.5 6 13Z"/><path d="M12 10v6"/></svg>
         <span>Insights</span>
-      </button>
-      <button class="nav-item" type="button">
+      </a>
+      <a class="nav-item" href="./index.html#options">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.2"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
         <span>Profile</span>
-      </button>
+      </a>
     </nav>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script>
       const continueItems = [
@@ -711,14 +778,24 @@
 
       const continueRail = document.getElementById("continueRail");
       const analysisList = document.getElementById("analysisList");
+      const searchInput = document.querySelector('.search input');
+      const toast = document.getElementById("toast");
+      let toastTimer;
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add("is-visible");
+        window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 2400);
+      }
 
       continueRail.innerHTML = continueItems
         .map(
           (item) => `
-            <article class="continue-card">
+            <article class="continue-card interactive-card" tabindex="0" role="link" data-href="./reader-preview.html" data-search="${item.titleCn} ${item.authorCn} ${item.titleEn} ${item.author}">
               <div class="continue-art"></div>
               <div class="continue-body">
-                <button class="icon-btn bookmark" aria-label="Bookmark" type="button">
+                <button class="icon-btn bookmark" aria-label="Bookmark" type="button" data-bookmark="${item.titleEn}">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                     <path d="M6 4.5A2.5 2.5 0 0 1 8.5 2h7A2.5 2.5 0 0 1 18 4.5V21l-5.5-3.5L7 21V4.5Z"/>
                   </svg>
@@ -742,7 +819,7 @@
       analysisList.innerHTML = analysisItems
         .map(
           (item) => `
-            <article class="analysis-row">
+            <article class="analysis-row" tabindex="0" role="link" data-href="./analysis-preview.html" data-search="${item.title} ${item.author} ${item.tag}">
               <div class="thumb ${item.thumbClass}"></div>
               <div class="analysis-main">
                 <h3 class="analysis-title">${item.title}</h3>
@@ -759,6 +836,73 @@
           `,
         )
         .join("");
+
+      const emptyState = document.createElement("p");
+      emptyState.className = "empty-state";
+      emptyState.textContent = "No matching texts or analyses.";
+      emptyState.hidden = true;
+      document.querySelector(".analysis-list").after(emptyState);
+
+      function openCard(card) {
+        window.location.href = card.dataset.href;
+      }
+
+      document.querySelectorAll("[data-href]").forEach((card) => {
+        card.addEventListener("click", (event) => {
+          if (event.target.closest("button")) return;
+          openCard(card);
+        });
+        card.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openCard(card);
+          }
+        });
+      });
+
+      const bookmarkKey = "textplex:home-bookmarks";
+      const bookmarks = new Set(JSON.parse(localStorage.getItem(bookmarkKey) || "[]"));
+      document.querySelectorAll("[data-bookmark]").forEach((button) => {
+        const title = button.dataset.bookmark;
+        button.classList.toggle("is-active", bookmarks.has(title));
+        button.addEventListener("click", () => {
+          if (bookmarks.has(title)) {
+            bookmarks.delete(title);
+            showToast("Removed from bookmarks");
+          } else {
+            bookmarks.add(title);
+            showToast("Saved to bookmarks");
+          }
+          button.classList.toggle("is-active", bookmarks.has(title));
+          localStorage.setItem(bookmarkKey, JSON.stringify([...bookmarks]));
+        });
+      });
+
+      searchInput.addEventListener("input", () => {
+        const query = searchInput.value.trim().toLocaleLowerCase();
+        let visibleCount = 0;
+        document.querySelectorAll("[data-search]").forEach((card) => {
+          const matches = !query || card.dataset.search.toLocaleLowerCase().includes(query);
+          card.classList.toggle("is-filtered", !matches);
+          if (matches) visibleCount += 1;
+        });
+        emptyState.hidden = visibleCount > 0;
+      });
+
+      document.getElementById("notificationButton").addEventListener("click", () => {
+        showToast("No new reading notifications");
+      });
+
+      document.getElementById("searchFilters").addEventListener("click", () => {
+        showToast("Search covers titles, authors, and levels");
+      });
+
+      document.getElementById("editGoals").addEventListener("click", () => {
+        const target = window.prompt("Weekly reading goal", "6");
+        if (target && /^\d+$/.test(target)) {
+          showToast(`Weekly goal set to ${target} texts`);
+        }
+      });
     </script>
   </body>
 </html>
