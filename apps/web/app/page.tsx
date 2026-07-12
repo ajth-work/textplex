@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { DEMO_BOOK_ID } from "../lib/demo-data";
 import { isDemoMode } from "../lib/textplex";
 
 export default function HomePage() {
@@ -24,8 +25,14 @@ export default function HomePage() {
           <Link className="button button-primary" href="/library">
             Open library
           </Link>
-          <Link className="button button-secondary" href="/library">
-            Browse book routes
+          <Link className="button button-secondary" href={`/analysis/${DEMO_BOOK_ID}`}>
+            View analysis
+          </Link>
+          <Link className="button button-secondary" href="/progress">
+            Progress
+          </Link>
+          <Link className="button button-secondary" href="/study">
+            Study
           </Link>
         </div>
       </section>
@@ -42,6 +49,18 @@ export default function HomePage() {
         <article className="card feature-card">
           <h2>Reader</h2>
           <p>Step through a processed page, tap tokens, and keep the reading session state in view.</p>
+        </article>
+        <article className="card feature-card">
+          <h2>Analysis</h2>
+          <p>See difficulty, vocabulary distribution, and recommendations for a processed book.</p>
+        </article>
+        <article className="card feature-card">
+          <h2>Study</h2>
+          <p>Review due items and keep learner state separate from portable book data.</p>
+        </article>
+        <article className="card feature-card">
+          <h2>Progress</h2>
+          <p>Track sentence reads, unique vocabulary, and exposure-driven reading progress.</p>
         </article>
       </section>
     </main>

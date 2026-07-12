@@ -8,6 +8,9 @@ const nextConfig = {
   trailingSlash: isStaticSite,
   basePath,
   assetPrefix: basePath || undefined,
+  experimental: {
+    externalDir: true,
+  },
   images: {
     unoptimized: isStaticSite,
   },
