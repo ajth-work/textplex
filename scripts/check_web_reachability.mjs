@@ -6,7 +6,18 @@ const defaultBaseUrls = [
 ];
 
 const baseUrls = parseList(process.env.TEXTPLEX_WEB_BASE_URLS, defaultBaseUrls);
-const checks = parseList(process.env.TEXTPLEX_WEB_CHECK_PATHS, ["/library", "/api/health"]);
+const checks = parseList(process.env.TEXTPLEX_WEB_CHECK_PATHS, [
+  "/",
+  "/library",
+  "/analysis/demo-book",
+  "/search",
+  "/study",
+  "/progress",
+  "/activity",
+  "/import",
+  "/settings",
+  "/api/health",
+]);
 const attempts = Number(process.env.TEXTPLEX_WEB_CHECK_ATTEMPTS ?? "12");
 const retryDelayMs = Number(process.env.TEXTPLEX_WEB_CHECK_DELAY_MS ?? "500");
 const requestTimeoutMs = Number(process.env.TEXTPLEX_WEB_REQUEST_TIMEOUT_MS ?? "2500");
@@ -69,8 +80,21 @@ function assertHtmlResponse(response, url) {
   }
 
   return response.text().then((body) => {
-    if (!body.includes("Books ready to read")) {
-      throw new Error(`${url} did not include the library heading`);
+    const expectedSnippets = {
+      "/": "Read scanned books as structured language data.",
+      "/library": "Books ready to read",
+      "/analysis/demo-book": "Text analysis summary",
+      "/search": "Search across books and vocabulary",
+      "/study": "Review queue and study loop",
+      "/progress": "Reading and vocabulary progress",
+      "/activity": "Reading activity feed",
+      "/import": "Paste text or upload a book",
+      "/settings": "Profile and app preferences",
+    };
+    const path = new URL(url).pathname;
+    const expectedSnippet = expectedSnippets[path];
+    if (expectedSnippet && !body.includes(expectedSnippet)) {
+      throw new Error(`${url} did not include expected content: ${expectedSnippet}`);
     }
   });
 }
