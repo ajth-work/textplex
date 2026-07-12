@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { RoutePage } from "./route-page";
 import {
@@ -280,17 +281,34 @@ export function SearchSurfaceView() {
   const [query, setQuery] = useState("");
   const [data, setData] = useState<SearchSurfaceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const initialQuery = searchParams.get("q")?.trim() ?? window.localStorage.getItem("textplex:last-search-query") ?? "";
+    if (initialQuery) {
+      setQuery(initialQuery);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (query.trim()) {
+      window.localStorage.setItem("textplex:last-search-query", query.trim());
+    }
+  }, [query]);
 
   async function runSearch(nextQuery: string) {
     const normalized = nextQuery.trim();
     if (!normalized) {
       setData(null);
       setError(null);
+      router.replace("/search");
       return;
     }
 
     try {
       setError(null);
+      router.replace(`/search?q=${encodeURIComponent(normalized)}`);
       const result = await fetchJson<SearchSurfaceResponse>(`/search?query=${encodeURIComponent(normalized)}&limit=24`);
       setData(result);
     } catch (err) {

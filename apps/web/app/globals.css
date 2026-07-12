@@ -73,6 +73,74 @@ main {
   padding: 2rem 0 4rem;
 }
 
+.app-frame {
+  width: min(1180px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1rem 0 4rem;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.app-shell-bar {
+  padding: 0.9rem 1rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+}
+
+.app-shell-brand,
+.app-shell-context,
+.app-shell-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.app-shell-home {
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.app-shell-context {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.app-shell-context strong {
+  font-size: 0.98rem;
+}
+
+.app-shell-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.app-nav {
+  padding: 0.7rem;
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.nav-link {
+  min-height: 2.5rem;
+  padding: 0.55rem 0.9rem;
+}
+
+.shell-button {
+  min-height: 2.45rem;
+  padding-inline: 0.9rem;
+}
+
+.app-shell-content {
+  display: grid;
+  gap: 1rem;
+}
+
 .home-shell {
   min-height: 100vh;
   display: grid;
@@ -714,6 +782,16 @@ code {
 }
 
 @media (max-width: 960px) {
+  .app-shell-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell-brand,
+  .app-shell-context,
+  .app-shell-actions {
+    justify-content: flex-start;
+  }
+
   .page-hero,
   .detail-layout,
   .reader-layout,
@@ -737,6 +815,7 @@ code {
 
 @media (max-width: 640px) {
   .home-shell,
+  .app-frame,
   .app-shell,
   .reader-shell {
     width: min(100% - 1rem, 1180px);

@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { RoutePage } from "./route-page";
 import {
@@ -226,6 +227,22 @@ export function MockProgressSurfaceView() {
 
 export function MockSearchSurfaceView() {
   const [query, setQuery] = useState("");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const initialQuery = searchParams.get("q")?.trim() ?? window.localStorage.getItem("textplex:last-search-query") ?? "";
+    if (initialQuery) {
+      setQuery(initialQuery);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (query.trim()) {
+      window.localStorage.setItem("textplex:last-search-query", query.trim());
+    }
+  }, [query]);
+
   const data = useMemo<SearchSurfaceResponse | null>(() => {
     const normalized = query.trim();
     if (!normalized) {
@@ -261,6 +278,17 @@ export function MockSearchSurfaceView() {
     };
   }, [query]);
 
+  function runSearch(nextQuery: string) {
+    const normalized = nextQuery.trim();
+    if (!normalized) {
+      router.replace("/search");
+      setQuery("");
+      return;
+    }
+    router.replace(`/search?q=${encodeURIComponent(normalized)}`);
+    setQuery(normalized);
+  }
+
   return (
     <RoutePage
       eyebrow="Search"
@@ -285,6 +313,9 @@ export function MockSearchSurfaceView() {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search a title, token, or lemma"
           />
+          <button className="button button-primary" type="button" onClick={() => runSearch(query)}>
+            Search
+          </button>
         </div>
       </section>
       {data ? (
