@@ -1,0 +1,535 @@
+const assert = require("node:assert/strict");
+const { test } = require("node:test");
+
+const { createNode, createPagerNode, loadPreviewData, loadPreviewRouter } = require("./helpers/browser-context");
+
+test("router helpers resolve preview routes and render icon-button cards", async () => {
+  const { window } = loadPreviewRouter();
+  await window.TextPlexPreviewRouter.ready;
+  const router = window.TextPlexPreviewRouter;
+  const preview = window.TextPlexPreview;
+
+  assert.ok(router, "router helpers should be exported to window");
+  assert.equal(router.currentBookId(), "spring-dawn");
+
+  const readerUrl = router.resolveTargetUrl(router.routes.reader, "little-prince");
+  assert.equal(readerUrl, "http://example.test/reader-preview.html?book=little-prince");
+
+  const analysisUrl = router.resolveTargetUrl(router.routes.analysis, "little-prince");
+  assert.equal(analysisUrl, "http://example.test/analysis-preview.html?book=little-prince");
+
+  const profile = preview.getLibraryProfile("little-prince");
+  const gridCard = router.renderLibraryGridCard(profile, "spring-dawn");
+  const listRow = router.renderLibraryListRow(profile, "spring-dawn");
+
+  assert.match(gridCard, /data-open-library/);
+  assert.match(gridCard, /data-open-reader/);
+  assert.match(gridCard, /action-icon-info/);
+  assert.match(gridCard, /action-icon-open/);
+  assert.match(listRow, /data-open-library/);
+  assert.match(listRow, /data-open-reader/);
+});
+
+test("library preview renders the live bookshelf data", async () => {
+  const shelfNode = createNode("section");
+  const countNode = createNode("div");
+  const emptyState = createNode("p");
+  const searchInput = createNode("input");
+  searchInput.value = "spring";
+  const gridModeButton = createNode("button");
+  const listModeButton = createNode("button");
+
+  gridModeButton.setAttribute("data-library-mode", "grid");
+  listModeButton.setAttribute("data-library-mode", "list");
+  searchInput.value = "";
+
+  const browser = loadPreviewRouter({
+    pathname: "/library-preview.html",
+    selectorMap: {
+      "#librarySearch": searchInput,
+      "[data-library-mode]": [gridModeButton, listModeButton],
+      "button, a": [],
+    },
+    idMap: {
+      libraryShelf: shelfNode,
+      libraryEmpty: emptyState,
+      libraryCount: countNode,
+    },
+  });
+
+  await browser.window.TextPlexPreviewRouter.ready;
+
+  assert.match(shelfNode.innerHTML, /The Little Prince/);
+  assert.match(shelfNode.innerHTML, /data-open-library/);
+  assert.match(shelfNode.innerHTML, /data-open-reader/);
+  assert.match(countNode.textContent, /documents in the local collection/);
+  assert.equal(emptyState.hidden, true);
+  assert.equal(searchInput.value, "");
+  assert.equal(browser.window.localStorage.getItem("textplex:library-view-mode"), null);
+});
+
+test("library preview offers a restore button when the sample shelf is empty", async () => {
+  const shelfNode = createNode("section");
+  const countNode = createNode("div");
+  const emptyState = createNode("p");
+  const searchInput = createNode("input");
+  const gridModeButton = createNode("button");
+  const listModeButton = createNode("button");
+  gridModeButton.setAttribute("data-library-mode", "grid");
+  listModeButton.setAttribute("data-library-mode", "list");
+
+  const archivedStore = {
+    selectedBookId: "spring-dawn",
+    books: [],
+    archivedBookIds: ["spring-dawn", "tengwangge", "little-prince", "snow-country", "article-demo-briefing"],
+  };
+
+  const browser = loadPreviewRouter({
+    pathname: "/library-preview.html",
+    localStorageSeed: {
+      "textplex.preview.store": JSON.stringify(archivedStore),
+    },
+    selectorMap: {
+      "#librarySearch": searchInput,
+      "[data-library-mode]": [gridModeButton, listModeButton],
+      "button, a": [],
+    },
+    idMap: {
+      libraryShelf: shelfNode,
+      libraryEmpty: emptyState,
+      libraryCount: countNode,
+    },
+  });
+
+  await browser.window.TextPlexPreviewRouter.ready;
+
+  assert.equal(emptyState.hidden, false);
+  assert.match(emptyState.innerHTML, /Restore sample library/);
+});
+
+test("explicit book lookups still resolve archived records by id", async () => {
+  const archivedStore = {
+    selectedBookId: "spring-dawn",
+    books: [
+      {
+        id: "little-prince",
+        contentType: "novel",
+        languageCode: "fr",
+        title: "The Little Prince",
+        titleCn: "The Little Prince",
+        author: "Antoine de Saint-Exupéry",
+        authorCn: "Antoine de Saint-Exupéry",
+        kindLabel: "TXT",
+        homePriority: 40,
+        analysisPriority: 30,
+        lastOpenedAt: "2026-07-11T20:00:00.000Z",
+        displayDate: "May 7, 2024",
+        home: { progress: 65, minutesLeft: "5 min left", coverClass: "three" },
+        analysis: { tag: "B1" },
+        library: { summary: "Archived sample book." },
+        reader: { progressPrefix: "TXT", sentences: [] },
+      },
+    ],
+    archivedBookIds: ["little-prince"],
+  };
+
+  const browser = loadPreviewData({
+    localStorageSeed: {
+      "textplex.preview.store": JSON.stringify(archivedStore),
+    },
+  });
+
+  await browser.window.TextPlexPreview.ready;
+
+  const readerProfile = browser.window.TextPlexPreview.getReaderProfile("little-prince");
+  const libraryProfile = browser.window.TextPlexPreview.getLibraryProfile("little-prince");
+
+  assert.ok(readerProfile, "archived records should still resolve for explicit reader lookups");
+  assert.ok(libraryProfile, "archived records should still resolve for explicit library lookups");
+  assert.equal(readerProfile.title, "The Little Prince");
+  assert.equal(libraryProfile.title, "The Little Prince");
+});
+
+test("library preview opens the clicked book instead of the default selection", async () => {
+  function loadLibraryBrowser() {
+    const infoButton = createNode("button");
+    infoButton.setAttribute("data-book-id", "little-prince");
+    infoButton.setAttribute("data-href", "./library-detail-preview.html?book=little-prince");
+
+    const openButton = createNode("button");
+    openButton.setAttribute("data-book-id", "little-prince");
+    openButton.setAttribute("data-href", "./reader-preview.html?book=little-prince");
+
+    const cardNode = createNode("article");
+    cardNode.setAttribute("data-book-id", "little-prince");
+    cardNode.setAttribute("data-library-href", "./library-detail-preview.html?book=little-prince");
+
+    const shelfNode = createNode("section");
+    const countNode = createNode("div");
+    const emptyState = createNode("p");
+    const searchInput = createNode("input");
+    const gridModeButton = createNode("button");
+    const listModeButton = createNode("button");
+    gridModeButton.setAttribute("data-library-mode", "grid");
+    listModeButton.setAttribute("data-library-mode", "list");
+
+    shelfNode.querySelectorAll = (selector) => {
+      if (selector === "[data-open-library]") {
+        return [infoButton];
+      }
+      if (selector === "[data-open-reader]") {
+        return [openButton];
+      }
+      if (selector === "[data-library-card]") {
+        return [cardNode];
+      }
+      return [];
+    };
+
+    const browser = loadPreviewRouter({
+      pathname: "/library-preview.html",
+      selectorMap: {
+        "#librarySearch": searchInput,
+        "[data-library-mode]": [gridModeButton, listModeButton],
+        "button, a": [],
+      },
+      idMap: {
+        libraryShelf: shelfNode,
+        libraryEmpty: emptyState,
+        libraryCount: countNode,
+      },
+    });
+
+    return { browser, infoButton, openButton, cardNode };
+  }
+
+  const { browser: browserOne, infoButton } = loadLibraryBrowser();
+  await browserOne.window.TextPlexPreviewRouter.ready;
+  infoButton.click();
+  assert.match(browserOne.window.location.href, /library-detail-preview\.html\?book=little-prince$/);
+
+  const { browser: browserTwo, openButton } = loadLibraryBrowser();
+  await browserTwo.window.TextPlexPreviewRouter.ready;
+  openButton.click();
+  assert.match(browserTwo.window.location.href, /reader-preview\.html\?book=little-prince$/);
+
+  const { browser: browserThree, cardNode } = loadLibraryBrowser();
+  await browserThree.window.TextPlexPreviewRouter.ready;
+  cardNode.click();
+  assert.match(browserThree.window.location.href, /library-detail-preview\.html\?book=little-prince$/);
+});
+
+test("reader preview wires sentence paging from dynamic book data", async () => {
+  const titleNode = createNode("h1");
+  const authorNode = createNode("p");
+  const pagerNode = createPagerNode();
+  const lineOne = createNode("div");
+  const lineTwo = createNode("div");
+  const translationNode = createNode("div");
+  const vocabChar = createNode("h2");
+  const vocabDefinition = createNode("p");
+  const exampleCn = createNode("p");
+  const exampleEn = createNode("p");
+  const saveButton = createNode("button");
+  const moreButton = createNode("button");
+  const readingSpan = createNode("span");
+  const audioSpan = createNode("span");
+  const tagSpan = createNode("span");
+  const vocabPinyin = createNode("div");
+  vocabPinyin.querySelectorAll = () => [readingSpan, audioSpan, tagSpan];
+
+  const browser = loadPreviewRouter({
+    pathname: "/reader-preview.html",
+    search: "?book=little-prince",
+    selectorMap: {
+      ".poem-title": titleNode,
+      ".poet": authorNode,
+      ".annotated-line": [lineOne, lineTwo],
+      ".translation": translationNode,
+      ".vocab-char": vocabChar,
+      ".vocab-pinyin": vocabPinyin,
+      ".vocab-definition": vocabDefinition,
+      ".example-cn": exampleCn,
+      ".example-en": exampleEn,
+      ".button-primary": saveButton,
+      ".button-secondary": moreButton,
+      ".topbar .icon-btn": [createNode("button")],
+      "button, a": [],
+    },
+    idMap: {
+      readerPager: pagerNode,
+    },
+  });
+  await browser.window.TextPlexPreviewRouter.ready;
+
+  const router = browser.window.TextPlexPreviewRouter;
+  const readerProfile = browser.window.TextPlexPreview.getReaderProfile("little-prince");
+
+  assert.equal(browser.document.title.includes("The Little Prince"), true);
+  assert.equal(readerProfile.pageCount, 3);
+  assert.match(pagerNode.innerHTML, /P1\/3 \| S1\/1/);
+  assert.match(lineOne.innerHTML, /sentence-row/);
+  assert.ok(translationNode.innerHTML.includes("The little prince"), "first sentence translation should render");
+  assert.equal(readingSpan.hidden, false);
+  assert.ok(readingSpan.textContent.length > 0, "vocabulary pinyin should be rendered");
+
+  const nextButton = pagerNode.querySelector('[aria-label="Next sentence"]');
+  assert.ok(nextButton, "next pager button should exist");
+  nextButton.click();
+
+  assert.match(pagerNode.innerHTML, /P2\/3 \| S1\/1/);
+  assert.ok(translationNode.innerHTML.includes("quiet wind"), "second sentence should render after paging forward");
+  assert.equal(browser.window.sessionStorage.getItem("textplex:reader-page:little-prince"), "1");
+  assert.equal(browser.window.sessionStorage.getItem("textplex:reader-sentence:little-prince"), "0");
+  assert.equal(router.clamp(5, 0, 2), 2);
+  assert.equal(router.clamp(-1, 0, 2), 0);
+});
+
+test("analysis preview shows an explicit missing-book state for unknown ids", async () => {
+  const appNode = createNode("main");
+  const browser = loadPreviewRouter({
+    pathname: "/analysis-preview.html",
+    search: "?book=missing-book",
+    selectorMap: {
+      ".app": appNode,
+    },
+  });
+
+  await browser.window.TextPlexPreviewRouter.ready;
+
+  assert.match(appNode.innerHTML, /Analysis record not found/);
+  assert.match(appNode.innerHTML, /Missing book: missing-book/);
+  assert.match(browser.document.title, /Analysis record not found/);
+});
+
+test("library detail preview shows an explicit missing-book state for unknown ids", async () => {
+  const appNode = createNode("main");
+  const browser = loadPreviewRouter({
+    pathname: "/library-detail-preview.html",
+    search: "?book=missing-book",
+    selectorMap: {
+      ".app": appNode,
+    },
+  });
+
+  await browser.window.TextPlexPreviewRouter.ready;
+
+  assert.match(appNode.innerHTML, /Library record not found/);
+  assert.match(appNode.innerHTML, /Missing book: missing-book/);
+  assert.match(browser.document.title, /Library record not found/);
+});
+
+test("chinese reader tokens keep pinyin attached to each token", async () => {
+  const titleNode = createNode("h1");
+  const authorNode = createNode("p");
+  const pagerNode = createPagerNode();
+  const lineOne = createNode("div");
+  const lineTwo = createNode("div");
+  const translationNode = createNode("div");
+  const vocabChar = createNode("h2");
+  const vocabPinyin = createNode("div");
+  vocabPinyin.querySelectorAll = () => [createNode("span"), createNode("span"), createNode("span")];
+
+  const browser = loadPreviewRouter({
+    pathname: "/reader-preview.html",
+    search: "?book=article-demo-briefing",
+    selectorMap: {
+      ".poem-title": titleNode,
+      ".poet": authorNode,
+      ".annotated-line": [lineOne, lineTwo],
+      ".translation": translationNode,
+      ".vocab-char": vocabChar,
+      ".vocab-pinyin": vocabPinyin,
+      ".vocab-definition": createNode("p"),
+      ".example-cn": createNode("p"),
+      ".example-en": createNode("p"),
+      ".button-primary": createNode("button"),
+      ".button-secondary": createNode("button"),
+      ".topbar .icon-btn": [createNode("button")],
+      "button, a": [],
+    },
+    idMap: {
+      readerPager: pagerNode,
+    },
+  });
+  await browser.window.TextPlexPreviewRouter.ready;
+
+  assert.match(lineOne.innerHTML, /token-reading/);
+  assert.match(lineOne.innerHTML, /token-surface/);
+  assert.match(lineOne.innerHTML, /zhè/);
+  assert.match(lineOne.innerHTML, /这是/);
+  assert.doesNotMatch(lineOne.innerHTML, /pinyin-row/);
+  assert.ok(browser.document.title.includes("习近平"), "Chinese book title should still render");
+});
+test("import preview exposes a visible processor URL control", async () => {
+  const processorInput = createNode("input");
+  const statusNode = createNode("p");
+  const saveButton = createNode("button");
+  saveButton.setAttribute("data-processor-action", "save");
+  const refreshButton = createNode("button");
+  refreshButton.setAttribute("data-processor-action", "refresh");
+
+  const browser = loadPreviewRouter({
+    pathname: "/import-preview.html",
+    localStorageSeed: {
+      "textplex.processorBaseUrl": "http://192.168.192.231:8201",
+    },
+    selectorMap: {
+      "[data-processor-action]": [saveButton, refreshButton],
+      "button, a": [],
+      ".option-row": [],
+    },
+    idMap: {
+      processorBaseUrl: processorInput,
+      processorStatus: statusNode,
+    },
+  });
+
+  await browser.window.TextPlexPreviewRouter.ready;
+
+  assert.equal(processorInput.value, "http://192.168.192.231:8201");
+  assert.match(statusNode.textContent, /Processor URL:/);
+
+  processorInput.value = "http://127.0.0.1:8201";
+  saveButton.click();
+
+  assert.equal(browser.window.localStorage.getItem("textplex.processorBaseUrl"), "http://127.0.0.1:8201");
+  assert.match(statusNode.textContent, /http:\/\/127\.0\.0\.1:8201/);
+});
+
+test("import preview upload row opens a PDF chooser instead of synthesizing a record", async () => {
+  const uploadRow = createNode("section");
+  const uploadTitle = createNode("h3");
+  uploadTitle.textContent = "Upload File";
+  uploadRow.querySelector = (selector) => (selector === "h3" ? uploadTitle : null);
+
+  let clicked = false;
+  const importPdfInput = createNode("input");
+  importPdfInput.click = () => {
+    clicked = true;
+  };
+
+  const browser = loadPreviewRouter({
+    pathname: "/import-preview.html",
+    selectorMap: {
+      ".option-row": [uploadRow],
+      ".recent-list": createNode("div"),
+      "[data-processor-action]": [],
+      "button, a": [],
+    },
+    idMap: {
+      importPdfInput,
+      processorStatus: createNode("p"),
+      processorBaseUrl: createNode("input"),
+    },
+  });
+
+  await browser.window.TextPlexPreviewRouter.ready;
+
+  uploadRow.click();
+
+  assert.equal(clicked, true);
+});
+
+test("import preview shows processor upload progress while a PDF is being imported", async () => {
+  const uploadRow = createNode("section");
+  const uploadTitle = createNode("h3");
+  uploadTitle.textContent = "Upload File";
+  uploadRow.querySelector = (selector) => (selector === "h3" ? uploadTitle : null);
+
+  const processorInput = createNode("input");
+  const processorStatus = createNode("p");
+  const importStatusCard = createNode("section");
+  const importStatusBadge = createNode("span");
+  const importStatusText = createNode("p");
+  const importProgressTrack = createNode("div");
+  const importProgressFill = createNode("div");
+  const importLogItems = ["selected", "uploading", "processing", "refreshing", "opening"].map((step, index) => {
+    const item = createNode("li");
+    item.getAttribute = (name) => (name === "data-step" ? step : null);
+    item.textContent = `step-${index}`;
+    return item;
+  });
+  const recentList = createNode("div");
+  const importPdfInput = createNode("input");
+  const uploadCalls = [];
+  const waitFor = async (predicate) => {
+    for (let index = 0; index < 30; index += 1) {
+      if (predicate()) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error("Timed out waiting for import preview state to settle.");
+  };
+
+  const browser = loadPreviewRouter({
+    pathname: "/import-preview.html",
+    localStorageSeed: {
+      "textplex.processorBaseUrl": "http://processor.test:8201",
+    },
+    fetchImpl: async (url, options) => {
+      uploadCalls.push({ url, options });
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      return {
+        ok: true,
+        json: async () => ({ id: "uploaded-book", title: "Uploaded PDF Sample" }),
+      };
+    },
+    selectorMap: {
+      ".option-row": [uploadRow],
+      ".recent-list": recentList,
+      "[data-processor-action]": [],
+      "#importLog [data-step]": importLogItems,
+      "button, a": [],
+    },
+    idMap: {
+      processorBaseUrl: processorInput,
+      processorStatus,
+      importStatusBadge,
+      importStatusText,
+      importProgressTrack,
+      importProgressFill,
+      importPdfInput,
+    },
+  });
+
+  const originalQuerySelector = browser.document.querySelector.bind(browser.document);
+  browser.document.querySelector = (selector) => {
+    if (selector === ".import-status-card") {
+      return importStatusCard;
+    }
+    return originalQuerySelector(selector);
+  };
+
+  await browser.window.TextPlexPreviewRouter.ready;
+
+  const pdfFile = browser.window.File
+    ? new browser.window.File(["fake pdf"], "demo-import.pdf", {
+        type: "application/pdf",
+      })
+    : Object.assign(new browser.window.Blob(["fake pdf"], { type: "application/pdf" }), {
+        name: "demo-import.pdf",
+      });
+  importPdfInput.files = [pdfFile];
+
+  uploadRow.click();
+  importPdfInput.dispatchEvent({ type: "change", target: importPdfInput });
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.match(importStatusText.textContent, /Uploading demo-import\.pdf/i);
+  assert.equal(importStatusBadge.textContent, "Uploading");
+  assert.equal(importProgressTrack.getAttribute("aria-valuenow"), "34");
+
+  await new Promise((resolve) => setTimeout(resolve, 75));
+
+  const uploadRequest = uploadCalls.find((entry) => /\/books\/upload$/.test(String(entry.url)));
+  assert.ok(uploadRequest, "upload request should be sent to the processor API");
+  await waitFor(() => browser.window.location.search === "?book=uploaded-book");
+  assert.match(importStatusText.textContent, /Opening Uploaded PDF Sample/i);
+  assert.equal(importStatusBadge.textContent, "Done");
+  assert.equal(importProgressTrack.getAttribute("aria-valuenow"), "100");
+
+  const store = JSON.parse(browser.window.localStorage.getItem("textplex.preview.store") || "{}");
+  assert.ok(Array.isArray(store.books) && store.books.some((book) => book.id === "uploaded-book"));
+});

@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from app.core.paths import get_data_root
-from app.schemas.books import BookExtractionRequest, BookImportRequest, BookPageManifest, BookReaderPageResponse, BookRecord, PageExtractionArtifact, TextParseRequest
+from app.schemas.books import BookExtractionRequest, BookImportRequest, BookPageManifest, BookReaderPageResponse, BookRecord, PageExtractionArtifact, TextImportRequest, TextParseRequest
 from app.schemas.learning import (
     LearningProfileSummary,
     PageReadCreateRequest,
@@ -19,7 +19,7 @@ from app.schemas.learning import (
 )
 from app.schemas.lexicon import LexiconImportRequest, LexiconImportSummary, LexiconLookupResponse
 from app.schemas.surfaces import BookAnalysisSurfaceResponse, ImportSurfaceResponse, ProgressSurfaceResponse, SearchSurfaceResponse, SettingsSurfaceResponse, SettingsUpdateRequest, StudySurfaceResponse, ActivitySurfaceResponse
-from app.services.book_extraction import extract_book_text, load_page_artifact, parse_text_into_page_artifact
+from app.services.book_extraction import extract_book_text, import_text_into_book, load_page_artifact, parse_text_into_page_artifact
 from app.services.book_registry import delete_book_from_path, import_book_from_path, load_registry, save_registry
 from app.services.learning_profile import create_reading_session, get_learning_profile_summary, record_page_read, record_sentence_read
 from app.services.lexicon import import_lexicon_from_source, lookup_lexicon_entry
@@ -29,8 +29,24 @@ from processor.contracts import BookExtractionResult
 
 app = FastAPI(title="TextPlex API", version="0.1.0")
 app.state.data_root = get_data_root()
-cors_origins = [origin.strip() for origin in os.getenv("TEXTPLEX_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,https://ajth-work.github.io").split(",") if origin.strip()]
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "TEXTPLEX_CORS_ORIGINS",
+        "http://127.0.0.1:8200,http://192.168.192.231:8200,null,https://ajth-work.github.io",
+    ).split(",")
+    if origin.strip()
+]
 cors_origin_regex = os.getenv("TEXTPLEX_CORS_ORIGIN_REGEX") or None
+if cors_origin_regex is None:
+    cors_origin_regex = (
+        r"^https?://(?:"
+        r"localhost|127\.0\.0\.1|::1|"
+        r"10(?:\.\d{1,3}){3}|"
+        r"192\.168\.\d{1,3}\.\d{1,3}|"
+        r"172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2}"
+        r")(?::\d+)?$"
+    )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -57,6 +73,37 @@ def _book_exists(book_id: str) -> BookRecord:
         raise HTTPException(status_code=404, detail=f"Book not found: {book_id}") from exc
 
 
+def _extract_and_persist_book(book: BookRecord, *, page_start: int, page_count: int | None) -> BookRecord:
+    extraction_path, extracted_page_count = extract_book_text(
+        book=book,
+        page_start=page_start,
+        page_count=page_count,
+        force=True,
+        data_root=app.state.data_root / "books",
+    )
+
+    book.extraction_status = "complete"
+    book.extracted_page_count = extracted_page_count
+    book.extraction_path = str(extraction_path)
+    book.status = "extracted"
+
+    registry = _load_book_registry()
+    registry[book.id] = book
+    save_registry(_registry_path(), registry)
+    book_path = app.state.data_root / "books" / book.id / "book.json"
+    book_path.write_text(book.model_dump_json(indent=2), encoding="utf-8")
+    return book
+
+
+def _persist_book(book: BookRecord) -> BookRecord:
+    registry = _load_book_registry()
+    registry[book.id] = book
+    save_registry(_registry_path(), registry)
+    book_path = app.state.data_root / "books" / book.id / "book.json"
+    book_path.write_text(book.model_dump_json(indent=2), encoding="utf-8")
+    return book
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -72,12 +119,36 @@ def parse_text(payload: TextParseRequest) -> PageExtractionArtifact:
     )
 
 
+@app.post("/texts/import", response_model=BookRecord)
+def import_text(payload: TextImportRequest) -> BookRecord:
+    try:
+        return import_text_into_book(
+            text=payload.text,
+            language_code=payload.language_code,
+            title=payload.title,
+            author=payload.author,
+            data_root=app.state.data_root / "books",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/books", response_model=list[BookRecord])
 def list_books() -> list[BookRecord]:
     registry = _load_book_registry()
     return sorted(
-        registry.values(),
+        (book for book in registry.values() if book.archived_at is None),
         key=lambda record: record.processed_at or record.created_at,
+        reverse=True,
+    )
+
+
+@app.get("/books/archived", response_model=list[BookRecord])
+def list_archived_books() -> list[BookRecord]:
+    registry = _load_book_registry()
+    return sorted(
+        (book for book in registry.values() if book.archived_at is not None),
+        key=lambda record: record.archived_at or record.processed_at or record.created_at,
         reverse=True,
     )
 
@@ -85,7 +156,7 @@ def list_books() -> list[BookRecord]:
 @app.post("/books/import", response_model=BookRecord)
 def import_book(payload: BookImportRequest) -> BookRecord:
     try:
-        return import_book_from_path(
+        book = import_book_from_path(
             payload.source_path,
             language_code=payload.language_code,
             title=payload.title,
@@ -93,6 +164,11 @@ def import_book(payload: BookImportRequest) -> BookRecord:
             page_start=payload.page_start,
             page_count=payload.page_count,
             data_root=app.state.data_root / "books",
+        )
+        return _extract_and_persist_book(
+            book,
+            page_start=payload.page_start,
+            page_count=payload.page_count,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -122,7 +198,7 @@ async def upload_book(
     try:
         contents = await file.read()
         upload_path.write_bytes(contents)
-        return import_book_from_path(
+        book = import_book_from_path(
             upload_path,
             language_code=language_code,
             title=title,
@@ -132,6 +208,7 @@ async def upload_book(
             page_count=page_count,
             data_root=app.state.data_root / "books",
         )
+        return _extract_and_persist_book(book, page_start=page_start, page_count=page_count)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -203,6 +280,27 @@ def delete_book(book_id: str) -> dict[str, str]:
 
     delete_book_from_path(book_id, app.state.data_root / "books")
     return {"status": "deleted", "book_id": book_id}
+
+
+@app.post("/books/{book_id}/archive", response_model=BookRecord)
+def archive_book(book_id: str) -> BookRecord:
+    book = _book_exists(book_id)
+    book.archived_at = book.archived_at or book.processed_at or book.created_at
+    book.status = "archived"
+    return _persist_book(book)
+
+
+@app.post("/books/{book_id}/restore", response_model=BookRecord)
+def restore_book(book_id: str) -> BookRecord:
+    book = _book_exists(book_id)
+    book.archived_at = None
+    if book.extraction_status == "complete":
+        book.status = "extracted"
+    elif book.page_split_status == "complete":
+        book.status = "pages_split"
+    else:
+        book.status = "imported"
+    return _persist_book(book)
 
 
 @app.post("/books/{book_id}/extract")

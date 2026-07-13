@@ -7,6 +7,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from processor import normalize_text, split_sentences
+
 
 def is_text_fixture_source(source_path: Path) -> bool:
     return source_path.is_dir() and (source_path / "manifest.json").exists() and (source_path / "pages").is_dir()
@@ -52,6 +54,47 @@ def hash_text_fixture_source(source_path: Path) -> str:
         digest.update(relative_page_path.encode("utf-8"))
         digest.update(page_path.read_bytes())
     return digest.hexdigest()
+
+
+def write_text_fixture_source(
+    source_path: Path,
+    *,
+    text: str,
+    language_code: str,
+    title: str = "Pasted text",
+    source_work: str = "Pasted text input",
+    author: str | None = None,
+) -> Path:
+    clean_text = normalize_text(text)
+    sentences = split_sentences(clean_text)
+    if not sentences:
+        raise ValueError("TextPlex text import requires non-empty text.")
+
+    source_path.mkdir(parents=True, exist_ok=True)
+    pages_dir = source_path / "pages"
+    pages_dir.mkdir(parents=True, exist_ok=True)
+
+    page_paths: list[str] = []
+    for index, sentence in enumerate(sentences, start=1):
+        page_filename = f"{index:03d}.txt"
+        page_path = pages_dir / page_filename
+        page_path.write_text(sentence, encoding="utf-8")
+        page_paths.append(f"pages/{page_filename}")
+
+    manifest = {
+        "fixture_id": source_path.name,
+        "title": title,
+        "source_work": source_work,
+        "author": author,
+        "language_code": language_code,
+        "license": "TextPlex local pasted text",
+        "page_count": len(page_paths),
+        "source_page_start": 1,
+        "source_page_end": len(page_paths),
+        "pages": page_paths,
+    }
+    (source_path / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+    return source_path
 
 
 def render_text_page_image(page_text: str, image_path: Path, *, book_title: str, page_number: int) -> None:

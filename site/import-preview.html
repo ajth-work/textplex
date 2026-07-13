@@ -219,6 +219,219 @@
         gap: 10px;
       }
 
+      .processor-card {
+        padding: 16px;
+        margin-top: 14px;
+      }
+
+      .processor-card h3 {
+        margin: 0 0 6px;
+        font-size: 16px;
+        font-weight: 900;
+        letter-spacing: -0.03em;
+      }
+
+      .processor-card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.45;
+      }
+
+      .processor-row {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .processor-row input {
+        width: 100%;
+        border: 1px solid rgba(31, 36, 48, 0.1);
+        border-radius: 16px;
+        background: var(--surface-strong);
+        padding: 14px 16px;
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 700;
+        outline: none;
+      }
+
+      .processor-row input:focus {
+        border-color: rgba(31, 51, 95, 0.32);
+        box-shadow: 0 0 0 4px rgba(31, 51, 95, 0.08);
+      }
+
+      .processor-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .processor-actions button {
+        border: 0;
+        border-radius: 14px;
+        padding: 12px 14px;
+        font-size: 14px;
+        font-weight: 900;
+        cursor: pointer;
+      }
+
+      .processor-actions .save-btn {
+        background: var(--accent);
+        color: white;
+      }
+
+      .processor-actions .refresh-btn {
+        background: rgba(31, 51, 95, 0.08);
+        color: var(--accent);
+      }
+
+      .processor-status {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .import-status-card {
+        margin-top: 14px;
+        padding: 16px;
+      }
+
+      .import-status-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .import-kicker {
+        margin: 0 0 4px;
+        color: #a2a9b7;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+      }
+
+      .import-status-head h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 900;
+        letter-spacing: -0.03em;
+      }
+
+      .import-status-badge {
+        flex: 0 0 auto;
+        border-radius: 999px;
+        background: rgba(31, 51, 95, 0.08);
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 900;
+        padding: 7px 11px;
+      }
+
+      .import-progress-track {
+        position: relative;
+        overflow: hidden;
+        height: 12px;
+        margin-top: 14px;
+        border-radius: 999px;
+        background: rgba(31, 36, 48, 0.08);
+      }
+
+      .import-progress-fill {
+        width: 0;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #1f335f 0%, #5c7dd8 55%, #1f335f 100%);
+        background-size: 200% 100%;
+        transition: width 220ms ease;
+      }
+
+      .import-status-card.is-busy .import-progress-fill {
+        width: 38%;
+        animation: import-progress-shimmer 1.1s linear infinite;
+      }
+
+      .import-status-card.is-done .import-progress-fill {
+        width: 100%;
+        background: linear-gradient(90deg, #4e8d64 0%, #6fb78a 100%);
+        animation: none;
+      }
+
+      .import-status-card.is-error .import-progress-fill {
+        width: 100%;
+        background: linear-gradient(90deg, #c95a52 0%, #e77865 100%);
+        animation: none;
+      }
+
+      @keyframes import-progress-shimmer {
+        0% { background-position: 0% 50%; }
+        100% { background-position: 200% 50%; }
+      }
+
+      .import-status-text {
+        margin: 12px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.45;
+      }
+
+      .import-log {
+        list-style: none;
+        padding: 0;
+        margin: 14px 0 0;
+        display: grid;
+        gap: 8px;
+      }
+
+      .import-log li {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.35;
+      }
+
+      .import-log li::before {
+        content: "○";
+        flex: 0 0 auto;
+        color: #a2a9b7;
+        font-weight: 900;
+      }
+
+      .import-log li.is-active {
+        color: var(--text);
+      }
+
+      .import-log li.is-active::before {
+        content: "→";
+        color: var(--accent);
+      }
+
+      .import-log li.is-done {
+        color: #61707f;
+      }
+
+      .import-log li.is-done::before {
+        content: "✓";
+        color: var(--green);
+      }
+
+      .import-log li.is-error {
+        color: #b84d45;
+      }
+
+      .import-log li.is-error::before {
+        content: "!";
+        color: var(--red);
+      }
+
       .ocr-btn {
         width: 100%;
         margin-top: 22px;
@@ -285,6 +498,65 @@
         </div>
       </section>
 
+      <section class="card processor-card" aria-label="Processor API">
+        <h3>Processor API</h3>
+        <p>Point this preview at your local API so imported content and live books hydrate from the same backend.</p>
+        <div class="processor-row">
+          <input
+            id="processorBaseUrl"
+            name="processorBaseUrl"
+            type="url"
+            inputmode="url"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="http://192.168.192.231:8201"
+            aria-label="Processor base URL"
+          />
+          <div class="processor-actions">
+            <button class="save-btn" type="button" data-processor-action="save">Save URL</button>
+            <button class="refresh-btn" type="button" data-processor-action="refresh">Refresh data</button>
+          </div>
+        </div>
+        <p class="processor-status" id="processorStatus">No processor URL set.</p>
+      </section>
+
+      <section class="card import-status-card" aria-label="Import activity">
+        <div class="import-status-head">
+          <div>
+            <p class="import-kicker">Import</p>
+            <h3>Import activity</h3>
+          </div>
+          <span class="import-status-badge" id="importStatusBadge">Idle</span>
+        </div>
+        <div
+          class="import-progress-track"
+          id="importProgressTrack"
+          role="progressbar"
+          aria-label="Import progress"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="0"
+        >
+          <div class="import-progress-fill" id="importProgressFill"></div>
+        </div>
+        <p class="import-status-text" id="importStatusText">Select a PDF to start the processor upload.</p>
+        <ul class="import-log" id="importLog">
+          <li data-step="selected">Pick a PDF</li>
+          <li data-step="uploading">Upload it to the processor API</li>
+          <li data-step="processing">Let the processor register the book</li>
+          <li data-step="refreshing">Refresh the live library data</li>
+          <li data-step="opening">Open the new reader record</li>
+        </ul>
+      </section>
+
+      <input
+        id="importPdfInput"
+        type="file"
+        accept=".pdf,application/pdf"
+        aria-label="Import PDF file"
+        hidden
+      />
+
       <div class="section-heading">
         <h3>Recent Imports</h3>
         <button class="section-link" type="button">See All</button>
@@ -315,5 +587,7 @@
         <span>Scan Text (OCR)</span>
       </button>
     </main>
+    <script src="./preview-data.js"></script>
+    <script type="module" src="./preview-router.js"></script>
   </body>
 </html>

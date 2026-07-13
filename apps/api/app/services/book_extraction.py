@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
+from uuid import uuid4
 
 from pypdf import PdfReader
 
 from app.core.paths import get_books_root
 from app.schemas.books import BookRecord, PageExtractionArtifact
+from app.services.book_registry import import_book_from_path, load_registry, save_registry
 from app.services.book_sources import is_text_fixture_source, load_text_fixture_pages
+from app.services.book_sources import write_text_fixture_source
 from app.services.ocr import get_text_source_signature, resolve_page_text
 from app.services.lexicon import lookup_lexicon_pinyin_map
 from processor import build_book_extraction_result, build_page_extraction_result
@@ -15,6 +19,7 @@ from processor.contracts import PageExtractionResult
 
 FIXTURE_TEXT_SOURCE = "fixture"
 FIXTURE_TEXT_SIGNATURE = "fixture-text-v1"
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 
 def _artifact_dir(book_id: str, data_root: Path) -> Path:
@@ -74,9 +79,68 @@ def parse_text_into_page_artifact(
     )
 
 
+def import_text_into_book(
+    *,
+    text: str,
+    language_code: str,
+    title: str | None = None,
+    author: str | None = None,
+    data_root: Path | None = None,
+) -> BookRecord:
+    books_root = data_root or get_books_root()
+    uploads_root = books_root.parent / "uploads"
+    fixture_root = uploads_root / uuid4().hex / _slugify(title)
+
+    write_text_fixture_source(
+        fixture_root,
+        text=text,
+        language_code=language_code,
+        title="Pasted text",
+        source_work="Pasted text input",
+        author=author,
+    )
+
+    book = import_book_from_path(
+        fixture_root,
+        language_code=language_code,
+        title=title,
+        author=author,
+        data_root=books_root,
+    )
+    extraction_path, extracted_page_count = extract_book_text(
+        book=book,
+        page_start=1,
+        page_count=book.total_pages,
+        force=True,
+        data_root=books_root,
+    )
+
+    book.extraction_status = "complete"
+    book.extracted_page_count = extracted_page_count
+    book.extraction_path = str(extraction_path)
+    book.status = "extracted"
+    _persist_book_record(book, data_root=books_root)
+    return book
+
+
 def _save_page_artifact(path: Path, artifact: PageExtractionArtifact) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(artifact.model_dump_json(indent=2), encoding="utf-8")
+
+
+def _persist_book_record(book: BookRecord, *, data_root: Path) -> None:
+    registry_path = data_root / "registry.json"
+    registry = load_registry(registry_path)
+    registry[book.id] = book
+    save_registry(registry_path, registry)
+    book_path = data_root / book.id / "book.json"
+    book_path.write_text(book.model_dump_json(indent=2), encoding="utf-8")
+
+
+def _slugify(value: str | None, fallback: str = "pasted-text") -> str:
+    text = (value or fallback).strip().lower()
+    text = _SLUG_RE.sub("-", text).strip("-")
+    return text or fallback
 
 
 def _page_image_hash(page_image_path: Path) -> str:

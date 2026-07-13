@@ -76,8 +76,55 @@
         cursor: pointer;
       }
 
+      .icon-btn.is-active {
+        color: #2f7d53;
+      }
+
       .tool-row {
         gap: 10px;
+      }
+
+      .reader-pager {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 12px;
+      }
+
+      .page-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: rgba(31, 36, 48, 0.08);
+        color: #1f2430;
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+      }
+
+      .pager-controls {
+        display: flex;
+        gap: 8px;
+      }
+
+      .pager-btn {
+        width: 42px;
+        height: 42px;
+        border: 0;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: var(--surface);
+        color: #2a3140;
+        box-shadow: var(--shadow-soft);
+      }
+
+      .pager-btn:disabled {
+        opacity: 0.4;
+        box-shadow: none;
       }
 
       .title-wrap {
@@ -88,9 +135,11 @@
       .poem-title {
         margin: 0;
         font-family: Georgia, "Times New Roman", serif;
-        font-size: 30px;
-        line-height: 1;
+        font-size: clamp(24px, 6vw, 30px);
+        line-height: 1.08;
         letter-spacing: -0.05em;
+        max-width: 11em;
+        margin-inline: auto;
       }
 
       .poet {
@@ -113,42 +162,55 @@
       }
 
       .annotated-line {
-        margin: 18px 0 28px;
-      }
-
-      .pinyin-row {
-        display: grid;
-        grid-template-columns: repeat(10, minmax(0, 1fr));
-        gap: 4px;
-        margin-bottom: 6px;
-        color: #8d9199;
-        font-size: 11px;
-        font-weight: 700;
-        text-align: center;
-        letter-spacing: 0.02em;
+        margin: 18px 0 24px;
       }
 
       .sentence-row {
         display: flex;
-        justify-content: space-between;
-        gap: 4px;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        align-items: flex-end;
+        gap: 2px 10px;
         font-family: Georgia, "Times New Roman", serif;
         font-size: 26px;
-        line-height: 1.5;
+        line-height: 1.25;
         letter-spacing: 0.02em;
       }
 
-      .char {
-        position: relative;
-        display: inline-grid;
-        place-items: center;
-        min-width: 30px;
-        padding: 0 2px;
+      .token {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        min-width: 0;
+        padding: 0 1px;
+        white-space: nowrap;
       }
 
-      .char.highlight {
+      .token-reading {
+        min-height: 1.2em;
+        margin-bottom: 4px;
+        color: #8d9199;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1;
+        text-align: center;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+      }
+
+      .token-surface {
+        white-space: nowrap;
+      }
+
+      .token.highlight .token-surface {
         background: rgba(109, 199, 163, 0.22);
         border-radius: 8px;
+        padding-inline: 2px;
+      }
+
+      .token.punctuation .token-reading {
+        visibility: hidden;
       }
 
       .translation {
@@ -164,20 +226,22 @@
       }
 
       .sheet-handle {
-        width: 42px;
-        height: 5px;
-        margin: 12px auto 0;
+        width: 32px;
+        height: 4px;
+        margin: 2px auto 10px;
         border-radius: 999px;
-        background: rgba(31, 36, 48, 0.22);
+        background: rgba(31, 36, 48, 0.16);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
       }
 
       .vocab-sheet {
+        position: relative;
         margin-top: 14px;
         background: var(--surface-strong);
         border: 1px solid rgba(31, 36, 48, 0.06);
         border-radius: 30px;
         box-shadow: var(--shadow);
-        padding: 18px 16px 18px;
+        padding: 12px 16px 18px;
       }
 
       .vocab-top {
@@ -316,6 +380,8 @@
         </div>
       </header>
 
+      <div id="readerPager" class="reader-pager" aria-label="Sentence navigation"></div>
+
       <article class="reading-surface">
         <div class="reading-body">
           <div class="annotated-line">
@@ -367,9 +433,8 @@
         </div>
       </article>
 
-      <div class="sheet-handle" aria-hidden="true"></div>
-
       <article class="vocab-sheet">
+        <div class="sheet-handle" aria-hidden="true"></div>
         <div class="vocab-top">
           <div class="vocab-head">
             <h2 class="vocab-char">觉</h2>
@@ -401,5 +466,7 @@
 
       <div class="bottom-spacer"></div>
     </main>
+    <script src="./preview-data.js"></script>
+    <script type="module" src="./preview-router.js"></script>
   </body>
 </html>

@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TextPlex Library Preview</title>
+    <meta
+      name="description"
+      content="A standalone library shelf preview for TextPlex, packaged for GitHub Pages."
+    />
+    <style>
+      :root {
+        --bg: #f7f4ee;
+        --surface: rgba(255, 255, 255, 0.9);
+        --surface-strong: #ffffff;
+        --text: #1f2430;
+        --muted: #6f7584;
+        --line: rgba(31, 36, 48, 0.08);
+        --shadow: 0 18px 40px rgba(20, 24, 35, 0.08);
+        --shadow-soft: 0 10px 24px rgba(20, 24, 35, 0.06);
+        --accent: #1f335f;
+        --green: #3f9b68;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { min-height: 100%; }
+      body {
+        margin: 0;
+        color: var(--text);
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(255,255,255,0.95), transparent 42%),
+          linear-gradient(180deg, #fbf9f5 0%, #f3efe7 100%);
+      }
+
+      .app {
+        max-width: 1240px;
+        min-height: 100vh;
+        margin: 0 auto;
+        padding: 18px 16px 24px;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .brand {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 34px;
+        line-height: 1;
+        letter-spacing: -0.04em;
+        color: var(--accent);
+      }
+
+      .eyebrow {
+        margin: 0 0 6px;
+        color: #9aa0ad;
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+      }
+
+      .badge {
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(31, 51, 95, 0.1);
+        color: var(--accent);
+        font-size: 14px;
+        font-weight: 900;
+      }
+
+      .icon-btn {
+        width: 42px;
+        height: 42px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: #2a3140;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+      }
+
+      .hero {
+        background: var(--surface);
+        border: 1px solid rgba(31, 36, 48, 0.06);
+        border-radius: 26px;
+        box-shadow: var(--shadow);
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+
+      .hero-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: 12px;
+      }
+
+      .hero-title {
+        margin: 0;
+        font-size: 26px;
+        line-height: 1.05;
+        letter-spacing: -0.04em;
+        font-weight: 900;
+      }
+
+      .hero-copy {
+        margin: 8px 0 0;
+        color: var(--muted);
+        line-height: 1.45;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .controls {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        margin-top: 14px;
+      }
+
+      .search {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 16px;
+        border-radius: 999px;
+        background: var(--surface-strong);
+        border: 1px solid rgba(31, 36, 48, 0.06);
+        box-shadow: var(--shadow-soft);
+      }
+
+      .search input {
+        width: 100%;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        font-size: 14px;
+        color: var(--text);
+      }
+
+      .search input::placeholder {
+        color: #8a90a0;
+        font-weight: 500;
+      }
+
+      .segmented {
+        display: inline-grid;
+        grid-auto-flow: column;
+        gap: 6px;
+        padding: 4px;
+        border-radius: 999px;
+        background: rgba(31, 36, 48, 0.06);
+      }
+
+      .segmented button {
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        padding: 10px 14px;
+        border-radius: 999px;
+        font-weight: 900;
+        cursor: pointer;
+      }
+
+      .segmented button.is-active {
+        background: var(--surface-strong);
+        color: var(--accent);
+        box-shadow: var(--shadow-soft);
+      }
+
+      .section-title {
+        margin: 0;
+        font-size: 20px;
+        line-height: 1.1;
+        letter-spacing: -0.03em;
+        font-weight: 900;
+      }
+
+      .section-sub {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1.45;
+      }
+
+      .library-note {
+        border: 1px solid rgba(31, 36, 48, 0.06);
+        background: rgba(255, 255, 255, 0.75);
+        border-radius: 18px;
+        box-shadow: var(--shadow-soft);
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.5;
+      }
+
+      .library-shell {
+        background: var(--surface);
+        border: 1px solid rgba(31, 36, 48, 0.06);
+        border-radius: 26px;
+        box-shadow: var(--shadow);
+        padding: 14px;
+      }
+
+      .library-shell-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .count {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .library-shelf {
+        display: grid;
+        gap: 12px;
+        justify-content: center;
+      }
+
+      .library-shelf.is-grid {
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      }
+
+      .library-shelf.is-list {
+        grid-template-columns: 1fr;
+      }
+
+      .library-card,
+      .library-row {
+        border-radius: 22px;
+        border: 1px solid rgba(31, 36, 48, 0.07);
+        background: var(--surface-strong);
+        box-shadow: var(--shadow-soft);
+        overflow: hidden;
+        height: 100%;
+      }
+
+      .library-card {
+        display: grid;
+        gap: 0;
+        cursor: pointer;
+      }
+
+      .library-card.is-selected,
+      .library-row.is-selected {
+        outline: 2px solid rgba(63, 155, 104, 0.3);
+      }
+
+      .library-art {
+        min-height: 160px;
+        background-size: cover !important;
+        background-position: center !important;
+      }
+
+      .library-art-small {
+        min-height: 96px;
+      }
+
+      .library-card-body {
+        padding: 16px 16px 14px 18px;
+      }
+
+      .library-card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: 12px;
+      }
+
+      .library-kicker {
+        margin: 0 0 6px;
+        color: #8a90a0;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+      }
+
+      .library-card h3,
+      .library-row h3 {
+        margin: 0;
+        font-size: 17px;
+        line-height: 1.08;
+        letter-spacing: -0.03em;
+        font-weight: 900;
+      }
+
+      .library-author {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .library-tag {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(63, 155, 104, 0.12);
+        color: #2f7d53;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .library-summary {
+        margin: 10px 0 0;
+        color: #3d4554;
+        font-size: 13px;
+        line-height: 1.5;
+        font-weight: 600;
+      }
+
+      .library-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 12px;
+        margin-top: 12px;
+        color: #7b8191;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .library-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .button {
+        border: 0;
+        font-size: 13px;
+        font-weight: 900;
+        cursor: pointer;
+      }
+
+      .button-primary {
+        color: #fff;
+        background: linear-gradient(180deg, #ff9a1f, #ef7d0c);
+        box-shadow: 0 12px 26px rgba(239, 125, 12, 0.24);
+      }
+
+      .button-secondary {
+        color: var(--text);
+        background: rgba(31, 36, 48, 0.06);
+      }
+
+      .action-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+      }
+
+      .action-icon svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .action-icon-info {
+        color: var(--text);
+        background: rgba(31, 36, 48, 0.06);
+      }
+
+      .action-icon-open {
+        color: #fff;
+      }
+
+      .library-row {
+        display: grid;
+        grid-template-columns: 92px minmax(0, 1fr) auto;
+        gap: 12px;
+        padding: 12px;
+        align-items: start;
+        cursor: pointer;
+      }
+
+      .library-row-main {
+        min-width: 0;
+      }
+
+      .library-row-actions {
+        display: flex;
+        justify-content: flex-end;
+        align-items: start;
+        gap: 8px;
+      }
+
+      .empty-state {
+        margin: 0;
+        padding: 18px;
+        border: 1px dashed var(--line);
+        border-radius: 18px;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .footer-note {
+        margin: 14px 2px 0;
+        color: #7b8191;
+        font-size: 12px;
+        line-height: 1.45;
+        font-weight: 600;
+      }
+
+      .is-hidden { display: none !important; }
+
+      @media (max-width: 640px) {
+        .hero-head,
+        .library-shell-head {
+          flex-direction: column;
+          align-items: start;
+        }
+
+        .controls {
+          grid-template-columns: 1fr;
+        }
+
+        .library-shelf.is-grid {
+          grid-template-columns: 1fr;
+          justify-content: stretch;
+        }
+
+        .library-card {
+          grid-template-columns: 80px minmax(0, 1fr);
+          align-items: start;
+          column-gap: 12px;
+        }
+
+        .library-art {
+          min-height: 100%;
+          min-width: 80px;
+          aspect-ratio: 1 / 1.22;
+        }
+
+        .library-card-body {
+          display: grid;
+          gap: 8px;
+          align-content: start;
+          padding: 14px 14px 12px 20px;
+        }
+
+        .library-card-head {
+          align-items: start;
+        }
+
+        .library-card-head > div {
+          padding-right: 4px;
+        }
+
+        .library-kicker {
+          margin-bottom: 4px;
+          font-size: 10px;
+        }
+
+        .library-card h3 {
+          font-size: 16px;
+        }
+
+        .library-author {
+          margin-top: 4px;
+          font-size: 12px;
+        }
+
+        .library-summary,
+        .library-meta {
+          display: none;
+        }
+
+        .library-actions {
+          grid-column: 1 / -1;
+          grid-template-columns: 1fr 1fr;
+          margin-top: 0;
+        }
+
+        .library-card .button {
+          width: 36px;
+          height: 36px;
+        }
+
+        .library-row {
+          grid-template-columns: 72px minmax(0, 1fr);
+        }
+
+        .library-row-actions {
+          grid-column: 1 / -1;
+          justify-content: flex-end;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <button class="icon-btn" type="button" aria-label="Back">←</button>
+        <div style="text-align:right">
+          <p class="eyebrow">TextPlex</p>
+          <span class="badge">Library</span>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div class="hero-head">
+          <div>
+            <p class="eyebrow">Collection</p>
+            <h1 class="hero-title">Your bookshelf, not another analysis page.</h1>
+            <p class="hero-copy">
+              Browse imported books, demo samples, articles, and synthetic texts in one place.
+              Use grid for visual scanning or list for compact inspection.
+            </p>
+          </div>
+          <div class="segmented" role="tablist" aria-label="Library view mode">
+            <button type="button" data-library-mode="grid" aria-pressed="true">Grid</button>
+            <button type="button" data-library-mode="list" aria-pressed="false">List</button>
+          </div>
+        </div>
+
+        <div class="controls">
+          <label class="search" for="librarySearch">
+            <span aria-hidden="true">⌕</span>
+            <input id="librarySearch" type="search" placeholder="Search titles, authors, tags..." autocomplete="off" autocapitalize="off" spellcheck="false" />
+          </label>
+          <div class="count" id="libraryCount">0 documents in the local collection</div>
+        </div>
+      </section>
+
+      <div class="library-note" style="margin: 0 0 14px; padding: 12px 14px;">
+        Use grid to scan the bookshelf visually. Use list for a denser text-first layout.
+      </div>
+
+      <section class="library-shell">
+        <div class="library-shell-head">
+          <div>
+            <p class="eyebrow">Library</p>
+            <h2 class="section-title">Open a record, inspect it, or jump straight into reading.</h2>
+            <p class="section-sub">The icons open the record or jump directly to reading.</p>
+          </div>
+        </div>
+
+        <div id="libraryShelf" class="library-shelf is-grid" aria-live="polite"></div>
+        <p id="libraryEmpty" class="empty-state" hidden>No visible library items match this search.</p>
+      </section>
+
+      <p class="footer-note">
+        This preview uses the local seeded registry in <code>preview-data.js</code>. Imported sample records persist in browser storage.
+      </p>
+    </main>
+
+    <script src="./preview-data.js"></script>
+    <script type="module" src="./preview-router.js"></script>
+  </body>
+</html>

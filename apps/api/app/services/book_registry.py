@@ -64,6 +64,7 @@ def split_pdf_into_page_images(
     total_pages: int,
     page_start: int = 1,
     page_count: int | None = None,
+    display_title: str | None = None,
     data_root: Path | None = None,
 ) -> BookPageManifest:
     resolved_source_path = Path(source_path).expanduser().resolve()
@@ -90,7 +91,7 @@ def split_pdf_into_page_images(
                 render_text_page_image(
                     page_text,
                     image_path,
-                    book_title=str(text_fixture_manifest.get("title") or resolved_source_path.name),
+                    book_title=display_title or str(text_fixture_manifest.get("title") or resolved_source_path.name),
                     page_number=page_number,
                 )
 
@@ -220,6 +221,7 @@ def import_book_from_path(
         total_pages=record.total_pages,
         page_start=page_start,
         page_count=page_count,
+        display_title=record.title,
         data_root=data_root,
     )
     record.page_split_status = "complete"

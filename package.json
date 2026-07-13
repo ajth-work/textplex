@@ -8,6 +8,7 @@
     "build:web:demo": "node ./scripts/build_web_demo.mjs",
     "lint:web": "npm --workspace apps/web run lint",
     "test:web": "node ./scripts/check_web_reachability.mjs",
+    "test:site": "node --test tests/site",
     "check:web": "npm run test:web",
     "stack:up": "docker compose up --build",
     "stack:down": "docker compose down"

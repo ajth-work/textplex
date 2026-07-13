@@ -46,7 +46,11 @@ def test_import_book_endpoint_registers_alice_mini_fixture(imported_real_scan: t
     assert data["total_pages"] == 3
     assert data["page_split_status"] == "complete"
     assert data["page_image_count"] == 3
+    assert data["status"] == "extracted"
+    assert data["extraction_status"] == "complete"
+    assert data["extracted_page_count"] == 3
     assert (data_root / "books" / data["id"] / "book.json").exists()
+    assert (data_root / "books" / data["id"] / "extractions" / "book-extraction.json").exists()
 
 
 def test_get_book_pages_returns_manifest_after_import(imported_real_scan: tuple[Path, BookRecord]) -> None:

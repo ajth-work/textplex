@@ -5,6 +5,7 @@ from .books import (
     BookRecord,
     PageExtractionArtifact,
     PageRecord,
+    TextImportRequest,
 )
 from .learning import (
     LearningProfileSummary,
@@ -39,6 +40,7 @@ __all__ = [
     "BookRecord",
     "PageExtractionArtifact",
     "PageRecord",
+    "TextImportRequest",
     "LearningProfileSummary",
     "PageReadCreateRequest",
     "PageReadRecord",

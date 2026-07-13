@@ -108,21 +108,29 @@ docker compose up --build
 
 Then open:
 
-- [Library](http://127.0.0.1:3000/library)
-- [Sample reader](http://127.0.0.1:3000/reader/book-bbd944eb715e/8)
+- [Site shell](http://127.0.0.1:8200/)
+- [API health](http://127.0.0.1:8201/health)
 
-If you want the processor API reachable from the GitHub Pages shell on the same desktop, keep the API container exposed on `http://127.0.0.1:8000` and make sure your browser origin is allowed by `TEXTPLEX_CORS_ORIGINS`. The default Docker compose file already allows the local web app and the published Pages shell.
+If you want the processor API reachable from the GitHub Pages shell on the same desktop, keep the API container exposed on `http://127.0.0.1:8201` and make sure your browser origin is allowed by `TEXTPLEX_CORS_ORIGINS`. The default Docker compose file already allows the local site shell and the published Pages shell.
 
-### GitHub Pages shell
+### Site shell
 
 GitHub Pages now serves the static browser shell from `site/`. It is a plain HTML/CSS/JavaScript reader that connects to a remote processor API for book import, page loading, and extraction.
 
 Open the shell, save your processor URL, and the reader will call the remote API from the browser. That keeps GitHub Pages lightweight while the processor can run in Docker, on a VPS, or anywhere else with CORS enabled.
 
+If you run the static shell locally on the desktop, use `http://127.0.0.1:8200` as the single browser-facing site endpoint.
+
+To start the canonical local stack:
+
+```powershell
+docker compose up --build site api
+```
+
 For a desktop-hosted processor, point the shell at:
 
-- [http://127.0.0.1:8000](http://127.0.0.1:8000)
-- [http://192.168.192.231:8000](http://192.168.192.231:8000) if you want another device on the LAN to reach the same Docker API
+- [http://127.0.0.1:8201](http://127.0.0.1:8201)
+- [http://192.168.192.231:8201](http://192.168.192.231:8201) if you want another device on the LAN to reach the same Docker API
 
 If you also set a wake helper URL in the Library panel, the shell will try `/health` on startup and, if the processor is offline, ping that helper once before retrying. That helper needs to be something always-on on your desktop network, like a small local service, a watchdog, or another relay that can start Docker.
 

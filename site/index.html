@@ -125,13 +125,13 @@
           <div class="section-heading">
             <div>
               <p class="eyebrow">Preview</p>
-              <h3>Library detail screen mock</h3>
+              <h3>Library shelf screen mock</h3>
             </div>
             <span class="pill">Static</span>
           </div>
-          <p class="small-copy">Open the standalone HTML test page that recreates the library item detail view from the mockup.</p>
+          <p class="small-copy">Open the standalone HTML test page that recreates the bookshelf view with list/grid browsing and per-item actions.</p>
           <div class="button-row button-row-tight">
-            <a class="button button-primary" href="./library-detail-preview.html">Open preview</a>
+            <a class="button button-primary" href="./library-preview.html">Open preview</a>
           </div>
         </article>
 
@@ -505,13 +505,14 @@
 
     <template id="bookCardTemplate">
       <article class="book-card">
-        <div class="book-card-top">
-          <span class="pill"></span>
-          <div class="book-card-actions">
-            <span class="muted book-status"></span>
-            <button class="button button-secondary button-compact book-archive" type="button">Archive</button>
+          <div class="book-card-top">
+            <span class="pill"></span>
+            <div class="book-card-actions">
+              <span class="muted book-status"></span>
+              <button class="button button-secondary button-compact book-archive" type="button">Archive</button>
+              <button class="button button-secondary button-compact book-delete" type="button">Delete</button>
+            </div>
           </div>
-        </div>
         <div class="book-summary-row">
           <h3 class="book-title"></h3>
           <p class="muted book-author"></p>

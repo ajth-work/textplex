@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -645,7 +645,7 @@
       <section class="section">
         <div class="section-head">
           <h2 class="section-title">Continue Reading</h2>
-          <a class="section-link" href="./library-detail-preview.html">See All</a>
+          <a class="section-link" href="./library-preview.html">See All</a>
         </div>
 
         <div class="carousel" id="continueRail"></div>
@@ -654,7 +654,7 @@
       <section class="section">
         <div class="section-head">
           <h2 class="section-title">Recent Analyses</h2>
-          <a class="section-link" href="./analysis-preview.html">See All</a>
+          <a class="section-link" href="./library-preview.html">See All</a>
         </div>
 
         <div class="analysis-list" id="analysisList"></div>
@@ -696,7 +696,7 @@
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11.2 12 4l9 7.2V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-8.8Z"/></svg>
         <span>Home</span>
       </a>
-      <a class="nav-item" href="./library-detail-preview.html">
+      <a class="nav-item" href="./library-preview.html">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
         <span>Library</span>
       </a>
@@ -719,57 +719,14 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+    <script src="./preview-data.js"></script>
     <script>
-      const continueItems = [
-        {
-          titleCn: "春晓",
-          authorCn: "孟浩然",
-          titleEn: "Spring Dawn",
-          author: "Meng Haoran",
-          progress: 72,
-        },
-        {
-          titleCn: "夜泊牛渚怀古",
-          authorCn: "李白",
-          titleEn: "Moonlit Harbor",
-          author: "Li Bai",
-          progress: 48,
-        },
-      ];
-
-      const analysisItems = [
-        {
-          title: "滕王阁序",
-          author: "Wang Bo",
-          tag: "HSK 5",
-          score: 78,
-          date: "May 8",
-          ring: "#3f9b68",
-          thumbClass: "one",
-        },
-        {
-          title: "The Little Prince",
-          author: "Antoine de Saint-Exupéry",
-          tag: "B1",
-          score: 85,
-          date: "May 7",
-          ring: "#3f9b68",
-          thumbClass: "two",
-        },
-        {
-          title: "설국 (雪國)",
-          author: "가와바타 야스나리",
-          tag: "TOPIK 5",
-          score: 72,
-          date: "May 1",
-          ring: "#5c7fe6",
-          thumbClass: "three",
-        },
-      ];
+      const preview = window.TextPlexPreview;
+      const { continueItems, analysisItems } = preview ? preview.getHomePreviewData() : { continueItems: [], analysisItems: [] };
 
       const continueRail = document.getElementById("continueRail");
       const analysisList = document.getElementById("analysisList");
-      const searchInput = document.querySelector('.search input');
+      const searchInput = document.querySelector(".search input");
       const toast = document.getElementById("toast");
       let toastTimer;
 
@@ -783,7 +740,7 @@
       continueRail.innerHTML = continueItems
         .map(
           (item) => `
-            <article class="continue-card interactive-card" tabindex="0" role="link" data-href="./reader-preview.html" data-search="${item.titleCn} ${item.authorCn} ${item.titleEn} ${item.author}">
+            <article class="continue-card interactive-card" tabindex="0" role="link" data-book-id="${item.id}" data-href="./reader-preview.html?book=${encodeURIComponent(item.id)}" data-search="${item.titleCn} ${item.authorCn} ${item.titleEn} ${item.author}">
               <div class="continue-art"></div>
               <div class="continue-body">
                 <button class="icon-btn bookmark" aria-label="Bookmark" type="button" data-bookmark="${item.titleEn}">
@@ -798,7 +755,7 @@
                   <p class="book-author">${item.author}</p>
                 </div>
                 <div>
-                  <div class="progress-meta">${item.progress}% • 3 min left</div>
+                  <div class="progress-meta">${item.progress}% • ${item.minutesLeft}</div>
                   <div class="progress-bar"><div class="progress-fill" style="width:${item.progress}%"></div></div>
                 </div>
               </div>
@@ -810,7 +767,7 @@
       analysisList.innerHTML = analysisItems
         .map(
           (item) => `
-            <article class="analysis-row" tabindex="0" role="link" data-href="./analysis-preview.html" data-search="${item.title} ${item.author} ${item.tag}">
+            <article class="analysis-row" tabindex="0" role="link" data-book-id="${item.id}" data-href="./analysis-preview.html?book=${encodeURIComponent(item.id)}" data-search="${item.title} ${item.author} ${item.tag}">
               <div class="thumb ${item.thumbClass}"></div>
               <div class="analysis-main">
                 <h3 class="analysis-title">${item.title}</h3>
@@ -835,6 +792,14 @@
       document.querySelector(".analysis-list").after(emptyState);
 
       function openCard(card) {
+        const bookId = card.dataset.bookId;
+        if (bookId && preview?.selectBook) {
+          preview.selectBook(bookId);
+          const fullBook = preview?.getBook?.(bookId);
+          if (fullBook) {
+            window.sessionStorage.setItem("textplex.preview.pendingBook", JSON.stringify(fullBook));
+          }
+        }
         window.location.href = card.dataset.href;
       }
 
@@ -870,10 +835,10 @@
       });
 
       searchInput.addEventListener("input", () => {
-        const query = searchInput.value.trim().toLocaleLowerCase();
+        const query = searchInput.value.trim().toLowerCase();
         let visibleCount = 0;
         document.querySelectorAll("[data-search]").forEach((card) => {
-          const matches = !query || card.dataset.search.toLocaleLowerCase().includes(query);
+          const matches = !query || (card.dataset.search || "").toLowerCase().includes(query);
           card.classList.toggle("is-filtered", !matches);
           if (matches) visibleCount += 1;
         });
@@ -897,3 +862,4 @@
     </script>
   </body>
 </html>
+

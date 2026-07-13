@@ -13,7 +13,13 @@ def test_split_sentences_handles_chinese_punctuation() -> None:
     assert sentences == ["第一句。", "第二句！", "第三句？"]
 
 
-def test_build_page_extraction_result_collects_tokens_and_lexical_entries() -> None:
+def test_build_page_extraction_result_collects_tokens_and_lexical_entries(monkeypatch) -> None:
+    monkeypatch.setattr(
+        extraction,
+        "_jieba_lcut",
+        lambda text, cut_all=False, HMM=True: ["科学", "边界"] if "科学边界" in text else ["三体", "世界"],
+    )
+
     result = build_page_extraction_result(
         book_id="book-123",
         page_number=8,
@@ -26,7 +32,7 @@ def test_build_page_extraction_result_collects_tokens_and_lexical_entries() -> N
     assert len(result.sentences) == 2
     assert len(result.token_occurrences) >= 4
     assert len(result.lexical_entries) >= 4
-    assert result.sentences[0].tokens[0].surface_form == "科"
+    assert result.sentences[0].tokens[0].surface_form == "科学"
 
 
 def test_tokenize_sentence_keeps_latin_words_together() -> None:
@@ -41,3 +47,11 @@ def test_tokenize_sentence_uses_chinese_segmenter_when_available(monkeypatch) ->
     tokens = tokenize_sentence("科学边界", "zh")
 
     assert [token.surface_form for token in tokens] == ["科学", "边界"]
+
+
+def test_tokenize_sentence_falls_back_to_characters_when_jieba_is_missing(monkeypatch) -> None:
+    monkeypatch.setattr(extraction, "_jieba_lcut", None)
+
+    tokens = tokenize_sentence("科学边界", "zh")
+
+    assert [token.surface_form for token in tokens] == ["科", "学", "边", "界"]

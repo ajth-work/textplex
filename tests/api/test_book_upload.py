@@ -39,7 +39,11 @@ def test_upload_book_endpoint_registers_uploaded_pdf(tmp_path_factory) -> None:
     assert record.author == "刘慈欣"
     assert record.source_filename == "Three-Body Problem (ZH) (ClearScan).pdf"
     assert record.page_image_count == 4
-    assert record.status == "pages_split"
+    assert record.status == "extracted"
+    assert record.extraction_status == "complete"
+    assert record.extracted_page_count == 4
+    assert record.extraction_path is not None
+    assert (data_root / "books" / record.id / "extractions" / "book-extraction.json").exists()
     assert record.source_path.endswith(".pdf")
     assert (data_root / "books" / record.id / "book.json").exists()
 

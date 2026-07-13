@@ -221,7 +221,7 @@ async function archiveRemoteBook(book) {
   try {
     if (state.apiBaseUrl) {
       setBusy(true);
-      await requestJson(`/books/${encodeURIComponent(book.id)}`, { method: "DELETE" });
+      await requestJson(`/books/${encodeURIComponent(book.id)}/archive`, { method: "POST" });
     }
 
     const archivedItem = normalizeArchivedItem({
@@ -258,6 +258,35 @@ async function archiveRemoteBook(book) {
   }
 }
 
+async function deleteRemoteBook(book) {
+  try {
+    if (!window.confirm(`Delete "${book.title}" forever? This cannot be undone.`)) {
+      return;
+    }
+    if (state.apiBaseUrl) {
+      setBusy(true);
+      await requestJson(`/books/${encodeURIComponent(book.id)}`, { method: "DELETE" });
+    }
+
+    state.archivedItems = state.archivedItems.filter((item) => item.sourceId !== book.id);
+    saveArchivedItems();
+    state.books = state.books.filter((item) => item.id !== book.id);
+    if (state.selectedBookId === book.id) {
+      state.selectedBookId = null;
+      state.pageData = null;
+      state.selectedSentenceIndex = 0;
+    }
+    renderAll();
+  } catch (error) {
+    state.error = error instanceof Error ? error.message : "Unable to delete the book.";
+    renderAll();
+  } finally {
+    if (state.apiBaseUrl) {
+      setBusy(false);
+    }
+  }
+}
+
 function archiveLocalEntry(entry) {
   const archivedItem = normalizeArchivedItem({
     id: `text:${entry.id}`,
@@ -283,10 +312,30 @@ function archiveLocalEntry(entry) {
   renderAll();
 }
 
-function deleteArchivedItem(itemId) {
-  state.archivedItems = state.archivedItems.filter((item) => item.id !== itemId);
-  saveArchivedItems();
-  renderAll();
+async function deleteArchivedItem(itemId) {
+  const item = state.archivedItems.find((entry) => entry.id === itemId);
+  if (!item) {
+    return;
+  }
+
+  try {
+    if (!window.confirm(`Delete "${item.title}" forever? This cannot be undone.`)) {
+      return;
+    }
+    setBusy(true);
+    if (item.sourceType === "book" && state.apiBaseUrl && item.sourceId) {
+      await requestJson(`/books/${encodeURIComponent(item.sourceId)}`, { method: "DELETE" });
+    }
+
+    state.archivedItems = state.archivedItems.filter((entry) => entry.id !== itemId);
+    saveArchivedItems();
+    renderAll();
+  } catch (error) {
+    state.error = error instanceof Error ? error.message : "Unable to delete the archived item.";
+    renderAll();
+  } finally {
+    setBusy(false);
+  }
 }
 
 async function restoreArchivedItem(itemId) {
@@ -298,26 +347,30 @@ async function restoreArchivedItem(itemId) {
   try {
     setBusy(true);
     if (item.sourceType === "book") {
-      if (!state.apiBaseUrl) {
-        throw new Error("Connect a processor URL before restoring books.");
-      }
-      if (!item.sourcePath) {
-        throw new Error("This archived book does not include a source path to restore from.");
-      }
+      if (state.apiBaseUrl && item.sourceId) {
+        await requestJson(`/books/${encodeURIComponent(item.sourceId)}/restore`, {
+          method: "POST",
+        });
+        await loadBooks();
+      } else {
+        if (!item.sourcePath) {
+          throw new Error("This archived book does not include a source path to restore from.");
+        }
 
-      await requestJson("/books/import", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          source_path: item.sourcePath,
-          language_code: item.languageCode ?? "zh",
-          title: item.title,
-          author: item.author ?? undefined,
-        }),
-      });
-      await loadBooks();
+        await requestJson("/books/import", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            source_path: item.sourcePath,
+            language_code: item.languageCode ?? "zh",
+            title: item.title,
+            author: item.author ?? undefined,
+          }),
+        });
+        await loadBooks();
+      }
     } else {
       const restoredEntry = normalizeLocalEntry({
         id: item.sourceId ?? crypto.randomUUID(),
@@ -1210,6 +1263,7 @@ function renderBooks() {
     const openButton = node.querySelector(".book-open");
     openButton.addEventListener("click", () => void loadReader(book.id, 1));
     node.querySelector(".book-archive")?.addEventListener("click", () => void archiveRemoteBook(book));
+    node.querySelector(".book-delete")?.addEventListener("click", () => void deleteRemoteBook(book));
 
     elements.bookList.appendChild(node);
   }
@@ -1334,7 +1388,11 @@ function renderReader() {
   elements.readerBody.classList.toggle("is-hidden", !(page || localEntry));
   elements.readerTitle.textContent = localEntry?.title ?? book?.title ?? "Select a book";
   elements.readerAuthor.textContent = localEntry ? `Local text · ${localEntry.kind}` : book?.author ?? "Pick a book from the library.";
-  elements.readerProgress.textContent = page || localEntry ? `${localEntry ? "TXT" : `P${state.selectedPageNumber}`} | S${currentSentence ? currentSentenceNumber : 0}/${currentSentenceCount || 0}` : "P1 | S1/1";
+  elements.readerProgress.textContent = page || localEntry
+    ? localEntry
+      ? `TXT | S${currentSentence ? currentSentenceNumber : 0}/${currentSentenceCount || 0}`
+      : `P${state.selectedPageNumber}/${book?.total_pages ?? 1} | S${currentSentence ? currentSentenceNumber : 0}/${currentSentenceCount || 0}`
+    : "P1/1 | S1/1";
   elements.toggleImage.classList.toggle("is-active", state.showImage);
   elements.toggleImage.setAttribute("aria-label", state.showImage ? "Hide page image" : "Show page image");
   elements.toggleImage.title = state.showImage ? "Hide page image" : "Show page image";

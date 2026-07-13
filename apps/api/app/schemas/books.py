@@ -20,6 +20,10 @@ class TextParseRequest(BaseModel):
     title: str | None = None
 
 
+class TextImportRequest(TextParseRequest):
+    author: str | None = None
+
+
 class BookExtractionRequest(BaseModel):
     page_start: int = Field(default=1, ge=1)
     page_count: int | None = Field(default=None, ge=1)
@@ -67,6 +71,7 @@ class BookRecord(BaseModel):
     extraction_status: str = "not_started"
     extracted_page_count: int = 0
     extraction_path: str | None = None
+    archived_at: str | None = None
     created_at: str
     processed_at: str | None = None
 

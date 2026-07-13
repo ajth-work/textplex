@@ -1,4 +1,11 @@
 services:
+  site:
+    build:
+      context: ./site
+      dockerfile: Dockerfile
+    ports:
+      - "8200:8200"
+
   api:
     build:
       context: .
@@ -8,20 +15,8 @@ services:
       BOOK_DATA_DIR: /workspace/data/books
       USER_DATA_DIR: /workspace/data/user
       DEFAULT_LANGUAGE: zh
-      TEXTPLEX_CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://192.168.192.231:3000,https://ajth-work.github.io
+      TEXTPLEX_CORS_ORIGINS: http://127.0.0.1:8200,http://192.168.192.231:8200,https://ajth-work.github.io
     ports:
-      - "8000:8000"
+      - "8201:8000"
     volumes:
       - ./data:/workspace/data
-
-  web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-    environment:
-      TEXTPLEX_API_ORIGIN: http://api:8000
-      TEXTPLEX_API_URL: http://api:8000
-    depends_on:
-      - api
-    ports:
-      - "3000:3000"

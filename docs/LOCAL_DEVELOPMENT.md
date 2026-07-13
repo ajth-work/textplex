@@ -55,27 +55,28 @@ Smoke-check the live reader and the API rewrite after the server is running:
 npm run check:web
 ```
 
-By default the smoke test checks both `http://127.0.0.1:3000` and the current ZeroTier address `http://192.168.192.231:3000`. If your ZeroTier IP changes, override it with:
+By default the smoke test checks both `http://127.0.0.1:8200` and the current ZeroTier address `http://192.168.192.231:8200`. If your ZeroTier IP changes, override it with:
 
 ```powershell
-$env:TEXTPLEX_WEB_BASE_URLS="http://127.0.0.1:3000,http://YOUR-ZEROTIER-IP:3000"
+$env:TEXTPLEX_WEB_BASE_URLS="http://127.0.0.1:8200,http://YOUR-ZEROTIER-IP:8200"
 npm run check:web
 ```
 
-### Docker Desktop preview
+### Canonical local stack
 
-Run the reader stack locally with Docker Desktop:
+Run the browser-facing site shell and processor API together:
 
 ```powershell
-docker compose up --build
+docker compose up --build site api
 ```
 
 Then inspect:
 
-- `http://127.0.0.1:3000/library`
-- `http://127.0.0.1:3000/reader/<book-id>/1` after importing the Alice fixture
+- `http://127.0.0.1:8200/`
+- `http://127.0.0.1:8201/health`
+- `http://192.168.192.231:8200/` from another device on the LAN
 
-The API listens on `http://127.0.0.1:8000`.
+The legacy Docker Next.js app is not part of the default preview stack.
 
 ## API
 

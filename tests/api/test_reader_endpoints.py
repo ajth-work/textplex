@@ -63,6 +63,43 @@ def test_delete_book_removes_registry_entry(imported_real_scan: tuple[Path, Book
     assert missing_response.status_code == 404
 
 
+def test_archive_book_hides_it_until_restored(imported_real_scan: tuple[Path, BookRecord]) -> None:
+    data_root, record = imported_real_scan
+
+    app.state.data_root = data_root
+    client = TestClient(app)
+
+    extract_response = client.post(
+        f"/books/{record.id}/extract",
+        json={"page_start": 1, "page_count": 3, "force": True},
+    )
+    assert extract_response.status_code == 200
+
+    archive_response = client.post(f"/books/{record.id}/archive")
+    assert archive_response.status_code == 200
+    archived = archive_response.json()
+    assert archived["status"] == "archived"
+    assert archived["archived_at"] is not None
+
+    list_response = client.get("/books")
+    assert list_response.status_code == 200
+    assert all(book["id"] != record.id for book in list_response.json())
+
+    archived_list_response = client.get("/books/archived")
+    assert archived_list_response.status_code == 200
+    assert any(book["id"] == record.id for book in archived_list_response.json())
+
+    restore_response = client.post(f"/books/{record.id}/restore")
+    assert restore_response.status_code == 200
+    restored = restore_response.json()
+    assert restored["archived_at"] is None
+    assert restored["status"] == "extracted"
+
+    list_response = client.get("/books")
+    assert list_response.status_code == 200
+    assert any(book["id"] == record.id for book in list_response.json())
+
+
 def test_parse_text_endpoint_returns_tokenized_sentences(tmp_path: Path) -> None:
     app.state.data_root = tmp_path
     client = TestClient(app)
@@ -83,6 +120,45 @@ def test_parse_text_endpoint_returns_tokenized_sentences(tmp_path: Path) -> None
     assert payload["page"]["page_number"] == 1
     assert len(payload["page"]["sentences"]) == 2
     assert len(payload["page"]["sentences"][0]["tokens"]) > 0
+
+
+def test_import_text_endpoint_creates_reader_ready_book(tmp_path: Path) -> None:
+    app.state.data_root = tmp_path
+    client = TestClient(app)
+
+    response = client.post(
+        "/texts/import",
+        json={
+            "text": "我一直觉得宇宙像一张巨大的网。它看不见，却一直在拉扯着所有人。",
+            "language_code": "zh",
+            "title": "Pasted article",
+            "author": "Local sample",
+        },
+    )
+
+    assert response.status_code == 200
+    record = response.json()
+    assert record["title"] == "Pasted article"
+    assert record["author"] == "Local sample"
+    assert record["status"] == "extracted"
+    assert record["extraction_status"] == "complete"
+    assert record["total_pages"] == 2
+    assert record["extracted_page_count"] == 2
+
+    page_response = client.get(f"/books/{record['id']}/pages/1")
+    assert page_response.status_code == 200
+    page = page_response.json()
+    assert page["book"]["id"] == record["id"]
+    assert page["page"]["page_number"] == 1
+    assert page["extraction"]["page"]["page_number"] == 1
+    assert len(page["extraction"]["page"]["sentences"]) == 1
+    assert len(page["extraction"]["page"]["sentences"][0]["tokens"]) > 0
+
+    second_page_response = client.get(f"/books/{record['id']}/pages/2")
+    assert second_page_response.status_code == 200
+    second_page = second_page_response.json()
+    assert second_page["page"]["page_number"] == 2
+    assert len(second_page["extraction"]["page"]["sentences"]) == 1
 
 
 def test_parse_text_endpoint_uses_imported_lexicon_pinyin(tmp_path: Path) -> None:

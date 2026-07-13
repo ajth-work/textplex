@@ -1,12 +1,18 @@
 import { setTimeout as delay } from "node:timers/promises";
 
-const defaultBaseUrls = [
-  "http://127.0.0.1:3000",
-  "http://192.168.192.231:3000",
+const defaultSiteUrls = [
+  "http://127.0.0.1:8200",
+  "http://192.168.192.231:8200",
 ];
 
-const baseUrls = parseList(process.env.TEXTPLEX_WEB_BASE_URLS, defaultBaseUrls);
-const checks = parseList(process.env.TEXTPLEX_WEB_CHECK_PATHS, [
+const defaultApiHealthUrls = [
+  "http://127.0.0.1:8201/health",
+  "http://192.168.192.231:8201/health",
+];
+
+const siteUrls = parseList(process.env.TEXTPLEX_WEB_BASE_URLS, defaultSiteUrls);
+const apiHealthUrls = parseList(process.env.TEXTPLEX_API_HEALTH_URLS, defaultApiHealthUrls);
+const siteChecks = parseList(process.env.TEXTPLEX_WEB_CHECK_PATHS, [
   "/",
   "/library",
   "/analysis/demo-book",
@@ -16,7 +22,6 @@ const checks = parseList(process.env.TEXTPLEX_WEB_CHECK_PATHS, [
   "/activity",
   "/import",
   "/settings",
-  "/api/health",
 ]);
 const attempts = Number(process.env.TEXTPLEX_WEB_CHECK_ATTEMPTS ?? "12");
 const retryDelayMs = Number(process.env.TEXTPLEX_WEB_CHECK_DELAY_MS ?? "500");
@@ -69,7 +74,7 @@ async function assertReachable(url, verifyResponse) {
   throw new Error(`Unable to reach ${url} after ${attempts} attempts. Last error: ${lastError?.message ?? lastError}`);
 }
 
-function assertHtmlResponse(response, url) {
+async function assertHtmlResponse(response, url) {
   if (response.status !== 200) {
     throw new Error(`${url} returned HTTP ${response.status}`);
   }
@@ -79,24 +84,23 @@ function assertHtmlResponse(response, url) {
     throw new Error(`${url} returned content-type "${contentType}" instead of HTML`);
   }
 
-  return response.text().then((body) => {
-    const expectedSnippets = {
-      "/": "Read scanned books as structured language data.",
-      "/library": "Books ready to read",
-      "/analysis/demo-book": "Text analysis summary",
-      "/search": "Search across books and vocabulary",
-      "/study": "Review queue and study loop",
-      "/progress": "Reading and vocabulary progress",
-      "/activity": "Reading activity feed",
-      "/import": "Paste text or upload a book",
-      "/settings": "Profile and app preferences",
-    };
-    const path = new URL(url).pathname;
-    const expectedSnippet = expectedSnippets[path];
-    if (expectedSnippet && !body.includes(expectedSnippet)) {
-      throw new Error(`${url} did not include expected content: ${expectedSnippet}`);
-    }
-  });
+  const body = await response.text();
+  const expectedSnippets = {
+    "/": "Read scanned books as structured language data.",
+    "/library": "Books ready to read",
+    "/analysis/demo-book": "Text analysis summary",
+    "/search": "Search across books and vocabulary",
+    "/study": "Review queue and study loop",
+    "/progress": "Reading and vocabulary progress",
+    "/activity": "Reading activity feed",
+    "/import": "Paste text or upload a book",
+    "/settings": "Profile and app preferences",
+  };
+  const path = new URL(url).pathname;
+  const expectedSnippet = expectedSnippets[path];
+  if (expectedSnippet && !body.includes(expectedSnippet)) {
+    throw new Error(`${url} did not include expected content: ${expectedSnippet}`);
+  }
 }
 
 async function assertHealthResponse(response, url) {
@@ -115,13 +119,17 @@ async function assertHealthResponse(response, url) {
   }
 }
 
-for (const baseUrl of baseUrls) {
-  for (const path of checks) {
+for (const baseUrl of siteUrls) {
+  for (const path of siteChecks) {
     const url = new URL(path, baseUrl).toString();
-    const verifyResponse = path === "/api/health" ? assertHealthResponse : assertHtmlResponse;
-
     process.stdout.write(`Checking ${url}... `);
-    await assertReachable(url, verifyResponse);
+    await assertReachable(url, assertHtmlResponse);
     process.stdout.write("ok\n");
   }
+}
+
+for (const healthUrl of apiHealthUrls) {
+  process.stdout.write(`Checking ${healthUrl}... `);
+  await assertReachable(healthUrl, assertHealthResponse);
+  process.stdout.write("ok\n");
 }

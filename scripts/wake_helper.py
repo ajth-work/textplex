@@ -14,7 +14,7 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8787
-DEFAULT_API_HEALTH_URL = "http://127.0.0.1:8000/health"
+DEFAULT_API_HEALTH_URL = "http://127.0.0.1:8201/health"
 
 
 class WakeHelperHandler(BaseHTTPRequestHandler):
