@@ -245,6 +245,19 @@
         margin-top: 14px;
       }
 
+      .field {
+        display: grid;
+        gap: 8px;
+      }
+
+      .field span {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
       .processor-row input {
         width: 100%;
         border: 1px solid rgba(31, 36, 48, 0.1);
@@ -266,6 +279,29 @@
         display: flex;
         gap: 10px;
         flex-wrap: wrap;
+      }
+
+      .segmented-control {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .segmented-option {
+        border: 1px solid rgba(31, 36, 48, 0.1);
+        border-radius: 999px;
+        background: var(--surface-strong);
+        color: var(--text);
+        font-weight: 800;
+        font-size: 13px;
+        padding: 10px 14px;
+        cursor: pointer;
+      }
+
+      .segmented-option.is-active {
+        color: white;
+        background: linear-gradient(180deg, #1f335f, #12325f);
+        border-color: transparent;
       }
 
       .processor-actions button {
@@ -512,6 +548,13 @@
             placeholder="http://192.168.192.231:8201"
             aria-label="Processor base URL"
           />
+          <div class="field">
+            <span>OCR mode</span>
+            <div class="segmented-control" id="ocrModeToggle" role="tablist" aria-label="OCR mode">
+              <button class="segmented-option is-active" type="button" data-ocr-provider="local">Local OCR</button>
+              <button class="segmented-option" type="button" data-ocr-provider="openai">OpenAI OCR</button>
+            </div>
+          </div>
           <div class="processor-actions">
             <button class="save-btn" type="button" data-processor-action="save">Save URL</button>
             <button class="refresh-btn" type="button" data-processor-action="refresh">Refresh data</button>

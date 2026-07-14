@@ -279,16 +279,16 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     };
   }, [bookId, page, pageNumber, selectedSentence, selectedSentenceOrder]);
 
-  const definitionSummary = selectedToken && !lexiconEntry && !tokenEntry ? "Dictionary wiring is pending." : null;
   const tokenLabel = lexiconEntry?.surface_form ?? selectedToken?.surface_form ?? "";
   const tokenDefinition =
     lexiconEntry?.definition ??
     selectedToken?.definition_short ??
     (tokenEntry
       ? `Seen ${tokenEntry.frequency_in_book} times in this book.`
-      : "Dictionary wiring is pending, but the token stays anchored to the book data.");
+      : "");
   const tokenPinyin = lexiconEntry?.pinyin ?? selectedToken?.romanization ?? null;
   const tokenHsk = lexiconEntry?.hsk_level ?? selectedToken?.proficiency_level ?? null;
+  const tokenHskLabel = formatLevelTag(tokenHsk);
   const tokenRadical = lexiconEntry?.radical ?? null;
   const tokenStrokeCount = lexiconEntry?.stroke_count ?? null;
   const needsExtraction = (pageData?.book.extracted_page_count ?? 0) <= 0;
@@ -470,7 +470,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   </div>
                   <div>
                     <dt>HSK</dt>
-                    <dd>{tokenHsk ?? "—"}</dd>
+                    <dd>{tokenHskLabel}</dd>
                   </div>
                   <div>
                     <dt>Frequency</dt>
@@ -486,7 +486,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   </div>
                 </dl>
                 {selectedSentence ? <p className="small-copy sentence-preview">{selectedSentence.text}</p> : null}
-                {definitionSummary ? <p className="small-copy">{definitionSummary}</p> : null}
               </div>
             ) : (
               <div className="definition-popover definition-empty">
@@ -657,4 +656,22 @@ function isSentencePunctuation(value: string): boolean {
 
 function countReadableCharacters(value: string): number {
   return Array.from(value).filter((character) => !isSentencePunctuation(character)).length;
+}
+
+function formatLevelTag(value: string | number | null | undefined): string {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return "—";
+  }
+
+  const normalized = text.replace(/^HSK\s*/i, "").trim();
+  if (/^\d+(?:\.\d+)?$/.test(normalized)) {
+    return `HSK ${normalized}`;
+  }
+
+  if (/^HSK\s+\d+(?:\.\d+)?$/i.test(text)) {
+    return text.replace(/\s+/g, " ").replace(/^hsk/i, "HSK");
+  }
+
+  return text;
 }

@@ -16,7 +16,9 @@ _TOKEN_RE = re.compile(r"[\u4e00-\u9fff]|[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?")
 _CHINESE_RUN_RE = re.compile(r"[\u4e00-\u9fff]+")
 _WORDISH_RE = re.compile(r"[\u4e00-\u9fff]+|[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?")
 _WHITESPACE_RE = re.compile(r"\s+")
-_SENTENCE_ENDERS = set("\u3002\uff01\uff1f!?")
+_SENTENCE_ENDERS = set("\u3002\uff01\uff1f!?.")
+_TRAILING_SENTENCE_CLOSERS = set("”’\"'）)]】》〕」』")
+_HARD_NO_SPACE_JOIN_LANGS = {"zh", "ja", "ko"}
 
 try:
     from jieba import lcut as _jieba_lcut
@@ -47,6 +49,116 @@ def split_sentences(clean_text: str) -> list[str]:
         sentences.append(tail)
 
     return sentences if sentences else ([clean_text] if clean_text else [])
+
+
+def ends_with_sentence_terminator(text: str) -> bool:
+    stripped = text.rstrip()
+    while stripped and stripped[-1] in _TRAILING_SENTENCE_CLOSERS:
+        stripped = stripped[:-1].rstrip()
+    return bool(stripped) and stripped[-1] in _SENTENCE_ENDERS
+
+
+def _language_root(language_code: str) -> str:
+    return (language_code or "").strip().lower().split("-", 1)[0]
+
+
+def _merge_sentence_text(left: str, right: str, language_code: str) -> str:
+    if not left:
+        return right
+    if not right:
+        return left
+    if _language_root(language_code) in _HARD_NO_SPACE_JOIN_LANGS:
+        return f"{left}{right}"
+    if left[-1].isspace() or right[0].isspace():
+        return f"{left}{right}"
+    if left[-1] in "([{\"“‘" or right[0] in ".,!?;:)]}\"”’。、，！？；：":
+        return f"{left}{right}"
+    return f"{left} {right}"
+
+
+def _merge_sentence_results(left: SentenceResult, right: SentenceResult, language_code: str) -> SentenceResult:
+    merged_tokens = [
+        token.model_copy(update={"order": index})
+        for index, token in enumerate([*left.tokens, *right.tokens], start=1)
+    ]
+    merged_grammar_patterns = list(dict.fromkeys([*left.grammar_patterns, *right.grammar_patterns]))
+    merged_text = _merge_sentence_text(left.text, right.text, language_code)
+    return left.model_copy(
+        update={
+            "text": merged_text,
+            "tokens": merged_tokens,
+            "grammar_patterns": merged_grammar_patterns,
+            "ends_with_sentence_terminator": ends_with_sentence_terminator(merged_text),
+        }
+    )
+
+
+def stitch_page_sentence_carryover(pages: list[PageExtractionResult]) -> list[PageExtractionResult]:
+    stitched_pages = [page.model_copy(deep=True) for page in pages]
+    pending_origin_index: int | None = None
+    pending_sentence: SentenceResult | None = None
+
+    for page_index, page in enumerate(stitched_pages):
+        current_sentences = list(page.sentences)
+
+        if pending_sentence is not None and pending_origin_index is not None:
+            merged_sentence = pending_sentence
+            while current_sentences:
+                next_sentence = current_sentences.pop(0)
+                merged_sentence = _merge_sentence_results(merged_sentence, next_sentence, page.language_code)
+                if merged_sentence.ends_with_sentence_terminator:
+                    stitched_pages[pending_origin_index].sentences.append(merged_sentence)
+                    pending_sentence = None
+                    pending_origin_index = None
+                    break
+            else:
+                pending_sentence = merged_sentence
+                page.sentences = []
+                continue
+
+        if current_sentences and not current_sentences[-1].ends_with_sentence_terminator:
+            pending_origin_index = page_index
+            pending_sentence = current_sentences.pop()
+
+        page.sentences = current_sentences
+
+    if pending_sentence is not None and pending_origin_index is not None:
+        stitched_pages[pending_origin_index].sentences.append(pending_sentence)
+
+    for page in stitched_pages:
+        token_occurrences: list[TokenOccurrenceResult] = []
+        lexical_entries: dict[str, LexicalEntryResult] = {}
+        for sentence in page.sentences:
+            for token in sentence.tokens:
+                normalized_form = token.lemma or _normalize_token_surface(token.surface_form, page.language_code)
+                token_occurrences.append(
+                    TokenOccurrenceResult(
+                        page_number=page.page_number,
+                        sentence_order=sentence.order,
+                        token_order=token.order,
+                        surface_form=token.surface_form,
+                        normalized_form=normalized_form,
+                    )
+                )
+                entry = lexical_entries.get(normalized_form)
+                if entry is None:
+                    lexical_entries[normalized_form] = LexicalEntryResult(
+                        lemma=normalized_form,
+                        display_form=token.surface_form,
+                        frequency_in_book=1,
+                        first_page=page.page_number,
+                        last_page=page.page_number,
+                    )
+                else:
+                    entry.frequency_in_book += 1
+                    entry.last_page = page.page_number
+
+        page.token_occurrences = token_occurrences
+        page.lexical_entries = list(lexical_entries.values())
+        page.clean_text = "\n".join(sentence.text for sentence in page.sentences).strip() or page.clean_text
+        page.page_ends_with_sentence_terminator = bool(page.sentences and page.sentences[-1].ends_with_sentence_terminator)
+
+    return stitched_pages
 
 
 def _normalize_token_surface(surface_form: str, language_code: str) -> str:
@@ -104,6 +216,7 @@ def build_page_extraction_result(
             order=index,
             text=sentence,
             tokens=tokenize_sentence(sentence, language_code),
+            ends_with_sentence_terminator=ends_with_sentence_terminator(sentence),
         )
         for index, sentence in enumerate(split_sentences(clean_text), start=1)
     ]
@@ -143,6 +256,7 @@ def build_page_extraction_result(
         raw_text=raw_text,
         clean_text=clean_text,
         sentences=sentences,
+        page_ends_with_sentence_terminator=ends_with_sentence_terminator(clean_text),
         token_occurrences=token_occurrences,
         lexical_entries=list(lexical_entries.values()),
     )

@@ -196,6 +196,42 @@ def test_parse_text_endpoint_uses_imported_lexicon_pinyin(tmp_path: Path) -> Non
     assert token["romanization"] == "yǔzhòu"
 
 
+def test_parse_text_endpoint_uses_imported_lexicon_definition_and_hsk(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    csv_root = source_root / "CSV Files"
+    csv_root.mkdir(parents=True, exist_ok=True)
+    (csv_root / "Chinese Character Recognition - Full Vocabulary List.csv").write_text(
+        "No,Chinese,Pinyin,English,HSK Level\n"
+        "1,宇宙,yǔzhòu,universe,4\n",
+        encoding="utf-8",
+    )
+    (csv_root / "Chinese Character Recognition - Full Characters.csv").write_text(
+        "id,Character,HanziDB Character Link,Pinyin,Tone,Definition,Radical,HanziDB Radical Link,Stroke count,HSK level,TGL,TGL #,Frequency rank,Note,#,Length,Radical Order,General Standard #\n"
+        "1,宇,http://example.com,yǔ,3,universe,宀,http://example.com,6,4,G1,1,12,note,1,1,1,1\n",
+        encoding="utf-8",
+    )
+
+    app.state.data_root = tmp_path / "data"
+    import_lexicon_from_source(source_root, data_root=app.state.data_root, replace_existing=True)
+    client = TestClient(app)
+
+    response = client.post(
+        "/texts/parse",
+        json={
+            "text": "宇宙",
+            "language_code": "zh",
+            "title": "Lexicon definition sample",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    token = payload["page"]["sentences"][0]["tokens"][0]
+    assert token["surface_form"] == "宇宙"
+    assert token["definition_short"] == "universe"
+    assert token["proficiency_level"] == "4"
+
+
 def test_parse_text_endpoint_auto_seeds_bundled_lexicon_and_falls_back_to_characters(tmp_path: Path) -> None:
     app.state.data_root = tmp_path
     client = TestClient(app)

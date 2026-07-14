@@ -358,6 +358,7 @@ test("chinese reader tokens keep pinyin attached to each token", async () => {
   assert.match(lineOne.innerHTML, /token-surface/);
   assert.match(lineOne.innerHTML, /zhè/);
   assert.match(lineOne.innerHTML, /这是/);
+  assert.match(lineOne.innerHTML, /[，。！？,.!?]/);
   assert.doesNotMatch(lineOne.innerHTML, /pinyin-row/);
   assert.ok(browser.document.title.includes("习近平"), "Chinese book title should still render");
 });
@@ -380,10 +381,49 @@ test("reader preview moves the highlight when a different token is clicked", asy
   const tagSpan = createNode("span");
   const vocabPinyin = createNode("div");
   vocabPinyin.querySelectorAll = () => [readingSpan, audioSpan, tagSpan];
+  const fetchCalls = [];
+  const fetchImpl = async (url) => {
+    const parsedUrl = new URL(String(url));
+    fetchCalls.push(parsedUrl.href);
+
+    if (parsedUrl.pathname.endsWith("/books")) {
+      return {
+        ok: true,
+        json: async () => [],
+      };
+    }
+
+    if (parsedUrl.pathname.endsWith("/lexicon/lookup")) {
+      const term = parsedUrl.searchParams.get("term") ?? "";
+      return {
+        ok: true,
+        json: async () => ({
+          entries: [
+            {
+              surface_form: term,
+              pinyin: `mock-${term}`,
+              definition: `Dictionary lookup for ${term}.`,
+              hsk_level: "HSK 2",
+              example_cn: `${term} is used in a mock sentence.`,
+              example_en: `Mock definition for ${term}.`,
+              radical: "示",
+              stroke_count: 7,
+            },
+          ],
+        }),
+      };
+    }
+
+    throw new Error(`Unexpected fetch: ${parsedUrl.href}`);
+  };
 
   const browser = loadPreviewRouter({
     pathname: "/reader-preview.html",
     search: "?book=article-demo-briefing",
+    localStorageSeed: {
+      "textplex.processorBaseUrl": "http://example.test",
+    },
+    fetchImpl,
     selectorMap: {
       ".poem-title": titleNode,
       ".poet": authorNode,
@@ -423,8 +463,163 @@ test("reader preview moves the highlight when a different token is clicked", asy
   assert.ok(selectedAfter, "clicking a token should keep a selection visible");
   assert.equal(selectedAfter.getAttribute("data-token-surface"), targetToken.getAttribute("data-token-surface"));
   assert.equal(vocabChar.textContent, targetToken.getAttribute("data-token-surface"));
-  assert.equal(vocabDefinition.textContent, "Selected token from this sentence.");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.match(vocabDefinition.textContent, new RegExp(`Dictionary lookup for ${targetToken.getAttribute("data-token-surface")}`));
+  assert.match(readingSpan.textContent, new RegExp(`mock-${targetToken.getAttribute("data-token-surface")}`));
+  assert.equal(tagSpan.textContent, "HSK 2");
   assert.ok(readingSpan.textContent.length > 0, "selected token pinyin should stay visible");
+  assert.ok(fetchCalls.some((call) => call.includes("/lexicon/lookup")), "reader preview should request a lexicon lookup");
+});
+
+test("reader preview keeps token-level definitions for non-anchor tokens", async () => {
+  const seededBrowser = loadPreviewData();
+  const api = seededBrowser.window.TextPlexPreview;
+
+  api.createImportedRecord("article", {
+    id: "metadata-book",
+    title: "Metadata Book",
+    author: "Local import",
+    languageCode: "zh",
+    sentences: [
+      {
+        tokens: [
+          { surface: "alpha", romanization: "a1" },
+          { surface: "beta", romanization: "b2", definition_short: "second token definition" },
+          { surface: ".", romanization: "" },
+        ],
+        translation: ["Sentence with two readable tokens."],
+        vocabulary: {
+          surface: "alpha",
+          reading: "a1",
+          tag: "demo",
+          definition: "first token anchor",
+        },
+      },
+    ],
+  });
+
+  const browser = loadPreviewRouter({
+    pathname: "/reader-preview.html",
+    search: "?book=metadata-book",
+    localStorageSeed: seededBrowser.window.localStorage.snapshot(),
+    selectorMap: {
+      ".poem-title": createNode("h1"),
+      ".poet": createNode("p"),
+      ".annotated-line": [createSentenceLineNode(), createNode("div")],
+      ".translation": createNode("div"),
+      ".vocab-char": createNode("h2"),
+      ".vocab-pinyin": Object.assign(createNode("div"), {
+        querySelectorAll: () => [createNode("span"), createNode("span"), createNode("span")],
+      }),
+      ".vocab-definition": createNode("p"),
+      ".example-cn": createNode("p"),
+      ".example-en": createNode("p"),
+      ".button-primary": createNode("button"),
+      ".button-secondary": createNode("button"),
+      ".topbar .icon-btn": [createNode("button")],
+      "button, a": [],
+    },
+    idMap: {
+      readerPager: createPagerNode(),
+    },
+  });
+
+  await browser.window.TextPlexPreviewRouter.ready;
+
+  const lineOne = browser.document.querySelector(".annotated-line");
+  const tokenButtons = lineOne.querySelectorAll(".token");
+  const secondToken = tokenButtons.find((token) => token.getAttribute("data-token-surface") === "beta");
+
+  assert.ok(secondToken, "the second token should exist");
+  secondToken.click();
+
+  assert.equal(browser.document.querySelector(".vocab-definition").textContent, "second token definition");
+  assert.equal(browser.document.querySelector(".vocab-char").textContent, "beta");
+});
+
+test("reader preview shows a not-found state when the lookup misses", async () => {
+  const seededBrowser = loadPreviewData();
+  const api = seededBrowser.window.TextPlexPreview;
+
+  api.createImportedRecord("article", {
+    id: "missing-lookup-book",
+    title: "Missing Lookup Book",
+    author: "Local import",
+    languageCode: "zh",
+    sentences: [
+      {
+        tokens: [
+          { surface: "alpha", romanization: "a1" },
+          { surface: "missing", romanization: "m1" },
+          { surface: ".", romanization: "" },
+        ],
+        translation: ["Sentence with a missing lookup."],
+        vocabulary: {
+          surface: "alpha",
+          reading: "a1",
+          tag: "demo",
+          definition: "first token anchor",
+        },
+      },
+    ],
+  });
+
+  const fetchCalls = [];
+  const browser = loadPreviewRouter({
+    pathname: "/reader-preview.html",
+    search: "?book=missing-lookup-book",
+    localStorageSeed: {
+      ...seededBrowser.window.localStorage.snapshot(),
+      "textplex.processorBaseUrl": "http://processor.test",
+    },
+    fetchImpl: async (url) => {
+      const href = String(url);
+      fetchCalls.push(href);
+      if (href.includes("/lexicon/lookup")) {
+        return {
+          ok: true,
+          json: async () => ({ query: "missing", language_code: "zh", entries: [] }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => null,
+      };
+    },
+    selectorMap: {
+      ".poem-title": createNode("h1"),
+      ".poet": createNode("p"),
+      ".annotated-line": [createSentenceLineNode(), createNode("div")],
+      ".translation": createNode("div"),
+      ".vocab-char": createNode("h2"),
+      ".vocab-pinyin": Object.assign(createNode("div"), {
+        querySelectorAll: () => [createNode("span"), createNode("span"), createNode("span")],
+      }),
+      ".vocab-definition": createNode("p"),
+      ".example-cn": createNode("p"),
+      ".example-en": createNode("p"),
+      ".button-primary": createNode("button"),
+      ".button-secondary": createNode("button"),
+      ".topbar .icon-btn": [createNode("button")],
+      "button, a": [],
+    },
+    idMap: {
+      readerPager: createPagerNode(),
+    },
+  });
+
+  await browser.window.TextPlexPreviewRouter.ready;
+
+  const lineOne = browser.document.querySelector(".annotated-line");
+  const tokenButtons = lineOne.querySelectorAll(".token");
+  const missingToken = tokenButtons.find((token) => token.getAttribute("data-token-surface") === "missing");
+
+  assert.ok(missingToken, "the missing token should exist");
+  missingToken.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(browser.document.querySelector(".vocab-definition").textContent, "No dictionary entry found in imported lexicon.");
+  assert.ok(fetchCalls.some((call) => call.includes("/lexicon/lookup")), "reader preview should still try the lexicon lookup");
 });
 
 test("import preview exposes a visible processor URL control", async () => {

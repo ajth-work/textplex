@@ -3,6 +3,7 @@ export interface BookRecord {
   title: string;
   author: string | null;
   language_code: string;
+  ocr_provider?: "local" | "openai";
   source_filename: string;
   source_path: string;
   source_sha256: string;
@@ -249,6 +250,7 @@ export interface BookExtractionTriggerRequest {
   page_start: number;
   page_count: number | null;
   force?: boolean;
+  ocr_provider?: "local" | "openai";
 }
 
 export interface AnalysisLexicalEntrySummary {

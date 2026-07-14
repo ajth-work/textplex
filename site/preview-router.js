@@ -438,9 +438,13 @@ function wireReaderPreview() {
   const exampleEn = document.querySelector(".example-en");
   const saveButton = document.querySelector(".button-primary");
   const moreButton = document.querySelector(".button-secondary");
+  const processorBaseUrl = previewData?.getProcessorBaseUrl?.() ?? "";
   const pageStateKey = `textplex:reader-page:${bookId}`;
   const sentenceStateKey = `textplex:reader-sentence:${bookId}`;
   const tokenStateKey = (page, sentence) => `textplex:reader-token:${bookId}:${page}:${sentence}`;
+  const tokenLookupCache = new Map();
+  const tokenLookupPending = new Map();
+  let activeTokenLookupKey = "";
   const pages = Array.isArray(profile.pages) && profile.pages.length
     ? profile.pages
     : Array.isArray(profile.sentences)
@@ -484,6 +488,9 @@ function wireReaderPreview() {
       vocabulary: null,
     };
     const selectedTokenIndex = resolveSelectedTokenIndex(sentence, pageIndex, sentenceIndex);
+    const selectedTokenLookupKey = buildTokenLookupKey(sentence, selectedTokenIndex);
+    activeTokenLookupKey = selectedTokenLookupKey;
+    void ensureSelectedTokenLookup(sentence, selectedTokenIndex);
     const selectedTokenState = buildSelectedTokenState(sentence, selectedTokenIndex);
 
     if (title) {
@@ -494,31 +501,7 @@ function wireReaderPreview() {
     }
     if (lines[0]) {
       const phonetics = Array.isArray(sentence.phonetics) ? sentence.phonetics : [];
-      const tokenMarkup = Array.isArray(sentence.tokens)
-        ? sentence.tokens
-            .map((token, index) => {
-              const surface = String(token?.surface ?? "");
-              const phonetic = String(phonetics[index] ?? "");
-              const punctuation = isTokenPunctuation(surface);
-              const highlighted = index === selectedTokenIndex;
-              return `
-                <button
-                  class="token${highlighted ? " is-selected" : ""}${punctuation ? " punctuation" : ""}"
-                  type="button"
-                  data-token-index="${index}"
-                  data-token-surface="${escapeHtml(surface)}"
-                  data-token-reading="${escapeHtml(phonetic)}"
-                  data-token-punctuation="${punctuation ? "true" : "false"}"
-                  aria-pressed="${highlighted ? "true" : "false"}"
-                  ${punctuation ? 'disabled aria-disabled="true"' : ""}
-                >
-                  <span class="token-reading">${escapeHtml(phonetic)}</span>
-                  <span class="token-surface">${escapeHtml(surface)}</span>
-                </button>
-              `;
-            })
-            .join("")
-        : "";
+      const tokenMarkup = buildSentenceTokenMarkup(sentence, phonetics, selectedTokenIndex);
 
       lines[0].style.display = "";
       lines[0].innerHTML = `<div class="sentence-row" aria-label="${escapeHtml(profile.title)} page ${pageIndex + 1} sentence ${sentenceIndex + 1}">${tokenMarkup}</div>`;
@@ -562,7 +545,7 @@ function wireReaderPreview() {
         parts[1].hidden = false;
       }
       if (parts[2]) {
-        parts[2].textContent = selectedTokenState.tag ?? profile.kindLabel ?? "demo";
+        parts[2].textContent = formatLevelTag(selectedTokenState.tag ?? profile.kindLabel ?? "demo");
       }
     }
     if (vocabDefinition) {
@@ -663,7 +646,7 @@ function wireReaderPreview() {
     const phonetics = Array.isArray(sentence.phonetics) ? sentence.phonetics : [];
     const token = tokens[index] ?? tokens.find((candidate) => !isTokenPunctuation(candidate?.surface ?? "")) ?? tokens[0] ?? {};
     const surface = String(token?.surface ?? sentence.vocabulary?.surface ?? "");
-    const reading = String(phonetics[index] ?? sentence.vocabulary?.reading ?? "");
+    const reading = String(token?.romanization ?? token?.pronunciation ?? phonetics[index] ?? sentence.vocabulary?.reading ?? "");
     const matchedVocabulary = normalizeText(surface) && normalizeText(surface) === normalizeText(sentence.vocabulary?.surface ?? "");
 
     if (matchedVocabulary && sentence.vocabulary) {
@@ -671,10 +654,46 @@ function wireReaderPreview() {
         ...sentence.vocabulary,
         surface: sentence.vocabulary.surface ?? surface,
         reading: sentence.vocabulary.reading ?? reading,
-        tag: sentence.vocabulary.tag ?? profile.kindLabel ?? "demo",
+        tag: formatLevelTag(sentence.vocabulary.tag ?? profile.kindLabel ?? "demo"),
         definition: sentence.vocabulary.definition ?? "Synthetic sentence preview.",
         exampleCn: sentence.vocabulary.exampleCn ?? "",
         exampleEn: sentence.vocabulary.exampleEn ?? "",
+      };
+    }
+
+    const tokenDefinition = String(token?.definition_short ?? token?.definition ?? "");
+    const tokenTag = formatLevelTag(token?.proficiency_level ?? token?.hsk_level ?? profile.kindLabel ?? "Selected");
+    if (tokenDefinition) {
+      return {
+        surface,
+        reading,
+        tag: tokenTag,
+        definition: tokenDefinition,
+        exampleCn: String(token?.example_cn ?? token?.exampleCn ?? ""),
+        exampleEn: String(token?.example_en ?? token?.exampleEn ?? ""),
+        lemma: String(token?.lemma ?? token?.surface_form ?? surface ?? ""),
+        radical: token?.radical ?? null,
+        strokeCount: token?.stroke_count ?? token?.strokeCount ?? null,
+      };
+    }
+
+    const lookupKey = buildTokenLookupKey(sentence, index);
+    const lexiconEntry = lookupKey ? tokenLookupCache.get(lookupKey) ?? null : null;
+    if (lexiconEntry) {
+      return buildLexiconTokenState(lexiconEntry, surface, reading);
+    }
+
+    if (token?.romanization || token?.pronunciation || token?.lemma) {
+      return {
+        surface,
+        reading,
+        tag: tokenTag,
+        definition: lookupKey && tokenLookupPending.has(lookupKey) ? "Looking up dictionary entry..." : "No dictionary entry found in imported lexicon.",
+        exampleCn: "",
+        exampleEn: "",
+        lemma: String(token?.lemma ?? token?.surface_form ?? surface ?? ""),
+        radical: token?.radical ?? null,
+        strokeCount: token?.stroke_count ?? token?.strokeCount ?? null,
       };
     }
 
@@ -682,10 +701,120 @@ function wireReaderPreview() {
       surface,
       reading,
       tag: profile.kindLabel ?? "Selected",
-      definition: "Selected token from this sentence.",
-      exampleCn: surface ? `Selected token: ${surface}` : "",
-      exampleEn: "Tap another token to change the selection.",
+      definition: lookupKey && tokenLookupPending.has(lookupKey) ? "Looking up dictionary entry..." : "No dictionary entry found in imported lexicon.",
+      exampleCn: "",
+      exampleEn: "",
     };
+  }
+
+  function buildTokenLookupKey(sentence, index) {
+    const tokens = Array.isArray(sentence.tokens) ? sentence.tokens : [];
+    const token = tokens[index] ?? tokens.find((candidate) => !isTokenPunctuation(candidate?.surface ?? "")) ?? tokens[0] ?? {};
+    const surface = String(token?.surface ?? "").trim();
+    if (!surface || isTokenPunctuation(surface)) {
+      return "";
+    }
+
+    return `${String(profile.languageCode ?? "zh")}:${normalizeText(surface)}`;
+  }
+
+  function buildLexiconTokenState(entry, surface, reading) {
+    return {
+      surface: String(entry?.surface_form ?? surface ?? ""),
+      reading: String(entry?.pinyin ?? reading ?? ""),
+        tag: formatLevelTag(entry?.hsk_level ?? profile.kindLabel ?? "demo"),
+      definition: String(entry?.definition ?? `Dictionary entry for ${surface}.`),
+      exampleCn: String(entry?.example_cn ?? entry?.exampleCn ?? ""),
+      exampleEn: String(entry?.example_en ?? entry?.exampleEn ?? ""),
+      radical: entry?.radical ?? null,
+      strokeCount: entry?.stroke_count ?? entry?.strokeCount ?? null,
+    };
+  }
+
+  function ensureSelectedTokenLookup(sentence, index) {
+    const lookupKey = buildTokenLookupKey(sentence, index);
+    if (!lookupKey || tokenLookupCache.has(lookupKey) || tokenLookupPending.has(lookupKey) || !processorBaseUrl || typeof window.fetch !== "function") {
+      return;
+    }
+
+    const tokens = Array.isArray(sentence.tokens) ? sentence.tokens : [];
+    const token = tokens[index] ?? tokens.find((candidate) => !isTokenPunctuation(candidate?.surface ?? "")) ?? tokens[0] ?? {};
+    const surface = String(token?.surface ?? "").trim();
+    if (!surface) {
+      return;
+    }
+
+    const request = fetchJsonMaybeWithTimeout(
+      () =>
+        window.fetch(buildLexiconLookupUrl(processorBaseUrl, profile.languageCode ?? "zh", surface), {
+          headers: { Accept: "application/json" },
+        }),
+      2500,
+    )
+      .then((payload) => {
+        const entry = Array.isArray(payload?.entries) ? payload.entries[0] ?? null : null;
+        tokenLookupCache.set(lookupKey, entry);
+        return entry;
+      })
+      .finally(() => {
+        tokenLookupPending.delete(lookupKey);
+        if (activeTokenLookupKey === lookupKey) {
+          render();
+        }
+      });
+
+    tokenLookupPending.set(lookupKey, request);
+  }
+
+  function fetchJsonMaybeWithTimeout(fetchFactory, timeoutMs = 2500) {
+    let settled = false;
+    let timeoutId = null;
+
+    return new Promise((resolve) => {
+      const complete = (value) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
+        resolve(value);
+      };
+
+      timeoutId = window.setTimeout(() => complete(null), timeoutMs);
+
+      Promise.resolve()
+        .then(fetchFactory)
+        .then((response) => (response && response.ok ? response.json() : null))
+        .then((payload) => complete(payload))
+        .catch(() => complete(null));
+    });
+  }
+
+  function buildLexiconLookupUrl(baseUrl, languageCode, term) {
+    const url = new URL("/lexicon/lookup", baseUrl);
+    url.searchParams.set("language_code", String(languageCode ?? "zh"));
+    url.searchParams.set("term", String(term ?? ""));
+    return url.href;
+  }
+
+  function formatLevelTag(value) {
+    const text = String(value ?? "").trim();
+    if (!text) {
+      return "demo";
+    }
+
+    const normalized = text.replace(/^HSK\s*/i, "").trim();
+    if (/^\d+(?:\.\d+)?$/.test(normalized)) {
+      return `HSK ${normalized}`;
+    }
+
+    if (/^HSK\s+\d+(?:\.\d+)?$/i.test(text)) {
+      return text.replace(/\s+/g, " ").replace(/^hsk/i, "HSK");
+    }
+
+    return text;
   }
 }
 
@@ -956,6 +1085,7 @@ function wireImportPreview() {
   const recentList = document.querySelector(".recent-list");
   const processorInput = document.getElementById("processorBaseUrl");
   const processorStatus = document.getElementById("processorStatus");
+  const ocrModeButtons = Array.from(document.querySelectorAll("[data-ocr-provider]"));
   const importStatusCard = document.querySelector(".import-status-card");
   const importStatusBadge = document.getElementById("importStatusBadge");
   const importStatusText = document.getElementById("importStatusText");
@@ -969,6 +1099,9 @@ function wireImportPreview() {
   if (processorInput && previewData?.getProcessorBaseUrl) {
     processorInput.value = previewData.getProcessorBaseUrl();
     updateProcessorStatus(processorStatus, processorInput.value);
+  }
+  if (ocrModeButtons.length && previewData?.getOcrProvider) {
+    syncOcrModeToggle(previewData.getOcrProvider());
   }
 
   setImportActivity("selected", "Select a PDF to start the processor upload.", {
@@ -984,6 +1117,14 @@ function wireImportPreview() {
 
     previewData.setProcessorBaseUrl(processorInput.value.trim());
     updateProcessorStatus(processorStatus, processorInput.value);
+  }
+
+  function syncOcrModeToggle(provider) {
+    const resolved = resolveOcrProvider(provider);
+    ocrModeButtons.forEach((button) => {
+      const next = resolveOcrProvider(button.getAttribute("data-ocr-provider"));
+      button.classList.toggle("is-active", next === resolved);
+    });
   }
 
   async function refreshProcessorData() {
@@ -1161,6 +1302,7 @@ function wireImportPreview() {
         authorCn: uploadResult.authorCn ?? uploadResult.author ?? "Local import",
         languageCode: uploadResult.languageCode ?? "zh",
         kindLabel: uploadResult.kindLabel ?? "TXT",
+        ocrProvider: previewData?.getOcrProvider?.() || "local",
         profileLabel: uploadResult.profileLabel ?? "Local",
         summary: uploadResult.summary ?? `Imported from ${file.name || "a PDF file"}.`,
         recentReading: Array.isArray(uploadResult.recentReading) ? uploadResult.recentReading : [],
@@ -1200,6 +1342,14 @@ function wireImportPreview() {
       if (processorStatus) {
         processorStatus.textContent = `Processor URL saved: ${previewData?.getProcessorBaseUrl?.() || "not set"}`;
       }
+    });
+  });
+
+  ocrModeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const provider = resolveOcrProvider(button.getAttribute("data-ocr-provider"));
+      previewData?.setOcrProvider?.(provider);
+      syncOcrModeToggle(provider);
     });
   });
 
@@ -1260,6 +1410,7 @@ async function uploadPdfToProcessor(file) {
   formData.append("language_code", "zh");
   formData.append("title", stripPdfExtension(file.name || "Imported PDF"));
   formData.append("author", "Local import");
+  formData.append("ocr_provider", previewData?.getOcrProvider?.() || "local");
 
   const response = await window.fetch(`${baseUrl}/books/upload`, {
     method: "POST",
@@ -1286,6 +1437,11 @@ function updateProcessorStatus(node, value) {
 
 function stripPdfExtension(value) {
   return String(value ?? "").replace(/\.pdf$/i, "").trim() || "Imported PDF";
+}
+
+function resolveOcrProvider(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "openai" ? "openai" : "local";
 }
 
 function setStat(node, value, label) {
@@ -1637,6 +1793,73 @@ function formatDate(value) {
 
 function capitalize(value) {
   return String(value ?? "").charAt(0).toUpperCase() + String(value ?? "").slice(1);
+}
+
+function buildSentenceTokenMarkup(sentence, phonetics, selectedTokenIndex) {
+  const tokens = Array.isArray(sentence?.tokens) ? sentence.tokens : [];
+  const text = String(sentence?.text ?? "");
+  let cursor = 0;
+  const chunks = [];
+
+  tokens.forEach((token, index) => {
+    const surface = String(token?.surface ?? "");
+    const phonetic = String(phonetics[index] ?? "");
+    const punctuation = isTokenPunctuation(surface);
+    const highlighted = index === selectedTokenIndex;
+    const matchIndex = surface ? text.indexOf(surface, cursor) : -1;
+
+    if (matchIndex > cursor) {
+      chunks.push(renderPunctuationChunk(text.slice(cursor, matchIndex)));
+    }
+
+    chunks.push(`
+      <button
+        class="token${highlighted ? " is-selected" : ""}${punctuation ? " punctuation" : ""}"
+        type="button"
+        data-token-index="${index}"
+        data-token-surface="${escapeHtml(surface)}"
+        data-token-reading="${escapeHtml(phonetic)}"
+        data-token-punctuation="${punctuation ? "true" : "false"}"
+        aria-pressed="${highlighted ? "true" : "false"}"
+        ${punctuation ? 'disabled aria-disabled="true"' : ""}
+      >
+        <span class="token-reading">${escapeHtml(phonetic)}</span>
+        <span class="token-surface">${escapeHtml(surface)}</span>
+      </button>
+    `);
+
+    if (matchIndex >= 0) {
+      cursor = matchIndex + surface.length;
+    }
+  });
+
+  if (cursor < text.length) {
+    chunks.push(renderPunctuationChunk(text.slice(cursor)));
+  }
+
+  return chunks.join("");
+}
+
+function renderPunctuationChunk(value) {
+  const text = String(value ?? "");
+  if (!text) {
+    return "";
+  }
+
+  return Array.from(text)
+    .map((character) => {
+      if (/^\s+$/.test(character)) {
+        return "";
+      }
+
+      return `
+        <span class="token punctuation" aria-hidden="true">
+          <span class="token-reading"></span>
+          <span class="token-surface">${escapeHtml(character)}</span>
+        </span>
+      `;
+    })
+    .join("");
 }
 
 function createToast() {

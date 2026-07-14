@@ -18,6 +18,7 @@ from app.services.book_sources import (
     load_text_fixture_pages,
     render_text_page_image,
 )
+from app.services.ocr import normalize_ocr_provider
 
 
 def _utc_now() -> str:
@@ -150,6 +151,7 @@ def import_book_from_path(
     source_path: str | Path,
     *,
     language_code: str,
+    ocr_provider: str = "local",
     title: str | None = None,
     author: str | None = None,
     source_filename: str | None = None,
@@ -196,6 +198,7 @@ def import_book_from_path(
         title=_safe_text(title, _safe_text(source_title, resolved_source_path.stem)),
         author=_optional_text(author) or _optional_text(source_author),
         language_code=language_code,
+        ocr_provider=normalize_ocr_provider(ocr_provider),
         source_filename=_safe_text(source_filename, resolved_source_path.name),
         source_path=str(resolved_source_path),
         source_sha256=source_sha256,

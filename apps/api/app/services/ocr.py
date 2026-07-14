@@ -11,16 +11,30 @@ from urllib.request import Request, urlopen
 logger = logging.getLogger(__name__)
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
-DEFAULT_OCR_MODEL = "gpt-5.4-nano"
+DEFAULT_OCR_MODEL = "gpt-5.4-mini"
 DEFAULT_MAX_OUTPUT_TOKENS = 2048
+DEFAULT_OCR_PROVIDER = "local"
 OCR_PROMPT_VERSION = "ocr-v1"
 PYPDF_TEXT_SIGNATURE = "pypdf-text-v1"
+SUPPORTED_OCR_PROVIDERS = {"local", "openai"}
 
 
-def should_use_openai_ocr() -> bool:
-    provider = os.getenv("AI_PROVIDER", "").strip().lower()
+def normalize_ocr_provider(provider: str | None = None) -> str:
+    candidate = (provider or "").strip().lower()
+    if candidate in SUPPORTED_OCR_PROVIDERS:
+        return candidate
+
+    env_provider = os.getenv("AI_PROVIDER", "").strip().lower()
+    if env_provider in SUPPORTED_OCR_PROVIDERS:
+        return env_provider
+
+    return DEFAULT_OCR_PROVIDER
+
+
+def should_use_openai_ocr(provider: str | None = None) -> bool:
+    resolved_provider = normalize_ocr_provider(provider)
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    return provider == "openai" and bool(api_key)
+    return resolved_provider == "openai" and bool(api_key)
 
 
 def get_openai_ocr_model() -> str:
@@ -36,8 +50,8 @@ def get_openai_max_output_tokens() -> int:
         return DEFAULT_MAX_OUTPUT_TOKENS
 
 
-def get_text_source_signature() -> tuple[str, str]:
-    if should_use_openai_ocr():
+def get_text_source_signature(provider: str | None = None) -> tuple[str, str]:
+    if should_use_openai_ocr(provider):
         model = get_openai_ocr_model()
         return "openai", f"openai:{model}:{OCR_PROMPT_VERSION}"
     return "pypdf", PYPDF_TEXT_SIGNATURE
@@ -48,7 +62,8 @@ def build_ocr_prompt(*, book_title: str | None, language_code: str, page_number:
     return (
         f"Transcribe the visible text from page {page_number} of {title}.\n"
         f"Language code: {language_code}.\n"
-        "Preserve the original wording, punctuation, and reading order as faithfully as possible.\n"
+        "Preserve the original wording, punctuation, line breaks, and reading order as faithfully as possible.\n"
+        "If the page ends mid-sentence, transcribe only the visible fragment and do not add ending punctuation.\n"
         "Do not translate, summarize, explain, or rewrite the content.\n"
         "Return only the transcription text."
     )
@@ -109,7 +124,9 @@ def transcribe_page_image(
                         "type": "input_text",
                         "text": (
                             "You transcribe scanned book pages for downstream sentence parsing. "
-                            "Preserve the visible text exactly. Do not translate, summarize, or explain. "
+                            "Preserve the visible text exactly, including punctuation and line breaks. "
+                            "Do not invent missing text or punctuation at the page boundary. "
+                            "Do not translate, summarize, or explain. "
                             "Output only the transcription."
                         ),
                     }
@@ -168,8 +185,10 @@ def resolve_page_text(
     book_title: str | None,
     language_code: str,
     page_number: int,
+    ocr_provider: str | None = None,
 ) -> tuple[str, str, str]:
-    if should_use_openai_ocr():
+    resolved_provider = normalize_ocr_provider(ocr_provider)
+    if should_use_openai_ocr(resolved_provider):
         try:
             text = transcribe_page_image(
                 page_image_path=page_image_path,
@@ -180,5 +199,7 @@ def resolve_page_text(
             return text, "openai", f"openai:{get_openai_ocr_model()}:{OCR_PROMPT_VERSION}"
         except Exception:
             logger.exception("OpenAI OCR failed for page %s; falling back to embedded PDF text.", page_number)
+    elif resolved_provider == "openai":
+        logger.warning("OpenAI OCR was requested for page %s but OPENAI_API_KEY is missing; falling back to embedded PDF text.", page_number)
 
     return fallback_text, "pypdf", PYPDF_TEXT_SIGNATURE

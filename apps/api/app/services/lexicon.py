@@ -427,3 +427,53 @@ def lookup_lexicon_pinyin_map(
                         pinyin_map.setdefault(term, " ".join(romanized_tokens))
 
     return pinyin_map
+
+
+def lookup_lexicon_entry_map(
+    *,
+    data_root: Path,
+    language_code: str,
+    terms: Iterable[str],
+) -> dict[str, LexiconEntryRecord]:
+    normalized_terms = [term.strip() for term in terms if isinstance(term, str) and term.strip()]
+    if not normalized_terms:
+        return {}
+
+    _ensure_seeded_lexicon(data_root)
+    db_path = ensure_lexicon_database(data_root)
+    placeholders = ", ".join("?" for _ in normalized_terms)
+    with sqlite3.connect(db_path) as connection:
+        connection.row_factory = sqlite3.Row
+        rows = connection.execute(
+            f"""
+            SELECT id, language_code, entry_type, surface_form, pinyin, tone, definition, radical, stroke_count, hsk_level, frequency_rank, note, source_name, source_path
+            FROM lexicon_entries
+            WHERE language_code = ? AND surface_form IN ({placeholders})
+            ORDER BY CASE entry_type WHEN 'word' THEN 0 ELSE 1 END, frequency_rank IS NULL, frequency_rank ASC, id ASC
+            """,
+            [language_code, *normalized_terms],
+        ).fetchall()
+
+    entry_map: dict[str, LexiconEntryRecord] = {}
+    for row in rows:
+        surface_form = row["surface_form"]
+        if not surface_form or surface_form in entry_map:
+            continue
+        entry_map[surface_form] = LexiconEntryRecord(
+            id=row["id"],
+            language_code=row["language_code"],
+            entry_type=row["entry_type"],
+            surface_form=surface_form,
+            pinyin=row["pinyin"],
+            tone=row["tone"],
+            definition=row["definition"],
+            radical=row["radical"],
+            stroke_count=row["stroke_count"],
+            hsk_level=row["hsk_level"],
+            frequency_rank=row["frequency_rank"],
+            note=row["note"],
+            source_name=row["source_name"],
+            source_path=row["source_path"],
+        )
+
+    return entry_map

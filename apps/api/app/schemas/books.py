@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from processor.contracts import PageExtractionResult
+
+OcrProviderMode = Literal["local", "openai"]
 
 
 class BookImportRequest(BaseModel):
@@ -12,6 +16,7 @@ class BookImportRequest(BaseModel):
     author: str | None = None
     page_start: int = Field(default=1, ge=1)
     page_count: int | None = Field(default=None, ge=1)
+    ocr_provider: OcrProviderMode = Field(default="local")
 
 
 class TextParseRequest(BaseModel):
@@ -28,6 +33,7 @@ class BookExtractionRequest(BaseModel):
     page_start: int = Field(default=1, ge=1)
     page_count: int | None = Field(default=None, ge=1)
     force: bool = False
+    ocr_provider: OcrProviderMode | None = Field(default=None)
 
 
 class PageExtractionArtifact(BaseModel):
@@ -60,6 +66,7 @@ class BookRecord(BaseModel):
     title: str
     author: str | None = None
     language_code: str
+    ocr_provider: OcrProviderMode = "local"
     source_filename: str
     source_path: str
     source_sha256: str

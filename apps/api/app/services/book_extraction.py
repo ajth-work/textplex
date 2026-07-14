@@ -13,8 +13,8 @@ from app.services.book_registry import import_book_from_path, load_registry, sav
 from app.services.book_sources import is_text_fixture_source, load_text_fixture_pages
 from app.services.book_sources import write_text_fixture_source
 from app.services.ocr import get_text_source_signature, resolve_page_text
-from app.services.lexicon import lookup_lexicon_pinyin_map
-from processor import build_book_extraction_result, build_page_extraction_result
+from app.services.lexicon import lookup_lexicon_entry_map, lookup_lexicon_pinyin_map
+from processor import build_book_extraction_result, build_page_extraction_result, stitch_page_sentence_carryover
 from processor.contracts import PageExtractionResult
 
 FIXTURE_TEXT_SOURCE = "fixture"
@@ -65,7 +65,7 @@ def parse_text_into_page_artifact(
         raw_text=text,
         source_page_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
     )
-    page_result = _enrich_page_romanization(
+    page_result = _enrich_page_lexicon_metadata(
         page_result,
         data_root=lexicon_root,
     )
@@ -113,6 +113,7 @@ def import_text_into_book(
         page_count=book.total_pages,
         force=True,
         data_root=books_root,
+        ocr_provider="local",
     )
 
     book.extraction_status = "complete"
@@ -147,7 +148,7 @@ def _page_image_hash(page_image_path: Path) -> str:
     return hashlib.sha256(page_image_path.read_bytes()).hexdigest()
 
 
-def _enrich_page_romanization(page_result: PageExtractionResult, *, data_root: Path) -> PageExtractionResult:
+def _enrich_page_lexicon_metadata(page_result: PageExtractionResult, *, data_root: Path) -> PageExtractionResult:
     if page_result.language_code.lower() != "zh":
         return page_result
 
@@ -157,20 +158,38 @@ def _enrich_page_romanization(page_result: PageExtractionResult, *, data_root: P
         for token in sentence.tokens
         if token.surface_form
     }
+    lexicon_entries = lookup_lexicon_entry_map(
+        data_root=data_root,
+        language_code=page_result.language_code,
+        terms=surface_forms,
+    )
     pinyin_map = lookup_lexicon_pinyin_map(
         data_root=data_root,
         language_code=page_result.language_code,
         terms=surface_forms,
     )
-    if not pinyin_map:
+    if not pinyin_map and not lexicon_entries:
         return page_result
 
     sentences = []
     for sentence in page_result.sentences:
         tokens = []
         for token in sentence.tokens:
-            romanization = token.romanization or pinyin_map.get(token.surface_form)
-            tokens.append(token.model_copy(update={"romanization": romanization}))
+            exact_entry = lexicon_entries.get(token.surface_form)
+            romanization = token.romanization or (exact_entry.pinyin if exact_entry else None) or pinyin_map.get(token.surface_form)
+            definition_short = token.definition_short or (exact_entry.definition if exact_entry else None)
+            proficiency_level = token.proficiency_level or (exact_entry.hsk_level if exact_entry else None)
+            proficiency_system = token.proficiency_system or ("HSK" if exact_entry and exact_entry.hsk_level else None)
+            tokens.append(
+                token.model_copy(
+                    update={
+                        "romanization": romanization,
+                        "definition_short": definition_short,
+                        "proficiency_level": proficiency_level,
+                        "proficiency_system": proficiency_system,
+                    }
+                )
+            )
         sentences.append(sentence.model_copy(update={"tokens": tokens}))
 
     return page_result.model_copy(update={"sentences": sentences})
@@ -182,6 +201,7 @@ def extract_book_pages(
     page_start: int = 1,
     page_count: int | None = None,
     force: bool = False,
+    ocr_provider: str | None = None,
     data_root: Path | None = None,
 ) -> tuple[PageExtractionArtifact, ...]:
     data_root = data_root or get_books_root()
@@ -198,10 +218,11 @@ def extract_book_pages(
     current_text_source, current_text_source_signature = (
         (FIXTURE_TEXT_SOURCE, FIXTURE_TEXT_SIGNATURE)
         if fixture_pages is not None
-        else get_text_source_signature()
+        else get_text_source_signature(ocr_provider or book.ocr_provider)
     )
 
-    artifacts: list[PageExtractionArtifact] = []
+    page_results: list[PageExtractionResult] = []
+    artifact_meta: list[tuple[str, str, str, PageExtractionResult]] = []
     for page_number in range(start_page, end_page + 1):
         page_image_path = pages_root / f"page-{page_number:04d}.png"
         page_hash = _page_image_hash(page_image_path)
@@ -214,7 +235,12 @@ def extract_book_pages(
             and existing_artifact.text_source == current_text_source
             and existing_artifact.text_source_signature == current_text_source_signature
         ):
-            artifacts.append(existing_artifact)
+            page_result = existing_artifact.page.model_copy(deep=True)
+            page_result = _enrich_page_lexicon_metadata(page_result, data_root=lexicon_root)
+            page_results.append(page_result)
+            artifact_meta.append(
+                (page_hash, existing_artifact.text_source, existing_artifact.text_source_signature, page_result)
+            )
             continue
 
         if fixture_pages is not None:
@@ -230,6 +256,7 @@ def extract_book_pages(
                 book_title=book.title,
                 language_code=book.language_code,
                 page_number=page_number,
+                ocr_provider=ocr_provider or book.ocr_provider,
             )
         page_result = build_page_extraction_result(
             book_id=book.id,
@@ -238,7 +265,13 @@ def extract_book_pages(
             raw_text=raw_text,
             source_page_sha256=page_hash,
         )
-        page_result = _enrich_page_romanization(page_result, data_root=lexicon_root)
+        page_result = _enrich_page_lexicon_metadata(page_result, data_root=lexicon_root)
+        page_results.append(page_result)
+        artifact_meta.append((page_hash, text_source, text_source_signature, page_result))
+
+    stitched_pages = stitch_page_sentence_carryover(page_results)
+    artifacts: list[PageExtractionArtifact] = []
+    for page_result, (page_hash, text_source, text_source_signature, _original_page_result) in zip(stitched_pages, artifact_meta):
         artifact = PageExtractionArtifact(
             source_page_sha256=page_hash,
             text_source=text_source,
@@ -247,6 +280,7 @@ def extract_book_pages(
             pipeline_version=page_result.pipeline_version,
             page=page_result,
         )
+        artifact_path = _page_artifact_path(book.id, page_result.page_number, data_root)
         _save_page_artifact(artifact_path, artifact)
         artifacts.append(artifact)
 
@@ -259,6 +293,7 @@ def extract_book_text(
     page_start: int = 1,
     page_count: int | None = None,
     force: bool = False,
+    ocr_provider: str | None = None,
     data_root: Path | None = None,
 ) -> tuple[Path, int]:
     data_root = data_root or get_books_root()
@@ -267,6 +302,7 @@ def extract_book_text(
         page_start=page_start,
         page_count=page_count,
         force=force,
+        ocr_provider=ocr_provider,
         data_root=data_root,
     )
     pages = [artifact.page for artifact in artifacts]

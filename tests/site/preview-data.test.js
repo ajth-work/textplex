@@ -125,7 +125,7 @@ test("preview data hydrates live books from the processor API", async () => {
                 order: 1,
                 text: "这是一个测试。",
                 tokens: [
-                  { surface_form: "这", romanization: "zhè" },
+                  { surface_form: "这", romanization: "zhè", definition_short: "this" },
                   { surface_form: "是", romanization: "shì" },
                   { surface_form: "一个", romanization: "yí gè" },
                   { surface_form: "测试", romanization: "cè shì" },
@@ -251,6 +251,7 @@ test("preview data hydrates live books from the processor API", async () => {
   assert.equal(readerProfile.sentences.length, 3, "live reader preview should expose the fetched pages");
   assert.match(readerProfile.sentences[0].tokens.map((token) => token.surface).join(""), /这是一个测试/);
   assert.equal(readerProfile.sentences[0].vocabulary.reading, "zhè shì");
+
 
   const libraryProfile = api.getLibraryProfile("api-book");
   assert.equal(libraryProfile.kindLabel, "TXT");

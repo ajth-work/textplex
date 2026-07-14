@@ -258,6 +258,13 @@
                 <span>Book title</span>
                 <input id="bookTitle" type="text" placeholder="three-body-mini-slice" />
               </label>
+              <div class="field">
+                <span>OCR mode</span>
+                <div class="segmented-control" id="ocrModeToggle" role="tablist" aria-label="OCR mode">
+                  <button class="segmented-option is-active" type="button" data-ocr-provider="local">Local OCR</button>
+                  <button class="segmented-option" type="button" data-ocr-provider="openai">OpenAI OCR</button>
+                </div>
+              </div>
               <label class="field">
                 <span>PDF file</span>
                 <input id="pdfFile" type="file" accept="application/pdf,.pdf" />

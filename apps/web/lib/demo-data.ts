@@ -231,15 +231,67 @@ function makeToken(surfaceForm: string, languageCode: string, definitionShort: s
 }
 
 function makeSentence(sentence: SentenceSpec, languageCode: string): SentenceResult {
+  const tokensWithPunctuation = insertPunctuationTokens(sentence.text, sentence.tokens);
   return {
     order: 0,
     text: sentence.text,
-    tokens: sentence.tokens.map((token, index) => ({
+    tokens: tokensWithPunctuation.map((token, index) => ({
       ...makeToken(token.surface_form, languageCode, token.definition_short ?? null),
       order: index + 1,
     })),
     grammar_patterns: [],
   };
+}
+
+function insertPunctuationTokens(text: string, tokens: TokenSpec[]): TokenSpec[] {
+  if (!Array.isArray(tokens) || tokens.length === 0) {
+    return tokens;
+  }
+
+  if (tokens.some((token) => isPunctuationSurface(token.surface_form))) {
+    return tokens;
+  }
+
+  const source = String(text ?? "");
+  if (!source) {
+    return tokens;
+  }
+
+  const merged: TokenSpec[] = [];
+  let cursor = 0;
+
+  for (const token of tokens) {
+    const surface = String(token.surface_form ?? "");
+    const matchIndex = surface ? source.indexOf(surface, cursor) : -1;
+    const gapEnd = matchIndex >= 0 ? matchIndex : cursor;
+
+    if (gapEnd > cursor) {
+      merged.push(...tokenizePunctuationGap(source.slice(cursor, gapEnd)));
+    }
+
+    merged.push(token);
+
+    if (matchIndex >= 0) {
+      cursor = matchIndex + surface.length;
+    }
+  }
+
+  if (cursor < source.length) {
+    merged.push(...tokenizePunctuationGap(source.slice(cursor)));
+  }
+
+  return merged;
+}
+
+function tokenizePunctuationGap(value: string): TokenSpec[] {
+  return Array.from(String(value ?? ""))
+    .filter((character) => !/\s/.test(character))
+    .filter((character) => isPunctuationSurface(character))
+    .map((character) => ({ surface_form: character }));
+}
+
+function isPunctuationSurface(surface: string): boolean {
+  return /^[\s。、！？；：,.!?;:、，。！？；：…—()（）「」『』《》【】]+$/.test(String(surface ?? ""));
 }
 
 function makePageResult(pageNumber: number, languageCode: string): PageExtractionResult {
@@ -254,6 +306,9 @@ function makePageResult(pageNumber: number, languageCode: string): PageExtractio
 
   for (const sentence of sentences) {
     for (const token of sentence.tokens) {
+      if (isPunctuationSurface(token.surface_form)) {
+        continue;
+      }
       tokenOccurrences.push({
         page_number: pageNumber,
         sentence_order: sentence.order,

@@ -2,11 +2,13 @@
 
 const storageKey = "textplex.processorBaseUrl";
 const wakeHelperStorageKey = "textplex.processorWakeHelperUrl";
+const ocrProviderStorageKey = "textplex.ocrProvider";
 const themeStorageKey = "textplex.theme";
 const localEntriesStorageKey = "textplex.localTextEntries";
 const archiveItemsStorageKey = "textplex.archiveItems";
 const defaultView = "home";
 const defaultTheme = "paper";
+const defaultOcrProvider = "local";
 const defaultEntryKind = "book";
 const entryKinds = new Set(["book", "article"]);
 const themeNames = new Set(["paper", "slate", "night", "midnight", "sunset", "mint"]);
@@ -30,6 +32,7 @@ const elements = {
   wakeProcessor: document.getElementById("wakeProcessor"),
   uploadForm: document.getElementById("uploadForm"),
   bookTitle: document.getElementById("bookTitle"),
+  ocrModeToggle: document.getElementById("ocrModeToggle"),
   pdfFile: document.getElementById("pdfFile"),
   uploadButton: document.getElementById("uploadButton"),
   textEntryForm: document.getElementById("textEntryForm"),
@@ -82,6 +85,7 @@ const elements = {
 const state = {
   apiBaseUrl: normalizeBaseUrl(window.localStorage.getItem(storageKey) ?? ""),
   wakeHelperUrl: normalizeBaseUrl(window.localStorage.getItem(wakeHelperStorageKey) ?? ""),
+  ocrProvider: resolveOcrProvider(window.localStorage.getItem(ocrProviderStorageKey) ?? defaultOcrProvider),
   theme: resolveTheme(window.localStorage.getItem(themeStorageKey) ?? defaultTheme),
   books: [],
   localEntries: loadLocalEntries(),
@@ -119,6 +123,7 @@ function bindEvents() {
   elements.connectProcessor.addEventListener("click", connectProcessor);
   elements.saveWakeHelperUrl.addEventListener("click", saveWakeHelperUrl);
   elements.wakeProcessor.addEventListener("click", () => void wakeProcessorHelper());
+  elements.ocrModeToggle?.addEventListener("click", handleOcrModeToggle);
   elements.homeReconnect.addEventListener("click", () => void refreshProcessorStatus(true));
   elements.homeWake.addEventListener("click", () => void wakeAndRefreshProcessorStatus());
   elements.uploadForm.addEventListener("submit", handleUpload);
@@ -1045,6 +1050,7 @@ async function handleUpload(event) {
   formData.append("file", file);
   formData.append("language_code", "zh");
   formData.append("title", elements.bookTitle.value.trim() || file.name.replace(/\.pdf$/i, ""));
+  formData.append("ocr_provider", state.ocrProvider);
 
   try {
     setBusy(true);
@@ -1058,6 +1064,18 @@ async function handleUpload(event) {
   } finally {
     setBusy(false);
   }
+}
+
+function handleOcrModeToggle(event) {
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  const provider = resolveOcrProvider(target?.dataset.ocrProvider ?? "");
+  if (provider === state.ocrProvider) {
+    return;
+  }
+
+  state.ocrProvider = provider;
+  window.localStorage.setItem(ocrProviderStorageKey, provider);
+  renderUploadMode();
 }
 
 async function loadReader(bookId, pageNumber, sentenceIndex = 0) {
@@ -1149,6 +1167,10 @@ async function inspectToken(token) {
   state.selectedToken = token;
   state.selectedBookEntry = page?.lexical_entries?.find((item) => item.lemma === (token.lemma ?? token.surface_form)) ?? null;
   elements.vocabTerm.value = token.surface_form;
+  state.lexicon = buildLocalLexiconFallback(token, book.language_code, state.selectedBookEntry);
+  state.vocabLookup = state.lexicon;
+  state.vocabError = null;
+  renderReader();
 
   if (!state.apiBaseUrl) {
     state.lexicon = lookupDemoLexicon(token.surface_form);
@@ -1157,15 +1179,26 @@ async function inspectToken(token) {
     return;
   }
 
-  try {
-    state.lexicon = await requestJson(
-      `/lexicon/lookup?language_code=${encodeURIComponent(book.language_code)}&term=${encodeURIComponent(token.surface_form)}`,
-    );
-    state.vocabError = null;
-  } catch {
-    state.lexicon = null;
-  }
-  renderReader();
+  void requestJson(`/lexicon/lookup?language_code=${encodeURIComponent(book.language_code)}&term=${encodeURIComponent(token.surface_form)}`)
+    .then((lookup) => {
+      if (state.selectedToken?.surface_form !== token.surface_form || state.selectedToken?.order !== token.order) {
+        return;
+      }
+      if (lookup?.entries?.length) {
+        state.lexicon = lookup;
+        state.vocabLookup = lookup;
+      }
+      state.vocabError = null;
+      renderReader();
+    })
+    .catch(() => {
+      if (state.selectedToken?.surface_form !== token.surface_form || state.selectedToken?.order !== token.order) {
+        return;
+      }
+      state.lexicon = buildLocalLexiconFallback(token, book.language_code, state.selectedBookEntry);
+      state.vocabLookup = state.lexicon;
+      renderReader();
+    });
 }
 
 async function inspectLocalToken(token, localEntry) {
@@ -1176,6 +1209,10 @@ async function inspectLocalToken(token, localEntry) {
   state.selectedToken = token;
   state.selectedBookEntry = null;
   elements.vocabTerm.value = token.surface_form;
+  state.lexicon = buildLocalLexiconFallback(token, getLocalEntryLanguageCode(localEntry), null);
+  state.vocabLookup = state.lexicon;
+  state.vocabError = null;
+  renderReader();
 
   if (!state.apiBaseUrl) {
     state.lexicon = lookupDemoLexicon(token.surface_form);
@@ -1184,15 +1221,28 @@ async function inspectLocalToken(token, localEntry) {
     return;
   }
 
-  try {
-    state.lexicon = await requestJson(
-      `/lexicon/lookup?language_code=${encodeURIComponent(getLocalEntryLanguageCode(localEntry))}&term=${encodeURIComponent(token.surface_form)}`,
-    );
-    state.vocabError = null;
-  } catch {
-    state.lexicon = null;
-  }
-  renderReader();
+  void requestJson(
+    `/lexicon/lookup?language_code=${encodeURIComponent(getLocalEntryLanguageCode(localEntry))}&term=${encodeURIComponent(token.surface_form)}`,
+  )
+    .then((lookup) => {
+      if (state.selectedToken?.surface_form !== token.surface_form || state.selectedToken?.order !== token.order) {
+        return;
+      }
+      if (lookup?.entries?.length) {
+        state.lexicon = lookup;
+        state.vocabLookup = lookup;
+      }
+      state.vocabError = null;
+      renderReader();
+    })
+    .catch(() => {
+      if (state.selectedToken?.surface_form !== token.surface_form || state.selectedToken?.order !== token.order) {
+        return;
+      }
+      state.lexicon = buildLocalLexiconFallback(token, getLocalEntryLanguageCode(localEntry), null);
+      state.vocabLookup = state.lexicon;
+      renderReader();
+    });
 }
 
 function openLocalEntryReader(entryId, sentenceIndex = 0) {
@@ -1242,6 +1292,18 @@ function renderAll() {
   renderHome();
   renderVocabularyPanel();
   renderOptions();
+  renderUploadMode();
+}
+
+function renderUploadMode() {
+  if (!elements.ocrModeToggle) {
+    return;
+  }
+
+  elements.ocrModeToggle.querySelectorAll("[data-ocr-provider]").forEach((button) => {
+    const provider = resolveOcrProvider(button.dataset.ocrProvider ?? "");
+    button.classList.toggle("is-active", provider === state.ocrProvider);
+  });
 }
 
 function renderBooks() {
@@ -1829,6 +1891,9 @@ function applyTheme(theme) {
 function setBusy(value) {
   state.busy = value;
   elements.uploadButton.disabled = value || !state.apiBaseUrl;
+  elements.ocrModeToggle?.querySelectorAll("[data-ocr-provider]").forEach((button) => {
+    button.disabled = value;
+  });
   elements.saveProcessorUrl.disabled = value;
   elements.connectProcessor.disabled = value;
   elements.saveWakeHelperUrl.disabled = value;
@@ -1856,6 +1921,14 @@ function resolveView(hash) {
 
 function resolveTheme(value) {
   return themeNames.has(value) ? value : defaultTheme;
+}
+
+function resolveOcrProvider(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "openai" || normalized === "local") {
+    return normalized;
+  }
+  return defaultOcrProvider;
 }
 
 function themeLabel(theme) {
@@ -2023,6 +2096,39 @@ function lookupDemoLexicon(term) {
     query: term,
     language_code: "zh",
     entries: DEMO_LEXICON[term] ?? [],
+  };
+}
+
+function buildLocalLexiconFallback(token, languageCode, entry = null) {
+  const surfaceForm = String(token?.surface_form ?? "").trim();
+  const pinyin = String(token?.romanization ?? token?.pronunciation ?? "").trim();
+  const definition =
+    String(token?.definition_short ?? "").trim() ||
+    (entry ? `Seen ${entry.frequency_in_book} times in this book.` : "") ||
+    "No dictionary entry found in imported lexicon.";
+  const hskLevel = token?.proficiency_level ?? token?.hsk_level ?? null;
+
+  return {
+    query: surfaceForm,
+    language_code: String(languageCode ?? "zh"),
+    entries: [
+      {
+        id: 0,
+        language_code: String(languageCode ?? "zh"),
+        entry_type: "word",
+        surface_form: surfaceForm,
+        pinyin: pinyin || null,
+        tone: null,
+        definition,
+        radical: null,
+        stroke_count: null,
+        hsk_level: hskLevel ?? null,
+        frequency_rank: null,
+        note: null,
+        source_name: "local-book",
+        source_path: "local-book",
+      },
+    ],
   };
 }
 

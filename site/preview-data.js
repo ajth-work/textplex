@@ -2,6 +2,7 @@
   const STORAGE_KEY = "textplex.preview.store";
   const SELECTION_KEY = "textplex.preview.selectedBook";
   const PROCESSOR_URL_KEY = "textplex.processorBaseUrl";
+  const OCR_PROVIDER_KEY = "textplex.ocrProvider";
   const PENDING_BOOK_KEY = "textplex.preview.pendingBook";
   const DEFAULT_BOOK_ID = "spring-dawn";
 
@@ -553,10 +554,13 @@
     storageKey: STORAGE_KEY,
     selectionKey: SELECTION_KEY,
     processorUrlKey: PROCESSOR_URL_KEY,
+    ocrProviderKey: OCR_PROVIDER_KEY,
     ready: hydrateFromApi(),
     refreshFromApi: hydrateFromApi,
     getProcessorBaseUrl,
     setProcessorBaseUrl,
+    getOcrProvider,
+    setOcrProvider,
     loadStore,
     saveStore,
     resetStore,
@@ -681,6 +685,7 @@
       author: value.author ?? value.authorCn ?? "Unknown author",
       authorCn: value.authorCn ?? value.author ?? "Unknown author",
       kindLabel: value.kindLabel ?? "TXT",
+      ocrProvider: normalizeOcrProvider(value.ocrProvider ?? value.ocr_provider),
       homePriority: Number.isFinite(value.homePriority) ? value.homePriority : 99,
       analysisPriority: Number.isFinite(value.analysisPriority) ? value.analysisPriority : 99,
       lastOpenedAt: value.lastOpenedAt ?? new Date().toISOString(),
@@ -1024,12 +1029,19 @@
 
   function normalizeSentence(sentence, languageCode = "zh") {
     const phonetics = Array.isArray(sentence?.phonetics) ? sentence.phonetics.slice() : [];
-    const tokens = Array.isArray(sentence?.tokens)
+    const normalizedTokens = Array.isArray(sentence?.tokens)
       ? sentence.tokens.map((token) => ({
           ...token,
-          surface: String(token?.surface ?? ""),
+          surface: String(token?.surface ?? token?.surface_form ?? ""),
+          surface_form: String(token?.surface_form ?? token?.surface ?? ""),
+          lemma: token?.lemma ?? token?.surface_form ?? token?.surface ?? null,
+          definition_short: token?.definition_short ?? token?.definition ?? null,
+          romanization: token?.romanization ?? token?.pronunciation ?? "",
+          pronunciation: token?.pronunciation ?? token?.romanization ?? "",
+          proficiency_level: token?.proficiency_level ?? token?.hsk_level ?? null,
         }))
       : [];
+    const tokens = insertPunctuationTokens(String(sentence?.text ?? ""), normalizedTokens);
     return {
       phonetics: alignSentencePhonetics(phonetics, tokens, languageCode),
       tokens,
@@ -1075,6 +1087,64 @@
 
   function countReadableCharacters(surface) {
     return Array.from(String(surface)).filter((char) => !isPunctuationSurface(char) && !/\s/.test(char)).length;
+  }
+
+  function insertPunctuationTokens(text, tokens) {
+    if (!Array.isArray(tokens) || tokens.length === 0) {
+      return tokens;
+    }
+
+    if (tokens.some((token) => isPunctuationSurface(token?.surface ?? token?.surface_form ?? ""))) {
+      return tokens;
+    }
+
+    const source = String(text ?? "");
+    if (!source) {
+      return tokens;
+    }
+
+    const merged = [];
+    let cursor = 0;
+
+    for (const token of tokens) {
+      const surface = String(token?.surface ?? token?.surface_form ?? "");
+      const matchIndex = surface ? source.indexOf(surface, cursor) : -1;
+      const gapEnd = matchIndex >= 0 ? matchIndex : cursor;
+
+      if (gapEnd > cursor) {
+        merged.push(...tokenizePunctuationGap(source.slice(cursor, gapEnd), token?.lemma ?? surface));
+      }
+
+      merged.push(token);
+
+      if (matchIndex >= 0) {
+        cursor = matchIndex + surface.length;
+      }
+    }
+
+    if (cursor < source.length) {
+      merged.push(...tokenizePunctuationGap(source.slice(cursor), ""));
+    }
+
+    return merged.map((token, index) => ({
+      ...token,
+      order: index + 1,
+    }));
+  }
+
+  function tokenizePunctuationGap(value, fallbackLemma) {
+    return Array.from(String(value ?? ""))
+      .filter((character) => !/\s/.test(character))
+      .filter((character) => isPunctuationSurface(character))
+      .map((character) => ({
+        surface: character,
+        surface_form: character,
+        lemma: fallbackLemma ? fallbackLemma : character,
+        definition_short: null,
+        romanization: "",
+        pronunciation: "",
+        proficiency_level: null,
+      }));
   }
 
   function isPunctuationSurface(surface) {
@@ -1176,6 +1246,7 @@
       author,
       authorCn: input.authorCn?.trim() || author,
       kindLabel: input.kindLabel || "TXT",
+      ocrProvider: normalizeOcrProvider(input.ocrProvider ?? input.ocr_provider),
       homePriority: 0,
       analysisPriority: 0,
       lastOpenedAt: now.toISOString(),
@@ -1380,6 +1451,16 @@
 
     const inferred = inferProcessorBaseUrl();
     return inferred ? stripTrailingSlash(inferred) : "";
+  }
+
+  function getOcrProvider() {
+    const stored = window.localStorage.getItem(OCR_PROVIDER_KEY);
+    return normalizeOcrProvider(stored);
+  }
+
+  function setOcrProvider(value) {
+    const normalized = normalizeOcrProvider(value);
+    window.localStorage.setItem(OCR_PROVIDER_KEY, normalized);
   }
 
   function setProcessorBaseUrl(value) {
@@ -1602,24 +1683,28 @@
   }
 
   async function mapApiSentenceToPreviewSentence(fetchImpl, baseUrl, book, sentence, lexiconCache) {
-    const tokens = Array.isArray(sentence?.tokens)
+    const normalizedTokens = Array.isArray(sentence?.tokens)
       ? sentence.tokens.map((token) => ({
+          ...token,
           surface: String(token?.surface_form ?? token?.surface ?? ""),
+          surface_form: String(token?.surface_form ?? token?.surface ?? ""),
+          lemma: token?.lemma ?? token?.surface_form ?? token?.surface ?? null,
+          definition_short: token?.definition_short ?? token?.definition ?? null,
+          romanization: token?.romanization ?? token?.pronunciation ?? "",
+          pronunciation: token?.pronunciation ?? token?.romanization ?? "",
+          proficiency_level: token?.proficiency_level ?? token?.hsk_level ?? null,
         }))
       : [];
+    const tokens = insertPunctuationTokens(String(sentence?.text ?? ""), normalizedTokens);
     if (!tokens.length) {
       return null;
     }
 
-    const phonetics = Array.isArray(sentence?.tokens)
-      ? sentence.tokens.map((token) => String(token?.romanization ?? token?.pronunciation ?? ""))
-      : [];
-    const surfaceToken = Array.isArray(sentence?.tokens)
-      ? sentence.tokens.find((token) => {
+    const phonetics = tokens.map((token) => String(token?.romanization ?? token?.pronunciation ?? ""));
+    const surfaceToken = tokens.find((token) => {
       const surface = String(token?.surface_form ?? "").trim();
       return surface && !isPunctuationSurface(surface);
-      })
-      : null;
+    });
     const vocabulary = surfaceToken
       ? await lookupLexiconEntry(fetchImpl, baseUrl, book.language_code ?? "zh", String(surfaceToken.surface_form), lexiconCache)
       : null;
@@ -1675,10 +1760,15 @@
     url.searchParams.set("language_code", languageCode);
     url.searchParams.set("term", term);
 
-    const payload = await fetchJsonMaybe(fetchImpl, url.href);
+    const payload = await fetchJsonMaybe(fetchImpl, url.href, { timeoutMs: 2500 });
     const entry = Array.isArray(payload?.entries) ? payload.entries[0] ?? null : null;
     lexiconCache.set(normalizedKey, entry);
     return entry;
+  }
+
+  function normalizeOcrProvider(value) {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    return normalized === "openai" ? "openai" : "local";
   }
 
   async function fetchJson(fetchImpl, url) {
@@ -1689,12 +1779,19 @@
     return response.json();
   }
 
-  async function fetchJsonMaybe(fetchImpl, url) {
-    try {
-      return await fetchJson(fetchImpl, url);
-    } catch {
-      return null;
+  async function fetchJsonMaybe(fetchImpl, url, { timeoutMs = 0 } = {}) {
+    if (!timeoutMs || timeoutMs <= 0) {
+      try {
+        return await fetchJson(fetchImpl, url);
+      } catch {
+        return null;
+      }
     }
+
+    return await Promise.race([
+      fetchJson(fetchImpl, url).catch(() => null),
+      new Promise((resolve) => window.setTimeout(() => resolve(null), timeoutMs)),
+    ]);
   }
 
   function inferContentType(book) {

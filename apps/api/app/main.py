@@ -79,6 +79,7 @@ def _extract_and_persist_book(book: BookRecord, *, page_start: int, page_count: 
         page_start=page_start,
         page_count=page_count,
         force=True,
+        ocr_provider=book.ocr_provider,
         data_root=app.state.data_root / "books",
     )
 
@@ -159,6 +160,7 @@ def import_book(payload: BookImportRequest) -> BookRecord:
         book = import_book_from_path(
             payload.source_path,
             language_code=payload.language_code,
+            ocr_provider=payload.ocr_provider,
             title=payload.title,
             author=payload.author,
             page_start=payload.page_start,
@@ -184,6 +186,7 @@ async def upload_book(
     author: str | None = Form(default=None),
     page_start: int = Form(default=1),
     page_count: int | None = Form(default=None),
+    ocr_provider: str = Form(default="local"),
 ) -> BookRecord:
     filename = Path(file.filename or "uploaded.pdf").name
     if Path(filename).suffix.lower() != ".pdf":
@@ -201,6 +204,7 @@ async def upload_book(
         book = import_book_from_path(
             upload_path,
             language_code=language_code,
+            ocr_provider=ocr_provider,
             title=title,
             author=author,
             source_filename=filename,
@@ -313,11 +317,14 @@ def extract_book(book_id: str, payload: BookExtractionRequest) -> dict[str, str]
         raise HTTPException(status_code=404, detail=f"Book not found: {book_id}") from exc
 
     try:
+        if payload.ocr_provider:
+            book.ocr_provider = payload.ocr_provider
         extraction_path, extracted_page_count = extract_book_text(
             book=book,
             page_start=payload.page_start,
             page_count=payload.page_count,
             force=payload.force,
+            ocr_provider=payload.ocr_provider or book.ocr_provider,
             data_root=app.state.data_root / "books",
         )
     except FileNotFoundError as exc:
