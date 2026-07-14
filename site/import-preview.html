@@ -551,10 +551,11 @@
           <div class="field">
             <span>OCR mode</span>
             <div class="segmented-control" id="ocrModeToggle" role="tablist" aria-label="OCR mode">
-              <button class="segmented-option is-active" type="button" data-ocr-provider="local">Local OCR</button>
-              <button class="segmented-option" type="button" data-ocr-provider="openai">OpenAI OCR</button>
+              <button class="segmented-option is-active" type="button" data-ocr-provider="local">Local PDF text</button>
+              <button class="segmented-option" type="button" data-ocr-provider="openai">OpenAI page OCR</button>
             </div>
           </div>
+          <p class="processor-status">Local OCR reads embedded PDF text. OpenAI OCR sends each page image to the processor for transcription and returns normalized JSON for the book record.</p>
           <div class="processor-actions">
             <button class="save-btn" type="button" data-processor-action="save">Save URL</button>
             <button class="refresh-btn" type="button" data-processor-action="refresh">Refresh data</button>
