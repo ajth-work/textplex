@@ -1007,12 +1007,12 @@ a {
   flex-wrap: wrap;
   justify-content: flex-start;
   align-items: flex-end;
-  gap: 14px 16px;
+  gap: 16px 18px;
 }
 
 .token-inline {
   display: inline-grid;
-  gap: 2px;
+  gap: 3px;
   justify-items: center;
   align-items: end;
   border-radius: 16px;

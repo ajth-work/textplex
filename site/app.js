@@ -11,6 +11,7 @@ const defaultTheme = "paper";
 const defaultOcrProvider = "local";
 const defaultEntryKind = "book";
 const entryKinds = new Set(["book", "article"]);
+const requestTimeoutMs = 15000;
 const themeNames = new Set(["paper", "slate", "night", "midnight", "sunset", "mint"]);
 const viewNames = new Set(["home", "library", "reader", "tools", "options"]);
 const processorHealthProbeAttempts = 6;
@@ -1969,23 +1970,38 @@ async function requestJson(pathname, options = {}) {
   }
 
   const url = new URL(pathname, ensureTrailingSlash(state.apiBaseUrl));
-  const response = await fetch(url.toString(), {
-    cache: "no-store",
-    ...options,
-    headers: {
-      ...(options.headers ?? {}),
-    },
-  });
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timeoutId = controller ? window.setTimeout(() => controller.abort(), requestTimeoutMs) : null;
 
-  if (!response.ok) {
-    throw new Error(`Request failed (${response.status}) for ${pathname}`);
+  try {
+    const response = await fetch(url.toString(), {
+      cache: "no-store",
+      ...options,
+      signal: controller?.signal,
+      headers: {
+        ...(options.headers ?? {}),
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Request failed (${response.status}) for ${pathname}`);
+    }
+
+    if (response.status === 204) {
+      return null;
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`Request timed out after ${requestTimeoutMs / 1000} seconds for ${pathname}`);
+    }
+    throw error;
+  } finally {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId);
+    }
   }
-
-  if (response.status === 204) {
-    return null;
-  }
-
-  return response.json();
 }
 
 async function lookupVocabulary(term) {

@@ -15,6 +15,7 @@ const routes = {
   activity: "./activity-preview.html",
   vocabulary: "./vocabulary-preview.html",
 };
+const uploadTimeoutMs = 15000;
 
 const toast = createToast();
 
@@ -1293,21 +1294,24 @@ function wireImportPreview() {
     await pauseForPaint();
 
     if (uploadResult.id) {
-      const importedRecord = previewData?.createImportedRecord?.("book", {
-        ...uploadResult,
-        id: uploadResult.id,
-        title: uploadResult.title ?? stripPdfExtension(file.name || "Imported PDF"),
-        titleCn: uploadResult.titleCn ?? uploadResult.title ?? stripPdfExtension(file.name || "Imported PDF"),
-        author: uploadResult.author ?? "Local import",
-        authorCn: uploadResult.authorCn ?? uploadResult.author ?? "Local import",
-        languageCode: uploadResult.languageCode ?? "zh",
-        kindLabel: uploadResult.kindLabel ?? "TXT",
-        ocrProvider: previewData?.getOcrProvider?.() || "local",
-        profileLabel: uploadResult.profileLabel ?? "Local",
-        summary: uploadResult.summary ?? `Imported from ${file.name || "a PDF file"}.`,
-        recentReading: Array.isArray(uploadResult.recentReading) ? uploadResult.recentReading : [],
-      });
-      const nextBook = importedRecord ?? uploadResult;
+      const hydratedBook = previewData?.getBook?.(uploadResult.id) ?? previewData?.listBooks?.().find((book) => book.id === uploadResult.id) ?? null;
+      const nextBook =
+        hydratedBook ??
+        previewData?.createImportedRecord?.("book", {
+          ...uploadResult,
+          id: uploadResult.id,
+          title: uploadResult.title ?? stripPdfExtension(file.name || "Imported PDF"),
+          titleCn: uploadResult.titleCn ?? uploadResult.title ?? stripPdfExtension(file.name || "Imported PDF"),
+          author: uploadResult.author ?? "Local import",
+          authorCn: uploadResult.authorCn ?? uploadResult.author ?? "Local import",
+          languageCode: uploadResult.languageCode ?? "zh",
+          kindLabel: uploadResult.kindLabel ?? "TXT",
+          ocrProvider: previewData?.getOcrProvider?.() || "local",
+          profileLabel: uploadResult.profileLabel ?? "Local",
+          summary: uploadResult.summary ?? `Imported from ${file.name || "a PDF file"}.`,
+          recentReading: Array.isArray(uploadResult.recentReading) ? uploadResult.recentReading : [],
+        }) ??
+        uploadResult;
       window.sessionStorage.setItem("textplex.preview.pendingBook", JSON.stringify(nextBook));
       previewData?.selectBook?.(String(nextBook.id ?? uploadResult.id));
       setImportActivity("opening", `Opening ${uploadResult.title || stripPdfExtension(file.name || "Imported PDF")}.`, {
@@ -1412,18 +1416,35 @@ async function uploadPdfToProcessor(file) {
   formData.append("author", "Local import");
   formData.append("ocr_provider", previewData?.getOcrProvider?.() || "local");
 
-  const response = await window.fetch(`${baseUrl}/books/upload`, {
-    method: "POST",
-    body: formData,
-  });
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timeoutId = controller ? window.setTimeout(() => controller.abort(), uploadTimeoutMs) : null;
 
-  if (!response.ok) {
-    toast(`Upload failed: ${response.status}`);
+  try {
+    const response = await window.fetch(`${baseUrl}/books/upload`, {
+      method: "POST",
+      body: formData,
+      signal: controller?.signal,
+    });
+
+    if (!response.ok) {
+      toast(`Upload failed: ${response.status}`);
+      return null;
+    }
+
+    toast("PDF uploaded.");
+    return response.json();
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      toast(`Upload timed out after ${uploadTimeoutMs / 1000} seconds.`);
+      return null;
+    }
+    toast("Upload failed. Check the processor URL and try again.");
     return null;
+  } finally {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId);
+    }
   }
-
-  toast("PDF uploaded.");
-  return response.json();
 }
 
 function updateProcessorStatus(node, value) {
