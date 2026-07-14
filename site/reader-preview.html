@@ -184,6 +184,13 @@
         justify-content: flex-end;
         min-width: 0;
         padding: 0 1px;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        -webkit-appearance: none;
+        appearance: none;
         white-space: nowrap;
       }
 
@@ -203,6 +210,7 @@
         white-space: nowrap;
       }
 
+      .token.is-selected .token-surface,
       .token.highlight .token-surface {
         background: rgba(109, 199, 163, 0.22);
         border-radius: 8px;

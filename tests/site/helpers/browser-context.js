@@ -146,6 +146,85 @@ function createPagerNode() {
   return node;
 }
 
+function createSentenceLineNode() {
+  let html = "";
+  let tokens = [];
+  const node = createNode("div");
+
+  const parseAttributes = (attributeSource, target) => {
+    const classMatch = attributeSource.match(/class="([^"]*)"/);
+    if (classMatch) {
+      classMatch[1]
+        .split(/\s+/)
+        .filter(Boolean)
+        .forEach((token) => target.classList.add(token));
+    }
+
+    const attributePattern = /([:\w-]+)="([^"]*)"/g;
+    let match;
+    while ((match = attributePattern.exec(attributeSource))) {
+      const name = String(match[1]);
+      const value = String(match[2]);
+      target.setAttribute(name, value);
+      if (name.startsWith("data-")) {
+        const dataKey = name
+          .slice(5)
+          .replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+        target.dataset[dataKey] = value;
+      }
+    }
+  };
+
+  const parseTokens = (markup) => {
+    tokens = [];
+    const tokenPattern = /<button\b([^>]*)>([\s\S]*?)<\/button>/g;
+    let match;
+    while ((match = tokenPattern.exec(markup))) {
+      const attributeSource = match[1] ?? "";
+      if (!/\btoken\b/.test(attributeSource)) {
+        continue;
+      }
+
+      const token = createNode("button");
+      parseAttributes(attributeSource, token);
+      token.innerHTML = match[2];
+      tokens.push(token);
+    }
+  };
+
+  Object.defineProperty(node, "innerHTML", {
+    get() {
+      return html;
+    },
+    set(value) {
+      html = String(value);
+      parseTokens(html);
+    },
+  });
+
+  node.querySelectorAll = (selector) => {
+    if (selector === ".token") {
+      return tokens;
+    }
+    if (selector === ".token.is-selected") {
+      return tokens.filter((token) => token.classList.contains("is-selected"));
+    }
+    return [];
+  };
+
+  node.querySelector = (selector) => {
+    if (selector === ".token.is-selected") {
+      return tokens.find((token) => token.classList.contains("is-selected")) ?? null;
+    }
+    if (selector === ".token") {
+      return tokens[0] ?? null;
+    }
+    return null;
+  };
+
+  return node;
+}
+
 function createDocumentStub(selectorMap = {}, idMap = {}) {
   const body = createNode("body");
   const document = {
@@ -289,6 +368,7 @@ module.exports = {
   createBrowserContext,
   createNode,
   createPagerNode,
+  createSentenceLineNode,
   loadPreviewData,
   loadPreviewRouter,
 };

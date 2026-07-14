@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 
-const { createNode, createPagerNode, loadPreviewData, loadPreviewRouter } = require("./helpers/browser-context");
+const { createNode, createPagerNode, createSentenceLineNode, loadPreviewData, loadPreviewRouter } = require("./helpers/browser-context");
 
 test("router helpers resolve preview routes and render icon-button cards", async () => {
   const { window } = loadPreviewRouter();
@@ -361,6 +361,72 @@ test("chinese reader tokens keep pinyin attached to each token", async () => {
   assert.doesNotMatch(lineOne.innerHTML, /pinyin-row/);
   assert.ok(browser.document.title.includes("习近平"), "Chinese book title should still render");
 });
+
+test("reader preview moves the highlight when a different token is clicked", async () => {
+  const titleNode = createNode("h1");
+  const authorNode = createNode("p");
+  const pagerNode = createPagerNode();
+  const lineOne = createSentenceLineNode();
+  const lineTwo = createNode("div");
+  const translationNode = createNode("div");
+  const vocabChar = createNode("h2");
+  const vocabDefinition = createNode("p");
+  const exampleCn = createNode("p");
+  const exampleEn = createNode("p");
+  const saveButton = createNode("button");
+  const moreButton = createNode("button");
+  const readingSpan = createNode("span");
+  const audioSpan = createNode("span");
+  const tagSpan = createNode("span");
+  const vocabPinyin = createNode("div");
+  vocabPinyin.querySelectorAll = () => [readingSpan, audioSpan, tagSpan];
+
+  const browser = loadPreviewRouter({
+    pathname: "/reader-preview.html",
+    search: "?book=article-demo-briefing",
+    selectorMap: {
+      ".poem-title": titleNode,
+      ".poet": authorNode,
+      ".annotated-line": [lineOne, lineTwo],
+      ".translation": translationNode,
+      ".vocab-char": vocabChar,
+      ".vocab-pinyin": vocabPinyin,
+      ".vocab-definition": vocabDefinition,
+      ".example-cn": exampleCn,
+      ".example-en": exampleEn,
+      ".button-primary": saveButton,
+      ".button-secondary": moreButton,
+      ".topbar .icon-btn": [createNode("button")],
+      "button, a": [],
+    },
+    idMap: {
+      readerPager: pagerNode,
+    },
+  });
+
+  await browser.window.TextPlexPreviewRouter.ready;
+
+  const selectedBefore = lineOne.querySelector(".token.is-selected");
+  assert.ok(selectedBefore, "a token should be selected by default");
+
+  const targetToken = lineOne.querySelectorAll(".token").find((token) => {
+    if (token.getAttribute("data-token-punctuation") === "true") {
+      return false;
+    }
+    return token.getAttribute("data-token-surface") !== selectedBefore.getAttribute("data-token-surface");
+  });
+
+  assert.ok(targetToken, "there should be another readable token to click");
+  targetToken.click();
+
+  const selectedAfter = lineOne.querySelector(".token.is-selected");
+  assert.ok(selectedAfter, "clicking a token should keep a selection visible");
+  assert.equal(selectedAfter.getAttribute("data-token-surface"), targetToken.getAttribute("data-token-surface"));
+  assert.equal(vocabChar.textContent, targetToken.getAttribute("data-token-surface"));
+  assert.equal(vocabDefinition.textContent, "Selected token from this sentence.");
+  assert.ok(readingSpan.textContent.length > 0, "selected token pinyin should stay visible");
+});
+
 test("import preview exposes a visible processor URL control", async () => {
   const processorInput = createNode("input");
   const statusNode = createNode("p");

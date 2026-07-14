@@ -440,6 +440,7 @@ function wireReaderPreview() {
   const moreButton = document.querySelector(".button-secondary");
   const pageStateKey = `textplex:reader-page:${bookId}`;
   const sentenceStateKey = `textplex:reader-sentence:${bookId}`;
+  const tokenStateKey = (page, sentence) => `textplex:reader-token:${bookId}:${page}:${sentence}`;
   const pages = Array.isArray(profile.pages) && profile.pages.length
     ? profile.pages
     : Array.isArray(profile.sentences)
@@ -482,6 +483,8 @@ function wireReaderPreview() {
       translation: [],
       vocabulary: null,
     };
+    const selectedTokenIndex = resolveSelectedTokenIndex(sentence, pageIndex, sentenceIndex);
+    const selectedTokenState = buildSelectedTokenState(sentence, selectedTokenIndex);
 
     if (title) {
       title.textContent = profile.title;
@@ -490,20 +493,28 @@ function wireReaderPreview() {
       author.textContent = profile.author;
     }
     if (lines[0]) {
-      const highlightValue = normalizeText(sentence.vocabulary?.surface ?? "");
       const phonetics = Array.isArray(sentence.phonetics) ? sentence.phonetics : [];
       const tokenMarkup = Array.isArray(sentence.tokens)
         ? sentence.tokens
             .map((token, index) => {
               const surface = String(token?.surface ?? "");
               const phonetic = String(phonetics[index] ?? "");
-              const punctuation = /^[\s??????,.!?;:??????????()??????????]+$/.test(surface);
-              const highlighted = highlightValue && normalizeText(surface) === highlightValue;
+              const punctuation = isTokenPunctuation(surface);
+              const highlighted = index === selectedTokenIndex;
               return `
-                <span class="token${highlighted ? " highlight" : ""}${punctuation ? " punctuation" : ""}">
+                <button
+                  class="token${highlighted ? " is-selected" : ""}${punctuation ? " punctuation" : ""}"
+                  type="button"
+                  data-token-index="${index}"
+                  data-token-surface="${escapeHtml(surface)}"
+                  data-token-reading="${escapeHtml(phonetic)}"
+                  data-token-punctuation="${punctuation ? "true" : "false"}"
+                  aria-pressed="${highlighted ? "true" : "false"}"
+                  ${punctuation ? 'disabled aria-disabled="true"' : ""}
+                >
                   <span class="token-reading">${escapeHtml(phonetic)}</span>
                   <span class="token-surface">${escapeHtml(surface)}</span>
-                </span>
+                </button>
               `;
             })
             .join("")
@@ -511,6 +522,21 @@ function wireReaderPreview() {
 
       lines[0].style.display = "";
       lines[0].innerHTML = `<div class="sentence-row" aria-label="${escapeHtml(profile.title)} page ${pageIndex + 1} sentence ${sentenceIndex + 1}">${tokenMarkup}</div>`;
+      const tokenButtons = Array.from(lines[0].querySelectorAll(".token"));
+      tokenButtons.forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          const nextIndex = Number.parseInt(button.getAttribute("data-token-index") ?? "", 10);
+          if (!Number.isFinite(nextIndex)) {
+            return;
+          }
+          if (button.getAttribute("data-token-punctuation") === "true") {
+            return;
+          }
+          window.sessionStorage.setItem(tokenStateKey(pageIndex, sentenceIndex), String(nextIndex));
+          render();
+        });
+      });
     }
 
     if (lines[1]) {
@@ -524,29 +550,29 @@ function wireReaderPreview() {
     }
 
     if (vocabChar) {
-      vocabChar.textContent = sentence.vocabulary?.surface ?? "?";
+      vocabChar.textContent = selectedTokenState.surface || sentence.vocabulary?.surface || "?";
     }
     if (vocabPinyin) {
       const parts = vocabPinyin.querySelectorAll("span");
       if (parts[0]) {
-        parts[0].textContent = sentence.vocabulary?.reading ?? "";
-        parts[0].hidden = !sentence.vocabulary?.reading;
+        parts[0].textContent = selectedTokenState.reading ?? "";
+        parts[0].hidden = !selectedTokenState.reading;
       }
       if (parts[1]) {
         parts[1].hidden = false;
       }
       if (parts[2]) {
-        parts[2].textContent = sentence.vocabulary?.tag ?? profile.kindLabel ?? "demo";
+        parts[2].textContent = selectedTokenState.tag ?? profile.kindLabel ?? "demo";
       }
     }
     if (vocabDefinition) {
-      vocabDefinition.textContent = sentence.vocabulary?.definition ?? "Synthetic sentence preview.";
+      vocabDefinition.textContent = selectedTokenState.definition ?? "Synthetic sentence preview.";
     }
     if (exampleCn) {
-      exampleCn.textContent = sentence.vocabulary?.exampleCn ?? "";
+      exampleCn.textContent = selectedTokenState.exampleCn ?? "";
     }
     if (exampleEn) {
-      exampleEn.innerHTML = sentence.vocabulary?.exampleEn ?? "";
+      exampleEn.innerHTML = selectedTokenState.exampleEn ?? "";
     }
     if (saveButton) {
       saveButton.textContent = "Save to Vocabulary";
@@ -581,6 +607,7 @@ function wireReaderPreview() {
     window.history.replaceState({}, "", url);
     window.sessionStorage.setItem(pageStateKey, String(pageIndex));
     window.sessionStorage.setItem(sentenceStateKey, String(sentenceIndex));
+    window.sessionStorage.setItem(tokenStateKey(pageIndex, sentenceIndex), String(selectedTokenIndex));
     document.title = `${profile.title} ? P${pageIndex + 1}/${pageCount} ? S${sentenceIndex + 1}/${currentSentenceCount} ? TextPlex Reader Preview`;
   }
 
@@ -607,6 +634,59 @@ function wireReaderPreview() {
   }
 
   render();
+
+  function resolveSelectedTokenIndex(sentence, page, sentenceNumber) {
+    const tokens = Array.isArray(sentence.tokens) ? sentence.tokens : [];
+    if (!tokens.length) {
+      return 0;
+    }
+
+    const storedIndex = Number.parseInt(window.sessionStorage.getItem(tokenStateKey(page, sentenceNumber)) ?? "", 10);
+    if (Number.isFinite(storedIndex)) {
+      const storedToken = tokens[storedIndex];
+      if (storedToken && !isTokenPunctuation(storedToken.surface)) {
+        return storedIndex;
+      }
+    }
+
+    const matchedIndex = tokens.findIndex((token) => normalizeText(token?.surface ?? "") === normalizeText(sentence.vocabulary?.surface ?? ""));
+    if (matchedIndex >= 0 && !isTokenPunctuation(tokens[matchedIndex]?.surface)) {
+      return matchedIndex;
+    }
+
+    const firstReadableIndex = tokens.findIndex((token) => !isTokenPunctuation(token?.surface ?? ""));
+    return firstReadableIndex >= 0 ? firstReadableIndex : 0;
+  }
+
+  function buildSelectedTokenState(sentence, index) {
+    const tokens = Array.isArray(sentence.tokens) ? sentence.tokens : [];
+    const phonetics = Array.isArray(sentence.phonetics) ? sentence.phonetics : [];
+    const token = tokens[index] ?? tokens.find((candidate) => !isTokenPunctuation(candidate?.surface ?? "")) ?? tokens[0] ?? {};
+    const surface = String(token?.surface ?? sentence.vocabulary?.surface ?? "");
+    const reading = String(phonetics[index] ?? sentence.vocabulary?.reading ?? "");
+    const matchedVocabulary = normalizeText(surface) && normalizeText(surface) === normalizeText(sentence.vocabulary?.surface ?? "");
+
+    if (matchedVocabulary && sentence.vocabulary) {
+      return {
+        ...sentence.vocabulary,
+        surface: sentence.vocabulary.surface ?? surface,
+        reading: sentence.vocabulary.reading ?? reading,
+        tag: sentence.vocabulary.tag ?? profile.kindLabel ?? "demo",
+        definition: sentence.vocabulary.definition ?? "Synthetic sentence preview.",
+        exampleCn: sentence.vocabulary.exampleCn ?? "",
+        exampleEn: sentence.vocabulary.exampleEn ?? "",
+      };
+    }
+
+    return {
+      surface,
+      reading,
+      tag: profile.kindLabel ?? "Selected",
+      definition: "Selected token from this sentence.",
+      exampleCn: surface ? `Selected token: ${surface}` : "",
+      exampleEn: "Tap another token to change the selection.",
+    };
+  }
 }
 
 function wireLibraryDetailPreview() {
@@ -1449,6 +1529,10 @@ function currentBookId() {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function isTokenPunctuation(value) {
+  return /^[\s.,!?;:，。！？；：、…（）()「」『』【】《》〈〉“”‘’—-]+$/.test(String(value ?? ""));
 }
 
 function createImportTemplate(kind, label) {
