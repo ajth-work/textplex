@@ -36,6 +36,7 @@ data/user/*
 !data/user/.gitkeep
 data/lexicon/*
 data/uploads/*
+site/.test-results/*
 tests/fixtures/books/three-body-mini/
 tests/processor/test_chinese_fixture.py
 

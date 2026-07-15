@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.services.ocr import get_text_source_signature, resolve_page_text, should_use_openai_ocr
+from app.services.ocr import OcrPageResult, get_text_source_signature, resolve_page_text, should_use_openai_ocr
 
 
 def test_openai_ocr_requires_provider_and_key(monkeypatch) -> None:
@@ -21,9 +21,9 @@ def test_openai_ocr_requires_provider_and_key(monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
     assert should_use_openai_ocr() is True
-    assert get_text_source_signature() == ("openai", "openai:gpt-5.4-mini:ocr-v1")
+    assert get_text_source_signature() == ("openai", "openai:gpt-5.4-mini:ocr-v2")
     assert should_use_openai_ocr("openai") is True
-    assert get_text_source_signature("openai") == ("openai", "openai:gpt-5.4-mini:ocr-v1")
+    assert get_text_source_signature("openai") == ("openai", "openai:gpt-5.4-mini:ocr-v2")
 
 
 def test_resolve_page_text_uses_openai_route_without_network(monkeypatch) -> None:
@@ -38,12 +38,19 @@ def test_resolve_page_text_uses_openai_route_without_network(monkeypatch) -> Non
         book_title: str | None,
         language_code: str,
         page_number: int,
-    ) -> str:
+    ) -> OcrPageResult:
         called["page_image_path"] = page_image_path
         called["book_title"] = book_title
         called["language_code"] = language_code
         called["page_number"] = page_number
-        return "示例句子。"
+        return OcrPageResult(
+            transcription="示例句子。",
+            sentence_texts=["示例句子。"],
+            page_ends_with_sentence_terminator=True,
+            token_hints=[],
+            text_source="openai",
+            text_source_signature="openai:gpt-5.4-mini:ocr-v2",
+        )
 
     monkeypatch.setattr("app.services.ocr.transcribe_page_image", fake_transcribe_page_image)
 
@@ -58,7 +65,7 @@ def test_resolve_page_text_uses_openai_route_without_network(monkeypatch) -> Non
 
     assert text == "示例句子。"
     assert source == "openai"
-    assert signature == "openai:gpt-5.4-mini:ocr-v1"
+    assert signature == "openai:gpt-5.4-mini:ocr-v2"
     assert called == {
         "page_image_path": Path("page-0001.png"),
         "book_title": "Sample Book",
@@ -71,7 +78,7 @@ def test_resolve_page_text_skips_openai_when_local_mode_is_selected(monkeypatch)
     monkeypatch.setenv("AI_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-    def fail_transcribe_page_image(**_: object) -> str:
+    def fail_transcribe_page_image(**_: object) -> OcrPageResult:
         raise AssertionError("OpenAI OCR should not have been called for local mode.")
 
     monkeypatch.setattr("app.services.ocr.transcribe_page_image", fail_transcribe_page_image)

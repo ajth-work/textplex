@@ -1,5 +1,7 @@
 from pathlib import Path
 import os
+import threading
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -73,6 +75,10 @@ def _book_exists(book_id: str) -> BookRecord:
         raise HTTPException(status_code=404, detail=f"Book not found: {book_id}") from exc
 
 
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def _extract_and_persist_book(book: BookRecord, *, page_start: int, page_count: int | None) -> BookRecord:
     extraction_path, extracted_page_count = extract_book_text(
         book=book,
@@ -94,6 +100,83 @@ def _extract_and_persist_book(book: BookRecord, *, page_start: int, page_count: 
     book_path = app.state.data_root / "books" / book.id / "book.json"
     book_path.write_text(book.model_dump_json(indent=2), encoding="utf-8")
     return book
+
+
+def _initialize_book_extraction(book: BookRecord, *, page_count: int | None) -> None:
+    total_pages = page_count if page_count is not None else book.page_image_count or book.total_pages
+    book.extraction_status = "processing"
+    book.extraction_total_pages = total_pages
+    book.extraction_pages_processed = 0
+    book.extraction_current_page = None
+    book.extraction_started_at = book.extraction_started_at or _utc_now()
+    book.extraction_updated_at = _utc_now()
+    if book.status not in {"archived"}:
+        book.status = "processing"
+    _persist_book(book)
+
+
+def _update_book_extraction_progress(book: BookRecord, *, current_page: int, pages_processed: int, total_pages: int) -> None:
+    book.extraction_total_pages = total_pages
+    book.extraction_pages_processed = pages_processed
+    book.extraction_current_page = current_page
+    book.extraction_started_at = book.extraction_started_at or _utc_now()
+    book.extraction_updated_at = _utc_now()
+    book.extraction_status = "processing"
+    if book.status not in {"archived"}:
+        book.status = "processing"
+    _persist_book(book)
+
+
+def _complete_book_extraction(book: BookRecord, *, extraction_path: Path, extracted_page_count: int) -> None:
+    book.extraction_status = "complete"
+    book.extraction_total_pages = extracted_page_count
+    book.extraction_pages_processed = extracted_page_count
+    book.extracted_page_count = extracted_page_count
+    book.extraction_current_page = book.page_image_count or book.total_pages
+    book.extraction_updated_at = _utc_now()
+    book.extraction_path = str(extraction_path)
+    book.status = "extracted"
+    _persist_book(book)
+
+
+def _fail_book_extraction(book: BookRecord) -> None:
+    book.extraction_status = "failed"
+    book.extraction_updated_at = _utc_now()
+    if book.status == "processing":
+        book.status = "pages_split"
+    _persist_book(book)
+
+
+def _start_background_extraction(book: BookRecord, *, page_start: int, page_count: int | None) -> None:
+    _initialize_book_extraction(book, page_count=page_count)
+    _persist_book(book)
+
+    def progress_callback(current_page: int, pages_processed: int, total_pages: int) -> None:
+        _update_book_extraction_progress(
+            book,
+            current_page=current_page,
+            pages_processed=pages_processed,
+            total_pages=total_pages,
+        )
+
+    def worker() -> None:
+        try:
+            extraction_path, extracted_page_count = extract_book_text(
+                book=book,
+                page_start=page_start,
+                page_count=page_count,
+                force=True,
+                ocr_provider=book.ocr_provider,
+                data_root=app.state.data_root / "books",
+                progress_callback=progress_callback,
+            )
+        except Exception:
+            _fail_book_extraction(book)
+            return
+        _complete_book_extraction(book, extraction_path=extraction_path, extracted_page_count=extracted_page_count)
+
+    thread = threading.Thread(target=worker, name=f"textplex-extract-{book.id}", daemon=True)
+    thread.start()
 
 
 def _persist_book(book: BookRecord) -> BookRecord:
@@ -186,7 +269,7 @@ async def upload_book(
     author: str | None = Form(default=None),
     page_start: int = Form(default=1),
     page_count: int | None = Form(default=None),
-    ocr_provider: str = Form(default="local"),
+    ocr_provider: str | None = Form(default=None),
 ) -> BookRecord:
     filename = Path(file.filename or "uploaded.pdf").name
     if Path(filename).suffix.lower() != ".pdf":
@@ -212,7 +295,8 @@ async def upload_book(
             page_count=page_count,
             data_root=app.state.data_root / "books",
         )
-        return _extract_and_persist_book(book, page_start=page_start, page_count=page_count)
+        _start_background_extraction(book, page_start=page_start, page_count=page_count)
+        return book
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

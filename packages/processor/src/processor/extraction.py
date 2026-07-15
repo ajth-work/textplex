@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Mapping
 
 from .contracts import (
     BookExtractionResult,
@@ -12,13 +13,18 @@ from .contracts import (
     TokenResult,
 )
 
-_TOKEN_RE = re.compile(r"[\u4e00-\u9fff]|[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?")
+_TOKEN_RE = re.compile(
+    r"[\u4e00-\u9fff]+|[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?|[。！？!?.,:;，、；：…—“”‘’（）()\[\]{}《》〈〉「」『』【】]",
+)
 _CHINESE_RUN_RE = re.compile(r"[\u4e00-\u9fff]+")
-_WORDISH_RE = re.compile(r"[\u4e00-\u9fff]+|[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?")
+_WORDISH_RE = re.compile(
+    r"[\u4e00-\u9fff]+|[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?|[。！？!?.,:;，、；：…—“”‘’（）()\[\]{}《》〈〉「」『』【】]",
+)
 _WHITESPACE_RE = re.compile(r"\s+")
 _SENTENCE_ENDERS = set("\u3002\uff01\uff1f!?.")
-_TRAILING_SENTENCE_CLOSERS = set("”’\"'）)]】》〕」』")
+_TRAILING_SENTENCE_CLOSERS = set("\"')]}〉》」』】〗〟”’")
 _HARD_NO_SPACE_JOIN_LANGS = {"zh", "ja", "ko"}
+_PUNCTUATION_TOKENS = set("。！？!?.，、；：,;:…—“”‘’（）()[]{}《》〈〉「」『』【】")
 
 try:
     from jieba import lcut as _jieba_lcut
@@ -71,9 +77,78 @@ def _merge_sentence_text(left: str, right: str, language_code: str) -> str:
         return f"{left}{right}"
     if left[-1].isspace() or right[0].isspace():
         return f"{left}{right}"
-    if left[-1] in "([{\"“‘" or right[0] in ".,!?;:)]}\"”’。、，！？；：":
+    if left[-1] in "([{\"“‘" or right[0] in ".,!?;:)]}\"”’。！？；：，、":
         return f"{left}{right}"
     return f"{left} {right}"
+
+
+def _is_punctuation_token(surface_form: str) -> bool:
+    text = surface_form.strip()
+    return bool(text) and len(text) == 1 and text in _PUNCTUATION_TOKENS
+
+
+def _normalize_token_surface(surface_form: str, language_code: str) -> str:
+    if language_code.lower().startswith("zh"):
+        return surface_form
+    return surface_form.lower()
+
+
+def _normalize_sentence_inputs(sentence_texts: list[str] | None, clean_text: str) -> list[str]:
+    if sentence_texts:
+        normalized = [normalize_text(sentence) for sentence in sentence_texts if normalize_text(sentence)]
+        if normalized:
+            return normalized
+    return split_sentences(clean_text)
+
+
+def _normalize_token_hints(
+    token_hints: list[Mapping[str, object]] | None,
+    language_code: str,
+) -> dict[str, dict[str, str | None]]:
+    hints: dict[str, dict[str, str | None]] = {}
+    if not token_hints:
+        return hints
+
+    for hint in token_hints:
+        surface_form = hint.get("surface_form") if isinstance(hint, Mapping) else None
+        if not isinstance(surface_form, str):
+            continue
+        normalized_surface = _normalize_token_surface(surface_form.strip(), language_code)
+        if not normalized_surface:
+            continue
+        romanization = hint.get("romanization") if isinstance(hint.get("romanization"), str) else None
+        definition_short = hint.get("definition_short") if isinstance(hint.get("definition_short"), str) else None
+        hints[normalized_surface] = {
+            "romanization": romanization,
+            "definition_short": definition_short,
+        }
+    return hints
+
+
+def _apply_token_hints(
+    sentence: SentenceResult,
+    token_hints: dict[str, dict[str, str | None]],
+    language_code: str,
+) -> SentenceResult:
+    if not token_hints:
+        return sentence
+
+    tokens = []
+    for token in sentence.tokens:
+        normalized_surface = _normalize_token_surface(token.surface_form, language_code)
+        hint = token_hints.get(normalized_surface)
+        if not hint:
+            tokens.append(token)
+            continue
+
+        update_payload = {}
+        if hint.get("romanization") and not token.romanization:
+            update_payload["romanization"] = hint["romanization"]
+        if hint.get("definition_short") and not token.definition_short:
+            update_payload["definition_short"] = hint["definition_short"]
+        tokens.append(token.model_copy(update=update_payload) if update_payload else token)
+
+    return sentence.model_copy(update={"tokens": tokens})
 
 
 def _merge_sentence_results(left: SentenceResult, right: SentenceResult, language_code: str) -> SentenceResult:
@@ -130,6 +205,8 @@ def stitch_page_sentence_carryover(pages: list[PageExtractionResult]) -> list[Pa
         lexical_entries: dict[str, LexicalEntryResult] = {}
         for sentence in page.sentences:
             for token in sentence.tokens:
+                if _is_punctuation_token(token.surface_form):
+                    continue
                 normalized_form = token.lemma or _normalize_token_surface(token.surface_form, page.language_code)
                 token_occurrences.append(
                     TokenOccurrenceResult(
@@ -161,12 +238,6 @@ def stitch_page_sentence_carryover(pages: list[PageExtractionResult]) -> list[Pa
     return stitched_pages
 
 
-def _normalize_token_surface(surface_form: str, language_code: str) -> str:
-    if language_code.lower().startswith("zh"):
-        return surface_form
-    return surface_form.lower()
-
-
 def _segment_chinese_chunk(chunk: str) -> list[str]:
     if _jieba_lcut is None:
         return list(chunk)
@@ -196,7 +267,7 @@ def tokenize_sentence(sentence: str, language_code: str) -> list[TokenResult]:
             TokenResult(
                 order=index,
                 surface_form=surface_form,
-                lemma=_normalize_token_surface(surface_form, language_code),
+                lemma=None if _is_punctuation_token(surface_form) else _normalize_token_surface(surface_form, language_code),
             )
         )
     return tokens
@@ -209,22 +280,33 @@ def build_page_extraction_result(
     language_code: str,
     raw_text: str,
     source_page_sha256: str | None = None,
+    sentence_texts: list[str] | None = None,
+    page_ends_with_sentence_terminator: bool | None = None,
+    token_hints: list[Mapping[str, object]] | None = None,
 ) -> PageExtractionResult:
     clean_text = normalize_text(raw_text)
+    candidate_sentences = _normalize_sentence_inputs(sentence_texts, clean_text)
+    hint_map = _normalize_token_hints(token_hints, language_code)
     sentences = [
-        SentenceResult(
-            order=index,
-            text=sentence,
-            tokens=tokenize_sentence(sentence, language_code),
-            ends_with_sentence_terminator=ends_with_sentence_terminator(sentence),
+        _apply_token_hints(
+            SentenceResult(
+                order=index,
+                text=sentence,
+                tokens=tokenize_sentence(sentence, language_code),
+                ends_with_sentence_terminator=ends_with_sentence_terminator(sentence),
+            ),
+            hint_map,
+            language_code,
         )
-        for index, sentence in enumerate(split_sentences(clean_text), start=1)
+        for index, sentence in enumerate(candidate_sentences, start=1)
     ]
     token_occurrences: list[TokenOccurrenceResult] = []
     lexical_entries: dict[str, LexicalEntryResult] = {}
 
     for sentence in sentences:
         for token in sentence.tokens:
+            if _is_punctuation_token(token.surface_form):
+                continue
             normalized_form = token.lemma or _normalize_token_surface(token.surface_form, language_code)
             token_occurrences.append(
                 TokenOccurrenceResult(
@@ -256,7 +338,9 @@ def build_page_extraction_result(
         raw_text=raw_text,
         clean_text=clean_text,
         sentences=sentences,
-        page_ends_with_sentence_terminator=ends_with_sentence_terminator(clean_text),
+        page_ends_with_sentence_terminator=page_ends_with_sentence_terminator
+        if page_ends_with_sentence_terminator is not None
+        else ends_with_sentence_terminator(clean_text),
         token_occurrences=token_occurrences,
         lexical_entries=list(lexical_entries.values()),
     )

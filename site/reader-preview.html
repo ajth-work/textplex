@@ -92,6 +92,31 @@
         margin: 0 0 12px;
       }
 
+      .session-pill {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 10px;
+        margin: 0 0 12px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(31, 36, 48, 0.08);
+        color: #1f2430;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.01em;
+      }
+
+      .session-pill strong {
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      .session-pill span {
+        color: #5d6470;
+        font-weight: 700;
+      }
+
       .page-pill {
         display: inline-flex;
         align-items: center;
@@ -162,7 +187,7 @@
       }
 
       .annotated-line {
-        margin: 18px 0 24px;
+        margin: 22px 0 30px;
       }
 
       .sentence-row {
@@ -170,10 +195,10 @@
         flex-wrap: wrap;
         justify-content: flex-start;
         align-items: flex-end;
-        gap: 2px 10px;
+        gap: 8px 12px;
         font-family: Georgia, "Times New Roman", serif;
         font-size: 26px;
-        line-height: 1.25;
+        line-height: 1.5;
         letter-spacing: 0.02em;
       }
 
@@ -183,7 +208,8 @@
         align-items: center;
         justify-content: flex-end;
         min-width: 0;
-        padding: 0 1px;
+        padding: 4px 6px 5px;
+        border-radius: 12px;
         border: 0;
         background: transparent;
         color: inherit;
@@ -196,7 +222,7 @@
 
       .token-reading {
         min-height: 1.2em;
-        margin-bottom: 4px;
+        margin-bottom: 6px;
         color: #8d9199;
         font-size: 11px;
         font-weight: 700;
@@ -210,11 +236,15 @@
         white-space: nowrap;
       }
 
+      .token.is-selected,
+      .token.highlight {
+        background: rgba(109, 199, 163, 0.22);
+      }
+
       .token.is-selected .token-surface,
       .token.highlight .token-surface {
-        background: rgba(109, 199, 163, 0.22);
-        border-radius: 8px;
-        padding-inline: 2px;
+        background: transparent;
+        padding-inline: 0;
       }
 
       .token.punctuation .token-reading {
@@ -389,6 +419,7 @@
       </header>
 
       <div id="readerPager" class="reader-pager" aria-label="Sentence navigation"></div>
+      <div id="readerSessionPill" class="session-pill" aria-live="polite" hidden></div>
 
       <article class="reading-surface">
         <div class="reading-body">

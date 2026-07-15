@@ -3,6 +3,8 @@ services:
     build:
       context: ./site
       dockerfile: Dockerfile
+    volumes:
+      - ./:/workspace
     ports:
       - "8200:8200"
 
@@ -10,11 +12,14 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+    env_file:
+      - ./.env
     environment:
       APP_ENV: development
       BOOK_DATA_DIR: /workspace/data/books
       USER_DATA_DIR: /workspace/data/user
       DEFAULT_LANGUAGE: zh
+      AI_PROVIDER: openai
       TEXTPLEX_CORS_ORIGINS: http://127.0.0.1:8200,http://192.168.192.231:8200,https://ajth-work.github.io
     ports:
       - "8201:8000"

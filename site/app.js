@@ -6,11 +6,14 @@ const ocrProviderStorageKey = "textplex.ocrProvider";
 const themeStorageKey = "textplex.theme";
 const localEntriesStorageKey = "textplex.localTextEntries";
 const archiveItemsStorageKey = "textplex.archiveItems";
+const uploadSessionStorageKey = "textplex.uploadSession";
 const defaultView = "home";
 const defaultTheme = "paper";
 const defaultOcrProvider = "local";
 const defaultEntryKind = "book";
 const entryKinds = new Set(["book", "article"]);
+const requestTimeoutMs = 15000;
+const uploadTimeoutMs = 20 * 60 * 1000;
 const themeNames = new Set(["paper", "slate", "night", "midnight", "sunset", "mint"]);
 const viewNames = new Set(["home", "library", "reader", "tools", "options"]);
 const processorHealthProbeAttempts = 6;
@@ -55,6 +58,14 @@ const elements = {
   homeReconnect: document.getElementById("homeReconnect"),
   homeWake: document.getElementById("homeWake"),
   libraryStatus: document.getElementById("libraryStatus"),
+  uploadProgressPanel: document.getElementById("uploadProgressPanel"),
+  uploadProgressBadge: document.getElementById("uploadProgressBadge"),
+  uploadOverallProgressTrack: document.getElementById("uploadOverallProgressTrack"),
+  uploadOverallProgressFill: document.getElementById("uploadOverallProgressFill"),
+  uploadOverallProgressText: document.getElementById("uploadOverallProgressText"),
+  uploadPageProgressTrack: document.getElementById("uploadPageProgressTrack"),
+  uploadPageProgressFill: document.getElementById("uploadPageProgressFill"),
+  uploadPageProgressText: document.getElementById("uploadPageProgressText"),
   bookList: document.getElementById("bookList"),
   readerTitle: document.getElementById("readerTitle"),
   readerAuthor: document.getElementById("readerAuthor"),
@@ -111,6 +122,7 @@ const state = {
   activeView: resolveView(window.location.hash),
   draftEntryKind: defaultEntryKind,
   draftEntryTags: [],
+  uploadProgress: null,
 };
 
 elements.processorUrl.value = state.apiBaseUrl;
@@ -180,6 +192,7 @@ async function boot() {
   renderLibraryComposer();
   setActiveView(state.activeView, { syncHash: false });
   await connectFromCurrentValue();
+  restoreUploadProgressSession();
 }
 
 function loadLocalEntries() {
@@ -220,6 +233,84 @@ function saveLocalEntries() {
 
 function saveArchivedItems() {
   window.localStorage.setItem(archiveItemsStorageKey, JSON.stringify(state.archivedItems));
+}
+
+function loadUploadSession() {
+  try {
+    const raw = window.localStorage.getItem(uploadSessionStorageKey);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+    return {
+      active: Boolean(parsed.active),
+      bookId: typeof parsed.bookId === "string" ? parsed.bookId : null,
+      title: typeof parsed.title === "string" ? parsed.title : "",
+      fileName: typeof parsed.fileName === "string" ? parsed.fileName : "",
+      stage: typeof parsed.stage === "string" ? parsed.stage : "processing",
+      badge: typeof parsed.badge === "string" ? parsed.badge : "Processing",
+      overallPercent: Number(parsed.overallPercent ?? 0) || 0,
+      pagePercent: Number(parsed.pagePercent ?? 0) || 0,
+      pagesProcessed: Number(parsed.pagesProcessed ?? 0) || 0,
+      totalPages: Number(parsed.totalPages ?? 0) || 0,
+      currentPage: Number(parsed.currentPage ?? 0) || 0,
+      message: typeof parsed.message === "string" ? parsed.message : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveUploadSession(progress) {
+  if (!progress) {
+    window.localStorage.removeItem(uploadSessionStorageKey);
+    return;
+  }
+
+  window.localStorage.setItem(
+    uploadSessionStorageKey,
+    JSON.stringify({
+      ...progress,
+      updatedAt: new Date().toISOString(),
+    }),
+  );
+}
+
+function clearUploadSession() {
+  window.localStorage.removeItem(uploadSessionStorageKey);
+}
+
+function restoreUploadProgressSession() {
+  const session = loadUploadSession();
+  if (!session?.bookId) {
+    return;
+  }
+
+  state.uploadProgress = {
+    active: session.active && session.stage !== "done" && session.stage !== "error",
+    bookId: session.bookId,
+    title: session.title || session.fileName || "the PDF",
+    fileName: session.fileName || "",
+    stage: session.stage,
+    badge: session.badge,
+    overallPercent: session.overallPercent,
+    pagePercent: session.pagePercent,
+    pagesProcessed: session.pagesProcessed,
+    totalPages: session.totalPages,
+    currentPage: session.currentPage,
+    message: session.message || `Resuming progress for ${session.title || session.fileName || "the PDF"}.`,
+  };
+  renderUploadProgress();
+
+  if (session.stage === "done" || session.stage === "error") {
+    clearUploadSession();
+    return;
+  }
+
+  void monitorUploadedBook(session.bookId, session.title || session.fileName || "the PDF");
 }
 
 async function archiveRemoteBook(book) {
@@ -1019,18 +1110,211 @@ function wait(ms) {
   });
 }
 
-async function loadBooks() {
+async function loadBooks(options = {}) {
+  const { openFirstBook = true } = options;
   elements.libraryStatus.textContent = "Loading library...";
   state.books = await requestJson("/books");
   elements.bookCount.textContent = String(state.books.length);
   elements.libraryStatus.textContent = state.books.length ? "Select a book to open the reader." : "No imported books were returned by the processor.";
 
-  if (state.books[0]) {
+  if (openFirstBook && state.books[0]) {
     await loadReader(state.books[0].id, 1);
   } else {
     state.pageData = null;
     state.selectedBookId = null;
   }
+}
+
+function renderUploadProgress() {
+  const progress = state.uploadProgress;
+  const panelVisible = Boolean(progress);
+  elements.uploadProgressPanel?.classList.toggle("is-hidden", !panelVisible);
+
+  if (!progress) {
+    if (elements.uploadProgressBadge) {
+      elements.uploadProgressBadge.textContent = "Idle";
+    }
+    if (elements.uploadOverallProgressTrack) {
+      elements.uploadOverallProgressTrack.setAttribute("aria-valuenow", "0");
+    }
+    if (elements.uploadPageProgressTrack) {
+      elements.uploadPageProgressTrack.setAttribute("aria-valuenow", "0");
+    }
+    if (elements.uploadOverallProgressFill) {
+      elements.uploadOverallProgressFill.style.width = "0%";
+    }
+    if (elements.uploadPageProgressFill) {
+      elements.uploadPageProgressFill.style.width = "0%";
+    }
+    if (elements.uploadOverallProgressText) {
+      elements.uploadOverallProgressText.textContent = "Waiting for a PDF.";
+    }
+    if (elements.uploadPageProgressText) {
+      elements.uploadPageProgressText.textContent = "0 pages processed.";
+    }
+    return;
+  }
+
+  const overallPercent = Math.max(0, Math.min(100, Math.round(progress.overallPercent ?? 0)));
+  const pagePercent = Math.max(0, Math.min(100, Math.round(progress.pagePercent ?? 0)));
+  const totalPages = Number(progress.totalPages ?? 0);
+  const pagesProcessed = Number(progress.pagesProcessed ?? 0);
+  const currentPage = Number(progress.currentPage ?? 0);
+  const stage = String(progress.stage ?? "processing");
+  const badge = String(progress.badge ?? "Processing");
+  const title = String(progress.title ?? "the PDF");
+  const overallText = String(progress.message ?? `Processing ${title}.`);
+  const pageText = totalPages > 0
+    ? `${pagesProcessed}/${totalPages} pages processed${currentPage > 0 ? ` · page ${currentPage}` : ""}.`
+    : `${pagesProcessed} pages processed.`;
+
+  if (elements.uploadProgressBadge) {
+    elements.uploadProgressBadge.textContent = badge;
+  }
+  if (elements.uploadOverallProgressTrack) {
+    elements.uploadOverallProgressTrack.setAttribute("aria-valuenow", String(overallPercent));
+  }
+  if (elements.uploadPageProgressTrack) {
+    elements.uploadPageProgressTrack.setAttribute("aria-valuenow", String(pagePercent));
+  }
+  if (elements.uploadOverallProgressFill) {
+    elements.uploadOverallProgressFill.style.width = `${overallPercent}%`;
+  }
+  if (elements.uploadPageProgressFill) {
+    elements.uploadPageProgressFill.style.width = `${pagePercent}%`;
+  }
+  if (elements.uploadOverallProgressText) {
+    elements.uploadOverallProgressText.textContent = overallText;
+  }
+  if (elements.uploadPageProgressText) {
+    elements.uploadPageProgressText.textContent = pageText;
+  }
+
+  elements.uploadProgressPanel?.classList.toggle("is-done", stage === "done");
+  elements.uploadProgressPanel?.classList.toggle("is-error", stage === "error");
+
+  if (!progress) {
+    clearUploadSession();
+    return;
+  }
+
+  saveUploadSession({
+    active: Boolean(progress.active),
+    bookId: progress.bookId ?? null,
+    title: String(progress.title ?? ""),
+    fileName: String(progress.fileName ?? ""),
+    stage,
+    badge,
+    overallPercent,
+    pagePercent,
+    pagesProcessed,
+    totalPages,
+    currentPage,
+    message: overallText,
+  });
+}
+
+async function monitorUploadedBook(bookId, filename) {
+  const bookLabel = String(filename ?? bookId ?? "the PDF").replace(/\.pdf$/i, "");
+  let lastKnownProgress = loadUploadSession() ?? {
+    bookId,
+    title: bookLabel,
+    fileName: filename ?? "",
+    stage: "processing",
+    badge: "Processing",
+    overallPercent: 18,
+    pagePercent: 0,
+    pagesProcessed: 0,
+    totalPages: 0,
+    currentPage: 0,
+    message: `Watching ${bookLabel} for page progress.`,
+  };
+  state.uploadProgress = {
+    active: true,
+    bookId,
+    title: bookLabel,
+    fileName: filename ?? "",
+  };
+  renderUploadProgress();
+
+  while (true) {
+    try {
+      const liveBook = await requestJson(`/books/${encodeURIComponent(bookId)}`);
+      state.books = state.books.map((book) => (book.id === bookId ? { ...book, ...liveBook } : book));
+      renderBooks();
+      renderHome();
+      if (liveBook) {
+        const totalPages = Number(liveBook.extraction_total_pages ?? liveBook.total_pages ?? 0) || 0;
+        const pagesProcessed = Number(liveBook.extraction_pages_processed ?? 0) || 0;
+        const currentPage = Number(liveBook.extraction_current_page ?? pagesProcessed ?? 0) || 0;
+        const status = String(liveBook.extraction_status ?? liveBook.status ?? "processing").toLowerCase();
+        const pagePercent = totalPages > 0 ? Math.min(100, Math.round((pagesProcessed / totalPages) * 100)) : 0;
+        const overallPercent =
+          status === "complete"
+            ? 100
+            : status === "failed"
+              ? 100
+              : Math.min(95, Math.max(18, 18 + Math.round(pagePercent * 0.72)));
+
+        state.uploadProgress = {
+          active: status !== "complete" && status !== "failed",
+          bookId,
+          title: String(liveBook.title ?? bookLabel),
+          fileName: filename ?? "",
+          stage: status === "failed" ? "error" : status === "complete" ? "done" : "processing",
+          badge: status === "failed" ? "Failed" : status === "complete" ? "Done" : "Processing",
+          overallPercent,
+          pagePercent,
+          pagesProcessed,
+          totalPages,
+          currentPage,
+          message:
+            status === "complete"
+              ? `Finished processing ${liveBook.title ?? bookLabel}.`
+              : status === "failed"
+                ? `Processor failed while handling ${liveBook.title ?? bookLabel}.`
+              : totalPages > 0
+                  ? `Processing page ${currentPage || pagesProcessed || 1} of ${totalPages}.`
+                  : `Processing ${liveBook.title ?? bookLabel}.`,
+        };
+        lastKnownProgress = { ...state.uploadProgress };
+        renderUploadProgress();
+      }
+
+      if (!liveBook || ["complete", "failed"].includes(String(liveBook.extraction_status ?? liveBook.status ?? "").toLowerCase())) {
+        break;
+      }
+    } catch (error) {
+      state.uploadProgress = {
+        ...lastKnownProgress,
+        active: true,
+        stage: "processing",
+        badge: "Waiting",
+        overallPercent: Number(lastKnownProgress.overallPercent ?? 18) || 18,
+        pagePercent: Number(lastKnownProgress.pagePercent ?? 0) || 0,
+        pagesProcessed: Number(lastKnownProgress.pagesProcessed ?? 0) || 0,
+        totalPages: Number(lastKnownProgress.totalPages ?? 0) || 0,
+        currentPage: Number(lastKnownProgress.currentPage ?? 0) || 0,
+        message: error instanceof Error ? error.message : "Unable to read processor progress. Retrying…",
+      };
+      renderUploadProgress();
+      await wait(2000);
+      continue;
+    }
+
+    await wait(1000);
+  }
+
+  state.uploadProgress = {
+    ...(state.uploadProgress ?? lastKnownProgress),
+    active: false,
+    stage: String(state.uploadProgress?.stage ?? lastKnownProgress.stage ?? "done"),
+    badge: String(state.uploadProgress?.badge ?? lastKnownProgress.badge ?? "Done"),
+  };
+  renderUploadProgress();
+  await loadBooks({ openFirstBook: false });
+  elements.libraryStatus.textContent = `Processing finished for ${bookLabel}. Open the new book from the library.`;
+  renderAll();
 }
 
 async function handleUpload(event) {
@@ -1053,17 +1337,90 @@ async function handleUpload(event) {
   formData.append("ocr_provider", state.ocrProvider);
 
   try {
+    state.uploadProgress = {
+      active: true,
+      stage: "uploading",
+      badge: "Uploading",
+      overallPercent: 24,
+      pagePercent: 0,
+      pagesProcessed: 0,
+      totalPages: 0,
+      currentPage: 0,
+      message: `Uploading ${file.name || "PDF file"} to the processor.`,
+      title: elements.bookTitle.value.trim() || file.name.replace(/\.pdf$/i, ""),
+      fileName: file.name,
+    };
+    renderUploadProgress();
     setBusy(true);
     elements.libraryStatus.textContent = "Uploading and registering the scan...";
-    await requestJson("/books/upload", { method: "POST", body: formData, isFormData: true });
-    await loadBooks();
+    const uploadedBook = await uploadFormData("/books/upload", formData, (event) => {
+      const loaded = Number(event?.loaded ?? 0) || 0;
+      const total = Number(event?.total ?? file.size ?? 0) || 0;
+      const uploadPercent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+      const uploadComplete = Boolean(event?.uploadComplete);
+      state.uploadProgress = {
+        ...(state.uploadProgress ?? {}),
+        active: true,
+        stage: uploadComplete ? "processing" : "uploading",
+        badge: uploadComplete ? "Processing" : "Uploading",
+        overallPercent: uploadComplete ? 28 : Math.max(8, uploadPercent),
+        pagePercent: Number(state.uploadProgress?.pagePercent ?? 0) || 0,
+        pagesProcessed: Number(state.uploadProgress?.pagesProcessed ?? 0) || 0,
+        totalPages: Number(state.uploadProgress?.totalPages ?? 0) || 0,
+        currentPage: Number(state.uploadProgress?.currentPage ?? 0) || 0,
+        message: uploadComplete
+          ? "Upload finished. Waiting for the processor to register and split the PDF."
+          : `Uploading ${formatBytes(loaded)} of ${formatBytes(total)}.`,
+        fileName: file.name,
+      };
+      renderUploadProgress();
+    });
+    state.uploadProgress = {
+      active: true,
+      bookId: uploadedBook?.id ?? null,
+      title: uploadedBook?.title ?? file.name.replace(/\.pdf$/i, ""),
+      fileName: file.name,
+      stage: "processing",
+      badge: "Processing",
+      overallPercent: 16,
+      pagePercent: Number(uploadedBook?.extraction_total_pages ?? uploadedBook?.total_pages ?? 0)
+        ? Math.min(
+            100,
+            Math.round(
+              ((Number(uploadedBook?.extraction_pages_processed ?? 0) || 0) /
+                Math.max(Number(uploadedBook?.extraction_total_pages ?? uploadedBook?.total_pages ?? 0), 1)) *
+                100,
+            ),
+          )
+        : 0,
+      pagesProcessed: Number(uploadedBook?.extraction_pages_processed ?? 0) || 0,
+      totalPages: Number(uploadedBook?.extraction_total_pages ?? uploadedBook?.total_pages ?? 0) || 0,
+      currentPage: Number(uploadedBook?.extraction_current_page ?? 0) || 0,
+      message: "Waiting for the processor to finish the book.",
+    };
+    renderUploadProgress();
+    elements.libraryStatus.textContent = "Book accepted. Processing pages in the background...";
+    if (uploadedBook?.id) {
+      void monitorUploadedBook(uploadedBook.id, file.name);
+    }
+    await loadBooks({ openFirstBook: false });
     setActiveView("library");
   } catch (error) {
-    state.error = error instanceof Error ? error.message : "Unable to upload the PDF.";
-    renderAll();
-  } finally {
-    setBusy(false);
-  }
+    state.uploadProgress = {
+      ...(state.uploadProgress ?? {}),
+      active: false,
+      stage: "error",
+      badge: "Error",
+      overallPercent: 100,
+      pagePercent: Number(state.uploadProgress?.pagePercent ?? 0) || 0,
+      message: error instanceof Error ? error.message : "Unable to upload the PDF.",
+    };
+    renderUploadProgress();
+      state.error = error instanceof Error ? error.message : "Unable to upload the PDF.";
+      renderAll();
+    } finally {
+      setBusy(false);
+    }
 }
 
 function handleOcrModeToggle(event) {
@@ -1293,6 +1650,7 @@ function renderAll() {
   renderVocabularyPanel();
   renderOptions();
   renderUploadMode();
+  renderUploadProgress();
 }
 
 function renderUploadMode() {
@@ -1873,7 +2231,7 @@ function updateModeChrome() {
     elements.modeBadge.textContent = "Demo";
   }
 
-  elements.uploadButton.disabled = Boolean(state.busy || !state.apiBaseUrl);
+  elements.uploadButton.disabled = Boolean(state.busy || state.uploadProgress?.active || !state.apiBaseUrl);
 }
 
 function setTheme(theme) {
@@ -1890,7 +2248,7 @@ function applyTheme(theme) {
 
 function setBusy(value) {
   state.busy = value;
-  elements.uploadButton.disabled = value || !state.apiBaseUrl;
+  elements.uploadButton.disabled = value || state.uploadProgress?.active || !state.apiBaseUrl;
   elements.ocrModeToggle?.querySelectorAll("[data-ocr-provider]").forEach((button) => {
     button.disabled = value;
   });
@@ -1969,23 +2327,134 @@ async function requestJson(pathname, options = {}) {
   }
 
   const url = new URL(pathname, ensureTrailingSlash(state.apiBaseUrl));
-  const response = await fetch(url.toString(), {
-    cache: "no-store",
-    ...options,
-    headers: {
-      ...(options.headers ?? {}),
-    },
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timeoutId = controller ? window.setTimeout(() => controller.abort(), requestTimeoutMs) : null;
+
+  try {
+    const response = await fetch(url.toString(), {
+      cache: "no-store",
+      ...options,
+      signal: controller?.signal,
+      headers: {
+        ...(options.headers ?? {}),
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Request failed (${response.status}) for ${pathname}`);
+    }
+
+    if (response.status === 204) {
+      return null;
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`Request timed out after ${requestTimeoutMs / 1000} seconds for ${pathname}`);
+    }
+    throw error;
+  } finally {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId);
+    }
+  }
+}
+
+function formatBytes(bytes) {
+  const size = Number(bytes) || 0;
+  if (size <= 0) {
+    return "0 B";
+  }
+  const units = ["B", "KB", "MB", "GB"];
+  let unitIndex = 0;
+  let value = size;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value >= 10 || unitIndex === 0 ? Math.round(value) : value.toFixed(1)} ${units[unitIndex]}`;
+}
+
+function readXhrErrorMessage(xhr, fallbackMessage) {
+  const raw = String(xhr?.responseText ?? "").trim();
+  if (!raw) {
+    return fallbackMessage;
+  }
+
+  try {
+    const body = JSON.parse(raw);
+    if (typeof body === "string" && body.trim()) {
+      return body.trim();
+    }
+    if (body && typeof body === "object") {
+      if (typeof body.detail === "string" && body.detail.trim()) {
+        return body.detail.trim();
+      }
+      if (body.detail && typeof body.detail === "object" && typeof body.detail.message === "string" && body.detail.message.trim()) {
+        return body.detail.message.trim();
+      }
+      if (typeof body.message === "string" && body.message.trim()) {
+        return body.message.trim();
+      }
+    }
+  } catch {
+    if (raw) {
+      return raw;
+    }
+  }
+
+  return fallbackMessage;
+}
+
+function uploadFormData(pathname, formData, onProgress) {
+  if (!state.apiBaseUrl) {
+    return Promise.reject(new Error("Upload is disabled in demo mode."));
+  }
+
+  return new Promise((resolve, reject) => {
+    const url = new URL(pathname, ensureTrailingSlash(state.apiBaseUrl));
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url.toString(), true);
+    xhr.responseType = "text";
+    xhr.timeout = uploadTimeoutMs;
+    xhr.upload.onprogress = (event) => {
+      onProgress?.(event);
+    };
+    xhr.upload.onload = () => {
+      onProgress?.({
+        lengthComputable: true,
+        loaded: 1,
+        total: 1,
+        uploadComplete: true,
+      });
+    };
+    xhr.onload = () => {
+      const responseText = String(xhr.responseText ?? "").trim();
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(readXhrErrorMessage(xhr, `Upload failed (${xhr.status})`)));
+        return;
+      }
+
+      if (!responseText) {
+        resolve(null);
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(responseText));
+      } catch {
+        resolve(responseText);
+      }
+    };
+    xhr.onerror = () => {
+      reject(new Error("Upload failed. Check the processor URL and try again."));
+    };
+    xhr.ontimeout = () => {
+      reject(new Error(`Upload timed out after ${Math.round(uploadTimeoutMs / 60000)} minutes while the processor was still handling the PDF.`));
+    };
+    xhr.send(formData);
   });
-
-  if (!response.ok) {
-    throw new Error(`Request failed (${response.status}) for ${pathname}`);
-  }
-
-  if (response.status === 204) {
-    return null;
-  }
-
-  return response.json();
 }
 
 async function lookupVocabulary(term) {

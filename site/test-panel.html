@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TextPlex Test Panel</title>
+    <meta
+      name="description"
+      content="Local regression panel for the TextPlex site shell and preview flows."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <style>
+      .test-shell {
+        display: grid;
+        gap: 14px;
+      }
+
+      .test-hero {
+        display: grid;
+        gap: 14px;
+      }
+
+      .test-title-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .test-title-row h2 {
+        margin: 0;
+      }
+
+      .test-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .test-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 10px;
+      }
+
+      .metric {
+        display: grid;
+        gap: 4px;
+        padding: 14px;
+        border-radius: 18px;
+        background: var(--surface-strong);
+        border: 1px solid var(--surface-border);
+      }
+
+      .metric strong {
+        font-size: 1.35rem;
+        color: var(--text-dark);
+      }
+
+      .metric span {
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      .test-status-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .test-output {
+        display: grid;
+        gap: 10px;
+      }
+
+      .test-item {
+        border-radius: 18px;
+        padding: 14px;
+        border: 1px solid var(--surface-border);
+        background: var(--surface-strong);
+        display: grid;
+        gap: 8px;
+      }
+
+      .test-item.is-fail {
+        border-color: rgba(219, 68, 55, 0.35);
+        background: rgba(219, 68, 55, 0.08);
+      }
+
+      .test-item.is-pass {
+        border-color: rgba(34, 197, 94, 0.28);
+        background: rgba(34, 197, 94, 0.08);
+      }
+
+      .test-item-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .test-name {
+        font-weight: 700;
+        color: var(--text-dark);
+        word-break: break-word;
+      }
+
+      .test-details {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--muted);
+      }
+
+      .raw-block {
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: #0f172a;
+        color: #e2e8f0;
+        border-radius: 18px;
+        padding: 14px;
+        font-size: 0.86rem;
+        line-height: 1.55;
+        overflow: auto;
+        max-height: 280px;
+      }
+
+      .is-hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell test-shell">
+      <header class="topbar card">
+        <div class="topbar-row">
+          <div class="topbar-brand">
+            <h1>TextPlex</h1>
+          </div>
+          <div class="topbar-status">
+            <span class="badge-label">Mode</span>
+            <strong>Test panel</strong>
+          </div>
+        </div>
+
+        <nav class="site-nav" aria-label="Primary">
+          <a href="./index.html" class="nav-link">Home</a>
+          <a href="./library-preview.html" class="nav-link">Library</a>
+          <a href="./reader-preview.html" class="nav-link">Reader</a>
+          <a href="./import-preview.html" class="nav-link">Import</a>
+          <a href="./test-panel.html" class="nav-link is-active" aria-current="page">Tests</a>
+        </nav>
+      </header>
+
+      <section class="card view test-hero" aria-labelledby="panelTitle">
+        <div class="section-heading test-title-row">
+          <div>
+            <p class="eyebrow">Regression</p>
+            <h2 id="panelTitle">Site test results</h2>
+            <p class="small-copy">Run the local site test suite, inspect failures, and rerun without leaving the browser.</p>
+          </div>
+          <span id="statusBadge" class="pill">Idle</span>
+        </div>
+
+        <div class="test-status-line">
+          <div class="test-actions">
+            <button id="runTestsButton" class="button button-primary" type="button">Run tests</button>
+            <button id="refreshButton" class="button button-secondary" type="button">Refresh latest</button>
+          </div>
+          <p class="small-copy" id="commandLine">Command: node --test tests/site</p>
+        </div>
+
+        <div class="test-grid" aria-label="Latest test summary">
+          <div class="metric">
+            <span>Total</span>
+            <strong id="totalCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>Passed</span>
+            <strong id="passedCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>Failed</span>
+            <strong id="failedCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>Duration</span>
+            <strong id="durationText">0 ms</strong>
+          </div>
+        </div>
+
+        <div class="test-grid">
+          <div class="metric">
+            <span>Started</span>
+            <strong id="startedAtText">—</strong>
+          </div>
+          <div class="metric">
+            <span>Finished</span>
+            <strong id="finishedAtText">—</strong>
+          </div>
+          <div class="metric">
+            <span>Last exit</span>
+            <strong id="exitCodeText">—</strong>
+          </div>
+          <div class="metric">
+            <span>Suite</span>
+            <strong>site</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="card view test-output" aria-labelledby="failuresTitle">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Failures</p>
+            <h3 id="failuresTitle">Failed tests</h3>
+          </div>
+          <span class="pill pill-warn" id="failureSummary">0 failed</span>
+        </div>
+        <div id="failureList" class="test-output"></div>
+      </section>
+
+      <section class="card view test-output" aria-labelledby="passesTitle">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Coverage</p>
+            <h3 id="passesTitle">Passing tests</h3>
+          </div>
+          <span class="pill pill-primary" id="passSummary">0 passed</span>
+        </div>
+        <div id="passList" class="test-output"></div>
+      </section>
+
+      <section class="card view test-output" aria-labelledby="rawTitle">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Raw output</p>
+            <h3 id="rawTitle">Latest console output</h3>
+          </div>
+          <span class="pill">Local</span>
+        </div>
+        <details>
+          <summary class="small-copy">Toggle the raw runner output</summary>
+          <pre id="rawOutput" class="raw-block">No test run yet.</pre>
+        </details>
+      </section>
+    </main>
+
+    <script>
+      const state = {
+        report: null,
+        loading: false,
+        error: null,
+      };
+
+      const elements = {
+        statusBadge: document.getElementById("statusBadge"),
+        runTestsButton: document.getElementById("runTestsButton"),
+        refreshButton: document.getElementById("refreshButton"),
+        totalCount: document.getElementById("totalCount"),
+        passedCount: document.getElementById("passedCount"),
+        failedCount: document.getElementById("failedCount"),
+        durationText: document.getElementById("durationText"),
+        startedAtText: document.getElementById("startedAtText"),
+        finishedAtText: document.getElementById("finishedAtText"),
+        exitCodeText: document.getElementById("exitCodeText"),
+        failureSummary: document.getElementById("failureSummary"),
+        passSummary: document.getElementById("passSummary"),
+        failureList: document.getElementById("failureList"),
+        passList: document.getElementById("passList"),
+        rawOutput: document.getElementById("rawOutput"),
+        commandLine: document.getElementById("commandLine"),
+      };
+
+      elements.runTestsButton.addEventListener("click", runTests);
+      elements.refreshButton.addEventListener("click", loadLatestReport);
+
+      render();
+      void loadLatestReport();
+
+      async function loadLatestReport() {
+        try {
+          const response = await fetch("./__test-results.json", { cache: "no-store" });
+          if (!response.ok) {
+            throw new Error(`Unable to load the latest report (${response.status}).`);
+          }
+          state.report = await response.json();
+          state.error = null;
+        } catch (error) {
+          state.error = error instanceof Error ? error.message : "Unable to load the latest report.";
+        }
+        render();
+      }
+
+      async function runTests() {
+        state.loading = true;
+        state.error = null;
+        render();
+
+        try {
+          const response = await fetch("./__run-tests", {
+            method: "POST",
+            cache: "no-store",
+          });
+          const payload = await response.json();
+          state.report = payload;
+          if (!response.ok) {
+            throw new Error(payload.stderr || payload.stdout || "Test run failed.");
+          }
+        } catch (error) {
+          state.error = error instanceof Error ? error.message : "Test run failed.";
+        } finally {
+          state.loading = false;
+          render();
+        }
+      }
+
+      function render() {
+        const report = state.report ?? {
+          status: "idle",
+          summary: { tests: 0, passed: 0, failed: 0 },
+          failingTests: [],
+          passingTests: [],
+          startedAt: null,
+          finishedAt: null,
+          durationMs: 0,
+          exitCode: null,
+          stdout: "",
+          stderr: "",
+        };
+
+        const status = state.loading ? "running" : report.status || "idle";
+        const badgeLabel =
+          status === "running"
+            ? "Running"
+            : status === "passed"
+              ? "Passed"
+              : status === "failed"
+                ? "Failed"
+                : "Idle";
+
+        elements.statusBadge.textContent = badgeLabel;
+        elements.statusBadge.className = `pill ${status === "failed" ? "pill-warn" : status === "passed" ? "pill-primary" : ""}`.trim();
+        elements.runTestsButton.disabled = state.loading;
+        elements.runTestsButton.textContent = state.loading ? "Running..." : "Run tests";
+        elements.refreshButton.disabled = state.loading;
+
+        elements.totalCount.textContent = String(report.summary?.tests ?? 0);
+        elements.passedCount.textContent = String(report.summary?.passed ?? 0);
+        elements.failedCount.textContent = String(report.summary?.failed ?? 0);
+        elements.durationText.textContent = formatDuration(report.durationMs);
+        elements.startedAtText.textContent = formatTimestamp(report.startedAt);
+        elements.finishedAtText.textContent = formatTimestamp(report.finishedAt);
+        elements.exitCodeText.textContent = report.exitCode === null || report.exitCode === undefined ? "—" : String(report.exitCode);
+        elements.failureSummary.textContent = `${report.summary?.failed ?? 0} failed`;
+        elements.passSummary.textContent = `${report.summary?.passed ?? 0} passed`;
+        elements.commandLine.textContent = `Command: ${report.command || "node --test tests/site"}`;
+
+        renderFailureList(report.failingTests || []);
+        renderPassList(report.passingTests || []);
+
+        const rawOutput = [report.stdout, report.stderr].filter(Boolean).join("\n\n");
+        elements.rawOutput.textContent = rawOutput || "No test run yet.";
+
+        if (state.error) {
+          elements.failureList.innerHTML = `
+            <article class="test-item is-fail">
+              <div class="test-item-head">
+                <span class="test-name">Panel error</span>
+                <span class="pill pill-warn">Error</span>
+              </div>
+              <p class="small-copy">${escapeHtml(state.error)}</p>
+            </article>
+          `;
+        }
+      }
+
+      function renderFailureList(failures) {
+        if (!failures.length) {
+          elements.failureList.innerHTML = `
+            <article class="test-item is-pass">
+              <div class="test-item-head">
+                <span class="test-name">No failures</span>
+                <span class="pill pill-primary">Clean</span>
+              </div>
+              <p class="small-copy">The latest run did not report any failing tests.</p>
+            </article>
+          `;
+          return;
+        }
+
+        elements.failureList.innerHTML = failures
+          .map((failure) => {
+            const details = Array.isArray(failure.details) && failure.details.length
+              ? `<ul class="test-details">${failure.details.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>`
+              : `<p class="small-copy">No additional diagnostic output was captured.</p>`;
+            return `
+              <article class="test-item is-fail">
+                <div class="test-item-head">
+                  <span class="test-name">${escapeHtml(failure.name || "Unnamed test")}</span>
+                  <span class="pill pill-warn">Fail</span>
+                </div>
+                ${details}
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      function renderPassList(passingTests) {
+        if (!passingTests.length) {
+          elements.passList.innerHTML = `
+            <article class="test-item">
+              <div class="test-item-head">
+                <span class="test-name">No passing tests recorded yet</span>
+                <span class="pill">Waiting</span>
+              </div>
+              <p class="small-copy">Run the suite to populate the latest result list.</p>
+            </article>
+          `;
+          return;
+        }
+
+        elements.passList.innerHTML = passingTests
+          .slice(0, 12)
+          .map(
+            (name) => `
+              <article class="test-item is-pass">
+                <div class="test-item-head">
+                  <span class="test-name">${escapeHtml(name)}</span>
+                  <span class="pill pill-primary">Pass</span>
+                </div>
+              </article>
+            `,
+          )
+          .join("");
+
+        if (passingTests.length > 12) {
+          elements.passList.insertAdjacentHTML(
+            "beforeend",
+            `<p class="small-copy">Showing the first 12 passing tests of ${passingTests.length} total.</p>`,
+          );
+        }
+      }
+
+      function formatDuration(durationMs) {
+        const value = Number(durationMs || 0);
+        if (!value) {
+          return "0 ms";
+        }
+        if (value < 1000) {
+          return `${Math.round(value)} ms`;
+        }
+        return `${(value / 1000).toFixed(1)} s`;
+      }
+
+      function formatTimestamp(value) {
+        if (!value) {
+          return "—";
+        }
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+          return "—";
+        }
+        return new Intl.DateTimeFormat(undefined, {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(date);
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+    </script>
+  </body>
+</html>

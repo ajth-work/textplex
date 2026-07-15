@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "dev": "node scripts/next-no-lockfile-patch.js dev",
+    "build": "node scripts/next-no-lockfile-patch.js build",
+    "start": "node scripts/next-no-lockfile-patch.js start",
+    "lint": "node scripts/next-no-lockfile-patch.js lint"
   },
   "dependencies": {
     "next": "13.5.11",
@@ -18,8 +18,5 @@
     "@types/react": "18.2.66",
     "@types/react-dom": "18.2.22",
     "typescript": "5.4.5"
-  },
-  "optionalDependencies": {
-    "@next/swc-linux-x64-gnu": "13.5.11"
   }
 }

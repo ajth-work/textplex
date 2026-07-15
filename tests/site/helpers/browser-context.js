@@ -289,6 +289,79 @@ function createBrowserContext({
 } = {}) {
   const location = createLocation(pathname, search);
   const document = createDocumentStub(selectorMap, idMap);
+  const windowListeners = new Map();
+  let fetchImplRef = fetchImpl;
+  class FakeXMLHttpRequest {
+    constructor() {
+      this.method = "GET";
+      this.url = "";
+      this.async = true;
+      this.responseType = "";
+      this.timeout = 0;
+      this.status = 0;
+      this.statusText = "";
+      this.responseText = "";
+      this.onload = null;
+      this.onerror = null;
+      this.ontimeout = null;
+      this.upload = {
+        onprogress: null,
+        onload: null,
+      };
+    }
+
+    open(method, url, async = true) {
+      this.method = String(method ?? "GET");
+      this.url = String(url ?? "");
+      this.async = async !== false;
+    }
+
+    send(body) {
+      const progressHandler = this.upload?.onprogress;
+      const loadHandler = this.upload?.onload;
+      if (typeof progressHandler === "function") {
+        window.setTimeout(() => {
+          progressHandler.call(this.upload, { lengthComputable: true, loaded: 34, total: 100 });
+        }, 0);
+      }
+      if (typeof loadHandler === "function") {
+        window.setTimeout(() => {
+          loadHandler.call(this.upload, { lengthComputable: true, loaded: 100, total: 100 });
+        }, 0);
+      }
+
+      const respond = async () => {
+        try {
+          if (typeof fetchImplRef !== "function") {
+            throw new Error("No fetch implementation available for XMLHttpRequest");
+          }
+          const response = await fetchImplRef(this.url, {
+            method: this.method,
+            body,
+          });
+          this.status = Number(response?.status ?? (response?.ok ? 200 : 0)) || 0;
+          this.statusText = String(response?.statusText ?? "");
+          if (typeof response?.text === "function") {
+            this.responseText = await response.text();
+          } else if (typeof response?.json === "function") {
+            this.responseText = JSON.stringify(await response.json());
+          } else {
+            this.responseText = "";
+          }
+          if (typeof this.onload === "function") {
+            this.onload.call(this, {});
+          }
+        } catch (error) {
+          if (typeof this.onerror === "function") {
+            this.onerror.call(this, error);
+          }
+        }
+      };
+
+      window.setTimeout(respond, 0);
+    }
+  }
+
   const window = {
     location,
     localStorage: createStorage(localStorageSeed),
@@ -306,6 +379,26 @@ function createBrowserContext({
     Blob: globalThis.Blob,
     File: globalThis.File,
     console,
+    XMLHttpRequest: FakeXMLHttpRequest,
+    addEventListener(type, handler) {
+      if (!windowListeners.has(type)) {
+        windowListeners.set(type, []);
+      }
+      windowListeners.get(type).push(handler);
+    },
+    removeEventListener(type, handler) {
+      if (!windowListeners.has(type)) {
+        return;
+      }
+      const next = windowListeners.get(type).filter((candidate) => candidate !== handler);
+      windowListeners.set(type, next);
+    },
+    dispatchEvent(event) {
+      const handlers = windowListeners.get(event?.type) ?? [];
+      for (const handler of handlers) {
+        handler.call(window, event);
+      }
+    },
   };
 
   if (fetchImpl) {
@@ -330,6 +423,7 @@ function createBrowserContext({
     setTimeout,
     clearTimeout,
     fetch: fetchImpl,
+    XMLHttpRequest: FakeXMLHttpRequest,
     Math,
     JSON,
     Date,

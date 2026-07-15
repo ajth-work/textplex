@@ -206,6 +206,20 @@
             <button id="homeWake" class="button button-primary" type="button">Wake</button>
           </div>
         </article>
+
+        <article class="panel status-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Utilities</p>
+              <h3>Test panel</h3>
+            </div>
+            <span class="pill">Local</span>
+          </div>
+          <p class="small-copy">Run the site regression suite, inspect the latest failures, and rerun it without leaving the browser.</p>
+          <div class="button-row button-row-tight">
+            <a class="button button-primary" href="./test-panel.html">Open panel</a>
+          </div>
+        </article>
       </section>
 
       <section id="libraryView" class="view card is-hidden" data-view="library">
@@ -261,16 +275,54 @@
               <div class="field">
                 <span>OCR mode</span>
                 <div class="segmented-control" id="ocrModeToggle" role="tablist" aria-label="OCR mode">
-                  <button class="segmented-option is-active" type="button" data-ocr-provider="local">Local OCR</button>
-                  <button class="segmented-option" type="button" data-ocr-provider="openai">OpenAI OCR</button>
+                  <button class="segmented-option is-active" type="button" data-ocr-provider="local">Local PDF text</button>
+                  <button class="segmented-option" type="button" data-ocr-provider="openai">OpenAI page OCR</button>
                 </div>
               </div>
+              <p class="small-copy">Local OCR uses embedded PDF text. OpenAI OCR sends each page image to the processor for transcription and returns normalized JSON for the book record.</p>
               <label class="field">
                 <span>PDF file</span>
                 <input id="pdfFile" type="file" accept="application/pdf,.pdf" />
               </label>
               <button id="uploadButton" class="button button-primary" type="submit" disabled>Upload PDF</button>
             </form>
+            <div id="uploadProgressPanel" class="library-note upload-progress-card is-hidden" aria-live="polite">
+              <div class="upload-progress-head">
+                <div>
+                  <p class="eyebrow">Import</p>
+                  <h4>Processing progress</h4>
+                </div>
+                <span id="uploadProgressBadge" class="pill">Idle</span>
+              </div>
+              <div
+                id="uploadOverallProgressTrack"
+                class="progress-track upload-progress-track"
+                role="progressbar"
+                aria-label="Overall import progress"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="0"
+              >
+                <div id="uploadOverallProgressFill" class="progress-fill upload-progress-fill"></div>
+              </div>
+              <div class="upload-progress-meta">
+                <p id="uploadOverallProgressText" class="small-copy">Waiting for a PDF.</p>
+              </div>
+              <div
+                id="uploadPageProgressTrack"
+                class="progress-track upload-progress-track upload-progress-track-secondary"
+                role="progressbar"
+                aria-label="Page processing progress"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="0"
+              >
+                <div id="uploadPageProgressFill" class="progress-fill upload-progress-fill upload-progress-fill-secondary"></div>
+              </div>
+              <div class="upload-progress-meta upload-progress-meta-secondary">
+                <p id="uploadPageProgressText" class="small-copy">0 pages processed.</p>
+              </div>
+            </div>
             <div class="library-note">
               <p id="libraryStatus" class="small-copy">Loading...</p>
             </div>
