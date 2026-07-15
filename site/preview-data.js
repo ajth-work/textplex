@@ -4,6 +4,7 @@
   const PROCESSOR_URL_KEY = "textplex.processorBaseUrl";
   const OCR_PROVIDER_KEY = "textplex.ocrProvider";
   const PENDING_BOOK_KEY = "textplex.preview.pendingBook";
+  const READING_STATE_KEY = "textplex.preview.readingState";
   const DEFAULT_BOOK_ID = "spring-dawn";
 
   const seedBooks = [
@@ -571,6 +572,9 @@
     selectBook,
     upsertBook,
     archiveBook,
+    getReadingProgress,
+    recordReadingProgress,
+    finalizeReadingProgress,
     getHomePreviewData,
     getAnalysisProfile,
     getLibraryProfile,
@@ -592,9 +596,9 @@
         store.selectedBookId = pendingBook.id;
       }
 
-      return normalizeStore(store);
+      return applyReadingStateToStore(normalizeStore(store));
     } catch {
-      return clone(defaultStore);
+      return applyReadingStateToStore(clone(defaultStore));
     }
   }
 
@@ -605,6 +609,7 @@
   function resetStore() {
     window.localStorage.removeItem(STORAGE_KEY);
     window.localStorage.removeItem(SELECTION_KEY);
+    window.localStorage.removeItem(READING_STATE_KEY);
     window.sessionStorage.removeItem(PENDING_BOOK_KEY);
     saveStore(clone(defaultStore));
     return loadStore();
@@ -694,6 +699,7 @@
       analysis: normalizeObject(value.analysis),
       library: normalizeObject(value.library),
       reader: normalizeReader(value.reader),
+      reading: normalizeReading(value.reading),
     };
   }
 
@@ -762,6 +768,58 @@
     };
   }
 
+  function normalizeReading(value) {
+    if (!value || typeof value !== "object") {
+      return {
+        completedPages: 0,
+        completedCharacters: 0,
+        pageCount: 0,
+        lastUpdatedAt: "",
+        activeSession: null,
+        sessions: [],
+      };
+    }
+
+    const sessions = Array.isArray(value.sessions)
+      ? value.sessions.map((session) => normalizeReadingSession(session)).filter(Boolean)
+      : [];
+
+    return {
+      completedPages: Math.max(0, Number(value.completedPages ?? 0) || 0),
+      completedCharacters: Math.max(0, Number(value.completedCharacters ?? 0) || 0),
+      pageCount: Math.max(0, Number(value.pageCount ?? 0) || 0),
+      lastUpdatedAt: typeof value.lastUpdatedAt === "string" ? value.lastUpdatedAt : "",
+      activeSession: normalizeReadingSession(value.activeSession),
+      sessions,
+    };
+  }
+
+  function normalizeReadingSession(value) {
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+
+    const startedAt = typeof value.startedAt === "string" && value.startedAt.trim() ? value.startedAt.trim() : "";
+    if (!startedAt) {
+      return null;
+    }
+
+    return {
+      startedAt,
+      endedAt: typeof value.endedAt === "string" ? value.endedAt : "",
+      lastSeenAt: typeof value.lastSeenAt === "string" ? value.lastSeenAt : startedAt,
+      pageIndex: Math.max(0, Number(value.pageIndex ?? 0) || 0),
+      sentenceIndex: Math.max(0, Number(value.sentenceIndex ?? 0) || 0),
+      pageCount: Math.max(0, Number(value.pageCount ?? 0) || 0),
+      completedPages: Math.max(0, Number(value.completedPages ?? 0) || 0),
+      completedCharacters: Math.max(0, Number(value.completedCharacters ?? 0) || 0),
+      title: typeof value.title === "string" ? value.title : "",
+      author: typeof value.author === "string" ? value.author : "",
+      languageLabel: typeof value.languageLabel === "string" ? value.languageLabel : "",
+      kindLabel: typeof value.kindLabel === "string" ? value.kindLabel : "",
+    };
+  }
+
   function normalizeObject(value) {
     if (!value || typeof value !== "object") {
       return {};
@@ -771,6 +829,236 @@
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
+  }
+
+  function loadReadingState() {
+    try {
+      const raw = window.localStorage.getItem(READING_STATE_KEY);
+      if (!raw) {
+        return {};
+      }
+
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") {
+        return {};
+      }
+
+      return Object.fromEntries(
+        Object.entries(parsed)
+          .map(([bookId, value]) => [String(bookId ?? "").trim(), normalizeReading(value)])
+          .filter(([bookId]) => Boolean(bookId)),
+      );
+    } catch {
+      return {};
+    }
+  }
+
+  function saveReadingState(state) {
+    window.localStorage.setItem(READING_STATE_KEY, JSON.stringify(normalizeReadingState(state)));
+  }
+
+  function normalizeReadingState(state) {
+    if (!state || typeof state !== "object") {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(state)
+        .map(([bookId, value]) => [String(bookId ?? "").trim(), normalizeReading(value)])
+        .filter(([bookId]) => Boolean(bookId)),
+    );
+  }
+
+  function applyReadingStateToStore(store) {
+    return store;
+  }
+
+  function getReadingStateForBook(bookId) {
+    const normalizedId = String(bookId ?? "").trim();
+    if (!normalizedId) {
+      return normalizeReading(null);
+    }
+
+    return normalizeReading(loadReadingState()[normalizedId] ?? null);
+  }
+
+  function clearReadingState(bookId) {
+    const normalizedId = String(bookId ?? "").trim();
+    if (!normalizedId) {
+      return;
+    }
+
+    const state = loadReadingState();
+    if (!Object.prototype.hasOwnProperty.call(state, normalizedId)) {
+      return;
+    }
+
+    delete state[normalizedId];
+    saveReadingState(state);
+  }
+
+  function updateReadingState(bookId, updater) {
+    const normalizedId = String(bookId ?? "").trim();
+    if (!normalizedId || typeof updater !== "function") {
+      return normalizeReading(null);
+    }
+
+    const state = loadReadingState();
+    const current = normalizeReading(state[normalizedId] ?? null);
+    const next = normalizeReading(updater(current));
+    state[normalizedId] = next;
+    saveReadingState(state);
+    return next;
+  }
+
+  function buildReadingProgress(record, reading) {
+    const pages = ensureReaderPages(record, 3);
+    const pageCount = Math.max(1, pages.length);
+    const completedPages = clamp(Math.max(0, Number(reading?.completedPages ?? 0) || 0), 0, pageCount);
+    const completedCharacters =
+      Number.isFinite(reading?.completedCharacters) && reading.completedCharacters > 0
+        ? Math.max(0, Number(reading.completedCharacters))
+        : countPreviewCharacters(pages.slice(0, completedPages).flatMap((page) => page.sentences));
+    const progress = pageCount > 0 ? Math.min(100, Math.round((completedPages / pageCount) * 100)) : 0;
+    const remainingPages = Math.max(pageCount - completedPages, 0);
+    const minutesLeft = remainingPages <= 0 ? "ready now" : `${remainingPages} page${remainingPages === 1 ? "" : "s"} left`;
+
+    return {
+      pageCount,
+      completedPages,
+      completedCharacters,
+      progress,
+      minutesLeft,
+      activeSession: reading?.activeSession ?? null,
+      sessions: Array.isArray(reading?.sessions) ? reading.sessions : [],
+      lastUpdatedAt: reading?.lastUpdatedAt ?? "",
+    };
+  }
+
+  function buildReadingSessionSummary(session, record, reading) {
+    if (!session) {
+      return null;
+    }
+
+    const pages = ensureReaderPages(record, 3);
+    const pageCount = Math.max(1, Number(session.pageCount ?? reading?.pageCount ?? pages.length) || pages.length || 1);
+    const completedPages = clamp(Math.max(0, Number(session.completedPages ?? reading?.completedPages ?? 0) || 0), 0, pageCount);
+    const completedCharacters =
+      Number.isFinite(session.completedCharacters) && session.completedCharacters > 0
+        ? Math.max(0, Number(session.completedCharacters))
+        : countPreviewCharacters(pages.slice(0, completedPages).flatMap((page) => page.sentences));
+    const durationMs = Math.max(0, Number(session.durationMs ?? 0) || 0);
+    const startedAt = session.startedAt ?? "";
+    const endedAt = session.endedAt ?? session.lastSeenAt ?? startedAt;
+    const dateLabel = formatSessionDate(endedAt || startedAt);
+    const timeLabel = `${formatSessionClock(startedAt)} - ${formatSessionClock(endedAt)}`;
+    const durationLabel = formatDuration(durationMs);
+    const progressLabel = `${completedPages}/${pageCount} pages`;
+    const characterLabel = `${formatNumber(completedCharacters)} chars`;
+    const averageLabel = formatAverageCharacterTime(durationMs, completedCharacters);
+
+    return {
+      title: dateLabel,
+      subtitle: `${timeLabel} · ${durationLabel} · ${progressLabel}`,
+      meta: `${characterLabel} · ${averageLabel}/char`,
+    };
+  }
+
+  function buildRecentReadingItems(record, reading) {
+    const items = [];
+    const activeSession = reading?.activeSession ? buildReadingSessionSummary(reading.activeSession, record, reading) : null;
+    if (activeSession) {
+      items.push({ ...activeSession, subtitle: `${activeSession.subtitle} · In progress` });
+    }
+
+    const completedSessions = Array.isArray(reading?.sessions) ? reading.sessions : [];
+    for (const session of completedSessions.slice(0, 2 - items.length)) {
+      const summary = buildReadingSessionSummary(session, record, reading);
+      if (summary) {
+        items.push(summary);
+      }
+    }
+
+    const fallbackItems = Array.isArray(record.library?.recentReading) ? record.library.recentReading : [];
+    for (const item of fallbackItems) {
+      if (items.length >= 2) {
+        break;
+      }
+      items.push({ ...item });
+    }
+
+    return items.slice(0, 2);
+  }
+
+  function formatSessionDate(value) {
+    if (!value) {
+      return "";
+    }
+
+    try {
+      return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(new Date(value));
+    } catch {
+      return String(value);
+    }
+  }
+
+  function formatSessionClock(value) {
+    if (!value) {
+      return "";
+    }
+
+    try {
+      return new Intl.DateTimeFormat("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      })
+        .format(new Date(value))
+        .replace(/\s+/g, " ")
+        .toLowerCase();
+    } catch {
+      return String(value);
+    }
+  }
+
+  function formatDuration(durationMs) {
+    const totalSeconds = Math.max(0, Math.round(Number(durationMs ?? 0) / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${seconds}s`;
+    }
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+    return `${seconds}s`;
+  }
+
+  function formatAverageCharacterTime(durationMs, characterCount) {
+    const safeCharacters = Math.max(0, Number(characterCount ?? 0) || 0);
+    if (!safeCharacters) {
+      return "0ms";
+    }
+
+    const averageMs = Math.max(0, Math.round(Number(durationMs ?? 0) / safeCharacters));
+    if (averageMs >= 1000) {
+      const averageSeconds = averageMs / 1000;
+      return `${averageSeconds.toFixed(1)}s`;
+    }
+    return `${averageMs}ms`;
+  }
+
+  function formatNumber(value) {
+    try {
+      return new Intl.NumberFormat("en-US").format(Number(value ?? 0) || 0);
+    } catch {
+      return String(value ?? 0);
+    }
+  }
+
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
   }
 
   function listBooks() {
@@ -844,7 +1132,17 @@
       store.selectedBookId = store.books[0]?.id ?? DEFAULT_BOOK_ID;
       window.localStorage.setItem(SELECTION_KEY, store.selectedBookId);
     }
+    clearReadingState(bookId);
     saveStore(store);
+  }
+
+  function getReadingProgress(bookId) {
+    const record = resolveBookRecord(bookId);
+    if (!record) {
+      return null;
+    }
+
+    return buildReadingProgress(record, getReadingStateForBook(record.id));
   }
 
   function getHomePreviewData() {
@@ -853,16 +1151,19 @@
       .slice()
       .sort(sortByHomePriority)
       .slice(0, 2)
-      .map((record) => ({
-        id: record.id,
-        titleCn: record.titleCn ?? record.title,
-        authorCn: record.authorCn ?? record.author,
-        titleEn: record.title,
-        author: record.author,
-        progress: record.home?.progress ?? 0,
-        minutesLeft: record.home?.minutesLeft ?? "ready now",
-        coverClass: record.home?.coverClass ?? "one",
-      }));
+      .map((record) => {
+        const reading = getReadingProgress(record.id);
+        return {
+          id: record.id,
+          titleCn: record.titleCn ?? record.title,
+          authorCn: record.authorCn ?? record.author,
+          titleEn: record.title,
+          author: record.author,
+          progress: reading?.progress ?? record.home?.progress ?? 0,
+          minutesLeft: reading?.minutesLeft ?? record.home?.minutesLeft ?? "ready now",
+          coverClass: record.home?.coverClass ?? "one",
+        };
+      });
 
     const analysisItems = visible
       .slice()
@@ -915,6 +1216,10 @@
       return null;
     }
 
+    const readingState = getReadingStateForBook(record.id);
+    const reading = buildReadingProgress(record, readingState);
+    const recentReading = buildRecentReadingItems(record, readingState);
+
     return {
       id: record.id,
       title: record.titleCn ?? record.title,
@@ -930,9 +1235,13 @@
       known: record.library?.known ?? "",
       review: record.library?.review ?? "",
       fresh: record.library?.fresh ?? "",
-      recentReading: Array.isArray(record.library?.recentReading) ? record.library.recentReading : [],
-      progress: record.home?.progress ?? 0,
-      minutesLeft: record.home?.minutesLeft ?? "",
+      recentReading,
+      progress: reading.progress ?? record.home?.progress ?? 0,
+      minutesLeft: reading.minutesLeft ?? record.home?.minutesLeft ?? "",
+      completedPages: reading.completedPages,
+      completedCharacters: reading.completedCharacters,
+      pageCount: reading.pageCount,
+      readingSession: reading.activeSession,
       imageUrl: record.reader?.imageUrl ?? "",
       art: makeArt(record.analysis),
       libraryHref: `./library-detail-preview.html?book=${encodeURIComponent(record.id)}`,
@@ -950,6 +1259,7 @@
 
     const pages = ensureReaderPages(record, 3);
     const sentences = pages.flatMap((page) => page.sentences);
+    const reading = buildReadingProgress(record, getReadingStateForBook(record.id));
 
     return {
       id: record.id,
@@ -964,9 +1274,113 @@
       imageUrl: pages[0]?.imageUrl ?? record.reader?.imageUrl ?? "",
       languageCode: record.languageCode,
       defaultVocabulary: sentences[0]?.vocabulary ?? null,
+      reading,
       analysisHref: `./analysis-preview.html?book=${encodeURIComponent(record.id)}`,
       libraryHref: `./library-detail-preview.html?book=${encodeURIComponent(record.id)}`,
     };
+  }
+
+  function recordReadingProgress(bookId, input = {}) {
+    const record = resolveBookRecord(bookId);
+    if (!record) {
+      return null;
+    }
+
+    const pages = ensureReaderPages(record, 3);
+    const pageCount = Math.max(1, pages.length);
+    const pageIndex = clamp(Math.max(0, Number(input.pageIndex ?? 0) || 0), 0, pageCount - 1);
+    const pageSentenceCount = Math.max(0, Array.isArray(pages[pageIndex]?.sentences) ? pages[pageIndex].sentences.length : 0);
+    const sentenceIndex = clamp(Math.max(0, Number(input.sentenceIndex ?? 0) || 0), 0, Math.max(0, pageSentenceCount - 1));
+    const now = new Date().toISOString();
+    const completedPages = clamp(Math.max(1, Number(input.completedPages ?? pageIndex + 1) || pageIndex + 1), 0, pageCount);
+    const completedCharacters =
+      Math.max(
+        0,
+        Number(input.completedCharacters ?? countPreviewCharacters(pages.slice(0, completedPages).flatMap((page) => page.sentences))) || 0,
+      );
+
+    return updateReadingState(record.id, (current) => {
+      const activeSession = current.activeSession ?? null;
+      const nextActiveSession = {
+        startedAt: activeSession?.startedAt ?? now,
+        lastSeenAt: now,
+        pageIndex,
+        sentenceIndex,
+        pageCount,
+        completedPages: Math.max(completedPages, Math.max(0, Number(current.completedPages ?? 0) || 0)),
+        completedCharacters: Math.max(completedCharacters, Math.max(0, Number(current.completedCharacters ?? 0) || 0)),
+        title: record.titleCn ?? record.title ?? "",
+        author: record.authorCn ?? record.author ?? "",
+        languageLabel: languageLabel(record.languageCode),
+        kindLabel: record.kindLabel ?? "TXT",
+      };
+
+      return {
+        completedPages: Math.max(current.completedPages ?? 0, nextActiveSession.completedPages ?? 0),
+        completedCharacters: Math.max(current.completedCharacters ?? 0, nextActiveSession.completedCharacters ?? 0),
+        pageCount,
+        lastUpdatedAt: now,
+        sessions: Array.isArray(current.sessions) ? current.sessions : [],
+        activeSession: nextActiveSession,
+      };
+    });
+  }
+
+  function finalizeReadingProgress(bookId, input = {}) {
+    const record = resolveBookRecord(bookId);
+    if (!record) {
+      return null;
+    }
+
+    const pages = ensureReaderPages(record, 3);
+    const pageCount = Math.max(1, pages.length);
+    const now = new Date().toISOString();
+    const current = getReadingStateForBook(record.id);
+    const activeSession = current.activeSession;
+    if (!activeSession) {
+      return buildReadingProgress(record, current);
+    }
+
+    const completedPages = clamp(
+      Math.max(
+        1,
+        Number(input.completedPages ?? activeSession.completedPages ?? current.completedPages ?? activeSession.pageIndex + 1 ?? 1) || 1,
+      ),
+      0,
+      pageCount,
+    );
+    const completedCharacters = Math.max(
+      0,
+      Number(
+        input.completedCharacters ??
+          activeSession.completedCharacters ??
+          current.completedCharacters ??
+          countPreviewCharacters(pages.slice(0, completedPages).flatMap((page) => page.sentences)),
+      ) || 0,
+    );
+    const durationMs = Math.max(0, (Date.parse(now) || 0) - (Date.parse(activeSession.startedAt) || 0));
+    const session = {
+      ...activeSession,
+      endedAt: now,
+      lastSeenAt: now,
+      durationMs,
+      completedPages,
+      completedCharacters,
+      pageCount,
+      pageIndex: Math.max(0, Number(input.pageIndex ?? activeSession.pageIndex ?? 0) || 0),
+      sentenceIndex: Math.max(0, Number(input.sentenceIndex ?? activeSession.sentenceIndex ?? 0) || 0),
+    };
+
+    const nextState = {
+      completedPages: Math.max(current.completedPages, completedPages),
+      completedCharacters: Math.max(current.completedCharacters, completedCharacters),
+      pageCount,
+      lastUpdatedAt: now,
+      activeSession: null,
+      sessions: [session, ...(Array.isArray(current.sessions) ? current.sessions : [])].slice(0, 10),
+    };
+
+    return updateReadingState(record.id, () => nextState);
   }
 
   function ensureReaderPages(record, minimumPages = 3) {

@@ -15,7 +15,8 @@ const routes = {
   activity: "./activity-preview.html",
   vocabulary: "./vocabulary-preview.html",
 };
-const uploadTimeoutMs = 15000;
+const uploadTimeoutMs = 20 * 60 * 1000;
+const importSessionKey = "textplex.preview.importSession";
 
 const toast = createToast();
 
@@ -430,6 +431,7 @@ function wireReaderPreview() {
   const title = document.querySelector(".poem-title");
   const author = document.querySelector(".poet");
   const pager = document.getElementById("readerPager");
+  const sessionPill = document.getElementById("readerSessionPill");
   const lines = Array.from(document.querySelectorAll(".annotated-line"));
   const translation = document.querySelector(".translation");
   const vocabChar = document.querySelector(".vocab-char");
@@ -468,7 +470,7 @@ function wireReaderPreview() {
       ? storedPage
       : Number.isFinite(legacyQueryPage)
         ? legacyQueryPage
-        : 0;
+      : 0;
   let sentenceIndex = Number.isFinite(querySentence)
     ? querySentence
     : Number.isFinite(storedSentence)
@@ -476,6 +478,11 @@ function wireReaderPreview() {
       : 0;
 
   pageIndex = clamp(pageIndex, 0, pageCount - 1);
+  const completedPages = clamp(Number.parseInt(profile.reading?.completedPages ?? 0, 10) || 0, 0, pageCount);
+  if (pageIndex < completedPages) {
+    pageIndex = Math.min(completedPages, pageCount - 1);
+    sentenceIndex = 0;
+  }
 
   function render() {
     const currentPage = pages[pageIndex] ?? pages[0] ?? { pageNumber: 1, sentences: [] };
@@ -493,6 +500,10 @@ function wireReaderPreview() {
     activeTokenLookupKey = selectedTokenLookupKey;
     void ensureSelectedTokenLookup(sentence, selectedTokenIndex);
     const selectedTokenState = buildSelectedTokenState(sentence, selectedTokenIndex);
+    const reading = previewData?.recordReadingProgress?.(bookId, {
+      pageIndex,
+      sentenceIndex,
+    }) ?? profile.reading ?? null;
 
     if (title) {
       title.textContent = profile.title;
@@ -564,6 +575,30 @@ function wireReaderPreview() {
     if (moreButton) {
       moreButton.setAttribute("aria-label", "More actions");
     }
+    if (sessionPill) {
+      const activeSession = reading?.activeSession ?? null;
+      if (activeSession) {
+        const startLabel = formatSessionClock(activeSession.startedAt);
+        const endLabel = formatSessionClock(activeSession.lastSeenAt ?? activeSession.startedAt);
+        const durationLabel = formatSessionDuration(Date.parse(activeSession.lastSeenAt ?? activeSession.startedAt) - Date.parse(activeSession.startedAt));
+        const charCount = Math.max(0, Number(reading?.completedCharacters ?? activeSession.completedCharacters ?? 0) || 0);
+        const averageLabel = formatCharacterRate(
+          Date.parse(activeSession.lastSeenAt ?? activeSession.startedAt) - Date.parse(activeSession.startedAt),
+          charCount,
+        );
+        sessionPill.hidden = false;
+        sessionPill.innerHTML = `
+          <strong>${escapeHtml(startLabel)}</strong>
+          <span>to ${escapeHtml(endLabel)}</span>
+          <span>· ${escapeHtml(durationLabel)}</span>
+          <span>· ${escapeHtml(formatNumber(charCount))} chars</span>
+          <span>· ${escapeHtml(averageLabel)}/char</span>
+        `;
+      } else {
+        sessionPill.hidden = true;
+        sessionPill.innerHTML = "";
+      }
+    }
 
     if (pager) {
       pager.innerHTML = `
@@ -595,6 +630,44 @@ function wireReaderPreview() {
     document.title = `${profile.title} ? P${pageIndex + 1}/${pageCount} ? S${sentenceIndex + 1}/${currentSentenceCount} ? TextPlex Reader Preview`;
   }
 
+  function countSentenceCharacters(sentence) {
+    const tokens = Array.isArray(sentence?.tokens) ? sentence.tokens : [];
+    return tokens.reduce((total, token) => {
+      const surface = String(token?.surface ?? "");
+      if (!surface || isTokenPunctuation(surface)) {
+        return total;
+      }
+      return total + Array.from(surface).filter((character) => !/\s/.test(character) && !isTokenPunctuation(character)).length;
+    }, 0);
+  }
+
+  function countPageCharacters(page) {
+    const sentencesForPage = Array.isArray(page?.sentences) ? page.sentences : [];
+    return sentencesForPage.reduce((total, sentence) => total + countSentenceCharacters(sentence), 0);
+  }
+
+  function completeCurrentPage() {
+    const completedPages = clamp(pageIndex + 1, 0, pageCount);
+    const completedCharacters = pages.slice(0, completedPages).reduce((total, page) => total + countPageCharacters(page), 0);
+    return previewData?.recordReadingProgress?.(bookId, {
+      pageIndex,
+      sentenceIndex,
+      completedPages,
+      completedCharacters,
+    });
+  }
+
+  function finalizeCurrentSession() {
+    const completedPages = clamp(pageIndex + 1, 0, pageCount);
+    const completedCharacters = pages.slice(0, completedPages).reduce((total, page) => total + countPageCharacters(page), 0);
+    return previewData?.finalizeReadingProgress?.(bookId, {
+      pageIndex,
+      sentenceIndex,
+      completedPages,
+      completedCharacters,
+    });
+  }
+
   function goTo(delta) {
     const currentPage = pages[pageIndex] ?? pages[0] ?? { sentences: [] };
     const currentPageSentenceCount = Math.max(Array.isArray(currentPage.sentences) ? currentPage.sentences.length : 0, 1);
@@ -610,6 +683,7 @@ function wireReaderPreview() {
       return;
     }
 
+    completeCurrentPage();
     pageIndex = nextPageIndex;
     const nextPage = pages[pageIndex] ?? pages[0] ?? { sentences: [] };
     const nextPageSentenceCount = Math.max(Array.isArray(nextPage.sentences) ? nextPage.sentences.length : 0, 1);
@@ -618,6 +692,8 @@ function wireReaderPreview() {
   }
 
   render();
+  window.addEventListener("pagehide", finalizeCurrentSession);
+  window.addEventListener("beforeunload", finalizeCurrentSession);
 
   function resolveSelectedTokenIndex(sentence, page, sentenceNumber) {
     const tokens = Array.isArray(sentence.tokens) ? sentence.tokens : [];
@@ -1092,6 +1168,9 @@ function wireImportPreview() {
   const importStatusText = document.getElementById("importStatusText");
   const importProgressTrack = document.getElementById("importProgressTrack");
   const importProgressFill = document.getElementById("importProgressFill");
+  const importPageProgressTrack = document.getElementById("importPageProgressTrack");
+  const importPageProgressFill = document.getElementById("importPageProgressFill");
+  const importPageProgressText = document.getElementById("importPageProgressText");
   const importLogItems = Array.from(document.querySelectorAll("#importLog [data-step]"));
   const importPdfInput = document.getElementById("importPdfInput");
   const processorButtons = Array.from(document.querySelectorAll("[data-processor-action]"));
@@ -1105,11 +1184,20 @@ function wireImportPreview() {
     syncOcrModeToggle(previewData.getOcrProvider());
   }
 
-  setImportActivity("selected", "Select a PDF to start the processor upload.", {
-    badge: "Idle",
-    state: "idle",
-    percent: 0,
-  });
+  const restoredSession = loadImportSession();
+  if (restoredSession?.bookId) {
+    restoreImportSession(restoredSession);
+    if (restoredSession.stage === "uploading" || restoredSession.stage === "processing" || restoredSession.stage === "opening") {
+      void monitorUploadedBook(restoredSession.bookId, restoredSession.fileName, { resume: true });
+    }
+  } else {
+    setImportActivity("selected", "Select a PDF to start the processor upload.", {
+      badge: "Idle",
+      state: "idle",
+      percent: 0,
+    });
+    setImportPageProgress(0, "0 pages processed.");
+  }
 
   function applyProcessorUrl() {
     if (!processorInput || !previewData?.setProcessorBaseUrl) {
@@ -1190,12 +1278,281 @@ function wireImportPreview() {
     });
   }
 
+  function setImportPageProgress(percent, message, options = {}) {
+    const { totalPages = 0, processedPages = 0, currentPage = 0 } = options;
+    const width = Math.max(0, Math.min(100, Math.round(percent || 0)));
+    if (importPageProgressTrack) {
+      importPageProgressTrack.setAttribute("aria-valuenow", String(width));
+    }
+    if (importPageProgressFill) {
+      importPageProgressFill.style.width = `${width}%`;
+    }
+    if (importPageProgressText) {
+      importPageProgressText.textContent =
+        message || (totalPages > 0 ? `${processedPages}/${totalPages} pages processed${currentPage > 0 ? ` · page ${currentPage}` : ""}.` : `${processedPages} pages processed.`);
+    }
+  }
+
   function setImportError(message) {
     setImportActivity("selected", message, {
       badge: "Error",
       state: "error",
       percent: 100,
     });
+  }
+
+  function loadImportSession() {
+    try {
+      const raw = window.localStorage.getItem(importSessionKey);
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") {
+        return null;
+      }
+
+      return {
+        bookId: typeof parsed.bookId === "string" ? parsed.bookId : "",
+        fileName: typeof parsed.fileName === "string" ? parsed.fileName : "",
+        title: typeof parsed.title === "string" ? parsed.title : "",
+        stage: typeof parsed.stage === "string" ? parsed.stage : "processing",
+        badge: typeof parsed.badge === "string" ? parsed.badge : "Processing",
+        state: typeof parsed.state === "string" ? parsed.state : "busy",
+        message: typeof parsed.message === "string" ? parsed.message : "",
+        overallPercent: Number(parsed.overallPercent ?? 0) || 0,
+        pagePercent: Number(parsed.pagePercent ?? 0) || 0,
+        pagesProcessed: Number(parsed.pagesProcessed ?? 0) || 0,
+        totalPages: Number(parsed.totalPages ?? 0) || 0,
+        currentPage: Number(parsed.currentPage ?? 0) || 0,
+        updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : "",
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function saveImportSession(session) {
+    if (!session || typeof session !== "object") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      importSessionKey,
+      JSON.stringify({
+        ...session,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+  }
+
+  function clearImportSession() {
+    window.localStorage.removeItem(importSessionKey);
+  }
+
+  function restoreImportSession(session) {
+    setImportActivity(
+      session.stage === "error" ? "selected" : session.stage === "opening" ? "opening" : "processing",
+      session.message || `Resuming ${stripPdfExtension(session.fileName || "Imported PDF")}.`,
+      {
+        badge: session.badge || (session.stage === "error" ? "Error" : session.stage === "opening" ? "Done" : "Processing"),
+        state: session.state || (session.stage === "error" ? "error" : session.stage === "opening" ? "done" : "busy"),
+        percent: Number(session.overallPercent ?? 0) || 0,
+      },
+    );
+    setImportPageProgress(Number(session.pagePercent ?? 0) || 0, session.message || "Resuming page processing.", {
+      totalPages: Number(session.totalPages ?? 0) || 0,
+      processedPages: Number(session.pagesProcessed ?? 0) || 0,
+      currentPage: Number(session.currentPage ?? 0) || 0,
+    });
+  }
+
+  async function fetchUploadedBook(bookId) {
+    const baseUrl = previewData?.getProcessorBaseUrl?.();
+    if (!baseUrl) {
+      throw new Error("Set the processor API URL before checking progress.");
+    }
+
+    const response = await window.fetch(`${baseUrl}/books/${encodeURIComponent(bookId)}`, {
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      throw new Error(`Progress check failed: ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async function monitorUploadedBook(bookId, fileName, options = {}) {
+    const bookLabel = stripPdfExtension(fileName || "Imported PDF");
+    let consecutiveFailures = 0;
+    let lastSnapshot = loadImportSession() ?? {};
+    saveImportSession({
+      bookId,
+      fileName,
+      title: bookLabel,
+      stage: "processing",
+      badge: "Processing",
+      state: "busy",
+      overallPercent: 18,
+      pagePercent: 0,
+      pagesProcessed: 0,
+      totalPages: 0,
+      currentPage: 0,
+      message: options.resume ? `Resuming processor progress for ${bookLabel}.` : `Watching ${bookLabel} for page progress.`,
+    });
+
+    while (true) {
+      let liveBook = null;
+      try {
+        liveBook = await fetchUploadedBook(bookId);
+        consecutiveFailures = 0;
+      } catch (error) {
+        consecutiveFailures += 1;
+        const preservedPagesProcessed = Number(lastSnapshot.pagesProcessed ?? 0) || 0;
+        const preservedTotalPages = Number(lastSnapshot.totalPages ?? 0) || 0;
+        const preservedCurrentPage = Number(lastSnapshot.currentPage ?? 0) || 0;
+        const preservedPagePercent = Number(lastSnapshot.pagePercent ?? 0) || 0;
+        const retryMessage =
+          consecutiveFailures === 1
+            ? `Lost connection to the processor while checking ${bookLabel}. Retrying…`
+            : `Still waiting to reconnect to the processor for ${bookLabel}.`;
+        setImportActivity("processing", retryMessage, {
+          badge: "Waiting",
+          state: "busy",
+          percent: 18,
+        });
+        setImportPageProgress(preservedPagePercent, retryMessage, {
+          totalPages: preservedTotalPages,
+          processedPages: preservedPagesProcessed,
+          currentPage: preservedCurrentPage,
+        });
+        saveImportSession({
+          bookId,
+          fileName,
+          title: bookLabel,
+          stage: "processing",
+          badge: "Waiting",
+          state: "busy",
+          overallPercent: 18,
+          pagePercent: preservedPagePercent,
+          pagesProcessed: preservedPagesProcessed,
+          totalPages: preservedTotalPages,
+          currentPage: preservedCurrentPage,
+          message: retryMessage,
+          lastError: error instanceof Error ? error.message : String(error ?? "Unknown error"),
+        });
+        await pauseForPaint();
+        await new Promise((resolve) => window.setTimeout(resolve, Math.min(5000, 1000 * Math.max(1, consecutiveFailures))));
+        continue;
+      }
+
+      const totalPages = Number(liveBook?.extraction_total_pages ?? liveBook?.total_pages ?? 0) || 0;
+      const processedPages = Number(liveBook?.extraction_pages_processed ?? 0) || 0;
+      const currentPage = Number(liveBook?.extraction_current_page ?? processedPages ?? 0) || 0;
+      const status = String(liveBook?.extraction_status ?? liveBook?.status ?? "processing").toLowerCase();
+      const pagePercent = totalPages > 0 ? Math.min(100, Math.round((processedPages / totalPages) * 100)) : 0;
+      const overallPercent =
+        status === "complete"
+          ? 100
+          : status === "failed"
+            ? 100
+            : Math.min(95, Math.max(18, 18 + Math.round(pagePercent * 0.72)));
+      const nextMessage =
+        status === "complete"
+          ? `Finished processing ${bookLabel}.`
+          : status === "failed"
+            ? `Processor failed while handling ${bookLabel}.`
+            : totalPages > 0
+              ? `Processing page ${currentPage || processedPages || 1} of ${totalPages}.`
+              : `Processing ${bookLabel}.`;
+
+      setImportActivity(
+        "processing",
+        nextMessage,
+        {
+          badge: status === "failed" ? "Error" : status === "complete" ? "Done" : "Processing",
+          state: status === "failed" ? "error" : status === "complete" ? "done" : "busy",
+          percent: overallPercent,
+        },
+      );
+      setImportPageProgress(
+        pagePercent,
+        totalPages > 0
+          ? `${processedPages}/${totalPages} pages processed${currentPage > 0 ? ` · page ${currentPage}` : ""}.`
+          : `${processedPages} pages processed.`,
+        {
+          totalPages,
+          processedPages,
+          currentPage,
+        },
+      );
+      saveImportSession({
+        bookId,
+        fileName,
+        title: bookLabel,
+        stage: status === "failed" ? "error" : status === "complete" ? "opening" : "processing",
+        badge: status === "failed" ? "Error" : status === "complete" ? "Done" : "Processing",
+        state: status === "failed" ? "error" : status === "complete" ? "done" : "busy",
+        overallPercent,
+        pagePercent,
+        pagesProcessed: processedPages,
+        totalPages,
+        currentPage,
+        message: nextMessage,
+      });
+      lastSnapshot = {
+        bookId,
+        fileName,
+        title: bookLabel,
+        stage: status === "failed" ? "error" : status === "complete" ? "opening" : "processing",
+        badge: status === "failed" ? "Error" : status === "complete" ? "Done" : "Processing",
+        state: status === "failed" ? "error" : status === "complete" ? "done" : "busy",
+        overallPercent,
+        pagePercent,
+        pagesProcessed: processedPages,
+        totalPages,
+        currentPage,
+        message: nextMessage,
+      };
+
+      if (status === "complete") {
+        setImportActivity("opening", `Opening ${bookLabel}.`, {
+          badge: "Done",
+          state: "done",
+          percent: 100,
+        });
+        await pauseForPaint();
+        await (previewData?.refreshFromApi?.() ?? Promise.resolve());
+        const hydratedBook =
+          previewData?.getBook?.(bookId) ??
+          previewData?.listBooks?.().find((book) => book.id === bookId) ??
+          liveBook;
+        if (hydratedBook) {
+          window.sessionStorage.setItem("textplex.preview.pendingBook", JSON.stringify(hydratedBook));
+          previewData?.selectBook?.(bookId);
+          clearImportSession();
+          navigateTo(`${routes.reader}?book=${encodeURIComponent(bookId)}`);
+        }
+        return liveBook;
+      }
+
+      if (status === "failed") {
+        setImportError(`The processor could not finish ${bookLabel}.`);
+        saveImportSession({
+          ...lastSnapshot,
+          stage: "error",
+          badge: "Error",
+          state: "error",
+          overallPercent: 100,
+          message: `The processor could not finish ${bookLabel}.`,
+        });
+        return liveBook;
+      }
+
+      await pauseForPaint();
+      await new Promise((resolve) => window.setTimeout(resolve, 1000));
+    }
   }
 
   function pauseForPaint() {
@@ -1271,56 +1628,47 @@ function wireImportPreview() {
     });
     await pauseForPaint();
 
-    const uploadResult = await uploadPdfToProcessor(file);
+    const uploadResult = await uploadPdfToProcessor(file, (progress) => {
+      const loaded = Number(progress?.loaded ?? 0) || 0;
+      const total = Number(progress?.total ?? file.size ?? 0) || 0;
+      const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+      if (progress?.uploadComplete) {
+        setImportActivity("processing", "Upload finished. Waiting for the processor to register and split the PDF.", {
+          badge: "Processing",
+          state: "busy",
+          percent: 42,
+        });
+        return;
+      }
+      setImportActivity("uploading", `Uploading ${formatBytes(loaded)} of ${formatBytes(total)}.`, {
+        badge: "Uploading",
+        state: "busy",
+        percent: Math.max(34, percent),
+      });
+    });
     importPdfInput.value = "";
-    if (!uploadResult) {
-      setImportError("The processor rejected the upload.");
+    if (!uploadResult || uploadResult.error) {
+      setImportError(uploadResult?.error || "The processor rejected the upload.");
       return;
     }
 
-    setImportActivity("processing", "Processor accepted the book and is refreshing live reader data.", {
-      badge: "Processing",
-      state: "busy",
-      percent: 58,
-    });
-    await pauseForPaint();
-
-    await (previewData?.refreshFromApi?.() ?? Promise.resolve());
-    setImportActivity("refreshing", "Preview data refreshed from the processor API.", {
-      badge: "Refreshing",
-      state: "busy",
-      percent: 78,
-    });
-    await pauseForPaint();
-
     if (uploadResult.id) {
-      const hydratedBook = previewData?.getBook?.(uploadResult.id) ?? previewData?.listBooks?.().find((book) => book.id === uploadResult.id) ?? null;
-      const nextBook =
-        hydratedBook ??
-        previewData?.createImportedRecord?.("book", {
-          ...uploadResult,
-          id: uploadResult.id,
-          title: uploadResult.title ?? stripPdfExtension(file.name || "Imported PDF"),
-          titleCn: uploadResult.titleCn ?? uploadResult.title ?? stripPdfExtension(file.name || "Imported PDF"),
-          author: uploadResult.author ?? "Local import",
-          authorCn: uploadResult.authorCn ?? uploadResult.author ?? "Local import",
-          languageCode: uploadResult.languageCode ?? "zh",
-          kindLabel: uploadResult.kindLabel ?? "TXT",
-          ocrProvider: previewData?.getOcrProvider?.() || "local",
-          profileLabel: uploadResult.profileLabel ?? "Local",
-          summary: uploadResult.summary ?? `Imported from ${file.name || "a PDF file"}.`,
-          recentReading: Array.isArray(uploadResult.recentReading) ? uploadResult.recentReading : [],
-        }) ??
-        uploadResult;
-      window.sessionStorage.setItem("textplex.preview.pendingBook", JSON.stringify(nextBook));
-      previewData?.selectBook?.(String(nextBook.id ?? uploadResult.id));
-      setImportActivity("opening", `Opening ${uploadResult.title || stripPdfExtension(file.name || "Imported PDF")}.`, {
-        badge: "Done",
-        state: "done",
-        percent: 100,
+      const uploadedTitle = stripPdfExtension(uploadResult.title ?? file.name);
+      saveImportSession({
+        bookId: uploadResult.id,
+        fileName: file.name,
+        title: uploadedTitle,
+        stage: "processing",
+        badge: "Processing",
+        state: "busy",
+        overallPercent: 18,
+        pagePercent: Number(uploadResult?.extraction_pages_processed ?? 0) || 0,
+        pagesProcessed: Number(uploadResult?.extraction_pages_processed ?? 0) || 0,
+        totalPages: Number(uploadResult?.extraction_total_pages ?? uploadResult?.total_pages ?? 0) || 0,
+        currentPage: Number(uploadResult?.extraction_current_page ?? 0) || 0,
+        message: `Waiting for the processor to finish ${uploadedTitle}.`,
       });
-      await pauseForPaint();
-      navigateTo(`${routes.reader}?book=${encodeURIComponent(String(nextBook.id ?? uploadResult.id))}`);
+      void monitorUploadedBook(uploadResult.id, uploadedTitle);
     }
   });
 
@@ -1397,7 +1745,51 @@ function wireImportPreview() {
   });
 }
 
-async function uploadPdfToProcessor(file) {
+function formatBytes(bytes) {
+  const size = Number(bytes) || 0;
+  if (size <= 0) {
+    return "0 B";
+  }
+  const units = ["B", "KB", "MB", "GB"];
+  let unitIndex = 0;
+  let value = size;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value >= 10 || unitIndex === 0 ? Math.round(value) : value.toFixed(1)} ${units[unitIndex]}`;
+}
+
+function readUploadErrorMessage(xhr, fallbackMessage) {
+  const raw = String(xhr?.responseText ?? "").trim();
+  if (!raw) {
+    return fallbackMessage;
+  }
+  try {
+    const body = JSON.parse(raw);
+    if (typeof body === "string" && body.trim()) {
+      return body.trim();
+    }
+    if (body && typeof body === "object") {
+      if (typeof body.detail === "string" && body.detail.trim()) {
+        return body.detail.trim();
+      }
+      if (body.detail && typeof body.detail === "object" && typeof body.detail.message === "string" && body.detail.message.trim()) {
+        return body.detail.message.trim();
+      }
+      if (typeof body.message === "string" && body.message.trim()) {
+        return body.message.trim();
+      }
+    }
+  } catch {
+    if (raw) {
+      return raw;
+    }
+  }
+  return fallbackMessage;
+}
+
+async function uploadPdfToProcessor(file, onProgress) {
   const baseUrl = previewData?.getProcessorBaseUrl?.();
   if (!baseUrl) {
     toast("Set the processor API URL before uploading.");
@@ -1416,34 +1808,54 @@ async function uploadPdfToProcessor(file) {
   formData.append("author", "Local import");
   formData.append("ocr_provider", previewData?.getOcrProvider?.() || "local");
 
-  const controller = typeof AbortController === "function" ? new AbortController() : null;
-  const timeoutId = controller ? window.setTimeout(() => controller.abort(), uploadTimeoutMs) : null;
-
   try {
-    const response = await window.fetch(`${baseUrl}/books/upload`, {
-      method: "POST",
-      body: formData,
-      signal: controller?.signal,
+    const response = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${baseUrl}/books/upload`, true);
+      xhr.responseType = "text";
+      xhr.timeout = uploadTimeoutMs;
+      xhr.upload.onprogress = (event) => {
+        onProgress?.(event);
+      };
+      xhr.upload.onload = () => {
+        onProgress?.({
+          lengthComputable: true,
+          loaded: 1,
+          total: 1,
+          uploadComplete: true,
+        });
+      };
+      xhr.onload = () => {
+        resolve({
+          ok: xhr.status >= 200 && xhr.status < 300,
+          status: xhr.status,
+          statusText: xhr.statusText,
+          text: async () => String(xhr.responseText ?? ""),
+          json: async () => JSON.parse(String(xhr.responseText ?? "{}")),
+          raw: String(xhr.responseText ?? ""),
+        });
+      };
+      xhr.onerror = () => {
+        reject(new Error("Upload failed. Check the processor URL and try again."));
+      };
+      xhr.ontimeout = () => {
+        reject(new Error(`Upload timed out after ${Math.round(uploadTimeoutMs / 60000)} minutes while the processor was still handling the PDF.`));
+      };
+      xhr.send(formData);
     });
 
     if (!response.ok) {
-      toast(`Upload failed: ${response.status}`);
-      return null;
+      const failure = readUploadErrorMessage(response, `${response.status} ${response.statusText || "Upload failed"}`.trim());
+      toast(`Upload failed: ${failure}`);
+      return { error: failure, status: response.status };
     }
 
     toast("PDF uploaded.");
     return response.json();
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      toast(`Upload timed out after ${uploadTimeoutMs / 1000} seconds.`);
-      return null;
-    }
-    toast("Upload failed. Check the processor URL and try again.");
-    return null;
-  } finally {
-    if (timeoutId !== null) {
-      window.clearTimeout(timeoutId);
-    }
+    const message = error instanceof Error ? error.message : "Upload failed. Check the processor URL and try again.";
+    toast(message);
+    return { error: message };
   }
 }
 
@@ -1810,6 +2222,60 @@ function escapeHtml(value) {
 
 function formatDate(value) {
   return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(value);
+}
+
+function formatNumber(value) {
+  try {
+    return new Intl.NumberFormat("en-US").format(Number(value ?? 0) || 0);
+  } catch {
+    return String(value ?? 0);
+  }
+}
+
+function formatSessionClock(value) {
+  if (!value) {
+    return "";
+  }
+
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    })
+      .format(new Date(value))
+      .replace(/\s+/g, " ")
+      .toLowerCase();
+  } catch {
+    return String(value);
+  }
+}
+
+function formatSessionDuration(durationMs) {
+  const totalSeconds = Math.max(0, Math.round(Number(durationMs ?? 0) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
+}
+
+function formatCharacterRate(durationMs, characterCount) {
+  const safeCharacters = Math.max(0, Number(characterCount ?? 0) || 0);
+  if (!safeCharacters) {
+    return "0ms";
+  }
+
+  const averageMs = Math.max(0, Math.round(Number(durationMs ?? 0) / safeCharacters));
+  if (averageMs >= 1000) {
+    return `${(averageMs / 1000).toFixed(1)}s`;
+  }
+  return `${averageMs}ms`;
 }
 
 function capitalize(value) {

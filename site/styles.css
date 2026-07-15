@@ -1201,6 +1201,58 @@ a {
   background: var(--surface-soft);
 }
 
+.upload-progress-card {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 14px;
+}
+
+.upload-progress-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.upload-progress-head h4 {
+  margin: 2px 0 0;
+  font-size: 0.98rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.upload-progress-track {
+  height: 12px;
+  margin-top: 0;
+}
+
+.upload-progress-fill {
+  transition: width 220ms ease;
+}
+
+.upload-progress-track-secondary {
+  height: 10px;
+}
+
+.upload-progress-fill-secondary {
+  background: linear-gradient(90deg, #4a74d1 0%, #7a95e3 55%, #4a74d1 100%);
+}
+
+.upload-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.upload-progress-meta .small-copy {
+  margin: 0;
+}
+
+.upload-progress-meta-secondary {
+  margin-top: -2px;
+}
+
 .vocab-results {
   display: grid;
   gap: 8px;

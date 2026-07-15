@@ -76,6 +76,11 @@ class BookRecord(BaseModel):
     page_image_count: int = 0
     pages_path: str | None = None
     extraction_status: str = "not_started"
+    extraction_total_pages: int = 0
+    extraction_pages_processed: int = 0
+    extraction_current_page: int | None = None
+    extraction_started_at: str | None = None
+    extraction_updated_at: str | None = None
     extracted_page_count: int = 0
     extraction_path: str | None = None
     archived_at: str | None = None

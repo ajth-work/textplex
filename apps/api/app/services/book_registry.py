@@ -151,7 +151,7 @@ def import_book_from_path(
     source_path: str | Path,
     *,
     language_code: str,
-    ocr_provider: str = "local",
+    ocr_provider: str | None = None,
     title: str | None = None,
     author: str | None = None,
     source_filename: str | None = None,

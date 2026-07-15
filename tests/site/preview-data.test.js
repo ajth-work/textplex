@@ -68,6 +68,47 @@ test("imported records become live book records and resolve by query params", ()
   assert.equal(api.getSelectedBookId(), "little-prince");
 });
 
+test("reading progress persists per book and feeds session summaries", () => {
+  const { window } = loadPreviewData();
+  const api = window.TextPlexPreview;
+
+  api.createImportedRecord("article", {
+    id: "progress-book",
+    title: "Progress Book",
+    author: "Local import",
+    languageCode: "zh",
+    sentences: [
+      { tokens: [{ surface: "一" }, { surface: "页" }, { surface: "。" }], translation: ["Page one."] },
+      { tokens: [{ surface: "二" }, { surface: "页" }, { surface: "。" }], translation: ["Page two."] },
+      { tokens: [{ surface: "三" }, { surface: "页" }, { surface: "。" }], translation: ["Page three."] },
+      { tokens: [{ surface: "四" }, { surface: "页" }, { surface: "。" }], translation: ["Page four."] },
+    ],
+  });
+
+  const initialLibrary = api.getLibraryProfile("progress-book");
+  assert.equal(initialLibrary.progress, 0);
+  assert.equal(initialLibrary.completedPages, 0);
+  assert.equal(initialLibrary.recentReading.length, 0);
+
+  const liveState = api.recordReadingProgress("progress-book", { pageIndex: 0, sentenceIndex: 0 });
+  assert.equal(liveState.completedPages, 1);
+
+  const afterPageOne = api.getLibraryProfile("progress-book");
+  assert.equal(afterPageOne.progress, 25);
+  assert.equal(afterPageOne.completedPages, 1);
+  assert.equal(afterPageOne.readingSession.completedPages, 1);
+
+  const finalized = api.finalizeReadingProgress("progress-book", { pageIndex: 0, sentenceIndex: 0 });
+  assert.equal(finalized.completedPages, 1);
+  assert.equal(finalized.sessions.length, 1);
+
+  const summary = api.getLibraryProfile("progress-book");
+  assert.equal(summary.progress, 25);
+  assert.equal(summary.recentReading.length > 0, true);
+  assert.ok(summary.recentReading[0].subtitle.length > 0);
+  assert.match(summary.recentReading[0].meta, /chars/);
+});
+
 test("preview data hydrates live books from the processor API", async () => {
   const fetchCalls = [];
   const fetchImpl = async (url) => {

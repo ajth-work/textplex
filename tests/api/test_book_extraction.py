@@ -8,6 +8,7 @@ from app.main import app
 from app.schemas.books import BookRecord
 from app.services.book_registry import import_book_from_path
 from app.services import book_extraction as book_extraction_service
+from app.services.ocr import OcrPageResult
 
 
 def test_extract_book_text_persists_structured_page_artifacts(imported_real_scan: tuple[Path, BookRecord]) -> None:
@@ -91,8 +92,15 @@ def test_extract_book_text_records_openai_ocr_metadata(monkeypatch: pytest.Monke
     monkeypatch.setenv("OPENAI_OCR_MODEL", "gpt-5.4-mini")
     monkeypatch.setattr(
         book_extraction_service,
-        "resolve_page_text",
-        lambda **_: ("这是第一句。", "openai", "openai:gpt-5.4-mini:ocr-v1"),
+        "resolve_page_ocr",
+        lambda **_: OcrPageResult(
+            transcription="这是第一句。",
+            sentence_texts=["这是第一句。"],
+            page_ends_with_sentence_terminator=True,
+            token_hints=[],
+            text_source="openai",
+            text_source_signature="openai:gpt-5.4-mini:ocr-v2",
+        ),
     )
 
     app.state.data_root = data_root
@@ -111,7 +119,7 @@ def test_extract_book_text_records_openai_ocr_metadata(monkeypatch: pytest.Monke
     assert page_artifact.exists()
     page_json = json.loads(page_artifact.read_text(encoding="utf-8"))
     assert page_json["text_source"] == "openai"
-    assert page_json["text_source_signature"] == "openai:gpt-5.4-mini:ocr-v1"
+    assert page_json["text_source_signature"] == "openai:gpt-5.4-mini:ocr-v2"
     assert page_json["page"]["raw_text"] == "这是第一句。"
     assert page_json["page"]["sentences"][0]["text"] == "这是第一句。"
 
@@ -122,8 +130,8 @@ def test_extract_book_text_uses_book_level_ocr_provider(monkeypatch: pytest.Monk
     record = import_book_from_path(
         source_pdf,
         language_code="zh",
-        title="ä¸‰ä½“",
-        author="åˆ˜æ…ˆæ¬£",
+        title="三体",
+        author="刘慈欣",
         page_start=1,
         page_count=1,
         ocr_provider="openai",
@@ -137,11 +145,18 @@ def test_extract_book_text_uses_book_level_ocr_provider(monkeypatch: pytest.Monk
 
     captured = {}
 
-    def fake_resolve_page_text(**kwargs):
+    def fake_resolve_page_ocr(**kwargs):
         captured.update(kwargs)
-        return "é€šè¿‡è®¾ç½®ç»§ç»­ä½¿ç”¨ OpenAIã€‚", "openai", "openai:gpt-5.4-mini:ocr-v1"
+        return OcrPageResult(
+            transcription="通过设置继续使用 OpenAI。",
+            sentence_texts=["通过设置继续使用 OpenAI。"],
+            page_ends_with_sentence_terminator=True,
+            token_hints=[],
+            text_source="openai",
+            text_source_signature="openai:gpt-5.4-mini:ocr-v2",
+        )
 
-    monkeypatch.setattr(book_extraction_service, "resolve_page_text", fake_resolve_page_text)
+    monkeypatch.setattr(book_extraction_service, "resolve_page_ocr", fake_resolve_page_ocr)
     monkeypatch.setenv("AI_PROVIDER", "local")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
@@ -158,7 +173,7 @@ def test_extract_book_text_uses_book_level_ocr_provider(monkeypatch: pytest.Monk
     page_artifact = data_root / "books" / record.id / "extractions" / "pages" / "page-0001.json"
     page_json = json.loads(page_artifact.read_text(encoding="utf-8"))
     assert page_json["text_source"] == "openai"
-    assert page_json["text_source_signature"] == "openai:gpt-5.4-mini:ocr-v1"
+    assert page_json["text_source_signature"] == "openai:gpt-5.4-mini:ocr-v2"
 
 
 def test_force_extraction_refreshes_cached_artifacts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -183,8 +198,15 @@ def test_force_extraction_refreshes_cached_artifacts(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(
         book_extraction_service,
-        "resolve_page_text",
-        lambda **_: ("旧句子。", "openai", "openai:gpt-5.4-mini:ocr-v1"),
+        "resolve_page_ocr",
+        lambda **_: OcrPageResult(
+            transcription="旧句子。",
+            sentence_texts=["旧句子。"],
+            page_ends_with_sentence_terminator=True,
+            token_hints=[],
+            text_source="openai",
+            text_source_signature="openai:gpt-5.4-mini:ocr-v2",
+        ),
     )
     first = client.post(
         f"/books/{record.id}/extract",
@@ -197,8 +219,15 @@ def test_force_extraction_refreshes_cached_artifacts(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(
         book_extraction_service,
-        "resolve_page_text",
-        lambda **_: ("新句子。", "openai", "openai:gpt-5.4-mini:ocr-v1"),
+        "resolve_page_ocr",
+        lambda **_: OcrPageResult(
+            transcription="新句子。",
+            sentence_texts=["新句子。"],
+            page_ends_with_sentence_terminator=True,
+            token_hints=[],
+            text_source="openai",
+            text_source_signature="openai:gpt-5.4-mini:ocr-v2",
+        ),
     )
     second = client.post(
         f"/books/{record.id}/extract",

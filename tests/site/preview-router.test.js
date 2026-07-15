@@ -285,6 +285,81 @@ test("reader preview wires sentence paging from dynamic book data", async () => 
   assert.equal(router.clamp(-1, 0, 2), 0);
 });
 
+test("reader preview shows a persisted reading session pill and advances book progress", async () => {
+  const titleNode = createNode("h1");
+  const authorNode = createNode("p");
+  const pagerNode = createPagerNode();
+  const sessionPill = createNode("div");
+  const lineOne = createSentenceLineNode();
+  const lineTwo = createNode("div");
+  const translationNode = createNode("div");
+  const vocabChar = createNode("h2");
+  const vocabDefinition = createNode("p");
+  const exampleCn = createNode("p");
+  const exampleEn = createNode("p");
+  const saveButton = createNode("button");
+  const moreButton = createNode("button");
+  const readingSpan = createNode("span");
+  const audioSpan = createNode("span");
+  const tagSpan = createNode("span");
+  const vocabPinyin = createNode("div");
+  vocabPinyin.querySelectorAll = () => [readingSpan, audioSpan, tagSpan];
+
+  const seededBrowser = loadPreviewData();
+  seededBrowser.window.TextPlexPreview.createImportedRecord("article", {
+    id: "session-book",
+    title: "Session Book",
+    author: "Local import",
+    languageCode: "zh",
+    sentences: [
+      { tokens: [{ surface: "甲" }, { surface: "页" }, { surface: "。" }], translation: ["Page one."] },
+      { tokens: [{ surface: "乙" }, { surface: "页" }, { surface: "。" }], translation: ["Page two."] },
+      { tokens: [{ surface: "丙" }, { surface: "页" }, { surface: "。" }], translation: ["Page three."] },
+      { tokens: [{ surface: "丁" }, { surface: "页" }, { surface: "。" }], translation: ["Page four."] },
+    ],
+  });
+
+  const browser = loadPreviewRouter({
+    pathname: "/reader-preview.html",
+    search: "?book=session-book",
+    localStorageSeed: seededBrowser.window.localStorage.snapshot(),
+    selectorMap: {
+      ".poem-title": titleNode,
+      ".poet": authorNode,
+      ".annotated-line": [lineOne, lineTwo],
+      ".translation": translationNode,
+      ".vocab-char": vocabChar,
+      ".vocab-pinyin": vocabPinyin,
+      ".vocab-definition": vocabDefinition,
+      ".example-cn": exampleCn,
+      ".example-en": exampleEn,
+      ".button-primary": saveButton,
+      ".button-secondary": moreButton,
+      ".topbar .icon-btn": [createNode("button")],
+      ".session-pill": sessionPill,
+      "button, a": [],
+    },
+    idMap: {
+      readerPager: pagerNode,
+      readerSessionPill: sessionPill,
+    },
+  });
+
+  await browser.window.TextPlexPreviewRouter.ready;
+
+  assert.match(sessionPill.innerHTML, /to/i);
+  assert.match(sessionPill.innerHTML, /chars/i);
+  assert.equal(sessionPill.hidden, false);
+  assert.equal(browser.window.TextPlexPreview.getLibraryProfile("session-book").progress, 25);
+
+  const nextButton = pagerNode.querySelector('[aria-label="Next sentence"]');
+  nextButton.click();
+
+  assert.match(pagerNode.innerHTML, /P2\/4 \| S1\/1/);
+  assert.equal(browser.window.TextPlexPreview.getLibraryProfile("session-book").progress, 50);
+  assert.match(sessionPill.innerHTML, /chars/i);
+});
+
 test("analysis preview shows an explicit missing-book state for unknown ids", async () => {
   const appNode = createNode("main");
   const browser = loadPreviewRouter({
@@ -732,6 +807,28 @@ test("import preview shows processor upload progress while a PDF is being import
     fetchImpl: async (url, options) => {
       uploadCalls.push({ url, options });
       await new Promise((resolve) => setTimeout(resolve, 25));
+      const href = String(url);
+      if (/\/books\/upload$/.test(href)) {
+        return {
+          ok: true,
+          json: async () => ({ id: "uploaded-book", title: "Uploaded PDF Sample" }),
+        };
+      }
+
+      if (/\/books\/uploaded-book$/.test(href)) {
+        return {
+          ok: true,
+          json: async () => ({
+            id: "uploaded-book",
+            title: "Uploaded PDF Sample",
+            extraction_status: "complete",
+            extraction_total_pages: 4,
+            extraction_pages_processed: 4,
+            extraction_current_page: 4,
+          }),
+        };
+      }
+
       return {
         ok: true,
         json: async () => ({ id: "uploaded-book", title: "Uploaded PDF Sample" }),

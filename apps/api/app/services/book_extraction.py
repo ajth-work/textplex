@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import re
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 from uuid import uuid4
 
 from pypdf import PdfReader
@@ -10,16 +12,20 @@ from pypdf import PdfReader
 from app.core.paths import get_books_root
 from app.schemas.books import BookRecord, PageExtractionArtifact
 from app.services.book_registry import import_book_from_path, load_registry, save_registry
-from app.services.book_sources import is_text_fixture_source, load_text_fixture_pages
-from app.services.book_sources import write_text_fixture_source
-from app.services.ocr import get_text_source_signature, resolve_page_text
+from app.services.book_sources import is_text_fixture_source, load_text_fixture_pages, write_text_fixture_source
 from app.services.lexicon import lookup_lexicon_entry_map, lookup_lexicon_pinyin_map
+from app.services.ocr import get_text_source_signature, resolve_page_ocr
 from processor import build_book_extraction_result, build_page_extraction_result, stitch_page_sentence_carryover
 from processor.contracts import PageExtractionResult
 
 FIXTURE_TEXT_SOURCE = "fixture"
 FIXTURE_TEXT_SIGNATURE = "fixture-text-v1"
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
+ExtractionProgressCallback = Callable[[int, int, int], None]
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _artifact_dir(book_id: str, data_root: Path) -> Path:
@@ -117,7 +123,11 @@ def import_text_into_book(
     )
 
     book.extraction_status = "complete"
-    book.extracted_page_count = extracted_page_count
+    book.extraction_total_pages = extracted_page_count
+    book.extraction_pages_processed = extracted_page_count
+    book.extraction_current_page = book.total_pages if extracted_page_count else None
+    book.extraction_started_at = book.extraction_started_at or _utc_now()
+    book.extraction_updated_at = _utc_now()
     book.extraction_path = str(extraction_path)
     book.status = "extracted"
     _persist_book_record(book, data_root=books_root)
@@ -195,6 +205,27 @@ def _enrich_page_lexicon_metadata(page_result: PageExtractionResult, *, data_roo
     return page_result.model_copy(update={"sentences": sentences})
 
 
+def _update_extraction_progress(
+    *,
+    book: BookRecord,
+    data_root: Path,
+    total_pages: int,
+    pages_processed: int,
+    current_page: int | None,
+) -> None:
+    book.extraction_total_pages = total_pages
+    book.extraction_pages_processed = pages_processed
+    book.extraction_current_page = current_page
+    if not book.extraction_started_at:
+        book.extraction_started_at = _utc_now()
+    book.extraction_updated_at = _utc_now()
+    if book.extraction_status != "complete":
+        book.extraction_status = "processing"
+    if book.status not in {"extracted", "archived"}:
+        book.status = "processing"
+    _persist_book_record(book, data_root=data_root)
+
+
 def extract_book_pages(
     *,
     book: BookRecord,
@@ -203,6 +234,7 @@ def extract_book_pages(
     force: bool = False,
     ocr_provider: str | None = None,
     data_root: Path | None = None,
+    progress_callback: ExtractionProgressCallback | None = None,
 ) -> tuple[PageExtractionArtifact, ...]:
     data_root = data_root or get_books_root()
     lexicon_root = data_root.parent if data_root.name == "books" else data_root
@@ -213,6 +245,7 @@ def extract_book_pages(
     source_pdf = Path(book.source_path)
     start_page = max(1, page_start)
     end_page = book.total_pages if page_count is None else min(book.total_pages, start_page + page_count - 1)
+    total_to_process = max(0, end_page - start_page + 1)
     fixture_pages = load_text_fixture_pages(source_pdf) if is_text_fixture_source(source_pdf) else None
     reader = None if fixture_pages is not None else PdfReader(str(source_pdf))
     current_text_source, current_text_source_signature = (
@@ -223,6 +256,7 @@ def extract_book_pages(
 
     page_results: list[PageExtractionResult] = []
     artifact_meta: list[tuple[str, str, str, PageExtractionResult]] = []
+    processed_count = 0
     for page_number in range(start_page, end_page + 1):
         page_image_path = pages_root / f"page-{page_number:04d}.png"
         page_hash = _page_image_hash(page_image_path)
@@ -241,16 +275,22 @@ def extract_book_pages(
             artifact_meta.append(
                 (page_hash, existing_artifact.text_source, existing_artifact.text_source_signature, page_result)
             )
+            processed_count += 1
+            if progress_callback:
+                progress_callback(page_number, processed_count, total_to_process)
             continue
 
         if fixture_pages is not None:
             raw_text = fixture_pages[page_number - 1][2]
             text_source = FIXTURE_TEXT_SOURCE
             text_source_signature = FIXTURE_TEXT_SIGNATURE
+            sentence_texts = None
+            page_ends = None
+            token_hints = None
         else:
             assert reader is not None
             fallback_text = reader.pages[page_number - 1].extract_text() or ""
-            raw_text, text_source, text_source_signature = resolve_page_text(
+            ocr_result = resolve_page_ocr(
                 fallback_text=fallback_text,
                 page_image_path=page_image_path,
                 book_title=book.title,
@@ -258,16 +298,29 @@ def extract_book_pages(
                 page_number=page_number,
                 ocr_provider=ocr_provider or book.ocr_provider,
             )
+            raw_text = ocr_result.transcription
+            text_source = ocr_result.text_source
+            text_source_signature = ocr_result.text_source_signature
+            sentence_texts = ocr_result.sentence_texts
+            page_ends = ocr_result.page_ends_with_sentence_terminator
+            token_hints = [hint.model_dump() for hint in ocr_result.token_hints]
+
         page_result = build_page_extraction_result(
             book_id=book.id,
             page_number=page_number,
             language_code=book.language_code,
             raw_text=raw_text,
             source_page_sha256=page_hash,
+            sentence_texts=sentence_texts,
+            page_ends_with_sentence_terminator=page_ends,
+            token_hints=token_hints,
         )
         page_result = _enrich_page_lexicon_metadata(page_result, data_root=lexicon_root)
         page_results.append(page_result)
         artifact_meta.append((page_hash, text_source, text_source_signature, page_result))
+        processed_count += 1
+        if progress_callback:
+            progress_callback(page_number, processed_count, total_to_process)
 
     stitched_pages = stitch_page_sentence_carryover(page_results)
     artifacts: list[PageExtractionArtifact] = []
@@ -295,6 +348,7 @@ def extract_book_text(
     force: bool = False,
     ocr_provider: str | None = None,
     data_root: Path | None = None,
+    progress_callback: ExtractionProgressCallback | None = None,
 ) -> tuple[Path, int]:
     data_root = data_root or get_books_root()
     artifacts = extract_book_pages(
@@ -304,6 +358,7 @@ def extract_book_text(
         force=force,
         ocr_provider=ocr_provider,
         data_root=data_root,
+        progress_callback=progress_callback,
     )
     pages = [artifact.page for artifact in artifacts]
     if not pages:

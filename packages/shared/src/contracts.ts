@@ -13,6 +13,11 @@ export interface BookRecord {
   page_image_count: number;
   pages_path: string | null;
   extraction_status: string;
+  extraction_total_pages: number;
+  extraction_pages_processed: number;
+  extraction_current_page: number | null;
+  extraction_started_at: string | null;
+  extraction_updated_at: string | null;
   extracted_page_count: number;
   extraction_path: string | null;
   created_at: string;
