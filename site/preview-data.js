@@ -3,9 +3,32 @@
   const SELECTION_KEY = "textplex.preview.selectedBook";
   const PROCESSOR_URL_KEY = "textplex.processorBaseUrl";
   const OCR_PROVIDER_KEY = "textplex.ocrProvider";
+  const READER_MODE_KEY = "textplex.readerMode";
+  const TRACK_KEY = "textplex.preview.selectedTrack";
   const PENDING_BOOK_KEY = "textplex.preview.pendingBook";
   const READING_STATE_KEY = "textplex.preview.readingState";
   const DEFAULT_BOOK_ID = "spring-dawn";
+
+  function normalizeTrackCode(value) {
+    const code = String(value ?? "").trim().toLowerCase();
+    if (["hsk", "jlpt", "topik", "cefr", "local"].includes(code)) {
+      return code;
+    }
+    return "local";
+  }
+
+  function getSelectedTrackCode() {
+    const fromUrl = normalizeTrackCode(new URL(window.location.href).searchParams.get("track"));
+    if (fromUrl !== "local" || new URL(window.location.href).searchParams.has("track")) {
+      window.localStorage.setItem(TRACK_KEY, fromUrl);
+      return fromUrl;
+    }
+    return normalizeTrackCode(window.localStorage.getItem(TRACK_KEY));
+  }
+
+  function setSelectedTrackCode(trackCode) {
+    window.localStorage.setItem(TRACK_KEY, normalizeTrackCode(trackCode));
+  }
 
   const seedBooks = [
     createRecord({
@@ -556,12 +579,15 @@
     selectionKey: SELECTION_KEY,
     processorUrlKey: PROCESSOR_URL_KEY,
     ocrProviderKey: OCR_PROVIDER_KEY,
+    trackKey: TRACK_KEY,
     ready: hydrateFromApi(),
     refreshFromApi: hydrateFromApi,
     getProcessorBaseUrl,
     setProcessorBaseUrl,
     getOcrProvider,
     setOcrProvider,
+    getSelectedTrackCode,
+    setSelectedTrackCode,
     loadStore,
     saveStore,
     resetStore,
@@ -576,6 +602,7 @@
     recordReadingProgress,
     finalizeReadingProgress,
     getHomePreviewData,
+    getProfilePreviewData,
     getAnalysisProfile,
     getLibraryProfile,
     getReaderProfile,
@@ -947,7 +974,7 @@
       Number.isFinite(session.completedCharacters) && session.completedCharacters > 0
         ? Math.max(0, Number(session.completedCharacters))
         : countPreviewCharacters(pages.slice(0, completedPages).flatMap((page) => page.sentences));
-    const durationMs = Math.max(0, Number(session.durationMs ?? 0) || 0);
+    const durationMs = getSessionDurationMs(session);
     const startedAt = session.startedAt ?? "";
     const endedAt = session.endedAt ?? session.lastSeenAt ?? startedAt;
     const dateLabel = formatSessionDate(endedAt || startedAt);
@@ -1047,6 +1074,29 @@
       return `${averageSeconds.toFixed(1)}s`;
     }
     return `${averageMs}ms`;
+  }
+
+  function getSessionDurationMs(session) {
+    if (!session || typeof session !== "object") {
+      return 0;
+    }
+
+    const directDuration = Math.max(0, Number(session.durationMs ?? 0) || 0);
+    if (directDuration > 0) {
+      return directDuration;
+    }
+
+    const startedAt = Date.parse(session.startedAt ?? "");
+    const endedAt = Date.parse(session.endedAt ?? session.lastSeenAt ?? "");
+    if (!Number.isFinite(startedAt) || !Number.isFinite(endedAt)) {
+      return 0;
+    }
+
+    return Math.max(0, endedAt - startedAt);
+  }
+
+  function getSessionDurationSeconds(session) {
+    return Math.max(0, Math.round(getSessionDurationMs(session) / 1000));
   }
 
   function formatNumber(value) {
@@ -1181,6 +1231,371 @@
       }));
 
     return { continueItems, analysisItems };
+  }
+
+  function inferTrackCode(record) {
+    const languageCode = String(record?.languageCode ?? record?.language_code ?? "").trim().toLowerCase();
+    if (languageCode.startsWith("zh")) {
+      return "hsk";
+    }
+    if (languageCode.startsWith("ja")) {
+      return "jlpt";
+    }
+    if (languageCode.startsWith("ko")) {
+      return "topik";
+    }
+    if (languageCode.startsWith("fr") || languageCode.startsWith("en")) {
+      return "cefr";
+    }
+    return "local";
+  }
+
+  function inferTrackInfo(trackCode, record) {
+    const normalized = normalizeTrackCode(trackCode);
+    switch (normalized) {
+      case "hsk":
+        return {
+          label: "HSK",
+          language_code: "zh",
+          subtitle: "Chinese reading track",
+          note: "Built from Chinese books and page reads in the local library.",
+        };
+      case "jlpt":
+        return {
+          label: "JLPT",
+          language_code: "ja",
+          subtitle: "Japanese reading track",
+          note: "Built from Japanese books and learner activity in the local library.",
+        };
+      case "topik":
+        return {
+          label: "TOPIK",
+          language_code: "ko",
+          subtitle: "Korean reading track",
+          note: "Built from Korean books and learner activity in the local library.",
+        };
+      case "cefr":
+        return {
+          label: "CEFR",
+          language_code: record?.languageCode ?? "fr",
+          subtitle: "European language reading track",
+          note: "Built from European-language books in the local library.",
+        };
+      default:
+        return {
+          label: "Local",
+          language_code: record?.languageCode ?? "local",
+          subtitle: "Mixed local reading track",
+          note: "Books that do not match a formal exam track stay here.",
+        };
+    }
+  }
+
+  function inferTrackLevelLabel(record, trackCode) {
+    const candidates = [
+      record?.analysis?.tag,
+      record?.library?.profileLabel,
+      record?.analysis?.level,
+      record?.kindLabel,
+      trackCode === "hsk" ? "HSK" : null,
+      trackCode === "jlpt" ? "JLPT" : null,
+      trackCode === "topik" ? "TOPIK" : null,
+      trackCode === "cefr" ? "CEFR" : null,
+      record?.contentType,
+    ].filter((value) => typeof value === "string" && value.trim());
+    return candidates[0] ?? "Track";
+  }
+
+  function trackJourney(track) {
+    const progress = Number(track?.progress ?? 0);
+    const wordExposures = Number(track?.word_exposures ?? 0);
+    const sentenceReads = Number(track?.sentence_reads ?? 0);
+    const averageSentence = track?.average_seconds_per_sentence;
+    const averageWord = track?.average_seconds_per_word;
+
+    let statuses;
+    if (progress >= 70) {
+      statuses = ["complete", "complete", "current"];
+    } else if (progress >= 35) {
+      statuses = ["complete", "current", "next"];
+    } else {
+      statuses = ["current", "next", "next"];
+    }
+
+    return [
+      {
+        label: "Reading flow",
+        detail: `${track?.page_reads ?? 0} page reads across ${track?.books ?? 0} books`,
+        progress: Math.min(progress, 100),
+        status: statuses[0],
+      },
+      {
+        label: "Vocabulary exposure",
+        detail: `${wordExposures} word exposures and ${track?.unique_words_seen ?? 0} unique words`,
+        progress: Math.min(100, wordExposures),
+        status: statuses[1],
+      },
+      {
+        label: "Reading pace",
+        detail:
+          `${sentenceReads} sentence reads` +
+          (typeof averageSentence === "number" ? ` at ${averageSentence.toFixed(2)} sec/sentence` : "") +
+          (typeof averageWord === "number" ? ` and ${averageWord.toFixed(2)} sec/word` : ""),
+        progress: Math.min(100, Math.max(0, progress * 0.9 + 10)),
+        status: statuses[2],
+      },
+    ];
+  }
+
+  function trackProgress(track) {
+    const totalPages = Number(track?.total_pages ?? 0);
+    const completedPages = Number(track?.completed_pages ?? 0);
+    if (totalPages <= 0) {
+      return completedPages <= 0 ? 0 : 100;
+    }
+    return roundTo(Math.min(completedPages / totalPages, 1) * 100, 2);
+  }
+
+  function getProfilePreviewData() {
+    const visibleBooks = getVisibleBooks();
+    const todayStamp = new Date().toISOString().slice(0, 10);
+    const selectedTrackCode = getSelectedTrackCode();
+    const settingsEntries = [
+      { key: "theme", value: window.localStorage.getItem("textplex.theme") ?? "paper" },
+      { key: "readerMode", value: window.localStorage.getItem(READER_MODE_KEY) ?? "sentence" },
+      { key: "ocrProvider", value: getOcrProvider() },
+      { key: "processorUrl", value: getProcessorBaseUrl() || "not set" },
+    ];
+
+    const totals = {
+      readingSessions: 0,
+      pageReads: 0,
+      sentenceReads: 0,
+      tokenExposures: 0,
+      wordExposures: 0,
+      characterExposures: 0,
+      activeBooks: 0,
+      uniqueWords: new Set(),
+      uniqueCharacters: new Set(),
+      vocabularyProgressRows: 0,
+      todaySentenceReads: 0,
+      todayTokenExposures: 0,
+      totalSeconds: 0,
+    };
+
+    const trackBuckets = new Map();
+    for (const trackCode of ["hsk", "jlpt", "topik", "cefr", "local"]) {
+      const definition = normalizeTrackCode(trackCode);
+      const info = inferTrackInfo(definition, null);
+      trackBuckets.set(definition, {
+        code: definition,
+        label: info.label,
+        language_code: info.language_code,
+        level: "—",
+        subtitle: info.subtitle,
+        note: info.note,
+        progress: 0,
+        books: 0,
+        page_reads: 0,
+        sentence_reads: 0,
+        word_exposures: 0,
+        character_exposures: 0,
+        unique_words_seen: new Set(),
+        unique_characters_seen: new Set(),
+        average_seconds_per_sentence: null,
+        average_seconds_per_word: null,
+        average_seconds_per_character: null,
+        next_step: info.note,
+        journey: [],
+        total_pages: 0,
+        completed_pages: 0,
+        sentence_seconds: 0,
+        word_seconds: 0,
+        character_seconds: 0,
+        sentence_count: 0,
+        word_count: 0,
+        character_count: 0,
+        levelCounts: new Map(),
+      });
+    }
+
+    const books = visibleBooks.map((record) => {
+      const reading = getReadingProgress(record.id);
+      const pages = ensureReaderPages(record, 3);
+      const completedPages = clamp(Math.max(0, Number(reading?.completedPages ?? 0) || 0), 0, pages.length);
+      const completedPageSentences = pages.slice(0, completedPages).flatMap((page) => (Array.isArray(page.sentences) ? page.sentences : []));
+      const activeSessionSeconds = getSessionDurationSeconds(reading?.activeSession);
+      const completedSessionSeconds = Array.isArray(reading?.sessions)
+        ? reading.sessions.reduce((sum, session) => sum + getSessionDurationSeconds(session), 0)
+        : 0;
+      const activeSeconds = activeSessionSeconds + completedSessionSeconds;
+      const hasTodayActivity = Boolean(
+        activeSessionSeconds ||
+          (Array.isArray(reading?.sessions) &&
+            reading.sessions.some((session) => {
+              const stamp = String(session?.endedAt ?? session?.completedAt ?? session?.lastSeenAt ?? session?.startedAt ?? "").slice(0, 10);
+              return stamp === todayStamp;
+            })),
+      );
+      const trackCode = inferTrackCode(record);
+      const track = trackBuckets.get(trackCode) ?? trackBuckets.get("local");
+      const levelLabel = inferTrackLevelLabel(record, trackCode);
+      if (track) {
+        track.books += 1;
+        track.total_pages += Math.max(0, Number(record.reader?.pageCount ?? reading?.pageCount ?? pages.length ?? 0) || 0);
+        track.completed_pages += completedPages;
+        track.levelCounts.set(levelLabel, (track.levelCounts.get(levelLabel) ?? 0) + 1);
+      }
+
+      let bookSentenceReads = 0;
+      let bookTokenExposures = 0;
+      let bookWordExposures = 0;
+      let bookCharacterExposures = 0;
+      const bookUniqueWords = new Set();
+      const bookUniqueCharacters = new Set();
+
+      for (const sentence of completedPageSentences) {
+        bookSentenceReads += 1;
+        const tokens = Array.isArray(sentence?.tokens) ? sentence.tokens : [];
+        for (const token of tokens) {
+          const surface = String(token?.surface ?? token?.surface_form ?? "");
+          if (!surface || isPunctuationSurface(surface)) {
+            continue;
+          }
+
+          const normalizedWord = String(token?.lemma ?? token?.surface_form ?? token?.surface ?? surface).trim();
+          if (normalizedWord) {
+            totals.uniqueWords.add(normalizedWord);
+            bookUniqueWords.add(normalizedWord);
+          }
+
+          for (const character of Array.from(surface)) {
+            if (!character.trim() || isPunctuationSurface(character)) {
+              continue;
+            }
+            totals.uniqueCharacters.add(character);
+            bookUniqueCharacters.add(character);
+            bookCharacterExposures += 1;
+          }
+
+          bookTokenExposures += 1;
+          bookWordExposures += 1;
+        }
+      }
+
+      totals.readingSessions += (Array.isArray(reading?.sessions) ? reading.sessions.length : 0) + (reading?.activeSession ? 1 : 0);
+      totals.pageReads += completedPages;
+      totals.sentenceReads += bookSentenceReads;
+      totals.tokenExposures += bookTokenExposures;
+      totals.wordExposures += bookWordExposures;
+      totals.characterExposures += bookCharacterExposures;
+      totals.totalSeconds += activeSeconds;
+      totals.vocabularyProgressRows += Math.max(0, Number(record.library?.recentReading?.length ?? 0) || 0);
+
+      if (track) {
+        track.page_reads += completedPages;
+        track.sentence_reads += bookSentenceReads;
+        track.word_exposures += bookWordExposures;
+        track.character_exposures += bookCharacterExposures;
+        track.sentence_seconds += activeSeconds;
+        track.word_seconds += activeSeconds;
+        track.character_seconds += activeSeconds;
+        track.sentence_count += bookSentenceReads;
+        track.word_count += bookWordExposures;
+        track.character_count += bookCharacterExposures;
+        bookUniqueWords.forEach((value) => track.unique_words_seen.add(value));
+        bookUniqueCharacters.forEach((value) => track.unique_characters_seen.add(value));
+      }
+
+      if (hasTodayActivity) {
+        totals.todaySentenceReads += bookSentenceReads;
+        totals.todayTokenExposures += bookTokenExposures;
+      }
+
+      if (completedPages > 0 || activeSeconds > 0) {
+        totals.activeBooks += 1;
+      }
+
+      return {
+        book_id: record.id,
+        title: record.titleCn ?? record.title,
+        page_reads: completedPages,
+        sentence_reads: bookSentenceReads,
+        active_seconds: activeSeconds,
+      };
+    });
+
+    const learningTracks = Array.from(trackBuckets.values()).map((track) => {
+      const progress = trackProgress(track);
+      track.progress = progress;
+      track.average_seconds_per_sentence = _average(Number(track.sentence_seconds) || 0, Number(track.sentence_count) || 0);
+      track.average_seconds_per_word = _average(Number(track.word_seconds) || 0, Number(track.word_count) || 0);
+      track.average_seconds_per_character = _average(Number(track.character_seconds) || 0, Number(track.character_count) || 0);
+      const levels = Array.from(track.levelCounts.entries()).sort((a, b) => b[1] - a[1]);
+      track.level = levels[0]?.[0] ?? track.level;
+      track.next_step =
+        track.books > 0
+          ? `Keep reading the ${track.label} track to build fluency across ${track.books} books.`
+          : `Add a ${track.label} book to start this track.`;
+      track.journey = trackJourney(track);
+      return {
+        code: track.code,
+        label: track.label,
+        language_code: track.language_code,
+        level: track.level,
+        subtitle: track.subtitle,
+        note: track.note,
+        progress: track.progress,
+        books: track.books,
+        page_reads: track.page_reads,
+        sentence_reads: track.sentence_reads,
+        word_exposures: track.word_exposures,
+        character_exposures: track.character_exposures,
+        unique_words_seen: track.unique_words_seen.size,
+        unique_characters_seen: track.unique_characters_seen.size,
+        average_seconds_per_sentence: track.average_seconds_per_sentence,
+        average_seconds_per_word: track.average_seconds_per_word,
+        average_seconds_per_character: track.average_seconds_per_character,
+        next_step: track.next_step,
+        journey: track.journey,
+      };
+    });
+
+    const selectedTrack =
+      learningTracks.find((track) => track.code === selectedTrackCode && (track.books > 0 || track.page_reads > 0 || track.sentence_reads > 0)) ??
+      learningTracks.find((track) => track.books > 0 || track.page_reads > 0 || track.sentence_reads > 0) ??
+      learningTracks.find((track) => track.code === "local") ??
+      learningTracks[0];
+
+    const averageSecondsPerSentence = totals.sentenceReads > 0 ? roundTo(totals.totalSeconds / totals.sentenceReads, 2) : null;
+    const averageSecondsPerWord = totals.wordExposures > 0 ? roundTo(totals.totalSeconds / totals.wordExposures, 2) : null;
+    const averageSecondsPerCharacter = totals.characterExposures > 0 ? roundTo(totals.totalSeconds / totals.characterExposures, 2) : null;
+
+    return {
+      profile: {
+        reading_sessions: totals.readingSessions,
+        page_reads: totals.pageReads,
+        sentence_reads: totals.sentenceReads,
+        token_exposures: totals.tokenExposures,
+        word_exposures: totals.wordExposures,
+        character_exposures: totals.characterExposures,
+        active_books: totals.activeBooks,
+        unique_words_seen: totals.uniqueWords.size,
+        unique_characters_seen: totals.uniqueCharacters.size,
+        vocabulary_progress_rows: totals.vocabularyProgressRows,
+        today_sentence_reads: totals.todaySentenceReads,
+        today_token_exposures: totals.todayTokenExposures,
+        average_seconds_per_sentence: averageSecondsPerSentence,
+        average_seconds_per_word: averageSecondsPerWord,
+        average_seconds_per_character: averageSecondsPerCharacter,
+        selected_track_code: selectedTrack?.code ?? "local",
+        learning_tracks: learningTracks,
+      },
+      books,
+      settings: {
+        entries: settingsEntries,
+      },
+    };
   }
 
   function getAnalysisProfile(bookId) {
@@ -2107,7 +2522,7 @@
           romanization: token?.romanization ?? token?.pronunciation ?? "",
           pronunciation: token?.pronunciation ?? token?.romanization ?? "",
           proficiency_level: token?.proficiency_level ?? token?.hsk_level ?? null,
-        }))
+      }))
       : [];
     const tokens = insertPunctuationTokens(String(sentence?.text ?? ""), normalizedTokens);
     if (!tokens.length) {
@@ -2115,6 +2530,12 @@
     }
 
     const phonetics = tokens.map((token) => String(token?.romanization ?? token?.pronunciation ?? ""));
+    const sentenceTranslation = Array.isArray(sentence?.translation)
+      ? sentence.translation.map((line) => String(line ?? "").trim()).filter(Boolean)
+      : typeof sentence?.translation === "string"
+        ? [sentence.translation.trim()].filter(Boolean)
+        : [];
+    const pageTranslation = typeof sentence?.page_translation === "string" ? [sentence.page_translation.trim()].filter(Boolean) : [];
     const surfaceToken = tokens.find((token) => {
       const surface = String(token?.surface_form ?? "").trim();
       return surface && !isPunctuationSurface(surface);
@@ -2126,7 +2547,7 @@
     return {
       phonetics,
       tokens,
-      translation: sentence?.text ? [String(sentence.text)] : [],
+      translation: sentenceTranslation.length ? sentenceTranslation : pageTranslation,
       vocabulary: vocabulary
         ? {
             surface: vocabulary.surface_form ?? surfaceToken.surface_form ?? "",
@@ -2242,5 +2663,17 @@
   function estimateMinutes(sentenceCount) {
     const minutes = Math.max(1, Math.ceil(Number(sentenceCount ?? 1) / 12));
     return `${minutes}m`;
+  }
+
+  function roundTo(value, digits = 2) {
+    const factor = 10 ** digits;
+    return Math.round(Number(value ?? 0) * factor) / factor;
+  }
+
+  function _average(totalSeconds, count) {
+    if (Number(count) <= 0) {
+      return null;
+    }
+    return roundTo(Number(totalSeconds) / Number(count), 2);
   }
 })();

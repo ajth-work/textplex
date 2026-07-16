@@ -167,6 +167,20 @@
           <div class="section-heading">
             <div>
               <p class="eyebrow">Preview</p>
+              <h3>Profile surface mock</h3>
+            </div>
+            <span class="pill">Dynamic</span>
+          </div>
+          <p class="small-copy">Open the standalone HTML test page that surfaces reading history, exposure metrics, and profile settings.</p>
+          <div class="button-row button-row-tight">
+            <a class="button button-primary" href="./profile-preview.html">Open preview</a>
+          </div>
+        </article>
+
+        <article class="panel status-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Preview</p>
               <h3>Study review mock</h3>
             </div>
             <span class="pill">Static</span>
@@ -381,9 +395,16 @@
           <button id="readerBack" class="icon-button reader-nav-button" type="button" aria-label="Back to library">←</button>
           <div class="reader-toolbar-actions">
             <button id="toggleImage" class="icon-button reader-nav-button" type="button" aria-label="Toggle page image">🖼</button>
+            <button id="readerTokenModeToggle" class="button button-secondary button-compact reader-token-mode-toggle" type="button" aria-pressed="false" aria-label="Switch to character mode">Word</button>
             <button id="extractNow" class="icon-button reader-nav-button" type="button" aria-label="Extract now" disabled>＋</button>
             <button class="icon-button reader-nav-button" type="button" aria-label="Bookmark">☆</button>
-            <button class="icon-button reader-nav-button" type="button" aria-label="More options">⋯</button>
+            <div class="reader-options-wrap">
+              <button id="readerOptionsButton" class="icon-button reader-nav-button" type="button" aria-label="More options" aria-expanded="false" aria-controls="readerOptionsMenu">⋯</button>
+              <div id="readerOptionsMenu" class="reader-options-menu is-hidden" role="menu" aria-label="Reader actions">
+                <button id="archiveCurrentItem" class="reader-options-menu-item" type="button" role="menuitem">Archive</button>
+                <button id="deleteCurrentItem" class="reader-options-menu-item reader-options-menu-item-danger" type="button" role="menuitem">Delete</button>
+              </div>
+            </div>
           </div>
         </div>
         <div class="section-heading reader-heading">

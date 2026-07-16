@@ -73,6 +73,25 @@ main {
   padding: 2rem 0 4rem;
 }
 
+.reader-shell {
+  --reader-display-font: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, "Times New Roman", serif;
+  --reader-body-font: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+}
+
+.reader-shell[data-reader-font="serif"] {
+  --reader-display-font: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, "Times New Roman", serif;
+  --reader-body-font: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, "Times New Roman", serif;
+}
+
+.reader-shell[data-reader-font="sans"] {
+  --reader-display-font: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  --reader-body-font: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+}
+
+.font-mode-toggle {
+  min-width: 5.5rem;
+}
+
 .app-frame {
   width: min(1180px, calc(100% - 2rem));
   margin: 0 auto;
@@ -512,7 +531,7 @@ dt {
 
 .reader-topbar h1 {
   margin: 0.2rem 0 0;
-  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  font-family: var(--reader-display-font);
   font-size: clamp(1.8rem, 3vw, 2.6rem);
 }
 
@@ -535,6 +554,11 @@ dt {
   align-items: start;
 }
 
+.reader-shell .small-copy,
+.reader-shell .muted {
+  font-family: var(--reader-body-font);
+}
+
 .reader-page {
   display: grid;
   gap: 1rem;
@@ -549,7 +573,7 @@ dt {
 
 .reader-card-header h2 {
   margin: 0.15rem 0 0;
-  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  font-family: var(--reader-display-font);
   letter-spacing: -0.02em;
 }
 
@@ -578,6 +602,7 @@ dt {
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.7);
   padding: 1rem;
+  font-family: var(--reader-body-font);
 }
 
 .page-image-placeholder {
@@ -604,16 +629,30 @@ dt {
 
 .definition-popover h3 {
   margin: 0.2rem 0 0;
-  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  font-family: var(--reader-display-font);
   font-size: 1.8rem;
   letter-spacing: -0.03em;
 }
 
 .definition-copy {
   margin: 0;
+  font-family: var(--reader-body-font);
   font-size: 1rem;
   line-height: 1.6;
   color: var(--ink);
+}
+
+.definition-fallback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: 0.15rem;
+}
+
+.definition-fallback .small-copy {
+  flex: 1 1 100%;
+  margin: 0;
 }
 
 .definition-grid {
@@ -638,6 +677,7 @@ dt {
 
 .definition-grid dd {
   margin: 0.25rem 0 0;
+  font-family: var(--reader-body-font);
   font-size: 0.98rem;
   font-weight: 700;
   color: var(--ink);
@@ -670,12 +710,22 @@ dt {
   font-size: 1.24rem;
   line-height: 2.05;
   letter-spacing: 0.01em;
+  font-family: var(--reader-body-font);
 }
 
 .sentence-block {
   margin: 0;
   padding: 0.35rem 0;
   text-indent: 0;
+}
+
+.sentence-translation {
+  margin: 0.35rem 0 0;
+  font-family: var(--reader-body-font);
+  font-size: 0.98rem;
+  line-height: 1.65;
+  letter-spacing: 0.005em;
+  color: var(--muted);
 }
 
 .sentence-block.is-focused {
@@ -696,6 +746,7 @@ dt {
   border-radius: calc(var(--radius-lg) - 2px);
   background: rgba(255, 255, 255, 0.56);
   border: 1px solid rgba(255, 255, 255, 0.5);
+  font-family: var(--reader-body-font);
 }
 
 .reading-progress-card h3 {

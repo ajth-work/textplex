@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TextPlex Profile Preview</title>
+    <meta
+      name="description"
+      content="A standalone profile and reading-history preview for TextPlex, packaged for GitHub Pages."
+    />
+    <link rel="stylesheet" href="./preview-wide.css" />
+    <style>
+      :root {
+        --bg: #f7f4ee;
+        --surface: rgba(255, 255, 255, 0.9);
+        --surface-strong: #ffffff;
+        --text: #1f2430;
+        --muted: #7b8191;
+        --line: rgba(31, 36, 48, 0.08);
+        --shadow: 0 18px 40px rgba(20, 24, 35, 0.08);
+        --accent: #1f335f;
+        --green: #3f9b68;
+        --blue: #6e8fe6;
+        --violet: #8e82db;
+        --orange: #d59c4c;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { min-height: 100%; }
+      body {
+        margin: 0;
+        color: var(--text);
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(255,255,255,0.95), transparent 42%),
+          linear-gradient(180deg, #fbf9f5 0%, #f3efe7 100%);
+      }
+
+      .app {
+        max-width: 430px;
+        min-height: 100vh;
+        margin: 0 auto;
+        padding: 18px 16px 24px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .back {
+        border: 0;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.7);
+        color: var(--accent);
+        font-size: 22px;
+        font-weight: 700;
+      }
+
+      .brand {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .brand-mark {
+        font-size: 12px;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+        color: #8a90a0;
+        font-weight: 800;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: rgba(31, 51, 95, 0.08);
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .surface {
+        background: var(--surface);
+        border: 1px solid rgba(31, 36, 48, 0.06);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+      }
+
+      .hero {
+        padding: 16px;
+      }
+
+      .eyebrow {
+        margin: 0 0 6px;
+        font-size: 13px;
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 800;
+      }
+
+      .hero h1 {
+        margin: 0;
+        font-size: 31px;
+        line-height: 0.98;
+        letter-spacing: -0.05em;
+        font-weight: 900;
+      }
+
+      .hero p {
+        margin: 12px 0 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.45;
+        font-weight: 600;
+      }
+
+      .track-section {
+        padding: 16px;
+      }
+
+      .track-selector {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .track-chip {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 9px 12px;
+        background: rgba(255, 255, 255, 0.95);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .track-chip.is-active {
+        background: var(--accent);
+        color: #fff;
+        border-color: transparent;
+      }
+
+      .track-panel {
+        background: var(--surface-strong);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 14px;
+      }
+
+      .track-panel-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .track-panel-head h3 {
+        margin: 4px 0 6px;
+        font-size: 18px;
+        line-height: 1.05;
+        letter-spacing: -0.04em;
+        font-weight: 900;
+      }
+
+      .track-copy {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+        font-weight: 700;
+      }
+
+      .track-progress {
+        margin: 14px 0 10px;
+      }
+
+      .track-progress-bar {
+        width: 100%;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(31, 36, 48, 0.08);
+        overflow: hidden;
+      }
+
+      .track-progress-bar > span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--green), var(--blue));
+        width: var(--track-progress, 0%);
+      }
+
+      .track-journey {
+        display: grid;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .track-step {
+        border-radius: 16px;
+        padding: 12px 13px;
+        background: rgba(31, 51, 95, 0.04);
+      }
+
+      .track-step strong {
+        display: block;
+        font-size: 13px;
+        font-weight: 900;
+        margin-bottom: 4px;
+      }
+
+      .track-step span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+        font-weight: 700;
+      }
+
+      .stack {
+        margin-top: 14px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .metric {
+        padding: 14px 12px;
+        min-height: 102px;
+        display: grid;
+        align-content: space-between;
+      }
+
+      .metric h3,
+      .section-head h2,
+      .book-title {
+        margin: 0;
+        font-weight: 900;
+        letter-spacing: -0.04em;
+      }
+
+      .metric h3 {
+        font-size: 30px;
+        line-height: 1;
+      }
+
+      .metric span,
+      .metric p,
+      .meta {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .section {
+        padding: 16px;
+      }
+
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .section-head h2 {
+        font-size: 20px;
+      }
+
+      .settings-list,
+      .book-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .setting-row,
+      .book-row {
+        background: var(--surface-strong);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 12px 14px;
+        box-shadow: var(--shadow-soft, 0 8px 18px rgba(20, 24, 35, 0.05));
+      }
+
+      .setting-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .setting-label,
+      .book-kicker {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 800;
+      }
+
+      .setting-value {
+        text-align: right;
+        font-size: 14px;
+        font-weight: 800;
+        color: var(--text);
+        overflow-wrap: anywhere;
+      }
+
+      .profile-book-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .profile-book-head h3 {
+        margin: 4px 0 6px;
+        font-size: 18px;
+        line-height: 1.05;
+        letter-spacing: -0.04em;
+      }
+
+      .book-meta {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.4;
+      }
+
+      .button-row {
+        display: flex;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .button {
+        border: 0;
+        border-radius: 16px;
+        padding: 12px 14px;
+        font: inherit;
+        font-weight: 800;
+        text-decoration: none;
+        text-align: center;
+      }
+
+      .button-secondary {
+        background: rgba(31, 51, 95, 0.08);
+        color: var(--accent);
+      }
+
+      .button-primary {
+        background: var(--accent);
+        color: #fff;
+      }
+
+      .empty-state {
+        margin: 0;
+        padding: 16px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+        font-weight: 700;
+      }
+
+      @media (max-width: 390px) {
+        .grid-3 { grid-template-columns: 1fr; }
+        .grid-2 { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <button class="back" type="button" aria-label="Back">←</button>
+        <div class="brand">
+          <span class="brand-mark">TextPlex</span>
+          <span id="profileBadge" class="pill">Profile</span>
+        </div>
+      </header>
+
+      <section class="surface hero">
+        <p class="eyebrow">Profile</p>
+        <h1 id="profileTitle">User profile and reading history</h1>
+        <p id="profileSubtitle">Sessions, page reads, exposure data, and stored preferences from the local profile store.</p>
+      </section>
+
+      <section class="surface track-section">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Learning track</p>
+            <h2 id="profileTrackTitle">Track overview</h2>
+          </div>
+          <span class="pill" id="profileTrackLevel">Track</span>
+        </div>
+        <div id="profileTrackList" class="track-selector" aria-label="Learning tracks"></div>
+        <article class="track-panel" aria-live="polite">
+          <p id="profileTrackSubtitle" class="track-copy">Select a track to inspect progress.</p>
+          <div class="track-progress">
+            <div class="track-progress-bar">
+              <span id="profileTrackProgress" style="--track-progress: 0%;"></span>
+            </div>
+          </div>
+          <p id="profileTrackNextStep" class="track-copy">Track guidance appears here.</p>
+          <div id="profileTrackJourney" class="track-journey"></div>
+        </article>
+      </section>
+
+      <section class="stack">
+        <div class="grid-3">
+          <article class="surface metric">
+            <div class="book-kicker">Sessions</div>
+            <h3 id="profileSessionCount">0</h3>
+            <span>Reading sessions recorded</span>
+          </article>
+          <article class="surface metric">
+            <div class="book-kicker">Pages</div>
+            <h3 id="profilePageReadCount">0</h3>
+            <span>Completed pages read</span>
+          </article>
+          <article class="surface metric">
+            <div class="book-kicker">Sentences</div>
+            <h3 id="profileSentenceReadCount">0</h3>
+            <span>Finished sentence reads</span>
+          </article>
+        </div>
+
+        <div class="grid-2">
+          <article class="surface metric">
+            <div class="book-kicker">Books</div>
+            <h3 id="profileActiveBookCount">0</h3>
+            <span>Active books in progress</span>
+          </article>
+          <article class="surface metric">
+            <div class="book-kicker">Today</div>
+            <h3 id="profileTodaySentenceCount">0</h3>
+            <span><span id="profileTodayTokenCount">0</span> token exposures today</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="surface section">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Exposure</p>
+            <h2>Reading breakdown</h2>
+          </div>
+          <span class="pill" id="profileActiveBookCountLabel">Live</span>
+        </div>
+        <div class="grid-3">
+          <article class="surface metric">
+            <div class="book-kicker">Words seen</div>
+            <h3 id="profileUniqueWordCount">0</h3>
+            <span>Unique vocabulary items</span>
+          </article>
+          <article class="surface metric">
+            <div class="book-kicker">Characters</div>
+            <h3 id="profileUniqueCharacterCount">0</h3>
+            <span>Unique characters exposed</span>
+          </article>
+          <article class="surface metric">
+            <div class="book-kicker">Avg time</div>
+            <h3 id="profileAvgSentence">—</h3>
+            <span>Per sentence read</span>
+          </article>
+        </div>
+        <div class="grid-2" style="margin-top:10px;">
+          <article class="surface metric">
+            <div class="book-kicker">Word pace</div>
+            <h3 id="profileAvgWord">—</h3>
+            <span>Average seconds per word</span>
+          </article>
+          <article class="surface metric">
+            <div class="book-kicker">Character pace</div>
+            <h3 id="profileAvgCharacter">—</h3>
+            <span>Average seconds per character</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="surface section">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Settings</p>
+            <h2>Stored preferences</h2>
+          </div>
+          <span class="pill">Local</span>
+        </div>
+        <div class="settings-list">
+          <div class="setting-row"><span class="setting-label">Theme</span><strong id="profileTheme" class="setting-value">paper</strong></div>
+          <div class="setting-row"><span class="setting-label">Reader mode</span><strong id="profileReaderMode" class="setting-value">sentence</strong></div>
+          <div class="setting-row"><span class="setting-label">OCR provider</span><strong id="profileOcrProvider" class="setting-value">local</strong></div>
+          <div class="setting-row"><span class="setting-label">Processor URL</span><strong id="profileProcessorUrl" class="setting-value">not set</strong></div>
+        </div>
+      </section>
+
+      <section class="surface section">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Activity</p>
+            <h2>Recent books</h2>
+          </div>
+          <span class="pill">Books</span>
+        </div>
+        <div id="profileBookActivity" class="book-list" aria-live="polite"></div>
+        <p id="profileActivityEmpty" class="empty-state" hidden>
+          No reading history is stored yet. Open a book in the reader to start collecting profile data.
+        </p>
+      </section>
+    </main>
+    <script src="./preview-data.js"></script>
+    <script type="module" src="./preview-router.js"></script>
+  </body>
+</html>

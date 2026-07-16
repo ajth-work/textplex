@@ -80,6 +80,7 @@ export interface LexicalEntryResult {
 export interface SentenceResult {
   order: number;
   text: string;
+  translation?: string | null;
   tokens: TokenResult[];
   grammar_patterns: string[];
 }
@@ -93,6 +94,7 @@ export interface PageExtractionResult {
   pipeline_version: string;
   raw_text: string;
   clean_text: string;
+  page_translation?: string | null;
   sentences: SentenceResult[];
   token_occurrences: TokenOccurrenceResult[];
   lexical_entries: LexicalEntryResult[];
@@ -207,6 +209,37 @@ export interface LearningProfileSummary {
   average_seconds_per_sentence: number | null;
   average_seconds_per_word: number | null;
   average_seconds_per_character: number | null;
+  selected_track_code: string;
+  learning_tracks: LearningTrackSummary[];
+}
+
+export interface LearningTrackJourneyStep {
+  label: string;
+  detail: string;
+  progress: number;
+  status: "complete" | "current" | "next";
+}
+
+export interface LearningTrackSummary {
+  code: string;
+  label: string;
+  language_code: string;
+  level: string;
+  subtitle: string;
+  note: string;
+  progress: number;
+  books: number;
+  page_reads: number;
+  sentence_reads: number;
+  word_exposures: number;
+  character_exposures: number;
+  unique_words_seen: number;
+  unique_characters_seen: number;
+  average_seconds_per_sentence: number | null;
+  average_seconds_per_word: number | null;
+  average_seconds_per_character: number | null;
+  next_step: string;
+  journey: LearningTrackJourneyStep[];
 }
 
 export interface LexiconImportRequest {
@@ -329,6 +362,12 @@ export interface ProgressBookSummary {
 export interface ProgressSurfaceResponse {
   profile: LearningProfileSummary;
   books: ProgressBookSummary[];
+}
+
+export interface ProfileSurfaceResponse {
+  profile: LearningProfileSummary;
+  books: ProgressBookSummary[];
+  settings: SettingsSurfaceResponse;
 }
 
 export interface ActivityEvent {

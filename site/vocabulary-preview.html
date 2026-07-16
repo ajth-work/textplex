@@ -8,6 +8,7 @@
       name="description"
       content="A standalone vocabulary dashboard mockup for TextPlex, packaged for GitHub Pages."
     />
+    <link rel="stylesheet" href="./preview-wide.css" />
     <style>
       :root {
         --bg: #f7f4ee;
@@ -150,6 +151,106 @@
         font-size: 13px;
         color: var(--muted);
         font-weight: 700;
+      }
+
+      .track-section {
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+
+      .track-selector {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .track-chip {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 9px 12px;
+        background: rgba(255, 255, 255, 0.95);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .track-chip.is-active {
+        background: var(--accent);
+        color: #fff;
+        border-color: transparent;
+      }
+
+      .track-panel {
+        background: var(--surface-strong);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 14px;
+      }
+
+      .track-copy {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+        font-weight: 700;
+      }
+
+      .track-progress {
+        margin: 14px 0 10px;
+      }
+
+      .track-progress-bar {
+        width: 100%;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(31, 36, 48, 0.08);
+        overflow: hidden;
+      }
+
+      .track-progress-bar > span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--green), var(--blue));
+        width: var(--track-progress, 0%);
+      }
+
+      .track-journey {
+        display: grid;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .track-step {
+        border-radius: 16px;
+        padding: 12px 13px;
+        background: rgba(31, 51, 95, 0.04);
+      }
+
+      .track-step strong {
+        display: block;
+        font-size: 13px;
+        font-weight: 900;
+        margin-bottom: 4px;
+      }
+
+      .track-step p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+        font-weight: 700;
+      }
+
+      .track-step span {
+        display: inline-block;
+        margin-top: 6px;
+        color: #6f7687;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.02em;
       }
 
       .section-heading {

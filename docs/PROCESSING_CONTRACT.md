@@ -11,10 +11,12 @@ The processor may use OCR, AI vision, local language tools, or a hybrid. All pro
   "language_code": "ko",
   "raw_text": "...",
   "clean_text": "...",
+  "page_translation": "...",
   "sentences": [
     {
       "order": 1,
       "text": "...",
+      "translation": "...",
       "tokens": [
         {
           "order": 1,

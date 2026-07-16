@@ -33,6 +33,8 @@ class OcrTokenHint(BaseModel):
 class OcrPageResult(BaseModel):
     transcription: str
     sentence_texts: list[str] = Field(default_factory=list)
+    sentence_translations: list[str] = Field(default_factory=list)
+    page_translation: str | None = None
     page_ends_with_sentence_terminator: bool = False
     token_hints: list[OcrTokenHint] = Field(default_factory=list)
     text_source: str = "pypdf"
@@ -85,10 +87,11 @@ def build_ocr_prompt(*, book_title: str | None, language_code: str, page_number:
         "Preserve the original wording, punctuation, line breaks, and reading order as faithfully as possible.\n"
         "If the page ends mid-sentence, transcribe only the visible fragment and do not add ending punctuation.\n"
         "Split the transcription into sentence_texts using the original punctuation.\n"
+        "If you can confidently translate the page, include page_translation and sentence_translations aligned to the sentence_texts order.\n"
         "If you can confidently identify segmented tokens, include token_hints with surface_form, romanization, and a short definition.\n"
         "Keep token_hints focused on the segmented words visible on this page.\n"
         "Do not translate, summarize, explain, or rewrite the content.\n"
-        "Return only a JSON object with transcription, sentence_texts, page_ends_with_sentence_terminator, and token_hints."
+        "Return only a JSON object with transcription, sentence_texts, sentence_translations, page_translation, page_ends_with_sentence_terminator, and token_hints."
     )
 
 
@@ -134,6 +137,35 @@ def _parse_json_object(value: str) -> dict[str, Any] | None:
     return None
 
 
+def _coerce_nested_ocr_payload(structured: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(structured)
+    for _ in range(3):
+        transcription = payload.get("transcription")
+        if not isinstance(transcription, str):
+            break
+
+        nested = _parse_json_object(transcription.strip())
+        if nested is None:
+            break
+
+        next_payload = dict(payload)
+        for key, value in nested.items():
+            if key not in next_payload or next_payload[key] in (None, "", [], {}):
+                next_payload[key] = value
+
+        nested_transcription = nested.get("transcription")
+        if isinstance(nested_transcription, str) and nested_transcription.strip():
+            next_payload["transcription"] = nested_transcription.strip()
+        elif isinstance(nested.get("raw_text"), str) and nested["raw_text"].strip():
+            next_payload["transcription"] = nested["raw_text"].strip()
+        elif isinstance(nested.get("text"), str) and nested["text"].strip():
+            next_payload["transcription"] = nested["text"].strip()
+
+        payload = next_payload
+
+    return payload
+
+
 def _page_terminator(value: str) -> bool:
     stripped = value.rstrip()
     while stripped and stripped[-1] in _TRAILING_SENTENCE_CLOSERS:
@@ -161,6 +193,28 @@ def _normalize_sentence_texts(values: object) -> list[str]:
                 if text:
                     sentence_texts.append(text)
     return sentence_texts
+
+
+def _normalize_sentence_translations(values: object) -> list[str]:
+    if isinstance(values, str):
+        values = [values]
+    if not isinstance(values, list):
+        return []
+
+    translations: list[str] = []
+    for item in values:
+        if isinstance(item, str):
+            text = item.strip()
+            if text:
+                translations.append(text)
+            continue
+        if isinstance(item, dict):
+            text = item.get("translation")
+            if isinstance(text, str):
+                text = text.strip()
+                if text:
+                    translations.append(text)
+    return translations
 
 
 def _normalize_token_hints(values: object) -> list[OcrTokenHint]:
@@ -196,12 +250,15 @@ def _extract_structured_ocr_result(response_text: str, *, fallback_text: str) ->
         return OcrPageResult(
             transcription=transcription,
             sentence_texts=[],
+            sentence_translations=[],
+            page_translation=None,
             page_ends_with_sentence_terminator=_page_terminator(transcription),
             token_hints=[],
             text_source="openai",
             text_source_signature=f"openai:{get_openai_ocr_model()}:{OCR_PROMPT_VERSION}",
         )
 
+    structured = _coerce_nested_ocr_payload(structured)
     transcription = ""
     if isinstance(structured.get("transcription"), str):
         transcription = structured["transcription"].strip()
@@ -213,6 +270,17 @@ def _extract_structured_ocr_result(response_text: str, *, fallback_text: str) ->
     sentence_texts = _normalize_sentence_texts(structured.get("sentence_texts"))
     if not sentence_texts:
         sentence_texts = _normalize_sentence_texts(structured.get("sentences"))
+    sentence_translations = _normalize_sentence_translations(structured.get("sentence_translations"))
+    if not sentence_translations:
+        sentence_translations = _normalize_sentence_translations(structured.get("translations"))
+    if not sentence_translations:
+        sentence_translations = _normalize_sentence_translations(structured.get("sentences"))
+    page_translation = structured.get("page_translation")
+    if not isinstance(page_translation, str):
+        maybe_translation = structured.get("translation")
+        page_translation = maybe_translation.strip() if isinstance(maybe_translation, str) and maybe_translation.strip() else None
+    else:
+        page_translation = page_translation.strip() or None
 
     page_ends = structured.get("page_ends_with_sentence_terminator")
     if not isinstance(page_ends, bool):
@@ -221,6 +289,8 @@ def _extract_structured_ocr_result(response_text: str, *, fallback_text: str) ->
     return OcrPageResult(
         transcription=transcription,
         sentence_texts=sentence_texts,
+        sentence_translations=sentence_translations,
+        page_translation=page_translation,
         page_ends_with_sentence_terminator=page_ends,
         token_hints=_normalize_token_hints(structured.get("token_hints")),
         text_source="openai",
@@ -253,7 +323,8 @@ def transcribe_page_image(
                             "You transcribe scanned book pages for downstream sentence parsing. "
                             "Preserve the visible text exactly, including punctuation and line breaks. "
                             "Do not invent missing text or punctuation at the page boundary. "
-                            "Do not translate, summarize, or explain. "
+                            "If you can provide a faithful translation, include it only in the translation fields. "
+                            "Do not summarize or explain. "
                             "Return only valid JSON."
                         ),
                     }
@@ -336,6 +407,8 @@ def resolve_page_ocr(
     return OcrPageResult(
         transcription=fallback_text,
         sentence_texts=[],
+        sentence_translations=[],
+        page_translation=None,
         page_ends_with_sentence_terminator=_page_terminator(fallback_text),
         token_hints=[],
         text_source="pypdf",

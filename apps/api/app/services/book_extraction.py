@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,7 +17,7 @@ from app.services.book_sources import is_text_fixture_source, load_text_fixture_
 from app.services.lexicon import lookup_lexicon_entry_map, lookup_lexicon_pinyin_map
 from app.services.ocr import get_text_source_signature, resolve_page_ocr
 from processor import build_book_extraction_result, build_page_extraction_result, stitch_page_sentence_carryover
-from processor.contracts import PageExtractionResult
+from processor.contracts import BookExtractionResult, PageExtractionResult
 
 FIXTURE_TEXT_SOURCE = "fixture"
 FIXTURE_TEXT_SIGNATURE = "fixture-text-v1"
@@ -40,10 +41,241 @@ def _book_artifact_path(book_id: str, data_root: Path) -> Path:
     return _artifact_dir(book_id, data_root) / "book-extraction.json"
 
 
-def _load_page_artifact(path: Path) -> PageExtractionArtifact | None:
+def _lexicon_root(data_root: Path) -> Path:
+    return data_root.parent if data_root.name == "books" else data_root
+
+
+def _load_page_artifact(path: Path, *, data_root: Path | None = None) -> PageExtractionArtifact | None:
     if not path.exists():
         return None
-    return PageExtractionArtifact.model_validate_json(path.read_text(encoding="utf-8"))
+    artifact = PageExtractionArtifact.model_validate_json(path.read_text(encoding="utf-8"))
+    recovered = _recover_page_artifact(artifact, data_root=data_root)
+    if recovered is not artifact:
+        _save_page_artifact(path, recovered)
+        return recovered
+    return artifact
+
+
+def _string_list(values: object) -> list[str]:
+    if isinstance(values, str):
+        values = [values]
+    if not isinstance(values, list):
+        return []
+
+    items: list[str] = []
+    for value in values:
+        if isinstance(value, str):
+            text = value.strip()
+            if text:
+                items.append(text)
+            continue
+        if isinstance(value, dict):
+            text = value.get("text") or value.get("translation")
+            if isinstance(text, str):
+                text = text.strip()
+                if text:
+                    items.append(text)
+    return items
+
+
+def _page_translation(values: object) -> str | None:
+    if isinstance(values, str):
+        text = values.strip()
+        return text or None
+    return None
+
+
+def _page_terminator_flag(values: object) -> bool | None:
+    return values if isinstance(values, bool) else None
+
+
+def _json_string_fragment(raw_text: str, key: str) -> str | None:
+    marker = f'"{key}":'
+    start = raw_text.find(marker)
+    if start < 0:
+        return None
+    quote_start = raw_text.find('"', start + len(marker))
+    if quote_start < 0:
+        return None
+
+    buffer: list[str] = []
+    escaped = False
+    for char in raw_text[quote_start + 1 :]:
+        if escaped:
+            buffer.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            buffer.append(char)
+            escaped = True
+            continue
+        if char == '"':
+            try:
+                return json.loads('"' + ''.join(buffer) + '"')
+            except json.JSONDecodeError:
+                return None
+        buffer.append(char)
+    return None
+
+
+def _json_bool_fragment(raw_text: str, key: str) -> bool | None:
+    marker = f'"{key}":'
+    start = raw_text.find(marker)
+    if start < 0:
+        return None
+    remainder = raw_text[start + len(marker) :].lstrip()
+    if remainder.startswith("true"):
+        return True
+    if remainder.startswith("false"):
+        return False
+    return None
+
+
+def _json_list_fragment(raw_text: str, key: str) -> list[object] | None:
+    marker = f'"{key}":'
+    start = raw_text.find(marker)
+    if start < 0:
+        return None
+    array_start = raw_text.find('[', start + len(marker))
+    if array_start < 0:
+        return None
+
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(array_start, len(raw_text)):
+        char = raw_text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+            continue
+        if char == '[':
+            depth += 1
+            continue
+        if char == ']':
+            depth -= 1
+            if depth == 0:
+                fragment = raw_text[array_start : index + 1]
+                try:
+                    value = json.loads(fragment)
+                except json.JSONDecodeError:
+                    return None
+                return value if isinstance(value, list) else None
+    return None
+
+
+def _recover_page_result(page: PageExtractionResult, *, data_root: Path | None = None) -> PageExtractionResult:
+    raw_text = page.raw_text.strip()
+    parsed: dict | None = None
+    if raw_text.startswith("{"):
+        try:
+            loaded = json.loads(raw_text)
+        except json.JSONDecodeError:
+            loaded = None
+        if isinstance(loaded, dict):
+            parsed = loaded
+
+    if parsed is None:
+        transcription = _json_string_fragment(raw_text, "transcription")
+        if not transcription:
+            return page
+        page_translation = _json_string_fragment(raw_text, "page_translation") or _json_string_fragment(raw_text, "translation")
+        page_ends_with_sentence_terminator = _json_bool_fragment(raw_text, "page_ends_with_sentence_terminator")
+        sentence_texts = _string_list(_json_list_fragment(raw_text, "sentence_texts")) or _string_list(_json_list_fragment(raw_text, "sentences"))
+        sentence_translations = _string_list(_json_list_fragment(raw_text, "sentence_translations")) or _string_list(_json_list_fragment(raw_text, "translations"))
+        token_hints = _json_list_fragment(raw_text, "token_hints")
+        source_payload = None
+    else:
+        transcription = parsed.get("transcription")
+        if not isinstance(transcription, str):
+            transcription = parsed.get("raw_text") if isinstance(parsed.get("raw_text"), str) else ""
+        transcription = transcription.strip()
+        if not transcription:
+            return page
+
+        nested = None
+        if transcription.startswith("{"):
+            try:
+                nested_loaded = json.loads(transcription)
+            except json.JSONDecodeError:
+                nested_loaded = None
+            if isinstance(nested_loaded, dict):
+                nested = nested_loaded
+
+        source_payload = nested if isinstance(nested, dict) else parsed
+        sentence_texts = _string_list(source_payload.get("sentence_texts")) or _string_list(source_payload.get("sentences"))
+        sentence_translations = _string_list(source_payload.get("sentence_translations")) or _string_list(source_payload.get("translations"))
+        page_translation = _page_translation(source_payload.get("page_translation")) or _page_translation(source_payload.get("translation"))
+        page_ends_with_sentence_terminator = _page_terminator_flag(
+            source_payload.get("page_ends_with_sentence_terminator")
+        )
+        token_hints = source_payload.get("token_hints") if isinstance(source_payload.get("token_hints"), list) else None
+
+    transcription = transcription.strip()
+    if not transcription:
+        return page
+
+    recovered = build_page_extraction_result(
+        book_id=page.book_id,
+        page_number=page.page_number,
+        language_code=page.language_code,
+        raw_text=transcription,
+        source_page_sha256=page.source_page_sha256,
+        sentence_texts=sentence_texts or None,
+        sentence_translations=sentence_translations or None,
+        page_translation=page_translation,
+        page_ends_with_sentence_terminator=page_ends_with_sentence_terminator,
+        token_hints=token_hints,
+    )
+    if data_root is None:
+        return recovered
+
+    enriched = _enrich_page_lexicon_metadata(recovered, data_root=_lexicon_root(data_root))
+    return enriched
+
+
+def _recover_page_artifact(artifact: PageExtractionArtifact, *, data_root: Path | None = None) -> PageExtractionArtifact:
+    rebuilt_page = _recover_page_result(artifact.page, data_root=data_root)
+    if data_root is not None:
+        enriched_page = _enrich_page_lexicon_metadata(rebuilt_page, data_root=_lexicon_root(data_root))
+        if enriched_page is not rebuilt_page:
+            rebuilt_page = enriched_page
+    if rebuilt_page is artifact.page:
+        return artifact
+    return artifact.model_copy(update={"page": rebuilt_page})
+
+
+def recover_book_extraction_result(
+    extraction: BookExtractionResult,
+    *,
+    data_root: Path | None = None,
+) -> BookExtractionResult:
+    recovered_pages = [_recover_page_result(page, data_root=data_root) for page in extraction.pages]
+    if data_root is not None:
+        lexicon_root = _lexicon_root(data_root)
+        enriched_pages = []
+        for page in recovered_pages:
+            enriched_pages.append(_enrich_page_lexicon_metadata(page, data_root=lexicon_root))
+        recovered_pages = enriched_pages
+
+    if all(recovered is original for recovered, original in zip(recovered_pages, extraction.pages, strict=False)):
+        return extraction
+    rebuilt = build_book_extraction_result(
+        book_id=extraction.book_id,
+        source_path=extraction.source_path,
+        language_code=extraction.language_code,
+        page_start=extraction.page_start,
+        page_end=extraction.page_end,
+        pages=recovered_pages,
+    )
+    return rebuilt
 
 
 def load_page_artifact(
@@ -53,7 +285,7 @@ def load_page_artifact(
     data_root: Path | None = None,
 ) -> PageExtractionArtifact | None:
     data_root = data_root or get_books_root()
-    return _load_page_artifact(_page_artifact_path(book_id, page_number, data_root))
+    return _load_page_artifact(_page_artifact_path(book_id, page_number, data_root), data_root=data_root)
 
 
 def parse_text_into_page_artifact(
@@ -285,6 +517,8 @@ def extract_book_pages(
             text_source = FIXTURE_TEXT_SOURCE
             text_source_signature = FIXTURE_TEXT_SIGNATURE
             sentence_texts = None
+            sentence_translations = None
+            page_translation = None
             page_ends = None
             token_hints = None
         else:
@@ -302,6 +536,8 @@ def extract_book_pages(
             text_source = ocr_result.text_source
             text_source_signature = ocr_result.text_source_signature
             sentence_texts = ocr_result.sentence_texts
+            sentence_translations = ocr_result.sentence_translations
+            page_translation = ocr_result.page_translation
             page_ends = ocr_result.page_ends_with_sentence_terminator
             token_hints = [hint.model_dump() for hint in ocr_result.token_hints]
 
@@ -312,6 +548,8 @@ def extract_book_pages(
             raw_text=raw_text,
             source_page_sha256=page_hash,
             sentence_texts=sentence_texts,
+            sentence_translations=sentence_translations,
+            page_translation=page_translation,
             page_ends_with_sentence_terminator=page_ends,
             token_hints=token_hints,
         )

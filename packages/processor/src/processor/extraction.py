@@ -101,6 +101,23 @@ def _normalize_sentence_inputs(sentence_texts: list[str] | None, clean_text: str
     return split_sentences(clean_text)
 
 
+def _normalize_sentence_translations(
+    sentence_translations: list[str] | None,
+    sentence_count: int,
+) -> list[str | None]:
+    if not sentence_translations:
+        return [None] * sentence_count
+
+    normalized = [normalize_text(sentence) for sentence in sentence_translations if normalize_text(sentence)]
+    if not normalized:
+        return [None] * sentence_count
+
+    padded = normalized[:sentence_count]
+    if len(padded) < sentence_count:
+        padded.extend([None] * (sentence_count - len(padded)))
+    return padded
+
+
 def _normalize_token_hints(
     token_hints: list[Mapping[str, object]] | None,
     language_code: str,
@@ -158,9 +175,13 @@ def _merge_sentence_results(left: SentenceResult, right: SentenceResult, languag
     ]
     merged_grammar_patterns = list(dict.fromkeys([*left.grammar_patterns, *right.grammar_patterns]))
     merged_text = _merge_sentence_text(left.text, right.text, language_code)
+    merged_translation = None
+    if left.translation or right.translation:
+        merged_translation = _merge_sentence_text(left.translation or "", right.translation or "", language_code).strip() or None
     return left.model_copy(
         update={
             "text": merged_text,
+            "translation": merged_translation,
             "tokens": merged_tokens,
             "grammar_patterns": merged_grammar_patterns,
             "ends_with_sentence_terminator": ends_with_sentence_terminator(merged_text),
@@ -281,17 +302,21 @@ def build_page_extraction_result(
     raw_text: str,
     source_page_sha256: str | None = None,
     sentence_texts: list[str] | None = None,
+    sentence_translations: list[str] | None = None,
+    page_translation: str | None = None,
     page_ends_with_sentence_terminator: bool | None = None,
     token_hints: list[Mapping[str, object]] | None = None,
 ) -> PageExtractionResult:
     clean_text = normalize_text(raw_text)
     candidate_sentences = _normalize_sentence_inputs(sentence_texts, clean_text)
     hint_map = _normalize_token_hints(token_hints, language_code)
+    sentence_translations = _normalize_sentence_translations(sentence_translations, len(candidate_sentences))
     sentences = [
         _apply_token_hints(
             SentenceResult(
                 order=index,
                 text=sentence,
+                translation=sentence_translations[index - 1],
                 tokens=tokenize_sentence(sentence, language_code),
                 ends_with_sentence_terminator=ends_with_sentence_terminator(sentence),
             ),
@@ -337,6 +362,7 @@ def build_page_extraction_result(
         source_page_sha256=source_page_sha256,
         raw_text=raw_text,
         clean_text=clean_text,
+        page_translation=page_translation.strip() if isinstance(page_translation, str) and page_translation.strip() else None,
         sentences=sentences,
         page_ends_with_sentence_terminator=page_ends_with_sentence_terminator
         if page_ends_with_sentence_terminator is not None

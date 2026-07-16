@@ -8,6 +8,7 @@
       name="description"
       content="A standalone mobile reading view for TextPlex, packaged for GitHub Pages."
     />
+    <link rel="stylesheet" href="./preview-wide.css" />
     <style>
       :root {
         --bg: #f6f2eb;
@@ -39,6 +40,26 @@
         min-height: 100vh;
         margin: 0 auto;
         padding: 18px 16px 22px;
+        --reader-display-font: Georgia, "Times New Roman", serif;
+        --reader-body-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      .app[data-reader-font="serif"] {
+        --reader-display-font: Georgia, "Times New Roman", serif;
+        --reader-body-font: Georgia, "Times New Roman", serif;
+      }
+
+      .app[data-reader-font="sans"] {
+        --reader-display-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --reader-body-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      .font-toggle {
+        min-width: 70px;
+      }
+
+      .reader-body-font {
+        font-family: var(--reader-body-font);
       }
 
       .status-row, .topbar, .tool-row, .info-line, .pill-row, .bottom-actions {
@@ -82,6 +103,24 @@
 
       .tool-row {
         gap: 10px;
+      }
+
+      .reader-token-mode-toggle {
+        min-width: 66px;
+        padding-inline: 12px;
+        border-radius: 999px;
+        background: var(--surface);
+        border: 1px solid rgba(31, 36, 48, 0.08);
+        color: #2a3140;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+      }
+
+      .reader-token-mode-toggle.is-active {
+        background: rgba(63, 155, 104, 0.16);
+        border-color: rgba(63, 155, 104, 0.28);
+        color: #2f7d53;
       }
 
       .reader-pager {
@@ -159,7 +198,7 @@
 
       .poem-title {
         margin: 0;
-        font-family: Georgia, "Times New Roman", serif;
+        font-family: var(--reader-display-font);
         font-size: clamp(24px, 6vw, 30px);
         line-height: 1.08;
         letter-spacing: -0.05em;
@@ -170,6 +209,7 @@
       .poet {
         margin: 8px 0 0;
         color: #787f8d;
+        font-family: var(--reader-body-font);
         font-size: 16px;
         font-weight: 700;
       }
@@ -196,7 +236,7 @@
         justify-content: flex-start;
         align-items: flex-end;
         gap: 8px 12px;
-        font-family: Georgia, "Times New Roman", serif;
+        font-family: var(--reader-body-font);
         font-size: 26px;
         line-height: 1.5;
         letter-spacing: 0.02em;
@@ -224,6 +264,7 @@
         min-height: 1.2em;
         margin-bottom: 6px;
         color: #8d9199;
+        font-family: var(--reader-body-font);
         font-size: 11px;
         font-weight: 700;
         line-height: 1;
@@ -254,6 +295,7 @@
       .translation {
         margin: 22px 0 0;
         color: #465064;
+        font-family: var(--reader-body-font);
         font-size: 19px;
         line-height: 1.55;
         font-weight: 600;
@@ -296,7 +338,7 @@
 
       .vocab-char {
         margin: 0;
-        font-family: Georgia, "Times New Roman", serif;
+        font-family: var(--reader-display-font);
         font-size: 40px;
         line-height: 1;
         letter-spacing: -0.05em;
@@ -307,6 +349,7 @@
         align-items: center;
         gap: 8px;
         margin: 8px 0 0;
+        font-family: var(--reader-body-font);
         font-size: 24px;
         font-weight: 700;
       }
@@ -325,8 +368,22 @@
       .vocab-definition {
         margin: 14px 0 0;
         color: #475061;
+        font-family: var(--reader-body-font);
         font-size: 16px;
         line-height: 1.55;
+      }
+
+      .definition-fallback {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        margin-top: 6px;
+      }
+
+      .definition-fallback .small-copy {
+        flex: 1 1 100%;
+        margin: 0;
       }
 
       .example-box {
@@ -337,6 +394,7 @@
 
       .example-cn {
         margin: 0;
+        font-family: var(--reader-body-font);
         font-size: 17px;
         font-weight: 700;
         line-height: 1.45;
@@ -345,6 +403,7 @@
       .example-en {
         margin: 4px 0 0;
         color: var(--muted);
+        font-family: var(--reader-body-font);
         font-size: 14px;
         line-height: 1.45;
       }
@@ -390,7 +449,7 @@
     </style>
   </head>
   <body>
-    <main class="app">
+    <main class="app" data-reader-font="mixed">
       <header class="topbar">
         <button class="icon-btn" type="button" aria-label="Back">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -402,7 +461,8 @@
           <p class="poet">孟浩然</p>
         </div>
         <div class="tool-row">
-          <button class="icon-btn" type="button" aria-label="Text size">AA</button>
+          <button id="readerTokenModeToggle" class="button button-secondary reader-token-mode-toggle" type="button" aria-pressed="false" aria-label="Switch to character mode">Word</button>
+          <button id="readerFontToggle" class="button button-secondary font-toggle" type="button" aria-label="Cycle reader font">Mixed</button>
           <button class="icon-btn" type="button" aria-label="Bookmark">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M6 3h12v18l-6-4-6 4V3z" />
@@ -483,12 +543,16 @@
           </button>
         </div>
 
-        <p class="vocab-definition">v. to feel; to sense; to realize; to wake up</p>
+          <p class="vocab-definition">v. to feel; to sense; to realize; to wake up</p>
+          <div class="definition-fallback" id="readerDefinitionFallback" hidden>
+            <p class="small-copy" id="readerDefinitionFallbackHint">Not in the dictionary yet? Try character mode for smaller pieces.</p>
+            <button id="readerFallbackModeToggle" class="button button-secondary button-compact" type="button">Try Char mode</button>
+          </div>
 
-        <div class="bottom-actions">
-          <button class="button button-primary" type="button">＋ Save to Vocabulary</button>
-          <button class="button button-secondary" type="button" aria-label="More actions">⋯</button>
-        </div>
+          <div class="bottom-actions">
+            <button class="button button-primary" type="button">＋ Save to Vocabulary</button>
+            <button id="readerMoreActions" class="button button-secondary" type="button" aria-label="More actions">⋯</button>
+          </div>
       </article>
 
       <div class="bottom-spacer"></div>

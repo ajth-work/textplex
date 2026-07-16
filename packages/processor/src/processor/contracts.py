@@ -43,6 +43,7 @@ class LexicalEntryResult(BaseModel):
 class SentenceResult(BaseModel):
     order: int = Field(ge=1)
     text: str
+    translation: str | None = None
     tokens: list[TokenResult]
     grammar_patterns: list[str] = Field(default_factory=list)
     ends_with_sentence_terminator: bool = False
@@ -57,6 +58,7 @@ class PageExtractionResult(BaseModel):
     pipeline_version: str = "textplex-1"
     raw_text: str
     clean_text: str
+    page_translation: str | None = None
     sentences: list[SentenceResult]
     page_ends_with_sentence_terminator: bool = False
     token_occurrences: list[TokenOccurrenceResult] = Field(default_factory=list)

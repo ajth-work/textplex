@@ -80,6 +80,21 @@ class ProgressSurfaceResponse(BaseModel):
     books: list[ProgressBookSummary] = Field(default_factory=list)
 
 
+class SettingEntry(BaseModel):
+    key: str
+    value: str
+
+
+class SettingsSurfaceResponse(BaseModel):
+    entries: list[SettingEntry] = Field(default_factory=list)
+
+
+class ProfileSurfaceResponse(BaseModel):
+    profile: LearningProfileSummary
+    books: list[ProgressBookSummary] = Field(default_factory=list)
+    settings: SettingsSurfaceResponse = Field(default_factory=SettingsSurfaceResponse)
+
+
 class ActivityEvent(BaseModel):
     kind: Literal["page_read", "sentence_read", "definition_lookup", "reading_session"]
     occurred_at: str
@@ -110,15 +125,6 @@ class ImportSurfaceResponse(BaseModel):
     can_upload_pdf: bool = True
     can_paste_text: bool = True
     recent_books: list[ImportRecentBook] = Field(default_factory=list)
-
-
-class SettingEntry(BaseModel):
-    key: str
-    value: str
-
-
-class SettingsSurfaceResponse(BaseModel):
-    entries: list[SettingEntry] = Field(default_factory=list)
 
 
 class SettingsUpdateRequest(BaseModel):

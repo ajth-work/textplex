@@ -20,12 +20,18 @@ from app.schemas.learning import (
     SentenceReadRecord,
 )
 from app.schemas.lexicon import LexiconImportRequest, LexiconImportSummary, LexiconLookupResponse
-from app.schemas.surfaces import BookAnalysisSurfaceResponse, ImportSurfaceResponse, ProgressSurfaceResponse, SearchSurfaceResponse, SettingsSurfaceResponse, SettingsUpdateRequest, StudySurfaceResponse, ActivitySurfaceResponse
-from app.services.book_extraction import extract_book_text, import_text_into_book, load_page_artifact, parse_text_into_page_artifact
+from app.schemas.surfaces import BookAnalysisSurfaceResponse, ImportSurfaceResponse, ProgressSurfaceResponse, ProfileSurfaceResponse, SearchSurfaceResponse, SettingsSurfaceResponse, SettingsUpdateRequest, StudySurfaceResponse, ActivitySurfaceResponse
+from app.services.book_extraction import (
+    extract_book_text,
+    import_text_into_book,
+    load_page_artifact,
+    parse_text_into_page_artifact,
+    recover_book_extraction_result,
+)
 from app.services.book_registry import delete_book_from_path, import_book_from_path, load_registry, save_registry
 from app.services.learning_profile import create_reading_session, get_learning_profile_summary, record_page_read, record_sentence_read
 from app.services.lexicon import import_lexicon_from_source, lookup_lexicon_entry
-from app.services.surfaces import get_activity_surface, get_book_analysis_surface, get_import_surface, get_progress_surface, get_study_surface, load_settings_surface, search_surfaces, update_settings_surface
+from app.services.surfaces import get_activity_surface, get_book_analysis_surface, get_import_surface, get_progress_surface, get_profile_surface, get_study_surface, load_settings_surface, search_surfaces, update_settings_surface
 from processor.contracts import BookExtractionResult
 
 
@@ -433,7 +439,12 @@ def get_book_extraction(book_id: str) -> BookExtractionResult:
     extraction_path = app.state.data_root / "books" / book_id / "extractions" / "book-extraction.json"
     if not extraction_path.exists():
         raise HTTPException(status_code=404, detail=f"Extraction not found for book: {book_id}")
-    return BookExtractionResult.model_validate_json(extraction_path.read_text(encoding="utf-8"))
+    extraction = BookExtractionResult.model_validate_json(extraction_path.read_text(encoding="utf-8"))
+    recovered = recover_book_extraction_result(extraction, data_root=app.state.data_root / "books")
+    if recovered is not extraction:
+        extraction_path.write_text(recovered.model_dump_json(indent=2), encoding="utf-8")
+        return recovered
+    return extraction
 
 
 @app.get("/learning/profile", response_model=LearningProfileSummary)
@@ -508,6 +519,11 @@ def study_surface(language_code: str | None = None, limit: int = 50) -> StudySur
 @app.get("/progress", response_model=ProgressSurfaceResponse)
 def progress_surface() -> ProgressSurfaceResponse:
     return get_progress_surface(app.state.data_root)
+
+
+@app.get("/profile", response_model=ProfileSurfaceResponse)
+def profile_surface() -> ProfileSurfaceResponse:
+    return get_profile_surface(app.state.data_root)
 
 
 @app.get("/activity", response_model=ActivitySurfaceResponse)

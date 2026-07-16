@@ -96,6 +96,7 @@ export function AppShell() {
   const analysisHref = activeBookId ? `/analysis/${activeBookId}` : "/library";
   const bookHref = activeBookId ? `/books/${activeBookId}` : "/library";
   const searchHref = activeSearchQuery ? `/search?q=${encodeURIComponent(activeSearchQuery)}` : "/search";
+  const profileHref = "/profile";
 
   function handleBack() {
     if (window.history.length > 1 && pathname !== "/") {
@@ -156,6 +157,9 @@ export function AppShell() {
         </Link>
         <Link className={navLinkClassName(pathname, "/progress")} href="/progress">
           Progress
+        </Link>
+        <Link className={navLinkClassName(pathname, profileHref)} href={profileHref}>
+          Profile
         </Link>
         <Link className={navLinkClassName(pathname, "/activity")} href="/activity">
           Activity
