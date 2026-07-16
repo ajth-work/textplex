@@ -66,6 +66,16 @@ For each extraction run, also store a book-level summary containing:
 7. Every AI response must be schema-validated before persistence.
 8. Save the normalized page artifact so processor changes can be audited.
 
+For Chinese-specific segmentation, token hints, and pinyin fallback behavior, see [Chinese Text Processing Notes](./CHINESE_TEXT_PROCESSING.md).
+
+For a reusable structure that can be adapted to other non-Latin scripts, see [Non-Romanized Language Processing Template](./NON_ROMANIZED_LANGUAGE_PROCESSING_TEMPLATE.md).
+
+For an implementation-order view of which languages to prioritize first, see [Non-Romanized Language Scope](./NON_ROMANIZED_LANGUAGE_SCOPE.md).
+
+For a starter public-domain corpus to use when testing those languages, see [Non-Romanized Language Test Corpus](./NON_ROMANIZED_LANGUAGE_TEST_CORPUS.md).
+
+For the first-wave Japanese-specific processing note, see [Japanese Text Processing Notes](./JAPANESE_TEXT_PROCESSING.md).
+
 ## Idempotency
 
 A page processing key should include:

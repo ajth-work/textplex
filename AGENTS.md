@@ -1,5 +1,7 @@
 # Repository Guidelines
 
+Use this file for repo-level guidance that should apply to any Codex session in this workspace. Keep reusable, task-specific workflow detail in `SKILLS.md` or a more specific nested agent file.
+
 ## Project Structure & Module Organization
 
 TextPlex is a local-first language-learning system built from a web reader, an API, and a processing package.
@@ -81,6 +83,8 @@ Treat source books, scans, OCR text, and learner history as sensitive local cont
 ## Commit & Pull Request Guidelines
 
 Use short imperative commit messages, such as `Add reader shell scaffold` or `Define page-processing contract`. Keep commits scoped to one coherent change. When relevant, mention whether you verified the web app, API, processor tests, or data-contract assumptions.
+
+When a request changes code, docs, tests, local data, or GitHub-tracked work, add a brief `CHANGELOG.md` note that captures the general change and date. Keep it high-level; the goal is to preserve a readable history of what changed, not to log every file touch.
 
 ## Codex Agent Configuration: Token Optimization Protocol
 
