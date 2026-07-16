@@ -1,4 +1,4 @@
-const assert = require("node:assert/strict");
+﻿const assert = require("node:assert/strict");
 const { test } = require("node:test");
 
 const { createNode, createPagerNode, createSentenceLineNode, loadPreviewData, loadPreviewRouter } = require("./helpers/browser-context");
@@ -12,11 +12,16 @@ test("router helpers resolve preview routes and render icon-button cards", async
   assert.ok(router, "router helpers should be exported to window");
   assert.equal(router.currentBookId(), "spring-dawn");
 
+  preview.setSelectedTrackCode("jlpt");
+
   const readerUrl = router.resolveTargetUrl(router.routes.reader, "little-prince");
-  assert.equal(readerUrl, "http://example.test/reader-preview.html?book=little-prince");
+  assert.equal(readerUrl, "http://example.test/reader-preview.html?book=little-prince&track=jlpt");
 
   const analysisUrl = router.resolveTargetUrl(router.routes.analysis, "little-prince");
-  assert.equal(analysisUrl, "http://example.test/analysis-preview.html?book=little-prince");
+  assert.equal(analysisUrl, "http://example.test/analysis-preview.html?book=little-prince&track=jlpt");
+
+  const profileUrl = router.resolveTargetUrl(router.routes.profile);
+  assert.equal(profileUrl, "http://example.test/profile-preview.html?book=spring-dawn&track=jlpt");
 
   const profile = preview.getLibraryProfile("little-prince");
   const gridCard = router.renderLibraryGridCard(profile, "spring-dawn");
@@ -117,8 +122,8 @@ test("explicit book lookups still resolve archived records by id", async () => {
         languageCode: "fr",
         title: "The Little Prince",
         titleCn: "The Little Prince",
-        author: "Antoine de Saint-Exupéry",
-        authorCn: "Antoine de Saint-Exupéry",
+        author: "Antoine de Saint-ExupÃ©ry",
+        authorCn: "Antoine de Saint-ExupÃ©ry",
         kindLabel: "TXT",
         homePriority: 40,
         analysisPriority: 30,
@@ -232,6 +237,7 @@ test("reader preview wires sentence paging from dynamic book data", async () => 
   const exampleEn = createNode("p");
   const saveButton = createNode("button");
   const moreButton = createNode("button");
+  const tokenModeToggle = createNode("button");
   const readingSpan = createNode("span");
   const audioSpan = createNode("span");
   const tagSpan = createNode("span");
@@ -258,6 +264,8 @@ test("reader preview wires sentence paging from dynamic book data", async () => 
     },
     idMap: {
       readerPager: pagerNode,
+      readerTokenModeToggle: tokenModeToggle,
+      readerMoreActions: moreButton,
     },
   });
   await browser.window.TextPlexPreviewRouter.ready;
@@ -299,6 +307,7 @@ test("reader preview shows a persisted reading session pill and advances book pr
   const exampleEn = createNode("p");
   const saveButton = createNode("button");
   const moreButton = createNode("button");
+  const tokenModeToggle = createNode("button");
   const readingSpan = createNode("span");
   const audioSpan = createNode("span");
   const tagSpan = createNode("span");
@@ -312,10 +321,10 @@ test("reader preview shows a persisted reading session pill and advances book pr
     author: "Local import",
     languageCode: "zh",
     sentences: [
-      { tokens: [{ surface: "甲" }, { surface: "页" }, { surface: "。" }], translation: ["Page one."] },
-      { tokens: [{ surface: "乙" }, { surface: "页" }, { surface: "。" }], translation: ["Page two."] },
-      { tokens: [{ surface: "丙" }, { surface: "页" }, { surface: "。" }], translation: ["Page three."] },
-      { tokens: [{ surface: "丁" }, { surface: "页" }, { surface: "。" }], translation: ["Page four."] },
+      { tokens: [{ surface: "ç”²" }, { surface: "é¡µ" }, { surface: "ã€‚" }], translation: ["Page one."] },
+      { tokens: [{ surface: "ä¹™" }, { surface: "é¡µ" }, { surface: "ã€‚" }], translation: ["Page two."] },
+      { tokens: [{ surface: "ä¸™" }, { surface: "é¡µ" }, { surface: "ã€‚" }], translation: ["Page three."] },
+      { tokens: [{ surface: "ä¸" }, { surface: "é¡µ" }, { surface: "ã€‚" }], translation: ["Page four."] },
     ],
   });
 
@@ -342,6 +351,8 @@ test("reader preview shows a persisted reading session pill and advances book pr
     idMap: {
       readerPager: pagerNode,
       readerSessionPill: sessionPill,
+      readerTokenModeToggle: tokenModeToggle,
+      readerMoreActions: moreButton,
     },
   });
 
@@ -403,6 +414,8 @@ test("chinese reader tokens keep pinyin attached to each token", async () => {
   const translationNode = createNode("div");
   const vocabChar = createNode("h2");
   const vocabPinyin = createNode("div");
+  const moreButton = createNode("button");
+  const tokenModeToggle = createNode("button");
   vocabPinyin.querySelectorAll = () => [createNode("span"), createNode("span"), createNode("span")];
 
   const browser = loadPreviewRouter({
@@ -419,23 +432,27 @@ test("chinese reader tokens keep pinyin attached to each token", async () => {
       ".example-cn": createNode("p"),
       ".example-en": createNode("p"),
       ".button-primary": createNode("button"),
-      ".button-secondary": createNode("button"),
+      ".button-secondary": moreButton,
       ".topbar .icon-btn": [createNode("button")],
       "button, a": [],
     },
     idMap: {
       readerPager: pagerNode,
+      readerTokenModeToggle: tokenModeToggle,
+      readerMoreActions: moreButton,
     },
   });
   await browser.window.TextPlexPreviewRouter.ready;
 
   assert.match(lineOne.innerHTML, /token-reading/);
   assert.match(lineOne.innerHTML, /token-surface/);
-  assert.match(lineOne.innerHTML, /zhè/);
-  assert.match(lineOne.innerHTML, /这是/);
+  assert.match(lineOne.innerHTML, /data-token-surface="这是"/);
+  assert.match(lineOne.innerHTML, /data-token-surface="演示"/);
   assert.match(lineOne.innerHTML, /[，。！？,.!?]/);
   assert.doesNotMatch(lineOne.innerHTML, /pinyin-row/);
-  assert.ok(browser.document.title.includes("习近平"), "Chinese book title should still render");
+  tokenModeToggle.click();
+  assert.match(lineOne.innerHTML, /data-token-surface="\u8FD9"/);
+  assert.match(lineOne.innerHTML, /data-token-surface="\u662F"/);
 });
 
 test("reader preview moves the highlight when a different token is clicked", async () => {
@@ -481,7 +498,7 @@ test("reader preview moves the highlight when a different token is clicked", asy
               hsk_level: "HSK 2",
               example_cn: `${term} is used in a mock sentence.`,
               example_en: `Mock definition for ${term}.`,
-              radical: "示",
+              radical: "ç¤º",
               stroke_count: 7,
             },
           ],
@@ -623,11 +640,11 @@ test("reader preview shows a not-found state when the lookup misses", async () =
     languageCode: "zh",
     sentences: [
       {
-        tokens: [
-          { surface: "alpha", romanization: "a1" },
-          { surface: "missing", romanization: "m1" },
-          { surface: ".", romanization: "" },
-        ],
+      tokens: [
+        { surface: "alpha", romanization: "a1" },
+        { surface: "示例", romanization: "shi4 li4" },
+        { surface: ".", romanization: "" },
+      ],
         translation: ["Sentence with a missing lookup."],
         vocabulary: {
           surface: "alpha",
@@ -680,6 +697,9 @@ test("reader preview shows a not-found state when the lookup misses", async () =
     },
     idMap: {
       readerPager: createPagerNode(),
+      readerTokenModeToggle: createNode("button"),
+      readerFallbackModeToggle: createNode("button"),
+      readerDefinitionFallback: createNode("div"),
     },
   });
 
@@ -687,13 +707,18 @@ test("reader preview shows a not-found state when the lookup misses", async () =
 
   const lineOne = browser.document.querySelector(".annotated-line");
   const tokenButtons = lineOne.querySelectorAll(".token");
-  const missingToken = tokenButtons.find((token) => token.getAttribute("data-token-surface") === "missing");
+  const missingToken = tokenButtons.find((token) => token.getAttribute("data-token-surface") === "示例");
 
   assert.ok(missingToken, "the missing token should exist");
   missingToken.click();
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.equal(browser.document.querySelector(".vocab-definition").textContent, "No dictionary entry found in imported lexicon.");
+  assert.equal(browser.document.getElementById("readerDefinitionFallback").hidden, false);
+  browser.document.getElementById("readerFallbackModeToggle").click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.match(lineOne.innerHTML, /data-token-surface="示"/);
+  assert.match(lineOne.innerHTML, /data-token-surface="例"/);
   assert.ok(fetchCalls.some((call) => call.includes("/lexicon/lookup")), "reader preview should still try the lexicon lookup");
 });
 
@@ -891,3 +916,4 @@ test("import preview shows processor upload progress while a PDF is being import
   const store = JSON.parse(browser.window.localStorage.getItem("textplex.preview.store") || "{}");
   assert.ok(Array.isArray(store.books) && store.books.some((book) => book.id === "uploaded-book"));
 });
+

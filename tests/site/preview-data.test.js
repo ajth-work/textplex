@@ -6,6 +6,7 @@ const { loadPreviewData } = require("./helpers/browser-context");
 test("preview data exposes seeded library and reader profiles", () => {
   const { window } = loadPreviewData();
   const api = window.TextPlexPreview;
+  const profile = api.getProfilePreviewData();
 
   assert.ok(api, "preview API should exist on window");
   assert.ok(api.ready, "preview API should expose a hydration promise");
@@ -24,6 +25,10 @@ test("preview data exposes seeded library and reader profiles", () => {
   assert.equal(readerProfile.totalSentences, 3, "reader view should be padded to three pages");
   assert.ok(readerProfile.sentences[0].tokens.length > 0, "reader sentence should include tokens");
   assert.ok(readerProfile.sentences[2].translation.length > 0, "synthetic fallback page should be generated");
+  assert.equal(profile.profile.selected_track_code, "hsk");
+  assert.ok(Array.isArray(profile.profile.learning_tracks));
+  assert.ok(profile.profile.learning_tracks.length >= 3);
+  assert.ok(profile.profile.learning_tracks.some((track) => track.code === "local"));
 
   const chineseProfile = api.getReaderProfile("article-demo-briefing");
   assert.deepEqual(chineseProfile.sentences[1].phonetics, ["wèi", "le", "cè", "shì", "jù", "zi", "chù", "lǐ"]);

@@ -11,6 +11,7 @@ const routes = {
   import: "./import-preview.html",
   search: "./search-preview.html",
   progress: "./progress-preview.html",
+  profile: "./profile-preview.html",
   study: "./study-preview.html",
   activity: "./activity-preview.html",
   vocabulary: "./vocabulary-preview.html",
@@ -88,7 +89,7 @@ function bindTextActions() {
       insights: routes.vocabulary,
       vocabulary: routes.vocabulary,
       progress: routes.progress,
-      profile: routes.progress,
+      profile: routes.profile,
       study: routes.study,
       activity: routes.activity,
       search: routes.search,
@@ -213,6 +214,14 @@ function bindPageSpecificActions() {
 
   if (currentFile === "import-preview.html") {
     wireImportPreview();
+  }
+
+  if (currentFile === "profile-preview.html") {
+    wireProfilePreview();
+  }
+
+  if (currentFile === "vocabulary-preview.html") {
+    wireVocabularyPreview();
   }
 }
 
@@ -440,14 +449,49 @@ function wireReaderPreview() {
   const exampleCn = document.querySelector(".example-cn");
   const exampleEn = document.querySelector(".example-en");
   const saveButton = document.querySelector(".button-primary");
-  const moreButton = document.querySelector(".button-secondary");
+  const moreButton = document.getElementById("readerMoreActions");
+  const tokenModeToggle = document.getElementById("readerTokenModeToggle");
+  const fontToggle = document.getElementById("readerFontToggle");
+  const fallbackModeToggle = document.getElementById("readerFallbackModeToggle");
+  const fallbackModeWrap = document.getElementById("readerDefinitionFallback");
+  const readerApp = document.querySelector(".app");
   const processorBaseUrl = previewData?.getProcessorBaseUrl?.() ?? "";
+  const readerTokenModeStorageKey = "textplex.readerTokenMode";
+  const readerFontStorageKey = "textplex.readerFont";
+  const missingLookupMessage = "No dictionary entry found in imported lexicon.";
   const pageStateKey = `textplex:reader-page:${bookId}`;
   const sentenceStateKey = `textplex:reader-sentence:${bookId}`;
-  const tokenStateKey = (page, sentence) => `textplex:reader-token:${bookId}:${page}:${sentence}`;
+  const tokenStateKey = (page, sentence, mode) => `textplex:reader-token:${bookId}:${page}:${sentence}:${mode}`;
   const tokenLookupCache = new Map();
   const tokenLookupPending = new Map();
   let activeTokenLookupKey = "";
+  let readerTokenMode = resolveReaderTokenMode(window.localStorage.getItem(readerTokenModeStorageKey) ?? "word");
+  let readerFont = resolveReaderFont(window.localStorage.getItem(readerFontStorageKey) ?? "mixed");
+
+  function setReaderTokenMode(nextMode) {
+    const normalizedMode = resolveReaderTokenMode(nextMode);
+    if (normalizedMode === readerTokenMode) {
+      return;
+    }
+
+    const previousMode = readerTokenMode;
+    readerTokenMode = normalizedMode;
+    window.localStorage.setItem(readerTokenModeStorageKey, readerTokenMode);
+    window.sessionStorage.removeItem(tokenStateKey(pageIndex, sentenceIndex, previousMode));
+    render();
+  }
+
+  function setReaderFont(nextMode) {
+    const normalizedMode = resolveReaderFont(nextMode);
+    if (normalizedMode === readerFont) {
+      return;
+    }
+
+    readerFont = normalizedMode;
+    window.localStorage.setItem(readerFontStorageKey, readerFont);
+    render();
+  }
+
   const pages = Array.isArray(profile.pages) && profile.pages.length
     ? profile.pages
     : Array.isArray(profile.sentences)
@@ -495,7 +539,7 @@ function wireReaderPreview() {
       translation: [],
       vocabulary: null,
     };
-    const selectedTokenIndex = resolveSelectedTokenIndex(sentence, pageIndex, sentenceIndex);
+    const selectedTokenIndex = resolveSelectedTokenIndex(sentence, pageIndex, sentenceIndex, readerTokenMode);
     const selectedTokenLookupKey = buildTokenLookupKey(sentence, selectedTokenIndex);
     activeTokenLookupKey = selectedTokenLookupKey;
     void ensureSelectedTokenLookup(sentence, selectedTokenIndex);
@@ -511,9 +555,39 @@ function wireReaderPreview() {
     if (author) {
       author.textContent = profile.author;
     }
+    if (readerApp) {
+      readerApp.dataset.readerFont = readerFont;
+    }
+    if (tokenModeToggle) {
+      tokenModeToggle.textContent = readerTokenMode === "character" ? "Char" : "Word";
+      tokenModeToggle.classList.toggle("is-active", readerTokenMode === "character");
+      tokenModeToggle.setAttribute("aria-pressed", String(readerTokenMode === "character"));
+      tokenModeToggle.setAttribute(
+        "aria-label",
+        readerTokenMode === "character" ? "Switch to word mode" : "Switch to character mode",
+      );
+      tokenModeToggle.title = readerTokenMode === "character" ? "Character mode" : "Word mode";
+      tokenModeToggle.disabled = !sentence;
+    }
+    if (fontToggle) {
+      const fontLabel = formatReaderFontLabel(readerFont);
+      fontToggle.textContent = fontLabel;
+      fontToggle.setAttribute("aria-label", `Cycle reader font. Current: ${fontLabel}`);
+      fontToggle.title = `Reader font: ${fontLabel}`;
+      fontToggle.disabled = !sentence;
+    }
+    const tokenLookupMissing = selectedTokenState.definition === missingLookupMessage;
+    if (fallbackModeToggle) {
+      fallbackModeToggle.textContent = readerTokenMode === "character" ? "Word mode" : "Try Char mode";
+      fallbackModeToggle.setAttribute("aria-label", readerTokenMode === "character" ? "Switch to word mode" : "Try character mode");
+      fallbackModeToggle.title = readerTokenMode === "character" ? "Switch back to word mode" : "Switch to character mode";
+      fallbackModeToggle.hidden = !tokenLookupMissing;
+    }
+    if (fallbackModeWrap) {
+      fallbackModeWrap.hidden = !tokenLookupMissing;
+    }
     if (lines[0]) {
-      const phonetics = Array.isArray(sentence.phonetics) ? sentence.phonetics : [];
-      const tokenMarkup = buildSentenceTokenMarkup(sentence, phonetics, selectedTokenIndex);
+      const tokenMarkup = buildSentenceTokenMarkup(sentence, readerTokenMode, selectedTokenIndex);
 
       lines[0].style.display = "";
       lines[0].innerHTML = `<div class="sentence-row" aria-label="${escapeHtml(profile.title)} page ${pageIndex + 1} sentence ${sentenceIndex + 1}">${tokenMarkup}</div>`;
@@ -528,7 +602,7 @@ function wireReaderPreview() {
           if (button.getAttribute("data-token-punctuation") === "true") {
             return;
           }
-          window.sessionStorage.setItem(tokenStateKey(pageIndex, sentenceIndex), String(nextIndex));
+          window.sessionStorage.setItem(tokenStateKey(pageIndex, sentenceIndex, readerTokenMode), String(nextIndex));
           render();
         });
       });
@@ -539,8 +613,15 @@ function wireReaderPreview() {
     }
 
     if (translation) {
-      translation.innerHTML = Array.isArray(sentence.translation) && sentence.translation.length
-        ? sentence.translation.map((line) => `<p>${escapeHtml(line)}</p>`).join("")
+      const sentenceTranslation = Array.isArray(sentence.translation) ? sentence.translation : [];
+      const pageTranslation = Array.isArray(currentPage.translation)
+        ? currentPage.translation
+        : typeof currentPage.page_translation === "string" && currentPage.page_translation.trim()
+          ? [currentPage.page_translation.trim()]
+          : [];
+      const translationLines = sentenceTranslation.length ? sentenceTranslation : pageTranslation;
+      translation.innerHTML = translationLines.length
+        ? translationLines.map((line) => `<p>${escapeHtml(line)}</p>`).join("")
         : `<p>Sentence ${sentenceIndex + 1} of ${currentSentenceCount}.</p>`;
     }
 
@@ -626,7 +707,7 @@ function wireReaderPreview() {
     window.history.replaceState({}, "", url);
     window.sessionStorage.setItem(pageStateKey, String(pageIndex));
     window.sessionStorage.setItem(sentenceStateKey, String(sentenceIndex));
-    window.sessionStorage.setItem(tokenStateKey(pageIndex, sentenceIndex), String(selectedTokenIndex));
+    window.sessionStorage.setItem(tokenStateKey(pageIndex, sentenceIndex, readerTokenMode), String(selectedTokenIndex));
     document.title = `${profile.title} ? P${pageIndex + 1}/${pageCount} ? S${sentenceIndex + 1}/${currentSentenceCount} ? TextPlex Reader Preview`;
   }
 
@@ -655,6 +736,32 @@ function wireReaderPreview() {
       completedPages,
       completedCharacters,
     });
+  }
+
+  function resolveReaderFont(value) {
+    return value === "serif" || value === "sans" || value === "mixed" ? value : "mixed";
+  }
+
+  function nextReaderFontMode(currentMode) {
+    const mode = resolveReaderFont(currentMode);
+    if (mode === "mixed") {
+      return "serif";
+    }
+    if (mode === "serif") {
+      return "sans";
+    }
+    return "mixed";
+  }
+
+  function formatReaderFontLabel(mode) {
+    switch (resolveReaderFont(mode)) {
+      case "serif":
+        return "Serif";
+      case "sans":
+        return "Sans";
+      default:
+        return "Mixed";
+    }
   }
 
   function finalizeCurrentSession() {
@@ -692,38 +799,54 @@ function wireReaderPreview() {
   }
 
   render();
+  if (tokenModeToggle) {
+    tokenModeToggle.addEventListener("click", () => {
+      setReaderTokenMode(readerTokenMode === "character" ? "word" : "character");
+    });
+  }
+  if (fontToggle) {
+    fontToggle.addEventListener("click", () => {
+      setReaderFont(nextReaderFontMode(readerFont));
+    });
+  }
+  if (fallbackModeToggle) {
+    fallbackModeToggle.addEventListener("click", () => {
+      setReaderTokenMode("character");
+    });
+  }
   window.addEventListener("pagehide", finalizeCurrentSession);
   window.addEventListener("beforeunload", finalizeCurrentSession);
 
-  function resolveSelectedTokenIndex(sentence, page, sentenceNumber) {
-    const tokens = Array.isArray(sentence.tokens) ? sentence.tokens : [];
+  function resolveSelectedTokenIndex(sentence, page, sentenceNumber, mode) {
+    const tokens = buildReaderDisplayTokens(sentence, mode);
     if (!tokens.length) {
       return 0;
     }
 
-    const storedIndex = Number.parseInt(window.sessionStorage.getItem(tokenStateKey(page, sentenceNumber)) ?? "", 10);
+    const storedIndex = Number.parseInt(window.sessionStorage.getItem(tokenStateKey(page, sentenceNumber, mode)) ?? "", 10);
     if (Number.isFinite(storedIndex)) {
       const storedToken = tokens[storedIndex];
-      if (storedToken && !isTokenPunctuation(storedToken.surface)) {
+      if (storedToken && !isTokenPunctuation(storedToken.surface_form ?? storedToken.surface)) {
         return storedIndex;
       }
     }
 
-    const matchedIndex = tokens.findIndex((token) => normalizeText(token?.surface ?? "") === normalizeText(sentence.vocabulary?.surface ?? ""));
-    if (matchedIndex >= 0 && !isTokenPunctuation(tokens[matchedIndex]?.surface)) {
+    const matchedIndex = tokens.findIndex(
+      (token) => normalizeText(token?.surface_form ?? token?.surface ?? "") === normalizeText(sentence.vocabulary?.surface ?? ""),
+    );
+    if (matchedIndex >= 0 && !isTokenPunctuation(tokens[matchedIndex]?.surface_form ?? tokens[matchedIndex]?.surface)) {
       return matchedIndex;
     }
 
-    const firstReadableIndex = tokens.findIndex((token) => !isTokenPunctuation(token?.surface ?? ""));
+    const firstReadableIndex = tokens.findIndex((token) => !isTokenPunctuation(token?.surface_form ?? token?.surface ?? ""));
     return firstReadableIndex >= 0 ? firstReadableIndex : 0;
   }
 
   function buildSelectedTokenState(sentence, index) {
-    const tokens = Array.isArray(sentence.tokens) ? sentence.tokens : [];
-    const phonetics = Array.isArray(sentence.phonetics) ? sentence.phonetics : [];
-    const token = tokens[index] ?? tokens.find((candidate) => !isTokenPunctuation(candidate?.surface ?? "")) ?? tokens[0] ?? {};
-    const surface = String(token?.surface ?? sentence.vocabulary?.surface ?? "");
-    const reading = String(token?.romanization ?? token?.pronunciation ?? phonetics[index] ?? sentence.vocabulary?.reading ?? "");
+    const tokens = buildReaderDisplayTokens(sentence, readerTokenMode);
+    const token = tokens[index] ?? tokens.find((candidate) => !isTokenPunctuation(candidate?.surface_form ?? candidate?.surface ?? "")) ?? tokens[0] ?? {};
+    const surface = String(token?.surface_form ?? token?.surface ?? sentence.vocabulary?.surface ?? "");
+    const reading = String(token?.romanization ?? token?.pronunciation ?? sentence.vocabulary?.reading ?? "");
     const matchedVocabulary = normalizeText(surface) && normalizeText(surface) === normalizeText(sentence.vocabulary?.surface ?? "");
 
     if (matchedVocabulary && sentence.vocabulary) {
@@ -785,9 +908,9 @@ function wireReaderPreview() {
   }
 
   function buildTokenLookupKey(sentence, index) {
-    const tokens = Array.isArray(sentence.tokens) ? sentence.tokens : [];
-    const token = tokens[index] ?? tokens.find((candidate) => !isTokenPunctuation(candidate?.surface ?? "")) ?? tokens[0] ?? {};
-    const surface = String(token?.surface ?? "").trim();
+    const tokens = buildReaderDisplayTokens(sentence, readerTokenMode);
+    const token = tokens[index] ?? tokens.find((candidate) => !isTokenPunctuation(candidate?.surface_form ?? candidate?.surface ?? "")) ?? tokens[0] ?? {};
+    const surface = String(token?.surface_form ?? token?.surface ?? "").trim();
     if (!surface || isTokenPunctuation(surface)) {
       return "";
     }
@@ -799,7 +922,7 @@ function wireReaderPreview() {
     return {
       surface: String(entry?.surface_form ?? surface ?? ""),
       reading: String(entry?.pinyin ?? reading ?? ""),
-        tag: formatLevelTag(entry?.hsk_level ?? profile.kindLabel ?? "demo"),
+      tag: formatLevelTag(entry?.hsk_level ?? profile.kindLabel ?? "demo"),
       definition: String(entry?.definition ?? `Dictionary entry for ${surface}.`),
       exampleCn: String(entry?.example_cn ?? entry?.exampleCn ?? ""),
       exampleEn: String(entry?.example_en ?? entry?.exampleEn ?? ""),
@@ -814,9 +937,13 @@ function wireReaderPreview() {
       return;
     }
 
-    const tokens = Array.isArray(sentence.tokens) ? sentence.tokens : [];
-    const token = tokens[index] ?? tokens.find((candidate) => !isTokenPunctuation(candidate?.surface ?? "")) ?? tokens[0] ?? {};
-    const surface = String(token?.surface ?? "").trim();
+    if (isBlockedProcessorUrl(processorBaseUrl)) {
+      return;
+    }
+
+    const tokens = buildReaderDisplayTokens(sentence, readerTokenMode);
+    const token = tokens[index] ?? tokens.find((candidate) => !isTokenPunctuation(candidate?.surface_form ?? candidate?.surface ?? "")) ?? tokens[0] ?? {};
+    const surface = String(token?.surface_form ?? token?.surface ?? "").trim();
     if (!surface) {
       return;
     }
@@ -1789,11 +1916,17 @@ function readUploadErrorMessage(xhr, fallbackMessage) {
   return fallbackMessage;
 }
 
-async function uploadPdfToProcessor(file, onProgress) {
+  async function uploadPdfToProcessor(file, onProgress) {
   const baseUrl = previewData?.getProcessorBaseUrl?.();
   if (!baseUrl) {
     toast("Set the processor API URL before uploading.");
     return null;
+  }
+
+  if (isBlockedProcessorUrl(baseUrl)) {
+    const message = "GitHub Pages is served over HTTPS, so this browser blocks HTTP processor URLs. Use an HTTPS API or test from the local site host.";
+    toast(message);
+    return { error: message };
   }
 
   if (typeof window.fetch !== "function" || typeof window.FormData !== "function") {
@@ -1865,7 +1998,278 @@ function updateProcessorStatus(node, value) {
   }
 
   const resolved = String(value ?? "").trim();
-  node.textContent = resolved ? `Processor URL: ${resolved}` : "No processor URL set.";
+  node.textContent = resolved
+    ? isBlockedProcessorUrl(resolved)
+      ? `Processor URL: ${resolved} (blocked from GitHub Pages over HTTPS)`
+      : `Processor URL: ${resolved}`
+    : "No processor URL set.";
+}
+
+function wireProfilePreview() {
+  const profile = previewData?.getProfilePreviewData?.();
+  if (!profile) {
+    return;
+  }
+
+  wireTrackPreview({
+    prefix: "profile",
+    tracks: profile.profile.learning_tracks || [],
+    selectedTrackCode: profile.profile.selected_track_code || "local",
+    titleFallback: "Track overview",
+    subtitleFallback: "Select a track to inspect progress.",
+    nextStepFallback: "Track guidance appears here.",
+  });
+
+  const title = document.getElementById("profileTitle");
+  const subtitle = document.getElementById("profileSubtitle");
+  const badge = document.getElementById("profileBadge");
+  const sessionCount = document.getElementById("profileSessionCount");
+  const pageReadCount = document.getElementById("profilePageReadCount");
+  const sentenceReadCount = document.getElementById("profileSentenceReadCount");
+  const activeBookCount = document.getElementById("profileActiveBookCount");
+  const uniqueWordCount = document.getElementById("profileUniqueWordCount");
+  const uniqueCharacterCount = document.getElementById("profileUniqueCharacterCount");
+  const todaySentenceCount = document.getElementById("profileTodaySentenceCount");
+  const todayTokenCount = document.getElementById("profileTodayTokenCount");
+  const avgSentence = document.getElementById("profileAvgSentence");
+  const avgWord = document.getElementById("profileAvgWord");
+  const avgCharacter = document.getElementById("profileAvgCharacter");
+  const settingsTheme = document.getElementById("profileTheme");
+  const settingsReaderMode = document.getElementById("profileReaderMode");
+  const settingsOcr = document.getElementById("profileOcrProvider");
+  const settingsProcessor = document.getElementById("profileProcessorUrl");
+  const activityList = document.getElementById("profileBookActivity");
+  const emptyState = document.getElementById("profileActivityEmpty");
+
+  if (title) {
+    title.textContent = "User profile and reading history";
+  }
+  if (subtitle) {
+    subtitle.textContent = "Sessions, page reads, exposure data, and stored preferences from the local profile store.";
+  }
+  if (badge) {
+    badge.textContent = `${profile.profile.active_books} active books`;
+  }
+  if (sessionCount) {
+    sessionCount.textContent = String(profile.profile.reading_sessions);
+  }
+  if (pageReadCount) {
+    pageReadCount.textContent = String(profile.profile.page_reads);
+  }
+  if (sentenceReadCount) {
+    sentenceReadCount.textContent = String(profile.profile.sentence_reads);
+  }
+  if (activeBookCount) {
+    activeBookCount.textContent = String(profile.profile.active_books);
+  }
+  if (uniqueWordCount) {
+    uniqueWordCount.textContent = String(profile.profile.unique_words_seen);
+  }
+  if (uniqueCharacterCount) {
+    uniqueCharacterCount.textContent = String(profile.profile.unique_characters_seen);
+  }
+  if (todaySentenceCount) {
+    todaySentenceCount.textContent = String(profile.profile.today_sentence_reads);
+  }
+  if (todayTokenCount) {
+    todayTokenCount.textContent = String(profile.profile.today_token_exposures);
+  }
+  if (avgSentence) {
+    avgSentence.textContent = profile.profile.average_seconds_per_sentence == null ? "—" : `${profile.profile.average_seconds_per_sentence.toFixed(2)} sec`;
+  }
+  if (avgWord) {
+    avgWord.textContent = profile.profile.average_seconds_per_word == null ? "—" : `${profile.profile.average_seconds_per_word.toFixed(2)} sec`;
+  }
+  if (avgCharacter) {
+    avgCharacter.textContent = profile.profile.average_seconds_per_character == null ? "—" : `${profile.profile.average_seconds_per_character.toFixed(2)} sec`;
+  }
+
+  const settingsMap = new Map(profile.settings.entries.map((entry) => [entry.key, entry.value]));
+  if (settingsTheme) {
+    settingsTheme.textContent = settingsMap.get("theme") ?? "paper";
+  }
+  if (settingsReaderMode) {
+    settingsReaderMode.textContent = settingsMap.get("readerMode") ?? "sentence";
+  }
+  if (settingsOcr) {
+    settingsOcr.textContent = settingsMap.get("ocrProvider") ?? "local";
+  }
+  if (settingsProcessor) {
+    settingsProcessor.textContent = settingsMap.get("processorUrl") ?? "not set";
+  }
+
+  if (activityList) {
+    activityList.innerHTML = profile.books
+      .map(
+        (book) => `
+          <article class="profile-book" data-profile-book data-book-id="${escapeHtml(book.book_id)}" data-library-href="${escapeHtml(resolveTargetUrl(`${routes.libraryDetail}?book=${encodeURIComponent(book.book_id)}`, book.book_id))}" data-reader-href="${escapeHtml(resolveTargetUrl(`${routes.reader}?book=${encodeURIComponent(book.book_id)}`, book.book_id))}">
+            <div class="profile-book-head">
+              <div>
+                <p class="profile-book-kicker">${escapeHtml(book.book_id)}</p>
+                <h3>${escapeHtml(book.title)}</h3>
+                <p class="profile-book-meta">${escapeHtml(book.page_reads)} page reads · ${escapeHtml(book.sentence_reads)} sentence reads</p>
+              </div>
+              <span class="pill">${escapeHtml(book.active_seconds)}s</span>
+            </div>
+            <div class="button-row button-row-tight">
+              <button class="button button-secondary" type="button" data-open-library data-book-id="${escapeHtml(book.book_id)}" data-href="${escapeHtml(resolveTargetUrl(`${routes.libraryDetail}?book=${encodeURIComponent(book.book_id)}`, book.book_id))}" aria-label="Open book info">Info</button>
+              <button class="button button-primary" type="button" data-open-reader data-book-id="${escapeHtml(book.book_id)}" data-href="${escapeHtml(resolveTargetUrl(`${routes.reader}?book=${encodeURIComponent(book.book_id)}`, book.book_id))}" aria-label="Open book">Open</button>
+            </div>
+          </article>
+        `,
+      )
+      .join("");
+  }
+
+  if (emptyState) {
+    emptyState.hidden = profile.books.length > 0;
+  }
+
+  activityList?.querySelectorAll?.("[data-open-library]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const href = button.getAttribute("data-href");
+      navigateTo(href || routes.library);
+    });
+  });
+
+  activityList?.querySelectorAll?.("[data-open-reader]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const href = button.getAttribute("data-href");
+      navigateTo(href || routes.reader);
+    });
+  });
+}
+
+function wireVocabularyPreview() {
+  const profile = previewData?.getProfilePreviewData?.();
+  if (!profile) {
+    return;
+  }
+
+  ensureTrackPreviewMarkup("insights", ".stats-grid");
+
+  wireTrackPreview({
+    prefix: "insights",
+    tracks: profile.profile.learning_tracks || [],
+    selectedTrackCode: profile.profile.selected_track_code || "local",
+    titleFallback: "Learning track",
+    subtitleFallback: "Select a learning path to review progress and pace.",
+    nextStepFallback: "Track guidance appears here.",
+  });
+}
+
+function ensureTrackPreviewMarkup(prefix, anchorSelector) {
+  if (document.getElementById(`${prefix}TrackList`)) {
+    return;
+  }
+
+  const anchor = document.querySelector(anchorSelector);
+  if (!anchor) {
+    return;
+  }
+
+  const section = document.createElement("section");
+  section.className = "track-section surface";
+  section.setAttribute("aria-label", "Learning track summary");
+  section.innerHTML = `
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">Learning track</p>
+        <h2 id="${prefix}TrackTitle">Track overview</h2>
+      </div>
+      <span class="pill" id="${prefix}TrackLevel">Track</span>
+    </div>
+    <div id="${prefix}TrackList" class="track-selector" aria-label="Learning tracks"></div>
+    <article class="track-panel" aria-live="polite">
+      <p id="${prefix}TrackSubtitle" class="track-copy">Select a track to inspect progress.</p>
+      <div class="track-progress">
+        <div class="track-progress-bar">
+          <span id="${prefix}TrackProgress" style="--track-progress: 0%;"></span>
+        </div>
+      </div>
+      <p id="${prefix}TrackNextStep" class="track-copy">Track guidance appears here.</p>
+      <div id="${prefix}TrackJourney" class="track-journey"></div>
+    </article>
+  `;
+  anchor.insertAdjacentElement("afterend", section);
+}
+
+function wireTrackPreview({ prefix, tracks, selectedTrackCode, titleFallback, subtitleFallback, nextStepFallback }) {
+  const titleNode = document.getElementById(`${prefix}TrackTitle`);
+  const levelNode = document.getElementById(`${prefix}TrackLevel`);
+  const listNode = document.getElementById(`${prefix}TrackList`);
+  const subtitleNode = document.getElementById(`${prefix}TrackSubtitle`);
+  const progressNode = document.getElementById(`${prefix}TrackProgress`);
+  const nextStepNode = document.getElementById(`${prefix}TrackNextStep`);
+  const journeyNode = document.getElementById(`${prefix}TrackJourney`);
+
+  const selectedTrack = tracks.find((track) => track.code === selectedTrackCode) ?? tracks[0] ?? null;
+
+  if (listNode) {
+    listNode.innerHTML = tracks
+      .map(
+        (track) => `
+          <button
+            class="track-chip ${track.code === selectedTrack?.code ? "is-active" : ""}"
+            type="button"
+            data-track-code="${escapeHtml(track.code)}"
+            aria-pressed="${track.code === selectedTrack?.code ? "true" : "false"}"
+          >
+            ${escapeHtml(track.label)}
+          </button>
+        `,
+      )
+      .join("");
+
+    listNode.querySelectorAll?.("[data-track-code]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const trackCode = button.getAttribute("data-track-code");
+        if (!trackCode) {
+          return;
+        }
+        previewData?.setSelectedTrackCode?.(trackCode);
+        navigateTo(resolveTargetUrl(routeForCurrentFile(), currentBookId()));
+      });
+    });
+  }
+
+  if (titleNode) {
+    titleNode.textContent = selectedTrack?.label ? `${selectedTrack.label} track` : titleFallback;
+  }
+  if (levelNode) {
+    levelNode.textContent = selectedTrack?.level || "Track";
+  }
+  if (subtitleNode) {
+    subtitleNode.textContent = selectedTrack?.subtitle || subtitleFallback;
+  }
+  if (progressNode) {
+    const trackProgress = `${Math.max(0, Math.min(100, Number(selectedTrack?.progress ?? 0)))}%`;
+    if (typeof progressNode.style?.setProperty === "function") {
+      progressNode.style.setProperty("--track-progress", trackProgress);
+    } else if (progressNode.style) {
+      progressNode.style["--track-progress"] = trackProgress;
+    }
+  }
+  if (nextStepNode) {
+    nextStepNode.textContent = selectedTrack?.next_step || nextStepFallback;
+  }
+  if (journeyNode) {
+    journeyNode.innerHTML = Array.isArray(selectedTrack?.journey)
+      ? selectedTrack.journey
+          .map(
+            (step) => `
+              <article class="track-step track-step-${escapeHtml(step.status)}">
+                <strong>${escapeHtml(step.label)}</strong>
+                <p>${escapeHtml(step.detail)}</p>
+                <span>${escapeHtml(Math.round(Number(step.progress ?? 0)))}% · ${escapeHtml(step.status)}</span>
+              </article>
+            `,
+          )
+          .join("")
+      : "";
+  }
 }
 
 function stripPdfExtension(value) {
@@ -1875,6 +2279,20 @@ function stripPdfExtension(value) {
 function resolveOcrProvider(value) {
   const normalized = String(value ?? "").trim().toLowerCase();
   return normalized === "openai" ? "openai" : "local";
+}
+
+function isBlockedProcessorUrl(value) {
+  const resolved = String(value ?? "").trim();
+  if (!resolved) {
+    return false;
+  }
+
+  try {
+    const url = new URL(resolved);
+    return window.location.protocol === "https:" && url.protocol === "http:";
+  } catch {
+    return false;
+  }
 }
 
 function setStat(node, value, label) {
@@ -2002,8 +2420,14 @@ function renderMissingBookState(kind, bookId) {
 function resolveTargetUrl(target, bookId = currentBookId()) {
   const url = new URL(target, window.location.href);
   const file = url.pathname.split("/").pop() || "";
-  if (["reader-preview.html", "analysis-preview.html", "library-preview.html", "library-detail-preview.html", "study-preview.html"].includes(file) && bookId) {
+  if (["reader-preview.html", "analysis-preview.html", "library-preview.html", "library-detail-preview.html", "study-preview.html", "progress-preview.html", "profile-preview.html", "vocabulary-preview.html"].includes(file) && bookId) {
     url.searchParams.set("book", bookId);
+  }
+  if (["reader-preview.html", "analysis-preview.html", "library-preview.html", "library-detail-preview.html", "study-preview.html", "progress-preview.html", "profile-preview.html", "vocabulary-preview.html"].includes(file)) {
+    const trackCode = currentTrackCode();
+    if (trackCode) {
+      url.searchParams.set("track", trackCode);
+    }
   }
   return url.href;
 }
@@ -2023,6 +2447,9 @@ function resolveBackTarget() {
     return resolveTargetUrl(routes.libraryDetail, bookId);
   }
   if (currentFile === "import-preview.html") {
+    return routes.home;
+  }
+  if (currentFile === "profile-preview.html") {
     return routes.home;
   }
   if (currentFile === "search-preview.html" || currentFile === "progress-preview.html" || currentFile === "study-preview.html" || currentFile === "activity-preview.html" || currentFile === "vocabulary-preview.html") {
@@ -2114,6 +2541,27 @@ function bookIcon() {
 
 function currentBookId() {
   return previewData?.resolveBookId?.(window.location) || previewData?.getSelectedBookId?.() || "spring-dawn";
+}
+
+function currentTrackCode() {
+  const code = previewData?.getSelectedTrackCode?.() || window.localStorage.getItem(previewData?.trackKey || "textplex.preview.selectedTrack") || "local";
+  return String(code).trim().toLowerCase() || "local";
+}
+
+function routeForCurrentFile() {
+  if (currentFile === "home-preview.html") return routes.home;
+  if (currentFile === "library-preview.html") return routes.library;
+  if (currentFile === "library-detail-preview.html") return routes.libraryDetail;
+  if (currentFile === "reader-preview.html") return routes.reader;
+  if (currentFile === "analysis-preview.html") return routes.analysis;
+  if (currentFile === "import-preview.html") return routes.import;
+  if (currentFile === "search-preview.html") return routes.search;
+  if (currentFile === "progress-preview.html") return routes.progress;
+  if (currentFile === "profile-preview.html") return routes.profile;
+  if (currentFile === "study-preview.html") return routes.study;
+  if (currentFile === "activity-preview.html") return routes.activity;
+  if (currentFile === "vocabulary-preview.html") return routes.vocabulary;
+  return routes.index;
 }
 
 function clamp(value, min, max) {
@@ -2282,15 +2730,92 @@ function capitalize(value) {
   return String(value ?? "").charAt(0).toUpperCase() + String(value ?? "").slice(1);
 }
 
-function buildSentenceTokenMarkup(sentence, phonetics, selectedTokenIndex) {
+function resolveReaderTokenMode(value) {
+  return value === "character" ? "character" : "word";
+}
+
+function isCjk(value) {
+  return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(String(value ?? ""));
+}
+
+function shouldExpandTokenIntoCharacters(surface) {
+  const text = String(surface ?? "");
+  return isCjk(text) && Array.from(text).length > 1;
+}
+
+function splitRomanizationByCharacters(romanization, characterCount) {
+  const syllables = String(romanization ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!characterCount) {
+    return [];
+  }
+
+  if (!syllables.length) {
+    return Array.from({ length: characterCount }, () => "");
+  }
+
+  if (syllables.length >= characterCount) {
+    return syllables.slice(0, characterCount);
+  }
+
+  const readings = [...syllables];
+  while (readings.length < characterCount) {
+    readings.push("");
+  }
+  return readings;
+}
+
+function buildReaderDisplayTokens(sentence, mode) {
+  const displayMode = resolveReaderTokenMode(mode);
   const tokens = Array.isArray(sentence?.tokens) ? sentence.tokens : [];
+  const displayTokens = [];
+
+  for (const token of tokens) {
+    const surface = String(token?.surface ?? token?.surface_form ?? token?.text ?? "");
+    const romanization = String(token?.romanization ?? token?.pronunciation ?? "");
+    const punctuation = isTokenPunctuation(surface);
+
+    if (displayMode === "character" && shouldExpandTokenIntoCharacters(surface) && !punctuation) {
+      const characters = Array.from(surface);
+      const readings = splitRomanizationByCharacters(romanization, characters.length);
+      characters.forEach((character, characterIndex) => {
+        displayTokens.push({
+          ...token,
+          order: (Number(token?.order) || displayTokens.length + 1) * 100 + characterIndex + 1,
+          surface,
+          surface_form: character,
+          lemma: character,
+          romanization: readings[characterIndex] ?? null,
+        });
+      });
+      continue;
+    }
+
+    displayTokens.push({
+      ...token,
+      order: Number.isFinite(Number(token?.order)) ? Number(token.order) : displayTokens.length + 1,
+      surface,
+      surface_form: surface,
+      lemma: typeof token?.lemma === "string" && token.lemma ? token.lemma : surface,
+      romanization: romanization || null,
+    });
+  }
+
+  return displayTokens;
+}
+
+function buildSentenceTokenMarkup(sentence, mode, selectedTokenIndex) {
+  const tokens = buildReaderDisplayTokens(sentence, mode);
   const text = String(sentence?.text ?? "");
   let cursor = 0;
   const chunks = [];
 
   tokens.forEach((token, index) => {
-    const surface = String(token?.surface ?? "");
-    const phonetic = String(phonetics[index] ?? "");
+    const surface = String(token?.surface_form ?? token?.surface ?? "");
+    const phonetic = String(token?.romanization ?? "");
     const punctuation = isTokenPunctuation(surface);
     const highlighted = index === selectedTokenIndex;
     const matchIndex = surface ? text.indexOf(surface, cursor) : -1;
@@ -2409,4 +2934,6 @@ window.TextPlexPreviewRouter = {
   wireSearchPreview,
   wireAnalysisPreview,
   wireImportPreview,
+  wireProfilePreview,
+  wireVocabularyPreview,
 };

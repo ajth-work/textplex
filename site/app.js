@@ -4,12 +4,14 @@ const storageKey = "textplex.processorBaseUrl";
 const wakeHelperStorageKey = "textplex.processorWakeHelperUrl";
 const ocrProviderStorageKey = "textplex.ocrProvider";
 const themeStorageKey = "textplex.theme";
+const readerTokenModeStorageKey = "textplex.readerTokenMode";
 const localEntriesStorageKey = "textplex.localTextEntries";
 const archiveItemsStorageKey = "textplex.archiveItems";
 const uploadSessionStorageKey = "textplex.uploadSession";
 const defaultView = "home";
 const defaultTheme = "paper";
 const defaultOcrProvider = "local";
+const defaultReaderTokenMode = "word";
 const defaultEntryKind = "book";
 const entryKinds = new Set(["book", "article"]);
 const requestTimeoutMs = 15000;
@@ -77,7 +79,12 @@ const elements = {
   readerNotice: document.getElementById("readerNotice"),
   readerBack: document.getElementById("readerBack"),
   toggleImage: document.getElementById("toggleImage"),
+  readerTokenModeToggle: document.getElementById("readerTokenModeToggle"),
   extractNow: document.getElementById("extractNow"),
+  readerOptionsButton: document.getElementById("readerOptionsButton"),
+  readerOptionsMenu: document.getElementById("readerOptionsMenu"),
+  archiveCurrentItem: document.getElementById("archiveCurrentItem"),
+  deleteCurrentItem: document.getElementById("deleteCurrentItem"),
   pageImageWrap: document.getElementById("pageImageWrap"),
   pageImage: document.getElementById("pageImage"),
   tokenPanel: document.getElementById("tokenPanel"),
@@ -98,6 +105,7 @@ const state = {
   wakeHelperUrl: normalizeBaseUrl(window.localStorage.getItem(wakeHelperStorageKey) ?? ""),
   ocrProvider: resolveOcrProvider(window.localStorage.getItem(ocrProviderStorageKey) ?? defaultOcrProvider),
   theme: resolveTheme(window.localStorage.getItem(themeStorageKey) ?? defaultTheme),
+  readerTokenMode: resolveReaderTokenMode(window.localStorage.getItem(readerTokenModeStorageKey) ?? defaultReaderTokenMode),
   books: [],
   localEntries: loadLocalEntries(),
   archivedItems: loadArchivedItems(),
@@ -116,6 +124,7 @@ const state = {
   lastProcessorCheckAt: null,
   processorStatusMessage: "Checking the remote processor.",
   showImage: false,
+  readerOptionsOpen: false,
   busy: false,
   error: null,
   pageError: null,
@@ -166,8 +175,19 @@ function bindEvents() {
     state.showImage = !state.showImage;
     renderReader();
   });
+  elements.readerTokenModeToggle?.addEventListener("click", handleReaderTokenModeToggle);
   elements.readerBack.addEventListener("click", () => setActiveView("library"));
   elements.extractNow.addEventListener("click", () => void extractSelectedBook());
+  elements.readerOptionsButton?.addEventListener("click", () => {
+    state.readerOptionsOpen = !state.readerOptionsOpen;
+    renderReaderOptionsMenu();
+  });
+  elements.archiveCurrentItem?.addEventListener("click", () => {
+    void archiveCurrentReaderItem();
+  });
+  elements.deleteCurrentItem?.addEventListener("click", () => {
+    void deleteCurrentReaderItem();
+  });
   elements.prevPage.addEventListener("click", () => void moveSentence(-1));
   elements.nextPage.addEventListener("click", () => void moveSentence(1));
   elements.navLinks.forEach((link) => {
@@ -184,6 +204,26 @@ function bindEvents() {
   });
   window.addEventListener("hashchange", () => {
     setActiveView(resolveView(window.location.hash), { syncHash: false });
+  });
+  document.addEventListener("click", (event) => {
+    if (!state.readerOptionsOpen) {
+      return;
+    }
+    const target = event.target instanceof Node ? event.target : null;
+    if (!target) {
+      return;
+    }
+    if (elements.readerOptionsMenu?.contains(target) || elements.readerOptionsButton?.contains(target)) {
+      return;
+    }
+    state.readerOptionsOpen = false;
+    renderReaderOptionsMenu();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && state.readerOptionsOpen) {
+      state.readerOptionsOpen = false;
+      renderReaderOptionsMenu();
+    }
   });
 }
 
@@ -405,6 +445,16 @@ function archiveLocalEntry(entry) {
     state.localReaderSentenceIndex = 0;
   }
   saveLocalEntries();
+  renderAll();
+}
+
+function deleteLocalEntry(entry) {
+  state.localEntries = state.localEntries.filter((item) => item.id !== entry.id);
+  saveLocalEntries();
+  if (state.localReaderEntryId === entry.id) {
+    state.localReaderEntryId = null;
+    state.localReaderSentenceIndex = 0;
+  }
   renderAll();
 }
 
@@ -667,6 +717,102 @@ function getSentenceTokens(sentence) {
     return [];
   }
   return Array.isArray(sentence?.tokens) ? sentence.tokens : [];
+}
+
+function resolveReaderTokenMode(value) {
+  return value === "character" ? "character" : "word";
+}
+
+function getReaderTokenModeLabel(mode) {
+  return resolveReaderTokenMode(mode) === "character" ? "Char" : "Word";
+}
+
+function shouldExpandTokenIntoCharacters(surface) {
+  const text = String(surface ?? "");
+  return isCjk(text) && Array.from(text).length > 1;
+}
+
+function splitRomanizationByCharacters(romanization, characterCount) {
+  const syllables = String(romanization ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!characterCount) {
+    return [];
+  }
+
+  if (!syllables.length) {
+    return Array.from({ length: characterCount }, () => "");
+  }
+
+  if (syllables.length === characterCount) {
+    return syllables;
+  }
+
+  if (syllables.length > characterCount) {
+    const readings = Array.from({ length: characterCount }, () => "");
+    const lastIndex = characterCount - 1;
+    for (let index = 0; index < syllables.length; index += 1) {
+      if (index < lastIndex) {
+        readings[index] = syllables[index];
+      } else {
+        readings[lastIndex] = readings[lastIndex] ? `${readings[lastIndex]} ${syllables[index]}` : syllables[index];
+      }
+    }
+    return readings;
+  }
+
+  const readings = Array.from({ length: characterCount }, () => "");
+  for (let index = 0; index < syllables.length; index += 1) {
+    readings[index] = syllables[index];
+  }
+  return readings;
+}
+
+function buildReaderDisplayTokens(sentence, mode) {
+  const displayMode = resolveReaderTokenMode(mode);
+  const tokens = Array.isArray(sentence?.tokens) ? sentence.tokens : [];
+  const displayTokens = [];
+
+  for (const token of tokens) {
+    const surface = String(token?.surface_form ?? token?.surface ?? token?.text ?? "");
+    const romanization = String(token?.romanization ?? token?.pronunciation ?? "");
+    if (displayMode === "character" && shouldExpandTokenIntoCharacters(surface)) {
+      const characters = Array.from(surface);
+      const readings = splitRomanizationByCharacters(romanization, characters.length);
+      characters.forEach((character, characterIndex) => {
+        displayTokens.push({
+          ...token,
+          order: (Number(token?.order) || displayTokens.length + 1) * 100 + characterIndex + 1,
+          surface_form: character,
+          lemma: character,
+          romanization: readings[characterIndex] ?? null,
+        });
+      });
+      continue;
+    }
+
+    displayTokens.push({
+      ...token,
+      order: Number.isFinite(Number(token?.order)) ? Number(token.order) : displayTokens.length + 1,
+      surface_form: surface,
+      lemma: typeof token?.lemma === "string" && token.lemma ? token.lemma : surface,
+      romanization: typeof token?.romanization === "string" ? token.romanization : null,
+    });
+  }
+
+  return displayTokens;
+}
+
+function handleReaderTokenModeToggle() {
+  state.readerTokenMode = state.readerTokenMode === "character" ? "word" : "character";
+  window.localStorage.setItem(readerTokenModeStorageKey, state.readerTokenMode);
+  state.selectedToken = null;
+  state.selectedBookEntry = null;
+  state.lexicon = null;
+  state.vocabLookup = null;
+  renderReader();
 }
 
 function getLocalEntryLanguageCode(entry) {
@@ -1038,6 +1184,12 @@ async function ensureProcessorReady(forceWake = false) {
     return;
   }
 
+  const blockedReason = getProcessorUrlBlockReason(state.apiBaseUrl);
+  if (blockedReason) {
+    setProcessorConnectionState(false, blockedReason);
+    throw new Error(blockedReason);
+  }
+
   for (let attempt = 0; attempt < processorHealthProbeAttempts; attempt += 1) {
     const healthy = await probeProcessorHealth();
     if (healthy) {
@@ -1061,6 +1213,12 @@ async function probeProcessorHealth() {
     return false;
   }
 
+  const blockedReason = getProcessorUrlBlockReason(state.apiBaseUrl);
+  if (blockedReason) {
+    setProcessorConnectionState(false, blockedReason);
+    return false;
+  }
+
   try {
     const response = await fetch(new URL("/health", ensureTrailingSlash(state.apiBaseUrl)).toString(), {
       cache: "no-store",
@@ -1076,14 +1234,23 @@ async function probeProcessorHealth() {
     const healthy = payload?.status === "ok";
     setProcessorConnectionState(healthy, healthy ? "The remote processor responded to /health." : "The remote processor returned an unexpected health payload.");
     return healthy;
-  } catch {
-    setProcessorConnectionState(false, "Could not reach the remote processor.");
+  } catch (error) {
+    const message = error instanceof Error && error.message ? error.message : "Could not reach the remote processor.";
+    setProcessorConnectionState(false, message);
     return false;
   }
 }
 
 async function wakeProcessorHelper() {
   if (!state.wakeHelperUrl) {
+    return false;
+  }
+
+  const blockedReason = getProcessorUrlBlockReason(state.wakeHelperUrl);
+  if (blockedReason) {
+    state.processorStatusMessage = blockedReason;
+    elements.connectionHint.textContent = blockedReason;
+    renderHome();
     return false;
   }
 
@@ -1803,6 +1970,10 @@ function renderReader() {
   const currentSentence = localEntry ? localSentences[state.localReaderSentenceIndex] ?? null : remoteSentences[state.selectedSentenceIndex] ?? null;
   const currentSentenceCount = localEntry ? localSentences.length : remoteSentences.length;
   const currentSentenceNumber = localEntry ? state.localReaderSentenceIndex + 1 : state.selectedSentenceIndex + 1;
+  const pageTranslation = !localEntry && typeof page?.page_translation === "string" ? page.page_translation.trim() : "";
+  const sentenceTranslation = !localEntry && typeof currentSentence?.translation === "string" ? currentSentence.translation.trim() : "";
+  const displayedSentenceTokens = currentSentence ? buildReaderDisplayTokens(currentSentence, state.readerTokenMode) : [];
+  const readableDisplayedTokens = displayedSentenceTokens.filter((token) => !isSentencePunctuation(token.surface_form));
 
   elements.readerEmpty.classList.toggle("is-hidden", Boolean(page || localEntry));
   elements.readerBody.classList.toggle("is-hidden", !(page || localEntry));
@@ -1816,8 +1987,20 @@ function renderReader() {
   elements.toggleImage.classList.toggle("is-active", state.showImage);
   elements.toggleImage.setAttribute("aria-label", state.showImage ? "Hide page image" : "Show page image");
   elements.toggleImage.title = state.showImage ? "Hide page image" : "Show page image";
+  if (elements.readerTokenModeToggle) {
+    const tokenModeLabel = getReaderTokenModeLabel(state.readerTokenMode);
+    elements.readerTokenModeToggle.classList.toggle("is-active", state.readerTokenMode === "character");
+    elements.readerTokenModeToggle.textContent = tokenModeLabel;
+    elements.readerTokenModeToggle.setAttribute(
+      "aria-label",
+      state.readerTokenMode === "character" ? "Switch to word mode" : "Switch to character mode",
+    );
+    elements.readerTokenModeToggle.setAttribute("aria-pressed", String(state.readerTokenMode === "character"));
+    elements.readerTokenModeToggle.title = state.readerTokenMode === "character" ? "Character mode" : "Word mode";
+  }
   elements.pageImageWrap.classList.toggle("is-hidden", !state.showImage || !page);
   elements.pageImage.src = resolveResourceUrl(state.pageData?.image_url ?? "");
+  renderReaderOptionsMenu(page, localEntry);
 
   const atFirstSentence = localEntry ? state.localReaderSentenceIndex <= 0 : state.selectedSentenceIndex <= 0;
   const atLastSentence = localEntry
@@ -1865,11 +2048,10 @@ function renderReader() {
 
       block.appendChild(header);
 
-      const localSentenceTokens = getSentenceTokens(currentSentence);
-      if (localSentenceTokens.length) {
+      if (displayedSentenceTokens.length) {
         const chineseRow = document.createElement("div");
         chineseRow.className = "sentence-chinese";
-        for (const token of localSentenceTokens) {
+        for (const token of displayedSentenceTokens) {
           const tokenButton = document.createElement("button");
           tokenButton.type = "button";
           const isSelected = state.selectedToken && state.selectedToken.surface_form === token.surface_form && state.selectedToken.order === token.order;
@@ -1903,7 +2085,7 @@ function renderReader() {
       const chineseRow = document.createElement("div");
       chineseRow.className = "sentence-chinese";
 
-      for (const token of currentSentence.tokens) {
+      for (const token of displayedSentenceTokens) {
         const tokenButton = document.createElement("button");
         tokenButton.type = "button";
         const isSelected = state.selectedToken && state.selectedToken.surface_form === token.surface_form && state.selectedToken.order === token.order;
@@ -1933,8 +2115,8 @@ function renderReader() {
     `
     : currentSentence
       ? `
-        <p class="reader-translation-label">Translation</p>
-        <p class="reader-translation-text">${escapeHtml(currentSentence.translation ?? "Translation will appear here once the processor returns it.")}</p>
+        <p class="reader-translation-label">${sentenceTranslation ? "Translation" : pageTranslation ? "Page translation" : "Translation"}</p>
+        <p class="reader-translation-text">${escapeHtml(sentenceTranslation || pageTranslation || "Translation will appear here once the processor returns it.")}</p>
       `
       : "";
 }
@@ -2265,6 +2447,10 @@ function setBusy(value) {
 function setActiveView(view, options = {}) {
   const resolved = viewNames.has(view) ? view : defaultView;
   state.activeView = resolved;
+  if (resolved !== "reader" && state.readerOptionsOpen) {
+    state.readerOptionsOpen = false;
+    renderReaderOptionsMenu();
+  }
   if (options.syncHash !== false && window.location.hash !== `#${resolved}`) {
     window.location.hash = resolved;
   }
@@ -2327,6 +2513,7 @@ async function requestJson(pathname, options = {}) {
   }
 
   const url = new URL(pathname, ensureTrailingSlash(state.apiBaseUrl));
+  assertProcessorUrlAllowed(url.toString());
   const controller = typeof AbortController === "function" ? new AbortController() : null;
   const timeoutId = controller ? window.setTimeout(() => controller.abort(), requestTimeoutMs) : null;
 
@@ -2414,6 +2601,12 @@ function uploadFormData(pathname, formData, onProgress) {
 
   return new Promise((resolve, reject) => {
     const url = new URL(pathname, ensureTrailingSlash(state.apiBaseUrl));
+    try {
+      assertProcessorUrlAllowed(url.toString());
+    } catch (error) {
+      reject(error);
+      return;
+    }
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url.toString(), true);
     xhr.responseType = "text";
@@ -2525,8 +2718,104 @@ function normalizeBaseUrl(value) {
   return value.trim().replace(/\/+$/, "");
 }
 
+function renderReaderOptionsMenu(page = undefined, localEntry = undefined) {
+  if (!elements.readerOptionsButton || !elements.readerOptionsMenu || !elements.archiveCurrentItem || !elements.deleteCurrentItem) {
+    return;
+  }
+
+  const activeLocalEntry = localEntry === undefined
+    ? (state.localEntries.find((item) => item.id === state.localReaderEntryId) ?? null)
+    : localEntry;
+  const activePage = page === undefined
+    ? (activeLocalEntry ? null : state.pageData?.extraction?.page ?? null)
+    : page;
+  const hasCurrentItem = Boolean(activePage || activeLocalEntry);
+
+  const archiveLabel = activeLocalEntry ? "Archive text" : "Archive book";
+  const deleteLabel = activeLocalEntry ? "Delete text" : "Delete book";
+  elements.readerOptionsButton.disabled = !hasCurrentItem || Boolean(state.busy);
+  elements.readerOptionsButton.setAttribute("aria-expanded", String(state.readerOptionsOpen && hasCurrentItem));
+  elements.readerOptionsMenu.classList.toggle("is-hidden", !state.readerOptionsOpen || !hasCurrentItem);
+  elements.archiveCurrentItem.textContent = archiveLabel;
+  elements.deleteCurrentItem.textContent = deleteLabel;
+  elements.archiveCurrentItem.disabled = !hasCurrentItem || Boolean(state.busy);
+  elements.deleteCurrentItem.disabled = !hasCurrentItem || Boolean(state.busy);
+}
+
+async function archiveCurrentReaderItem() {
+  const localEntry = state.localEntries.find((item) => item.id === state.localReaderEntryId) ?? null;
+  const book = localEntry ? null : state.pageData?.book ?? null;
+
+  state.readerOptionsOpen = false;
+  renderReaderOptionsMenu(book ? state.pageData?.extraction?.page ?? null : null, localEntry);
+
+  if (localEntry) {
+    archiveLocalEntry(localEntry);
+    return;
+  }
+
+  if (book) {
+    await archiveRemoteBook(book);
+  }
+}
+
+async function deleteCurrentReaderItem() {
+  const localEntry = state.localEntries.find((item) => item.id === state.localReaderEntryId) ?? null;
+  const book = localEntry ? null : state.pageData?.book ?? null;
+  const label = localEntry?.title ?? book?.title ?? "this item";
+
+  if (!window.confirm(`Delete "${label}" forever? This cannot be undone.`)) {
+    return;
+  }
+
+  state.readerOptionsOpen = false;
+  renderReaderOptionsMenu(book ? state.pageData?.extraction?.page ?? null : null, localEntry);
+
+  if (localEntry) {
+    deleteLocalEntry(localEntry);
+    return;
+  }
+
+  if (book) {
+    await deleteRemoteBook(book);
+  }
+}
+
 function ensureTrailingSlash(value) {
   return value.endsWith("/") ? value : `${value}/`;
+}
+
+function parseUrl(value) {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    return new URL(trimmed);
+  } catch {
+    return null;
+  }
+}
+
+function getProcessorUrlBlockReason(baseUrl) {
+  const resolved = parseUrl(baseUrl);
+  if (!resolved) {
+    return "";
+  }
+
+  if (window.location.protocol === "https:" && resolved.protocol === "http:") {
+    return "GitHub Pages is served over HTTPS, so this browser blocks HTTP processor URLs. Use an HTTPS API or test from the local site host.";
+  }
+
+  return "";
+}
+
+function assertProcessorUrlAllowed(baseUrl) {
+  const reason = getProcessorUrlBlockReason(baseUrl);
+  if (reason) {
+    throw new Error(reason);
+  }
 }
 
 function resolveResourceUrl(resourceUrl) {
