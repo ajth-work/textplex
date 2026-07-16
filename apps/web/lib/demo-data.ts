@@ -11,6 +11,7 @@ import type {
   LexiconEntryRecord,
   LexiconLookupResponse,
   ProgressSurfaceResponse,
+  ProfileSurfaceResponse,
   SearchSurfaceResponse,
   PageExtractionArtifact,
   PageExtractionResult,
@@ -464,6 +465,133 @@ export const demoBookManifest: BookPageManifest = {
 };
 export const demoBookExtractionResult = demoSummary;
 export const demoBookReaderPages = demoPageArtifacts;
+const demoLearningTracks: LearningProfileSummary["learning_tracks"] = [
+  {
+    code: "hsk",
+    label: "HSK",
+    language_code: "zh",
+    level: "HSK 3-4",
+    subtitle: "Chinese reading for intermediate learners.",
+    note: "Focus on sentence-level fluency, vocabulary reinforcement, and page completion.",
+    progress: 72,
+    books: 1,
+    page_reads: 12,
+    sentence_reads: 38,
+    word_exposures: 518,
+    character_exposures: 496,
+    unique_words_seen: demoSummary.lexical_entries.length,
+    unique_characters_seen: 12,
+    average_seconds_per_sentence: 14.8,
+    average_seconds_per_word: 3.2,
+    average_seconds_per_character: 1.1,
+    next_step: "Read the next sentence and review the highlighted HSK 3-4 words.",
+    journey: [
+      { label: "Pages completed", detail: "One full chapter of the sample book is complete.", progress: 33, status: "complete" },
+      { label: "Current pace", detail: "The reader is spending about 14.8 seconds per sentence.", progress: 72, status: "current" },
+      { label: "Next review", detail: "Return to the toughest words after the current page.", progress: 86, status: "next" },
+    ],
+  },
+  {
+    code: "jlpt",
+    label: "JLPT",
+    language_code: "ja",
+    level: "JLPT N4",
+    subtitle: "Japanese reading practice built from the same progress store.",
+    note: "Track book sessions, sentence exposure, and paced review cycles.",
+    progress: 28,
+    books: 0,
+    page_reads: 0,
+    sentence_reads: 0,
+    word_exposures: 0,
+    character_exposures: 0,
+    unique_words_seen: 0,
+    unique_characters_seen: 0,
+    average_seconds_per_sentence: null,
+    average_seconds_per_word: null,
+    average_seconds_per_character: null,
+    next_step: "Load a Japanese book to begin a separate reading path.",
+    journey: [
+      { label: "Setup", detail: "No Japanese books have been added yet.", progress: 10, status: "complete" },
+      { label: "Import", detail: "Add a JLPT sample or pasted reading to this path.", progress: 28, status: "current" },
+      { label: "Review", detail: "Vocabulary tracking will appear after the first reading session.", progress: 40, status: "next" },
+    ],
+  },
+  {
+    code: "topik",
+    label: "TOPIK",
+    language_code: "ko",
+    level: "TOPIK 3",
+    subtitle: "Korean reading track for mixed practice imports.",
+    note: "Keep exposure counts separate from the Chinese reader path.",
+    progress: 18,
+    books: 0,
+    page_reads: 0,
+    sentence_reads: 0,
+    word_exposures: 0,
+    character_exposures: 0,
+    unique_words_seen: 0,
+    unique_characters_seen: 0,
+    average_seconds_per_sentence: null,
+    average_seconds_per_word: null,
+    average_seconds_per_character: null,
+    next_step: "Add a Korean sample text to activate TOPIK tracking.",
+    journey: [
+      { label: "Track selected", detail: "TOPIK is available but not active yet.", progress: 8, status: "complete" },
+      { label: "Add content", detail: "Import a Korean article or book to start exposure tracking.", progress: 18, status: "current" },
+      { label: "Review queue", detail: "Track confidence after the first reading session.", progress: 25, status: "next" },
+    ],
+  },
+  {
+    code: "cefr",
+    label: "CEFR",
+    language_code: "fr",
+    level: "B1",
+    subtitle: "A general reading path for languages outside the named exam tracks.",
+    note: "Useful for mixed-language imports and broader progress summaries.",
+    progress: 41,
+    books: 1,
+    page_reads: 4,
+    sentence_reads: 11,
+    word_exposures: 88,
+    character_exposures: 112,
+    unique_words_seen: 36,
+    unique_characters_seen: 48,
+    average_seconds_per_sentence: 11.4,
+    average_seconds_per_word: 2.8,
+    average_seconds_per_character: 0.9,
+    next_step: "Continue reading the current sample until the next checkpoint.",
+    journey: [
+      { label: "Starter text", detail: "A CEFR-friendly article is ready for review.", progress: 25, status: "complete" },
+      { label: "Fluency stretch", detail: "Continue with a longer mixed-language passage.", progress: 41, status: "current" },
+      { label: "Expansion", detail: "Add another text when the current passage is stable.", progress: 60, status: "next" },
+    ],
+  },
+  {
+    code: "local",
+    label: "Local",
+    language_code: "zh",
+    level: "Demo",
+    subtitle: "Imported content and local-only samples.",
+    note: "This path reflects anything added outside a named exam track.",
+    progress: 100,
+    books: 1,
+    page_reads: 4,
+    sentence_reads: 12,
+    word_exposures: 156,
+    character_exposures: 144,
+    unique_words_seen: demoSummary.lexical_entries.length,
+    unique_characters_seen: 12,
+    average_seconds_per_sentence: 12.2,
+    average_seconds_per_word: 3.0,
+    average_seconds_per_character: 1.0,
+    next_step: "Keep reading the imported sample or switch back to the HSK path.",
+    journey: [
+      { label: "Import complete", detail: "The local sample book is already available.", progress: 100, status: "complete" },
+      { label: "Review", detail: "Tokens and page reads are being tracked locally.", progress: 100, status: "current" },
+      { label: "Archive", detail: "Move finished demo imports out of the active shelf when ready.", progress: 100, status: "next" },
+    ],
+  },
+];
 export const demoLearningProfileSummary: LearningProfileSummary = {
   database_path: "demo/profile.sqlite3",
   reading_sessions: 1,
@@ -481,6 +609,8 @@ export const demoLearningProfileSummary: LearningProfileSummary = {
   average_seconds_per_sentence: null,
   average_seconds_per_word: null,
   average_seconds_per_character: null,
+  selected_track_code: "hsk",
+  learning_tracks: demoLearningTracks,
 };
 
 export function getDemoPageNumbers(): number[] {
@@ -600,6 +730,26 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
         },
       ],
     } satisfies ProgressSurfaceResponse;
+  }
+
+  if (route === "/profile") {
+    return {
+      profile: demoLearningProfileSummary,
+      books: demoLibraryBooks.map((book, index) => ({
+        book_id: book.id,
+        title: book.title,
+        page_reads: index + 1,
+        sentence_reads: index + 2,
+        active_seconds: 120 + index * 45,
+      })),
+      settings: {
+        entries: [
+          { key: "theme", value: "night" },
+          { key: "readerMode", value: "sentence" },
+          { key: "ocrProvider", value: "openai" },
+        ],
+      },
+    } satisfies ProfileSurfaceResponse;
   }
 
   if (route === "/settings") {

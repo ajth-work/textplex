@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -14,6 +14,7 @@ import type {
   BookAnalysisSurfaceResponse,
   ImportSurfaceResponse,
   ProgressSurfaceResponse,
+  ProfileSurfaceResponse,
   SearchSurfaceResponse,
   SettingsSurfaceResponse,
   StudySurfaceResponse,
@@ -201,9 +202,19 @@ export function MockProgressSurfaceView() {
           <h2>Profile summary</h2>
           <p>Unique words: {data.profile.unique_words_seen}</p>
           <p>Unique characters: {data.profile.unique_characters_seen}</p>
-          <p>Avg sec/word: {data.profile.average_seconds_per_word?.toFixed(2) ?? "—"}</p>
-          <p>Avg sec/char: {data.profile.average_seconds_per_character?.toFixed(2) ?? "—"}</p>
+          <p>Avg sec/word: {data.profile.average_seconds_per_word?.toFixed(2) ?? "â€”"}</p>
+          <p>Avg sec/char: {data.profile.average_seconds_per_character?.toFixed(2) ?? "â€”"}</p>
         </article>
+        {data.profile.learning_tracks?.length ? (
+          <article className="card feature-card">
+            <h2>Learning track</h2>
+            <p>
+              {(data.profile.learning_tracks.find((track) => track.code === data.profile.selected_track_code) ?? data.profile.learning_tracks[0]).label} · {(data.profile.learning_tracks.find((track) => track.code === data.profile.selected_track_code) ?? data.profile.learning_tracks[0]).level}
+            </p>
+            <p>{(data.profile.learning_tracks.find((track) => track.code === data.profile.selected_track_code) ?? data.profile.learning_tracks[0]).subtitle}</p>
+            <p>{(data.profile.learning_tracks.find((track) => track.code === data.profile.selected_track_code) ?? data.profile.learning_tracks[0]).next_step}</p>
+          </article>
+        ) : null}
         <article className="card feature-card">
           <h2>Books</h2>
           <div className="surface-list">
@@ -215,6 +226,96 @@ export function MockProgressSurfaceView() {
                 </div>
                 <p className="small-copy">
                   {book.page_reads} page reads - {book.sentence_reads} sentence reads
+                </p>
+              </div>
+            ))}
+          </div>
+        </article>
+      </section>
+    </RoutePage>
+  );
+}
+
+export function MockProfileSurfaceView() {
+  const data = {
+    profile: demoLearningProfileSummary,
+    books: demoLibraryBooks.map((book, index) => ({
+      book_id: book.id,
+      title: book.title,
+      page_reads: index + 1,
+      sentence_reads: index + 2,
+      active_seconds: 120 + index * 45,
+    })),
+    settings: {
+      entries: [
+        { key: "theme", value: "night" },
+        { key: "readerMode", value: "sentence" },
+        { key: "ocrProvider", value: "openai" },
+      ],
+    },
+  } satisfies ProfileSurfaceResponse;
+
+  return (
+    <RoutePage
+      eyebrow="Profile"
+      title="User profile and reading history"
+      description="Demo learner summary, progress history, and stored preferences for the packaged sample build."
+      badge={`${data.profile.active_books} books`}
+      links={[
+        { href: "/progress", label: "Progress" },
+        { href: "/settings", label: "Settings" },
+      ]}
+      metrics={[
+        { label: "Sessions", value: String(data.profile.reading_sessions) },
+        { label: "Page reads", value: String(data.profile.page_reads) },
+        { label: "Sentence reads", value: String(data.profile.sentence_reads) },
+      ]}
+    >
+      <section className="feature-grid">
+        <article className="card feature-card">
+          <h2>Learning summary</h2>
+          <p>Unique words: {data.profile.unique_words_seen}</p>
+          <p>Unique characters: {data.profile.unique_characters_seen}</p>
+          <p>Today&apos;s sentence reads: {data.profile.today_sentence_reads}</p>
+          <p>Today&apos;s token exposures: {data.profile.today_token_exposures}</p>
+          <p>Avg sec/sentence: {data.profile.average_seconds_per_sentence?.toFixed(2) ?? "â€”"}</p>
+          <p>Avg sec/word: {data.profile.average_seconds_per_word?.toFixed(2) ?? "â€”"}</p>
+          <p>Avg sec/char: {data.profile.average_seconds_per_character?.toFixed(2) ?? "â€”"}</p>
+        </article>
+        {data.profile.learning_tracks?.length ? (
+          <article className="card feature-card">
+            <h2>Selected track</h2>
+            <p>
+              {(data.profile.learning_tracks.find((track) => track.code === data.profile.selected_track_code) ?? data.profile.learning_tracks[0]).label} · {(data.profile.learning_tracks.find((track) => track.code === data.profile.selected_track_code) ?? data.profile.learning_tracks[0]).level}
+            </p>
+            <p>{(data.profile.learning_tracks.find((track) => track.code === data.profile.selected_track_code) ?? data.profile.learning_tracks[0]).subtitle}</p>
+            <p>{(data.profile.learning_tracks.find((track) => track.code === data.profile.selected_track_code) ?? data.profile.learning_tracks[0]).next_step}</p>
+          </article>
+        ) : null}
+        <article className="card feature-card">
+          <h2>Preferences</h2>
+          <div className="surface-list">
+            {data.settings.entries.map((entry) => (
+              <div key={entry.key} className="surface-list-item">
+                <div className="card-topline">
+                  <strong>{entry.key}</strong>
+                  <span className="muted">{entry.value}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </article>
+        <article className="card feature-card">
+          <h2>Book activity</h2>
+          <div className="surface-list">
+            {data.books.map((book) => (
+              <div key={book.book_id} className="surface-list-item">
+                <div className="card-topline">
+                  <strong>{book.title}</strong>
+                  <span className="muted">{book.active_seconds}s</span>
+                </div>
+                <p className="small-copy">
+                  {book.page_reads} page reads â€¢ {book.sentence_reads} sentence reads
                 </p>
               </div>
             ))}
@@ -413,7 +514,7 @@ export function MockStudySurfaceView() {
     queued_items: [
       {
         language_code: "zh",
-        lemma: "我",
+        lemma: "æˆ‘",
         raw_exposures: 5,
         weighted_exposure: 2.4,
         unique_pages: 2,
@@ -427,7 +528,7 @@ export function MockStudySurfaceView() {
       },
       {
         language_code: "zh",
-        lemma: "宇宙",
+        lemma: "å®‡å®™",
         raw_exposures: 3,
         weighted_exposure: 1.8,
         unique_pages: 1,
@@ -476,3 +577,4 @@ export function MockStudySurfaceView() {
     </RoutePage>
   );
 }
+

@@ -22,6 +22,20 @@ import {
   type TokenResult,
 } from "../lib/textplex";
 
+type ReaderTokenMode = "word" | "character";
+type ReaderFontMode = "mixed" | "serif" | "sans";
+
+const readerFontStorageKey = "textplex.readerFont";
+const readerFontLabels: Record<ReaderFontMode, string> = {
+  mixed: "Mixed",
+  serif: "Serif",
+  sans: "Sans",
+};
+
+function resolveReaderFont(value: string | null | undefined): ReaderFontMode {
+  return value === "serif" || value === "sans" || value === "mixed" ? value : "mixed";
+}
+
 function resolveEntry(summary: BookExtractionResult | null, token: TokenResult | null): LexicalEntryResult | null {
   if (!summary || !token) {
     return null;
@@ -30,17 +44,76 @@ function resolveEntry(summary: BookExtractionResult | null, token: TokenResult |
   return summary.lexical_entries.find((entry) => entry.lemma === key) ?? null;
 }
 
+function resolveReaderTokenMode(value: string | null | undefined): ReaderTokenMode {
+  return value === "character" ? "character" : "word";
+}
+
+function shouldExpandTokenIntoCharacters(surface: string): boolean {
+  return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(surface) && Array.from(surface).length > 1;
+}
+
+function splitRomanizationByCharacters(romanization: string, characterCount: number): string[] {
+  const syllables = romanization.trim().split(/\s+/).filter(Boolean);
+  if (!characterCount) {
+    return [];
+  }
+  if (!syllables.length) {
+    return Array.from({ length: characterCount }, () => "");
+  }
+  if (syllables.length >= characterCount) {
+    return syllables.slice(0, characterCount);
+  }
+  const readings = [...syllables];
+  while (readings.length < characterCount) {
+    readings.push("");
+  }
+  return readings;
+}
+
+function buildReaderDisplayTokens(sentence: { tokens?: TokenResult[] } | null | undefined, mode: ReaderTokenMode): TokenResult[] {
+  const tokens = Array.isArray(sentence?.tokens) ? sentence.tokens : [];
+  if (mode !== "character") {
+    return tokens;
+  }
+
+  const displayTokens: TokenResult[] = [];
+  tokens.forEach((token) => {
+    const surface = token.surface_form ?? "";
+    if (!surface || isSentencePunctuation(surface) || !shouldExpandTokenIntoCharacters(surface)) {
+      displayTokens.push(token);
+      return;
+    }
+
+    const characters = Array.from(surface);
+    const readings = splitRomanizationByCharacters(token.romanization ?? token.pronunciation ?? "", characters.length);
+    characters.forEach((character, characterIndex) => {
+      displayTokens.push({
+        ...token,
+        order: (token.order ?? displayTokens.length + 1) * 100 + characterIndex + 1,
+        surface_form: character,
+        lemma: character,
+        romanization: readings[characterIndex] ?? null,
+      });
+    });
+  });
+
+  return displayTokens;
+}
+
 export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber: number }) {
   const [pageData, setPageData] = useState<BookReaderPageResponse | null>(null);
   const [summary, setSummary] = useState<BookExtractionResult | null>(null);
   const [selectedToken, setSelectedToken] = useState<TokenResult | null>(null);
   const [selectedSentenceOrder, setSelectedSentenceOrder] = useState<number | null>(null);
   const [showPageImage, setShowPageImage] = useState(false);
+  const [readerTokenMode, setReaderTokenMode] = useState<ReaderTokenMode>("word");
+  const [readerFont, setReaderFont] = useState<ReaderFontMode>("mixed");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeSeconds, setActiveSeconds] = useState(0);
   const [profileSummary, setProfileSummary] = useState<LearningProfileSummary | null>(null);
   const [lexiconResult, setLexiconResult] = useState<LexiconLookupResponse | null>(null);
+  const [lexiconLoading, setLexiconLoading] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
@@ -50,6 +123,15 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const activeSecondsRef = useRef(0);
   const sentenceActiveSecondsRef = useRef(0);
   const sentenceTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    setReaderTokenMode(resolveReaderTokenMode(window.localStorage.getItem("textplex.readerTokenMode")));
+    setReaderFont(resolveReaderFont(window.localStorage.getItem(readerFontStorageKey)));
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -131,8 +213,14 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       if (!pageData || !selectedToken) {
         if (active) {
           setLexiconResult(null);
+          setLexiconLoading(false);
         }
         return;
+      }
+
+      if (active) {
+        setLexiconLoading(true);
+        setLexiconResult(null);
       }
 
       try {
@@ -145,6 +233,10 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       } catch {
         if (active) {
           setLexiconResult(null);
+        }
+      } finally {
+        if (active) {
+          setLexiconLoading(false);
         }
       }
     }
@@ -215,11 +307,17 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const page = pageData?.extraction?.page ?? null;
   const tokenEntry = resolveEntry(summary, selectedToken);
   const lexiconEntry = lexiconResult?.entries[0] ?? null;
+  const tokenLookupMissing = Boolean(selectedToken && !lexiconLoading && !lexiconEntry && !isSentencePunctuation(selectedToken.surface_form));
   const imageUrl = pageData ? resolveResourceUrl(pageData.image_url) : "";
   const totalPages = pageData?.book.total_pages ?? summary?.page_end ?? pageNumber;
+  const pageTranslation = page?.page_translation?.trim() || null;
   const selectedSentence = useMemo(
     () => (page ? page.sentences.find((sentence) => sentence.order === selectedSentenceOrder) ?? null : null),
     [page, selectedSentenceOrder],
+  );
+  const displayedSentenceTokens = useMemo(
+    () => buildReaderDisplayTokens(selectedSentence, readerTokenMode),
+    [selectedSentence, readerTokenMode],
   );
 
   useEffect(() => {
@@ -304,12 +402,14 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     return page.sentences.findIndex((sentence) => sentence.order === selectedSentenceOrder);
   }, [page?.sentences, selectedSentenceOrder]);
   const selectedSentencePosition = selectedSentenceIndex >= 0 ? selectedSentenceIndex + 1 : 0;
-  const selectedSentenceTokenCount = selectedSentence ? selectedSentence.tokens.filter((token) => !isSentencePunctuation(token.surface_form)).length : 0;
-  const selectedSentenceCharacterCount = selectedSentence
-    ? selectedSentence.tokens.reduce((total, token) => total + countReadableCharacters(token.surface_form), 0)
-    : 0;
+  const selectedSentenceTokenCount = displayedSentenceTokens.filter((token) => !isSentencePunctuation(token.surface_form)).length;
+  const selectedSentenceCharacterCount = displayedSentenceTokens.reduce(
+    (total, token) => total + countReadableCharacters(token.surface_form),
+    0,
+  );
   const selectedSentenceSecondsPerCharacter = selectedSentenceCharacterCount > 0 ? sentenceActiveSeconds / selectedSentenceCharacterCount : null;
   const selectedSentenceSecondsPerToken = selectedSentenceTokenCount > 0 ? sentenceActiveSeconds / selectedSentenceTokenCount : null;
+  const selectedSentenceTokenLabel = readerTokenMode === "character" ? "chars" : "words";
 
   async function handleExtractNow() {
     if (!pageData || extracting) {
@@ -332,6 +432,23 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     }
   }
 
+  function handleToggleReaderTokenMode() {
+    setReaderTokenMode((mode) => {
+      const nextMode = mode === "character" ? "word" : "character";
+      window.localStorage.setItem("textplex.readerTokenMode", nextMode);
+      return nextMode;
+    });
+    setSelectedToken(null);
+  }
+
+  function handleToggleReaderFont() {
+    setReaderFont((mode) => {
+      const nextMode: ReaderFontMode = mode === "mixed" ? "serif" : mode === "serif" ? "sans" : "mixed";
+      window.localStorage.setItem(readerFontStorageKey, nextMode);
+      return nextMode;
+    });
+  }
+
   function focusSentence(nextIndex: number) {
     if (!page?.sentences.length) {
       return;
@@ -346,7 +463,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   }
 
   return (
-    <section className="reader-shell">
+    <section className={`reader-shell reader-font-${readerFont}`} data-reader-font={readerFont}>
       <header className="reader-topbar card">
         <div>
           <span className="eyebrow">Reader</span>
@@ -365,6 +482,26 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             <span className="muted">Source</span>
             <strong>{extractionSourceLabel}</strong>
           </div>
+          <button
+            type="button"
+            className={`button button-secondary button-compact token-mode-toggle ${readerTokenMode === "character" ? "is-active" : ""}`}
+            onClick={handleToggleReaderTokenMode}
+            disabled={!pageData}
+            aria-pressed={readerTokenMode === "character"}
+            aria-label={readerTokenMode === "character" ? "Switch to word mode" : "Switch to character mode"}
+          >
+            {readerTokenMode === "character" ? "Char" : "Word"}
+          </button>
+          <button
+            type="button"
+            className="button button-secondary button-compact font-mode-toggle"
+            onClick={handleToggleReaderFont}
+            disabled={!pageData}
+            aria-label={`Cycle reader font. Current: ${readerFontLabels[readerFont]}`}
+            title={`Reader font: ${readerFontLabels[readerFont]}`}
+          >
+            {readerFontLabels[readerFont]}
+          </button>
           <button
             type="button"
             className="button button-secondary"
@@ -420,11 +557,12 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   S{selectedSentencePosition || 1}/{page.sentences.length}
                 </h3>
                 <p className="small-copy">
-                  Active {formatElapsed(sentenceActiveSeconds)} · {selectedSentenceCharacterCount} chars · {selectedSentenceTokenCount} words
+                  Active {formatElapsed(sentenceActiveSeconds)} · {selectedSentenceCharacterCount} chars · {selectedSentenceTokenCount}{" "}
+                  {selectedSentenceTokenLabel}
                 </p>
                 <p className="small-copy">
                   Avg {selectedSentenceSecondsPerCharacter ? `${selectedSentenceSecondsPerCharacter.toFixed(2)} sec/char` : "—"} ·{" "}
-                  {selectedSentenceSecondsPerToken ? `${selectedSentenceSecondsPerToken.toFixed(2)} sec/word` : "—"}
+                  {selectedSentenceSecondsPerToken ? `${selectedSentenceSecondsPerToken.toFixed(2)} sec/${readerTokenMode === "character" ? "char" : "word"}` : "—"}
                 </p>
               </div>
               <div className="button-row button-row-tight">
@@ -459,6 +597,19 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   </button>
                 </div>
                 <p className="definition-copy">{tokenDefinition}</p>
+                {tokenLookupMissing ? (
+                  <div className="definition-fallback">
+                    <p className="small-copy">Not in the dictionary yet? Try character mode for smaller pieces.</p>
+                    <button
+                      type="button"
+                      className="button button-secondary button-compact"
+                      onClick={handleToggleReaderTokenMode}
+                      aria-label={readerTokenMode === "character" ? "Switch to word mode" : "Try character mode"}
+                    >
+                      {readerTokenMode === "character" ? "Word mode" : "Try Char mode"}
+                    </button>
+                  </div>
+                ) : null}
                 <dl className="definition-grid">
                   <div>
                     <dt>Lemma</dt>
@@ -496,40 +647,51 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
             <div className="reader-page-text" aria-label="Reflowed page text">
               {page.sentences.map((sentence) => (
-                <p
+                <div
                   key={sentence.order}
                   className={`sentence-block ${selectedSentenceOrder === sentence.order ? "is-focused" : ""}`}
                   aria-label={`Sentence ${sentence.order}`}
                   onClick={() => setSelectedSentenceOrder(sentence.order)}
                 >
-                  {sentence.tokens.map((token) => {
+                  {displayedSentenceTokens.map((token) => {
                     const isSelected = selectedToken?.surface_form === token.surface_form && selectedToken?.order === token.order;
                     const tokenClassName = `token-inline ${isSelected ? "is-selected" : ""} ${isCjkToken(token.surface_form) ? "is-cjk" : "is-word"}`;
-                    return (
-                      <span
-                        key={`${sentence.order}-${token.order}-${token.surface_form}`}
-                        role="button"
-                        tabIndex={0}
+                      return (
+                        <span
+                          key={`${sentence.order}-${token.order}-${token.surface_form}`}
+                          role="button"
+                          tabIndex={0}
                         className={tokenClassName}
-                        onClick={() => {
-                          setSelectedToken(token);
-                          setSelectedSentenceOrder(sentence.order);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
+                          onClick={() => {
+                            setLexiconLoading(true);
+                            setLexiconResult(null);
                             setSelectedToken(token);
                             setSelectedSentenceOrder(sentence.order);
-                          }
-                        }}
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setLexiconLoading(true);
+                              setLexiconResult(null);
+                              setSelectedToken(token);
+                              setSelectedSentenceOrder(sentence.order);
+                            }
+                          }}
                         aria-label={`Inspect ${token.surface_form}`}
                       >
                         {token.surface_form}
                       </span>
                     );
                   })}
-                </p>
+                  {sentence.translation ? <p className="sentence-translation">{sentence.translation}</p> : null}
+                </div>
               ))}
+              {!selectedSentence?.translation && pageTranslation ? (
+                <div className="page-translation">
+                  <p className="eyebrow">Page translation</p>
+                  <p className="sentence-translation">{pageTranslation}</p>
+                </div>
+              ) : null}
             </div>
           </article>
 

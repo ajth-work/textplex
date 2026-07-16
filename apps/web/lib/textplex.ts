@@ -25,6 +25,7 @@ export type {
   LexiconLookupResponse,
   ProgressBookSummary,
   ProgressSurfaceResponse,
+  ProfileSurfaceResponse,
   SearchResult,
   SearchSurfaceResponse,
   SettingEntry,
