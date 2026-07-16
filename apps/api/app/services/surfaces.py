@@ -14,6 +14,7 @@ from app.schemas.surfaces import (
     ImportSurfaceResponse,
     ProgressBookSummary,
     ProgressSurfaceResponse,
+    ProfileSurfaceResponse,
     SearchResult,
     SearchSurfaceResponse,
     SettingEntry,
@@ -23,6 +24,7 @@ from app.schemas.surfaces import (
     StudySurfaceResponse,
 )
 from app.services.book_registry import load_registry
+from app.services.book_extraction import recover_book_extraction_result
 from app.services.learning_profile import ensure_profile_database, get_learning_profile_summary
 from processor.contracts import BookExtractionResult
 
@@ -43,7 +45,12 @@ def _load_book_extraction(data_root: Path, book_id: str) -> BookExtractionResult
     artifact_path = _book_artifact_path(data_root, book_id)
     if not artifact_path.exists():
         return None
-    return BookExtractionResult.model_validate_json(artifact_path.read_text(encoding="utf-8"))
+    extraction = BookExtractionResult.model_validate_json(artifact_path.read_text(encoding="utf-8"))
+    recovered = recover_book_extraction_result(extraction, data_root=data_root / "books")
+    if recovered is not extraction:
+        artifact_path.write_text(recovered.model_dump_json(indent=2), encoding="utf-8")
+        return recovered
+    return extraction
 
 
 def _snippet(text: str, query: str, *, width: int = 140) -> str:
@@ -284,6 +291,16 @@ def get_progress_surface(data_root: Path) -> ProgressSurfaceResponse:
 
     books = sorted(aggregate.values(), key=lambda item: (-item.active_seconds, item.title))
     return ProgressSurfaceResponse(profile=profile, books=books)
+
+
+def get_profile_surface(data_root: Path) -> ProfileSurfaceResponse:
+    progress = get_progress_surface(data_root)
+    settings = load_settings_surface(data_root)
+    return ProfileSurfaceResponse(
+        profile=progress.profile,
+        books=progress.books,
+        settings=settings,
+    )
 
 
 def get_activity_surface(data_root: Path, *, limit: int = 50) -> ActivitySurfaceResponse:

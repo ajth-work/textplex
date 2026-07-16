@@ -70,6 +70,35 @@ class SentenceReadRecord(BaseModel):
     completed_at: str
 
 
+class LearningTrackJourneyStep(BaseModel):
+    label: str
+    detail: str
+    progress: float = Field(ge=0.0, le=100.0)
+    status: Literal["complete", "current", "next"]
+
+
+class LearningTrackSummary(BaseModel):
+    code: str
+    label: str
+    language_code: str
+    level: str
+    subtitle: str
+    note: str
+    progress: float = Field(ge=0.0, le=100.0)
+    books: int
+    page_reads: int
+    sentence_reads: int
+    word_exposures: int
+    character_exposures: int
+    unique_words_seen: int
+    unique_characters_seen: int
+    average_seconds_per_sentence: float | None = None
+    average_seconds_per_word: float | None = None
+    average_seconds_per_character: float | None = None
+    next_step: str
+    journey: list[LearningTrackJourneyStep] = Field(default_factory=list)
+
+
 class LearningProfileSummary(BaseModel):
     database_path: str
     reading_sessions: int
@@ -87,3 +116,5 @@ class LearningProfileSummary(BaseModel):
     average_seconds_per_sentence: float | None = None
     average_seconds_per_word: float | None = None
     average_seconds_per_character: float | None = None
+    selected_track_code: str = "local"
+    learning_tracks: list["LearningTrackSummary"] = Field(default_factory=list)

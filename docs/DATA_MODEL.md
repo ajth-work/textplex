@@ -23,6 +23,7 @@
 - image_path TEXT NOT NULL
 - raw_text TEXT
 - clean_text TEXT
+- page_translation TEXT
 - word_count INTEGER DEFAULT 0
 - sentence_count INTEGER DEFAULT 0
 - processing_status TEXT NOT NULL

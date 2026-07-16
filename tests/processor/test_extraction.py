@@ -25,6 +25,22 @@ def test_build_page_extraction_result_marks_terminal_quotes_as_sentence_enders()
     assert result.sentences[0].ends_with_sentence_terminator is True
 
 
+def test_build_page_extraction_result_applies_translations_to_sentences() -> None:
+    result = build_page_extraction_result(
+        book_id="book-translated",
+        page_number=1,
+        language_code="zh",
+        raw_text="\u8fd9\u662f\u7b2c\u4e00\u53e5\u3002\u8fd9\u662f\u7b2c\u4e8c\u53e5\u3002",
+        sentence_texts=["\u8fd9\u662f\u7b2c\u4e00\u53e5\u3002", "\u8fd9\u662f\u7b2c\u4e8c\u53e5\u3002"],
+        sentence_translations=["This is the first sentence.", "This is the second sentence."],
+        page_translation="This is page one.",
+    )
+
+    assert result.page_translation == "This is page one."
+    assert result.sentences[0].translation == "This is the first sentence."
+    assert result.sentences[1].translation == "This is the second sentence."
+
+
 def test_stitch_page_sentence_carryover_moves_open_sentence_to_previous_page(monkeypatch) -> None:
     monkeypatch.setattr(
         extraction,

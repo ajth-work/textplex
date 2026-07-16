@@ -46,6 +46,8 @@ def test_resolve_page_text_uses_openai_route_without_network(monkeypatch) -> Non
         return OcrPageResult(
             transcription="示例句子。",
             sentence_texts=["示例句子。"],
+            sentence_translations=["Sample sentence."],
+            page_translation="Sample page.",
             page_ends_with_sentence_terminator=True,
             token_hints=[],
             text_source="openai",
