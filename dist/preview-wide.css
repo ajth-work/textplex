@@ -1,0 +1,23 @@
+/* Shared widening rules for standalone preview pages on tablets and desktop. */
+.app {
+  width: min(calc(100vw - 32px), 1240px) !important;
+  max-width: 1240px !important;
+}
+
+.bottom-nav {
+  width: min(calc(100vw - 32px), 1240px) !important;
+}
+
+@media (min-width: 900px) {
+  .app {
+    padding-left: 24px !important;
+    padding-right: 24px !important;
+  }
+}
+
+@media (min-width: 1200px) {
+  .app {
+    padding-left: 32px !important;
+    padding-right: 32px !important;
+  }
+}
