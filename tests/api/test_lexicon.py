@@ -1,6 +1,69 @@
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from app.services.lexicon import import_lexicon_from_source, lookup_lexicon_entry
+
+
+def test_import_and_lookup_lexicon_from_canonical_sqlite_pack(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    source_root.mkdir()
+
+    with closing(sqlite3.connect(source_root / "lexicon.sqlite3")) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE lexicon_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                language_code TEXT NOT NULL,
+                entry_type TEXT NOT NULL,
+                surface_form TEXT NOT NULL,
+                pinyin TEXT,
+                definition TEXT,
+                hsk_level TEXT,
+                frequency_rank INTEGER,
+                note TEXT,
+                source_name TEXT,
+                source_path TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            INSERT INTO lexicon_entries (
+                language_code,
+                entry_type,
+                surface_form,
+                pinyin,
+                definition,
+                hsk_level,
+                frequency_rank,
+                note,
+                source_name,
+                source_path
+            ) VALUES (
+                'ja',
+                'word',
+                '坊っちゃん',
+                'ぼっちゃん',
+                'a boy',
+                'N4',
+                1,
+                'sample entry',
+                'lexicon.sqlite3',
+                'lexicon.sqlite3'
+            );
+            """
+        )
+        connection.commit()
+
+    data_root = tmp_path / "data"
+    summary = import_lexicon_from_source(source_root, data_root=data_root, language_code="ja", replace_existing=True)
+
+    assert summary.vocabulary_rows == 1
+    assert summary.character_rows == 0
+    assert summary.imported_rows == 1
+
+    lookup = lookup_lexicon_entry(data_root=data_root, language_code="ja", term="坊っちゃん")
+    assert lookup.query == "坊っちゃん"
+    assert lookup.entries[0].definition == "a boy"
+    assert lookup.entries[0].pinyin == "ぼっちゃん"
 
 
 def test_import_and_lookup_lexicon_from_csv_assets(tmp_path: Path) -> None:

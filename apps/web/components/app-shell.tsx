@@ -158,6 +158,9 @@ export function AppShell() {
         <Link className={navLinkClassName(pathname, "/progress")} href="/progress">
           Progress
         </Link>
+        <Link className={navLinkClassName(pathname, "/roadmap")} href="/roadmap">
+          Roadmap
+        </Link>
         <Link className={navLinkClassName(pathname, profileHref)} href={profileHref}>
           Profile
         </Link>

@@ -118,5 +118,7 @@ All notable changes to TextPlex are recorded here.
 - `working tree` - Add a non-Romanized language scope doc with implementation priorities
 - `working tree` - Add a public-domain test corpus for non-Romanized language smoke tests
 - `working tree` - Add Japanese-specific processing notes for the first-wave language pass
+- `working tree` - Add a vocabulary roadmap preview page and per-language implementation tracker
 - `working tree` - Add progression benchmarks for official language tests and vocabulary ladders
 - `working tree` - Add learner ecosystem and domestic literacy anchors for vocabulary planning
+- `working tree` - Add a canonical lexicon pack format and Japanese starter pack scaffold
