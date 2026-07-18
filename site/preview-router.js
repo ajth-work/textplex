@@ -50,6 +50,10 @@ function bindNavigationButtons() {
       button.addEventListener("click", () => {
         const label = button.getAttribute("aria-label");
 
+        if (currentFile === "reader-preview.html" && (label === "More options" || label === "More actions")) {
+          return;
+        }
+
         if (label === "Bookmark") {
           button.classList.toggle("is-active");
           toast(button.classList.contains("is-active") ? "Bookmarked" : "Bookmark cleared");
@@ -450,6 +454,12 @@ function wireReaderPreview() {
   const exampleEn = document.querySelector(".example-en");
   const saveButton = document.querySelector(".button-primary");
   const moreButton = document.getElementById("readerMoreActions");
+  const readerOptionButtons = Array.from(document.querySelectorAll('button[aria-label="More options"], button[aria-label="More actions"]'));
+  const readerOptionsBackdrop = document.getElementById("readerOptionsBackdrop");
+  const readerThemePanel = document.getElementById("readerOptionsPanel");
+  const readerThemeStatus = document.getElementById("readerThemeStatus");
+  const readerTextSizeChoices = Array.from(document.querySelectorAll("[data-text-size-choice]"));
+  const readerThemeChoices = Array.from(document.querySelectorAll("[data-theme-choice]"));
   const tokenModeToggle = document.getElementById("readerTokenModeToggle");
   const fontToggle = document.getElementById("readerFontToggle");
   const fallbackModeToggle = document.getElementById("readerFallbackModeToggle");
@@ -458,6 +468,8 @@ function wireReaderPreview() {
   const processorBaseUrl = previewData?.getProcessorBaseUrl?.() ?? "";
   const readerTokenModeStorageKey = "textplex.readerTokenMode";
   const readerFontStorageKey = "textplex.readerFont";
+  const readerThemeStorageKey = "textplex.readerTheme";
+  const readerTextSizeStorageKey = "textplex.readerTextSize";
   const missingLookupMessage = "No dictionary entry found in imported lexicon.";
   const pageStateKey = `textplex:reader-page:${bookId}`;
   const sentenceStateKey = `textplex:reader-sentence:${bookId}`;
@@ -467,6 +479,9 @@ function wireReaderPreview() {
   let activeTokenLookupKey = "";
   let readerTokenMode = resolveReaderTokenMode(window.localStorage.getItem(readerTokenModeStorageKey) ?? "word");
   let readerFont = resolveReaderFont(window.localStorage.getItem(readerFontStorageKey) ?? "mixed");
+  let readerTheme = resolveReaderTheme(window.localStorage.getItem(readerThemeStorageKey) ?? "neutral");
+  let readerTextSize = resolveReaderTextSize(window.localStorage.getItem(readerTextSizeStorageKey) ?? "medium");
+  let readerOptionsOpen = false;
 
   function setReaderTokenMode(nextMode) {
     const normalizedMode = resolveReaderTokenMode(nextMode);
@@ -490,6 +505,102 @@ function wireReaderPreview() {
     readerFont = normalizedMode;
     window.localStorage.setItem(readerFontStorageKey, readerFont);
     render();
+  }
+
+  function setReaderTheme(nextTheme) {
+    const normalizedTheme = resolveReaderTheme(nextTheme);
+    if (normalizedTheme === readerTheme) {
+      return;
+    }
+
+    readerTheme = normalizedTheme;
+    window.localStorage.setItem(readerThemeStorageKey, readerTheme);
+    syncReaderOptionsState();
+  }
+
+  function setReaderTextSize(nextSize) {
+    const normalizedSize = resolveReaderTextSize(nextSize);
+    if (normalizedSize === readerTextSize) {
+      return;
+    }
+
+    readerTextSize = normalizedSize;
+    window.localStorage.setItem(readerTextSizeStorageKey, readerTextSize);
+    syncReaderOptionsState();
+  }
+
+  function resolveReaderTheme(value) {
+    return value === "sepia" || value === "ink" || value === "black" ? value : "neutral";
+  }
+
+  function resolveReaderTextSize(value) {
+    return value === "small" || value === "large" || value === "medium" ? value : "medium";
+  }
+
+  function formatReaderThemeLabel(value) {
+    switch (resolveReaderTheme(value)) {
+      case "sepia":
+        return "Warm Sepia";
+      case "ink":
+        return "Dark Ink";
+      case "black":
+        return "Pitch Black";
+      default:
+        return "Neutral";
+    }
+  }
+
+  function formatReaderTextSizeLabel(value) {
+    switch (resolveReaderTextSize(value)) {
+      case "small":
+        return "Small";
+      case "large":
+        return "Large";
+      default:
+        return "Medium";
+    }
+  }
+
+  function syncReaderOptionsState() {
+    const normalizedTheme = resolveReaderTheme(readerTheme);
+    const normalizedTextSize = resolveReaderTextSize(readerTextSize);
+    readerTheme = normalizedTheme;
+    readerTextSize = normalizedTextSize;
+    if (readerApp) {
+      readerApp.dataset.readerTheme = normalizedTheme;
+      readerApp.dataset.readerTextSize = normalizedTextSize;
+    }
+    document.body.dataset.readerTheme = normalizedTheme;
+    if (readerThemeStatus) {
+      readerThemeStatus.textContent = formatReaderThemeLabel(normalizedTheme);
+    }
+    if (readerThemePanel) {
+      readerThemePanel.hidden = !readerOptionsOpen;
+    }
+    if (readerOptionsBackdrop) {
+      readerOptionsBackdrop.hidden = !readerOptionsOpen;
+    }
+    readerOptionButtons.forEach((button) => {
+      button.setAttribute("aria-expanded", String(readerOptionsOpen));
+    });
+    readerThemeChoices.forEach((button) => {
+      const theme = resolveReaderTheme(button.getAttribute("data-theme-choice"));
+      const selected = theme === normalizedTheme;
+      button.classList.toggle("is-selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    readerTextSizeChoices.forEach((button) => {
+      const textSize = resolveReaderTextSize(button.getAttribute("data-text-size-choice"));
+      const selected = textSize === normalizedTextSize;
+      button.classList.toggle("is-selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+      button.setAttribute("aria-label", `Text size ${formatReaderTextSizeLabel(textSize)}`);
+    });
+  }
+
+  function toggleReaderOptions(forceOpen = null) {
+    readerOptionsOpen = typeof forceOpen === "boolean" ? forceOpen : !readerOptionsOpen;
+    syncReaderOptionsState();
   }
 
   const pages = Array.isArray(profile.pages) && profile.pages.length
@@ -557,7 +668,10 @@ function wireReaderPreview() {
     }
     if (readerApp) {
       readerApp.dataset.readerFont = readerFont;
+      readerApp.dataset.readerTheme = readerTheme;
+      readerApp.dataset.readerTextSize = readerTextSize;
     }
+    document.body.dataset.readerTheme = readerTheme;
     if (tokenModeToggle) {
       tokenModeToggle.textContent = readerTokenMode === "character" ? "Char" : "Word";
       tokenModeToggle.classList.toggle("is-active", readerTokenMode === "character");
@@ -581,10 +695,10 @@ function wireReaderPreview() {
       fallbackModeToggle.textContent = readerTokenMode === "character" ? "Word mode" : "Try Char mode";
       fallbackModeToggle.setAttribute("aria-label", readerTokenMode === "character" ? "Switch to word mode" : "Try character mode");
       fallbackModeToggle.title = readerTokenMode === "character" ? "Switch back to word mode" : "Switch to character mode";
-      fallbackModeToggle.hidden = !tokenLookupMissing;
+      fallbackModeToggle.hidden = !tokenLookupMissing || readerTokenMode === "character";
     }
     if (fallbackModeWrap) {
-      fallbackModeWrap.hidden = !tokenLookupMissing;
+      fallbackModeWrap.hidden = !tokenLookupMissing || readerTokenMode === "character";
     }
     if (lines[0]) {
       const tokenMarkup = buildSentenceTokenMarkup(sentence, readerTokenMode, selectedTokenIndex);
@@ -656,6 +770,7 @@ function wireReaderPreview() {
     if (moreButton) {
       moreButton.setAttribute("aria-label", "More actions");
     }
+    syncReaderOptionsState();
     if (sessionPill) {
       const activeSession = reading?.activeSession ?? null;
       if (activeSession) {
@@ -814,6 +929,32 @@ function wireReaderPreview() {
       setReaderTokenMode("character");
     });
   }
+  readerOptionButtons.forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      toggleReaderOptions();
+    });
+  });
+  readerOptionsBackdrop?.addEventListener("click", () => {
+    toggleReaderOptions(false);
+  });
+  readerThemeChoices.forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      setReaderTheme(button.getAttribute("data-theme-choice") ?? "neutral");
+    });
+  });
+  readerTextSizeChoices.forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      setReaderTextSize(button.getAttribute("data-text-size-choice") ?? "medium");
+    });
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && readerOptionsOpen) {
+      toggleReaderOptions(false);
+    }
+  });
   window.addEventListener("pagehide", finalizeCurrentSession);
   window.addEventListener("beforeunload", finalizeCurrentSession);
 
@@ -2743,6 +2884,108 @@ function shouldExpandTokenIntoCharacters(surface) {
   return isCjk(text) && Array.from(text).length > 1;
 }
 
+const pinyinSyllablePattern = /^(?:(?:zh|ch|sh)|[bpmfdtnlgkhjqxrzcsyw])?(?:a|ai|an|ang|ao|e|ei|en|eng|er|o|ong|ou|i|ia|ian|iang|iao|ie|in|ing|iong|iu|u|ua|uai|uan|uang|ue|ui|un|uo|v|ve|van|vn)$/;
+const pinyinSeparatorPattern = /[\s'’\-.0-9]/u;
+
+function normalizePinyinCharacter(character) {
+  switch (character) {
+    case "ā":
+    case "á":
+    case "ǎ":
+    case "à":
+      return "a";
+    case "ē":
+    case "é":
+    case "ě":
+    case "è":
+      return "e";
+    case "ī":
+    case "í":
+    case "ǐ":
+    case "ì":
+      return "i";
+    case "ō":
+    case "ó":
+    case "ǒ":
+    case "ò":
+      return "o";
+    case "ū":
+    case "ú":
+    case "ǔ":
+    case "ù":
+      return "u";
+    case "ǖ":
+    case "ǘ":
+    case "ǚ":
+    case "ǜ":
+    case "ü":
+      return "v";
+    default:
+      return character.toLowerCase();
+  }
+}
+
+function isValidPinyinChunk(chunk) {
+  return pinyinSyllablePattern.test(chunk);
+}
+
+function splitConcatenatedPinyin(romanization, characterCount) {
+  const sourceCharacters = Array.from(String(romanization ?? "").trim()).filter((character) => !pinyinSeparatorPattern.test(character));
+  if (!sourceCharacters.length || characterCount <= 0) {
+    return null;
+  }
+
+  const normalizedCharacters = sourceCharacters.map((character) => normalizePinyinCharacter(character));
+  const maxChunkLength = Math.min(7, normalizedCharacters.length);
+  const memo = new Map();
+
+  function splitFrom(startIndex, remainingCount) {
+    const memoKey = `${startIndex}:${remainingCount}`;
+    if (memo.has(memoKey)) {
+      return memo.get(memoKey) ?? null;
+    }
+
+    const remainingCharacters = normalizedCharacters.length - startIndex;
+    if (remainingCount <= 0 || remainingCharacters < remainingCount) {
+      memo.set(memoKey, null);
+      return null;
+    }
+
+    if (remainingCount === 1) {
+      const chunk = normalizedCharacters.slice(startIndex).join("");
+      if (!chunk || !isValidPinyinChunk(chunk)) {
+        memo.set(memoKey, null);
+        return null;
+      }
+
+      const tail = sourceCharacters.slice(startIndex).join("");
+      memo.set(memoKey, [tail]);
+      return [tail];
+    }
+
+    const maxEndIndex = Math.min(normalizedCharacters.length - (remainingCount - 1), startIndex + maxChunkLength);
+    for (let endIndex = startIndex + 1; endIndex <= maxEndIndex; endIndex += 1) {
+      const chunk = normalizedCharacters.slice(startIndex, endIndex).join("");
+      if (!isValidPinyinChunk(chunk)) {
+        continue;
+      }
+
+      const tail = splitFrom(endIndex, remainingCount - 1);
+      if (tail) {
+        const head = sourceCharacters.slice(startIndex, endIndex).join("");
+        const result = [head, ...tail];
+        memo.set(memoKey, result);
+        return result;
+      }
+    }
+
+    memo.set(memoKey, null);
+    return null;
+  }
+
+  return splitFrom(0, characterCount);
+}
+
 function splitRomanizationByCharacters(romanization, characterCount) {
   const syllables = String(romanization ?? "")
     .trim()
@@ -2757,13 +3000,33 @@ function splitRomanizationByCharacters(romanization, characterCount) {
     return Array.from({ length: characterCount }, () => "");
   }
 
-  if (syllables.length >= characterCount) {
-    return syllables.slice(0, characterCount);
+  if (syllables.length === characterCount) {
+    return syllables;
   }
 
-  const readings = [...syllables];
-  while (readings.length < characterCount) {
-    readings.push("");
+  if (syllables.length > characterCount) {
+    const readings = Array.from({ length: characterCount }, () => "");
+    const lastIndex = characterCount - 1;
+    for (let index = 0; index < syllables.length; index += 1) {
+      if (index < lastIndex) {
+        readings[index] = syllables[index];
+      } else {
+        readings[lastIndex] = readings[lastIndex] ? `${readings[lastIndex]} ${syllables[index]}` : syllables[index];
+      }
+    }
+    return readings;
+  }
+
+  if (syllables.length === 1 && characterCount > 1) {
+    const splitSyllables = splitConcatenatedPinyin(romanization, characterCount);
+    if (splitSyllables && splitSyllables.length === characterCount) {
+      return splitSyllables;
+    }
+  }
+
+  const readings = Array.from({ length: characterCount }, () => "");
+  for (let index = 0; index < syllables.length; index += 1) {
+    readings[index] = syllables[index];
   }
   return readings;
 }

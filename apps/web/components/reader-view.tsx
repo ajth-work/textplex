@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import {
   fetchJson,
@@ -24,16 +24,146 @@ import {
 
 type ReaderTokenMode = "word" | "character";
 type ReaderFontMode = "mixed" | "serif" | "sans";
+type ReaderThemeMode = "neutral" | "sepia" | "ink" | "black";
+type ReaderTextSizeMode = "small" | "medium" | "large";
 
 const readerFontStorageKey = "textplex.readerFont";
+const readerThemeStorageKey = "textplex.readerTheme";
+const readerTextSizeStorageKey = "textplex.readerTextSize";
 const readerFontLabels: Record<ReaderFontMode, string> = {
   mixed: "Mixed",
   serif: "Serif",
   sans: "Sans",
 };
+const readerTextSizeLabels: Record<ReaderTextSizeMode, string> = {
+  small: "Small",
+  medium: "Medium",
+  large: "Large",
+};
+const readerThemeLabels: Record<ReaderThemeMode, string> = {
+  neutral: "Neutral",
+  sepia: "Warm Sepia",
+  ink: "Dark Ink",
+  black: "Pitch Black",
+};
+const readerTextSizeScales: Record<ReaderTextSizeMode, number> = {
+  small: 0.92,
+  medium: 1,
+  large: 1.1,
+};
 
 function resolveReaderFont(value: string | null | undefined): ReaderFontMode {
   return value === "serif" || value === "sans" || value === "mixed" ? value : "mixed";
+}
+
+function resolveReaderTheme(value: string | null | undefined): ReaderThemeMode {
+  return value === "sepia" || value === "ink" || value === "black" || value === "neutral" ? value : "neutral";
+}
+
+function resolveReaderTextSize(value: string | null | undefined): ReaderTextSizeMode {
+  return value === "small" || value === "large" || value === "medium" ? value : "medium";
+}
+
+const pinyinSyllablePattern = /^(?:(?:zh|ch|sh)|[bpmfdtnlgkhjqxrzcsyw])?(?:a|ai|an|ang|ao|e|ei|en|eng|er|o|ong|ou|i|ia|ian|iang|iao|ie|in|ing|iong|iu|u|ua|uai|uan|uang|ue|ui|un|uo|v|ve|van|vn)$/;
+const pinyinSeparatorPattern = /[\s'’\-.0-9]/u;
+
+function normalizePinyinCharacter(character: string): string {
+  switch (character) {
+    case "ā":
+    case "á":
+    case "ǎ":
+    case "à":
+      return "a";
+    case "ē":
+    case "é":
+    case "ě":
+    case "è":
+      return "e";
+    case "ī":
+    case "í":
+    case "ǐ":
+    case "ì":
+      return "i";
+    case "ō":
+    case "ó":
+    case "ǒ":
+    case "ò":
+      return "o";
+    case "ū":
+    case "ú":
+    case "ǔ":
+    case "ù":
+      return "u";
+    case "ǖ":
+    case "ǘ":
+    case "ǚ":
+    case "ǜ":
+    case "ü":
+      return "v";
+    default:
+      return character.toLowerCase();
+  }
+}
+
+function isValidPinyinChunk(chunk: string): boolean {
+  return pinyinSyllablePattern.test(chunk);
+}
+
+function splitConcatenatedPinyin(romanization: string, characterCount: number): string[] | null {
+  const sourceCharacters = Array.from(romanization.trim()).filter((character) => !pinyinSeparatorPattern.test(character));
+  if (!sourceCharacters.length || characterCount <= 0) {
+    return null;
+  }
+
+  const normalizedCharacters = sourceCharacters.map((character) => normalizePinyinCharacter(character));
+  const maxChunkLength = Math.min(7, normalizedCharacters.length);
+  const memo = new Map<string, string[] | null>();
+
+  function splitFrom(startIndex: number, remainingCount: number): string[] | null {
+    const memoKey = `${startIndex}:${remainingCount}`;
+    if (memo.has(memoKey)) {
+      return memo.get(memoKey) ?? null;
+    }
+
+    const remainingCharacters = normalizedCharacters.length - startIndex;
+    if (remainingCount <= 0 || remainingCharacters < remainingCount) {
+      memo.set(memoKey, null);
+      return null;
+    }
+
+    if (remainingCount === 1) {
+      const chunk = normalizedCharacters.slice(startIndex).join("");
+      if (!chunk || !isValidPinyinChunk(chunk)) {
+        memo.set(memoKey, null);
+        return null;
+      }
+
+      const tail = sourceCharacters.slice(startIndex).join("");
+      memo.set(memoKey, [tail]);
+      return [tail];
+    }
+
+    const maxEndIndex = Math.min(normalizedCharacters.length - (remainingCount - 1), startIndex + maxChunkLength);
+    for (let endIndex = startIndex + 1; endIndex <= maxEndIndex; endIndex += 1) {
+      const chunk = normalizedCharacters.slice(startIndex, endIndex).join("");
+      if (!isValidPinyinChunk(chunk)) {
+        continue;
+      }
+
+      const tail = splitFrom(endIndex, remainingCount - 1);
+      if (tail) {
+        const head = sourceCharacters.slice(startIndex, endIndex).join("");
+        const result = [head, ...tail];
+        memo.set(memoKey, result);
+        return result;
+      }
+    }
+
+    memo.set(memoKey, null);
+    return null;
+  }
+
+  return splitFrom(0, characterCount);
 }
 
 function resolveEntry(summary: BookExtractionResult | null, token: TokenResult | null): LexicalEntryResult | null {
@@ -60,12 +190,34 @@ function splitRomanizationByCharacters(romanization: string, characterCount: num
   if (!syllables.length) {
     return Array.from({ length: characterCount }, () => "");
   }
-  if (syllables.length >= characterCount) {
-    return syllables.slice(0, characterCount);
+
+  if (syllables.length === characterCount) {
+    return syllables;
   }
-  const readings = [...syllables];
-  while (readings.length < characterCount) {
-    readings.push("");
+
+  if (syllables.length > characterCount) {
+    const readings = Array.from({ length: characterCount }, () => "");
+    const lastIndex = characterCount - 1;
+    for (let index = 0; index < syllables.length; index += 1) {
+      if (index < lastIndex) {
+        readings[index] = syllables[index];
+      } else {
+        readings[lastIndex] = readings[lastIndex] ? `${readings[lastIndex]} ${syllables[index]}` : syllables[index];
+      }
+    }
+    return readings;
+  }
+
+  if (syllables.length === 1 && characterCount > 1) {
+    const splitSyllables = splitConcatenatedPinyin(romanization, characterCount);
+    if (splitSyllables && splitSyllables.length === characterCount) {
+      return splitSyllables;
+    }
+  }
+
+  const readings = Array.from({ length: characterCount }, () => "");
+  for (let index = 0; index < syllables.length; index += 1) {
+    readings[index] = syllables[index];
   }
   return readings;
 }
@@ -106,8 +258,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [selectedToken, setSelectedToken] = useState<TokenResult | null>(null);
   const [selectedSentenceOrder, setSelectedSentenceOrder] = useState<number | null>(null);
   const [showPageImage, setShowPageImage] = useState(false);
+  const [showReaderOptions, setShowReaderOptions] = useState(false);
   const [readerTokenMode, setReaderTokenMode] = useState<ReaderTokenMode>("word");
   const [readerFont, setReaderFont] = useState<ReaderFontMode>("mixed");
+  const [readerTheme, setReaderTheme] = useState<ReaderThemeMode>("neutral");
+  const [readerTextSize, setReaderTextSize] = useState<ReaderTextSizeMode>("medium");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeSeconds, setActiveSeconds] = useState(0);
@@ -131,6 +286,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
     setReaderTokenMode(resolveReaderTokenMode(window.localStorage.getItem("textplex.readerTokenMode")));
     setReaderFont(resolveReaderFont(window.localStorage.getItem(readerFontStorageKey)));
+    setReaderTheme(resolveReaderTheme(window.localStorage.getItem(readerThemeStorageKey)));
+    setReaderTextSize(resolveReaderTextSize(window.localStorage.getItem(readerTextSizeStorageKey)));
   }, []);
 
   useEffect(() => {
@@ -389,6 +546,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const tokenHskLabel = formatLevelTag(tokenHsk);
   const tokenRadical = lexiconEntry?.radical ?? null;
   const tokenStrokeCount = lexiconEntry?.stroke_count ?? null;
+  const showReaderFallback = tokenLookupMissing && readerTokenMode !== "character";
   const needsExtraction = (pageData?.book.extracted_page_count ?? 0) <= 0;
   const extractionSource = pageData?.extraction?.text_source ?? null;
   const extractionSourceLabel = extractionSource ? extractionSource.toUpperCase() : "UNAVAILABLE";
@@ -449,6 +607,16 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     });
   }
 
+  function handleSetReaderTheme(nextTheme: ReaderThemeMode) {
+    setReaderTheme(nextTheme);
+    window.localStorage.setItem(readerThemeStorageKey, nextTheme);
+  }
+
+  function handleSetReaderTextSize(nextSize: ReaderTextSizeMode) {
+    setReaderTextSize(nextSize);
+    window.localStorage.setItem(readerTextSizeStorageKey, nextSize);
+  }
+
   function focusSentence(nextIndex: number) {
     if (!page?.sentences.length) {
       return;
@@ -463,60 +631,147 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   }
 
   return (
-    <section className={`reader-shell reader-font-${readerFont}`} data-reader-font={readerFont}>
+    <section
+      className={`reader-shell reader-font-${readerFont}`}
+      data-reader-font={readerFont}
+      data-reader-theme={readerTheme}
+      data-reader-text-size={readerTextSize}
+      style={{ "--reader-text-scale": readerTextSizeScales[readerTextSize] } as CSSProperties}
+    >
       <header className="reader-topbar card">
-        <div>
-          <span className="eyebrow">Reader</span>
-          <h1>{pageData?.book.title ?? "Loading page..."}</h1>
-          <p className="muted">
-            Page {pageNumber} of {totalPages}
-          </p>
-          {isDemoMode ? <p className="small-copy">Demo mode is active. This reader is running from packaged sample data.</p> : null}
-        </div>
-        <div className="reader-topbar-actions">
-          <div className="timer-chip">
-            <span className="muted">Active</span>
-            <strong>{formatElapsed(activeSeconds)}</strong>
+        <div className="reader-topbar-main">
+          <div>
+            <span className="eyebrow">Reader</span>
+            <h1>{pageData?.book.title ?? "Loading page..."}</h1>
+            <p className="muted">
+              Page {pageNumber} of {totalPages}
+            </p>
+            {isDemoMode ? <p className="small-copy">Demo mode is active. This reader is running from packaged sample data.</p> : null}
           </div>
-          <div className="timer-chip">
-            <span className="muted">Source</span>
-            <strong>{extractionSourceLabel}</strong>
+          <div className="reader-topbar-actions">
+            <div className="timer-chip">
+              <span className="muted">Active</span>
+              <strong>{formatElapsed(activeSeconds)}</strong>
+            </div>
+            <div className="timer-chip">
+              <span className="muted">Source</span>
+              <strong>{extractionSourceLabel}</strong>
+            </div>
+            <button
+              type="button"
+              className={`button button-secondary button-compact token-mode-toggle ${readerTokenMode === "character" ? "is-active" : ""}`}
+              onClick={handleToggleReaderTokenMode}
+              disabled={!pageData}
+              aria-pressed={readerTokenMode === "character"}
+              aria-label={readerTokenMode === "character" ? "Switch to word mode" : "Switch to character mode"}
+            >
+              {readerTokenMode === "character" ? "Char" : "Word"}
+            </button>
+            <button
+              type="button"
+              className="button button-secondary button-compact font-mode-toggle"
+              onClick={handleToggleReaderFont}
+              disabled={!pageData}
+              aria-label={`Cycle reader font. Current: ${readerFontLabels[readerFont]}`}
+              title={`Reader font: ${readerFontLabels[readerFont]}`}
+            >
+              {readerFontLabels[readerFont]}
+            </button>
+            <button
+              type="button"
+              className={`button button-secondary button-compact options-toggle ${showReaderOptions ? "is-active" : ""}`}
+              onClick={() => setShowReaderOptions((value) => !value)}
+              disabled={!pageData}
+              aria-expanded={showReaderOptions}
+              aria-controls="reader-options-panel"
+            >
+              Options
+            </button>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => void handleExtractNow()}
+              disabled={extracting || loading || !pageData}
+            >
+              {extracting ? "Refreshing..." : pageData?.book.extracted_page_count ? "Refresh extraction" : "Extract now"}
+            </button>
+            {pageData?.book ? (
+              <Link className="button button-secondary" href={`/books/${bookId}`}>
+                Book detail
+              </Link>
+            ) : null}
           </div>
-          <button
-            type="button"
-            className={`button button-secondary button-compact token-mode-toggle ${readerTokenMode === "character" ? "is-active" : ""}`}
-            onClick={handleToggleReaderTokenMode}
-            disabled={!pageData}
-            aria-pressed={readerTokenMode === "character"}
-            aria-label={readerTokenMode === "character" ? "Switch to word mode" : "Switch to character mode"}
-          >
-            {readerTokenMode === "character" ? "Char" : "Word"}
-          </button>
-          <button
-            type="button"
-            className="button button-secondary button-compact font-mode-toggle"
-            onClick={handleToggleReaderFont}
-            disabled={!pageData}
-            aria-label={`Cycle reader font. Current: ${readerFontLabels[readerFont]}`}
-            title={`Reader font: ${readerFontLabels[readerFont]}`}
-          >
-            {readerFontLabels[readerFont]}
-          </button>
-          <button
-            type="button"
-            className="button button-secondary"
-            onClick={() => void handleExtractNow()}
-            disabled={extracting || loading || !pageData}
-          >
-            {extracting ? "Refreshing..." : pageData?.book.extracted_page_count ? "Refresh extraction" : "Extract now"}
-          </button>
-          {pageData?.book ? (
-            <Link className="button button-secondary" href={`/books/${bookId}`}>
-              Book detail
-            </Link>
-          ) : null}
         </div>
       </header>
+
+      {showReaderOptions ? (
+        <>
+          <button type="button" className="reader-options-backdrop" aria-label="Close reader options" onClick={() => setShowReaderOptions(false)} />
+          <section id="reader-options-panel" className="card reader-options-panel" aria-modal="true" role="dialog">
+            <div className="card-topline">
+              <div>
+                <span className="eyebrow">Reader options</span>
+                <h2>Themes</h2>
+              </div>
+              <button type="button" className="ghost-link" onClick={() => setShowReaderOptions(false)}>
+                Close
+              </button>
+            </div>
+            <div className="reader-scale-row" role="group" aria-label="Reader text size">
+              {([
+                "small" as ReaderTextSizeMode,
+                "medium" as ReaderTextSizeMode,
+                "large" as ReaderTextSizeMode,
+              ]).map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  className={`reader-scale-option ${readerTextSize === size ? "is-selected" : ""}`}
+                  onClick={() => handleSetReaderTextSize(size)}
+                  aria-pressed={readerTextSize === size}
+                >
+                  <span className="reader-scale-option-body">
+                    <strong>{readerTextSizeLabels[size]}</strong>
+                  </span>
+                </button>
+              ))}
+            </div>
+          <div className="reader-theme-grid" role="list" aria-label="Reader theme variations">
+            {([
+              {
+                value: "neutral" as ReaderThemeMode,
+                title: "Neutral",
+              },
+              {
+                value: "sepia" as ReaderThemeMode,
+                title: "Sepia",
+              },
+              {
+                value: "ink" as ReaderThemeMode,
+                title: "Ink",
+              },
+              {
+                value: "black" as ReaderThemeMode,
+                title: "Black",
+              },
+            ]).map((theme) => (
+                <button
+                key={theme.value}
+                type="button"
+                className={`reader-theme-option ${readerTheme === theme.value ? "is-selected" : ""}`}
+                onClick={() => handleSetReaderTheme(theme.value)}
+                aria-pressed={readerTheme === theme.value}
+              >
+                <span className="reader-theme-option-swatch" data-theme={theme.value} aria-hidden="true" />
+                <span className="reader-theme-option-body">
+                  <strong>{theme.title}</strong>
+                </span>
+              </button>
+            ))}
+          </div>
+          </section>
+        </>
+      ) : null}
 
       {loading ? <div className="card">Loading reader page...</div> : null}
       {error ? <div className="card error-card">{error}</div> : null}
@@ -597,16 +852,16 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   </button>
                 </div>
                 <p className="definition-copy">{tokenDefinition}</p>
-                {tokenLookupMissing ? (
+                {showReaderFallback ? (
                   <div className="definition-fallback">
                     <p className="small-copy">Not in the dictionary yet? Try character mode for smaller pieces.</p>
                     <button
                       type="button"
                       className="button button-secondary button-compact"
                       onClick={handleToggleReaderTokenMode}
-                      aria-label={readerTokenMode === "character" ? "Switch to word mode" : "Try character mode"}
+                      aria-label="Try character mode"
                     >
-                      {readerTokenMode === "character" ? "Word mode" : "Try Char mode"}
+                      Try Char mode
                     </button>
                   </div>
                 ) : null}

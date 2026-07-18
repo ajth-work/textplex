@@ -11,17 +11,99 @@
     <link rel="stylesheet" href="./preview-wide.css" />
     <style>
       :root {
-        --bg: #f6f2eb;
+        --bg-start: #f6f2eb;
+        --bg-end: #ede4d7;
+        --glow-a: rgba(255, 255, 255, 0.55);
+        --glow-b: rgba(31, 51, 95, 0.05);
         --surface: rgba(255, 255, 255, 0.9);
         --surface-strong: #ffffff;
         --surface-muted: #f5f1ea;
         --text: #202633;
+        --text-strong: #121826;
+        --text-soft: #465064;
         --muted: #787f8d;
         --accent: #1f335f;
+        --accent-strong: #182847;
+        --accent-soft: rgba(31, 51, 95, 0.12);
         --green: #3f9b68;
         --line: rgba(31, 36, 48, 0.08);
+        --line-strong: rgba(31, 36, 48, 0.12);
         --shadow: 0 18px 40px rgba(20, 24, 35, 0.08);
         --shadow-soft: 0 10px 24px rgba(20, 24, 35, 0.06);
+        --pill-bg: rgba(31, 36, 48, 0.08);
+        --pill-text: #1f2430;
+      }
+
+      body[data-reader-theme="sepia"] {
+        --bg-start: #f4e2c7;
+        --bg-end: #e1c9a8;
+        --glow-a: rgba(255, 255, 255, 0.42);
+        --glow-b: rgba(139, 91, 48, 0.08);
+        --surface: rgba(255, 248, 239, 0.92);
+        --surface-strong: #fffaf2;
+        --surface-muted: #f2e4d4;
+        --text: #2a2018;
+        --text-strong: #1f1710;
+        --text-soft: #4f3c2e;
+        --muted: #7a6656;
+        --accent: #8c541f;
+        --accent-strong: #6f4016;
+        --accent-soft: rgba(140, 84, 31, 0.14);
+        --green: #6f7f36;
+        --line: rgba(77, 53, 31, 0.1);
+        --line-strong: rgba(77, 53, 31, 0.16);
+        --shadow: 0 18px 40px rgba(88, 58, 29, 0.1);
+        --shadow-soft: 0 10px 24px rgba(88, 58, 29, 0.07);
+        --pill-bg: rgba(77, 53, 31, 0.08);
+        --pill-text: #4d351f;
+      }
+
+      body[data-reader-theme="ink"] {
+        --bg-start: #10151d;
+        --bg-end: #07090d;
+        --glow-a: rgba(122, 162, 255, 0.08);
+        --glow-b: rgba(255, 255, 255, 0.04);
+        --surface: rgba(20, 24, 31, 0.96);
+        --surface-strong: #151920;
+        --surface-muted: #1d222c;
+        --text: #eef2f8;
+        --text-strong: #f7f9fc;
+        --text-soft: #cad1de;
+        --muted: #a6afbf;
+        --accent: #86a8ff;
+        --accent-strong: #5d7fe0;
+        --accent-soft: rgba(134, 168, 255, 0.16);
+        --green: #7ecfa0;
+        --line: rgba(255, 255, 255, 0.08);
+        --line-strong: rgba(255, 255, 255, 0.12);
+        --shadow: 0 22px 48px rgba(0, 0, 0, 0.5);
+        --shadow-soft: 0 12px 28px rgba(0, 0, 0, 0.35);
+        --pill-bg: rgba(255, 255, 255, 0.08);
+        --pill-text: #eef2f8;
+      }
+
+      body[data-reader-theme="black"] {
+        --bg-start: #020203;
+        --bg-end: #000000;
+        --glow-a: rgba(136, 166, 255, 0.08);
+        --glow-b: rgba(255, 255, 255, 0.02);
+        --surface: rgba(10, 11, 14, 0.98);
+        --surface-strong: #0b0c0f;
+        --surface-muted: #111318;
+        --text: #f7f8fb;
+        --text-strong: #ffffff;
+        --text-soft: #d9dee8;
+        --muted: #aeb6c5;
+        --accent: #d9bf7a;
+        --accent-strong: #f1d28b;
+        --accent-soft: rgba(217, 191, 122, 0.14);
+        --green: #8dd6a6;
+        --line: rgba(255, 255, 255, 0.08);
+        --line-strong: rgba(255, 255, 255, 0.12);
+        --shadow: 0 22px 48px rgba(0, 0, 0, 0.65);
+        --shadow-soft: 0 12px 28px rgba(0, 0, 0, 0.42);
+        --pill-bg: rgba(255, 255, 255, 0.06);
+        --pill-text: #f7f8fb;
       }
 
       * { box-sizing: border-box; }
@@ -31,8 +113,9 @@
         color: var(--text);
         font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         background:
-          radial-gradient(circle at top, rgba(255,255,255,0.95), transparent 42%),
-          linear-gradient(180deg, #fbf9f4 0%, #f1ece4 100%);
+          radial-gradient(circle at top, var(--glow-a), transparent 42%),
+          radial-gradient(circle at top right, var(--glow-b), transparent 34%),
+          linear-gradient(180deg, var(--bg-start) 0%, var(--bg-end) 100%);
       }
 
       .app {
@@ -40,8 +123,10 @@
         min-height: 100vh;
         margin: 0 auto;
         padding: 18px 16px 22px;
+        color: var(--text);
         --reader-display-font: Georgia, "Times New Roman", serif;
         --reader-body-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --reader-text-scale: 1;
       }
 
       .app[data-reader-font="serif"] {
@@ -52,6 +137,18 @@
       .app[data-reader-font="sans"] {
         --reader-display-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         --reader-body-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      .app[data-reader-text-size="small"] {
+        --reader-text-scale: 0.92;
+      }
+
+      .app[data-reader-text-size="medium"] {
+        --reader-text-scale: 1;
+      }
+
+      .app[data-reader-text-size="large"] {
+        --reader-text-scale: 1.1;
       }
 
       .font-toggle {
@@ -70,7 +167,7 @@
       .status-row {
         justify-content: space-between;
         margin-bottom: 12px;
-        color: #121826;
+        color: var(--text-strong);
         font-size: 15px;
         font-weight: 600;
       }
@@ -81,7 +178,10 @@
       }
 
       .topbar {
+        display: flex;
+        align-items: flex-start;
         justify-content: space-between;
+        gap: 12px;
         margin-bottom: 18px;
       }
 
@@ -91,14 +191,14 @@
         border: 0;
         border-radius: 50%;
         background: transparent;
-        color: #2a3140;
+        color: var(--text-strong);
         display: grid;
         place-items: center;
         cursor: pointer;
       }
 
       .icon-btn.is-active {
-        color: #2f7d53;
+        color: var(--green);
       }
 
       .tool-row {
@@ -110,17 +210,17 @@
         padding-inline: 12px;
         border-radius: 999px;
         background: var(--surface);
-        border: 1px solid rgba(31, 36, 48, 0.08);
-        color: #2a3140;
+        border: 1px solid var(--line);
+        color: var(--text-strong);
         font-size: 13px;
         font-weight: 800;
         letter-spacing: 0.04em;
       }
 
       .reader-token-mode-toggle.is-active {
-        background: rgba(63, 155, 104, 0.16);
+        background: var(--accent-soft);
         border-color: rgba(63, 155, 104, 0.28);
-        color: #2f7d53;
+        color: var(--green);
       }
 
       .reader-pager {
@@ -139,8 +239,8 @@
         margin: 0 0 12px;
         padding: 10px 14px;
         border-radius: 999px;
-        background: rgba(31, 36, 48, 0.08);
-        color: #1f2430;
+        background: var(--pill-bg);
+        color: var(--pill-text);
         font-size: 12px;
         font-weight: 800;
         letter-spacing: 0.01em;
@@ -152,7 +252,7 @@
       }
 
       .session-pill span {
-        color: #5d6470;
+        color: var(--muted);
         font-weight: 700;
       }
 
@@ -162,8 +262,8 @@
         justify-content: center;
         padding: 8px 14px;
         border-radius: 999px;
-        background: rgba(31, 36, 48, 0.08);
-        color: #1f2430;
+        background: var(--pill-bg);
+        color: var(--pill-text);
         font-size: 13px;
         font-weight: 900;
         letter-spacing: 0.08em;
@@ -182,7 +282,7 @@
         display: grid;
         place-items: center;
         background: var(--surface);
-        color: #2a3140;
+        color: var(--text-strong);
         box-shadow: var(--shadow-soft);
       }
 
@@ -191,27 +291,43 @@
         box-shadow: none;
       }
 
+      .header-stack {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
       .title-wrap {
-        text-align: center;
-        flex: 1;
+        text-align: left;
       }
 
       .poem-title {
         margin: 0;
         font-family: var(--reader-display-font);
-        font-size: clamp(24px, 6vw, 30px);
+        font-size: calc(clamp(24px, 6vw, 30px) * var(--reader-text-scale));
         line-height: 1.08;
         letter-spacing: -0.05em;
-        max-width: 11em;
-        margin-inline: auto;
+        width: 100%;
+        max-width: none;
+        margin-inline: 0;
+        overflow-wrap: anywhere;
       }
 
       .poet {
         margin: 8px 0 0;
-        color: #787f8d;
+        color: var(--muted);
         font-family: var(--reader-body-font);
-        font-size: 16px;
+        font-size: calc(16px * var(--reader-text-scale));
         font-weight: 700;
+      }
+
+      .settings-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
       }
 
       .reading-surface {
@@ -237,7 +353,7 @@
         align-items: flex-end;
         gap: 8px 12px;
         font-family: var(--reader-body-font);
-        font-size: 26px;
+        font-size: calc(26px * var(--reader-text-scale));
         line-height: 1.5;
         letter-spacing: 0.02em;
       }
@@ -263,9 +379,9 @@
       .token-reading {
         min-height: 1.2em;
         margin-bottom: 6px;
-        color: #8d9199;
+        color: var(--muted);
         font-family: var(--reader-body-font);
-        font-size: 11px;
+        font-size: calc(11px * var(--reader-text-scale));
         font-weight: 700;
         line-height: 1;
         text-align: center;
@@ -294,9 +410,9 @@
 
       .translation {
         margin: 22px 0 0;
-        color: #465064;
+        color: var(--text-soft);
         font-family: var(--reader-body-font);
-        font-size: 19px;
+        font-size: calc(19px * var(--reader-text-scale));
         line-height: 1.55;
         font-weight: 600;
       }
@@ -310,7 +426,7 @@
         height: 4px;
         margin: 2px auto 10px;
         border-radius: 999px;
-        background: rgba(31, 36, 48, 0.16);
+        background: var(--line);
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
       }
 
@@ -318,7 +434,7 @@
         position: relative;
         margin-top: 14px;
         background: var(--surface-strong);
-        border: 1px solid rgba(31, 36, 48, 0.06);
+        border: 1px solid var(--line);
         border-radius: 30px;
         box-shadow: var(--shadow);
         padding: 12px 16px 18px;
@@ -339,7 +455,7 @@
       .vocab-char {
         margin: 0;
         font-family: var(--reader-display-font);
-        font-size: 40px;
+        font-size: calc(40px * var(--reader-text-scale));
         line-height: 1;
         letter-spacing: -0.05em;
       }
@@ -350,7 +466,7 @@
         gap: 8px;
         margin: 8px 0 0;
         font-family: var(--reader-body-font);
-        font-size: 24px;
+        font-size: calc(24px * var(--reader-text-scale));
         font-weight: 700;
       }
 
@@ -359,17 +475,17 @@
         align-items: center;
         padding: 6px 11px;
         border-radius: 999px;
-        background: rgba(63, 155, 104, 0.14);
-        color: #2f7d53;
+        background: var(--accent-soft);
+        color: var(--green);
         font-size: 12px;
         font-weight: 800;
       }
 
       .vocab-definition {
         margin: 14px 0 0;
-        color: #475061;
+        color: var(--text-soft);
         font-family: var(--reader-body-font);
-        font-size: 16px;
+        font-size: calc(16px * var(--reader-text-scale));
         line-height: 1.55;
       }
 
@@ -395,7 +511,7 @@
       .example-cn {
         margin: 0;
         font-family: var(--reader-body-font);
-        font-size: 17px;
+        font-size: calc(17px * var(--reader-text-scale));
         font-weight: 700;
         line-height: 1.45;
       }
@@ -404,8 +520,193 @@
         margin: 4px 0 0;
         color: var(--muted);
         font-family: var(--reader-body-font);
+        font-size: calc(14px * var(--reader-text-scale));
+        line-height: 1.45;
+      }
+
+      .reader-options-panel {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 30;
+        width: min(390px, calc(100vw - 1.5rem));
+        max-height: calc(100vh - 2rem);
+        overflow: auto;
+        padding: 14px 16px 10px;
+        border-radius: 26px;
+        background: var(--surface-strong);
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+      }
+
+      .reader-scale-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 2px;
+      }
+
+      .reader-scale-option {
+        display: grid;
+        place-items: center;
+        min-height: 48px;
+        padding: 10px 12px;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--text);
+        text-align: center;
+        cursor: pointer;
+        box-shadow: var(--shadow-soft);
+      }
+
+      .reader-scale-option.is-selected {
+        border-color: var(--accent);
+        background: var(--surface-strong);
+        box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow-soft);
+      }
+
+      .reader-scale-option.is-selected strong {
+        color: var(--accent);
+      }
+
+      .reader-scale-option-body {
+        display: grid;
+        gap: 0;
+        min-width: 0;
+      }
+
+      .reader-scale-option-body strong {
+        font-size: 13px;
+        line-height: 1.15;
+        text-align: center;
+      }
+
+      .reader-options-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 25;
+        border: 0;
+        padding: 0;
+        background: rgba(3, 6, 12, 0.48);
+        backdrop-filter: blur(3px);
+        cursor: pointer;
+      }
+
+      .reader-options-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .reader-options-header h2 {
+        margin-top: 1px;
+        font-size: 20px;
+        line-height: 1.1;
+      }
+
+      .reader-options-copy {
+        margin-top: 8px;
+        color: var(--muted);
         font-size: 14px;
         line-height: 1.45;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: var(--pill-bg);
+        color: var(--pill-text);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+      }
+
+      .reader-theme-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+        margin-top: 0;
+      }
+
+      .reader-theme-option {
+        display: grid;
+        gap: 8px;
+        align-content: start;
+        width: 100%;
+        min-height: 126px;
+        padding: 10px;
+        border-radius: 20px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--text);
+        text-align: left;
+        box-shadow: var(--shadow-soft);
+      }
+
+      .reader-theme-option:hover {
+        transform: translateY(-1px);
+        border-color: var(--line-strong);
+      }
+
+      .reader-theme-option.is-selected {
+        border-color: var(--accent);
+        background: var(--surface-strong);
+        box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow-soft);
+      }
+
+      .reader-theme-option.is-selected strong {
+        color: var(--accent);
+      }
+
+      .reader-theme-option-swatch {
+        width: 100%;
+        height: 62px;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        overflow: hidden;
+      }
+
+      .reader-theme-option-swatch[data-theme="neutral"] {
+        background:
+          linear-gradient(180deg, #fcfaf6 0%, #efeadf 100%);
+      }
+
+      .reader-theme-option-swatch[data-theme="sepia"] {
+        background:
+          linear-gradient(180deg, #fff7ea 0%, #e1c9a8 100%);
+      }
+
+      .reader-theme-option-swatch[data-theme="ink"] {
+        background:
+          linear-gradient(180deg, #1a202b 0%, #080b10 100%);
+      }
+
+      .reader-theme-option-swatch[data-theme="black"] {
+        background:
+          linear-gradient(180deg, #020203 0%, #0d1016 100%);
+      }
+
+      .reader-theme-option-body {
+        display: grid;
+        gap: 0;
+        min-width: 0;
+      }
+
+      .reader-theme-option-body strong {
+        font-size: 13px;
+        line-height: 1.15;
+        text-align: center;
+      }
+
+      #readerThemeStatus {
+        background: var(--accent-soft);
+        color: var(--accent-strong);
       }
 
       .bottom-actions {
@@ -425,15 +726,15 @@
       .button-primary {
         flex: 1;
         color: white;
-        background: linear-gradient(180deg, var(--accent), #182847);
+        background: linear-gradient(180deg, var(--accent), var(--accent-strong));
         box-shadow: 0 14px 28px rgba(31, 51, 95, 0.25);
       }
 
       .button-secondary {
         width: 58px;
-        color: #2a3140;
+        color: var(--text-strong);
         background: var(--surface);
-        border: 1px solid rgba(31, 36, 48, 0.08);
+        border: 1px solid var(--line);
       }
 
       .bottom-spacer {
@@ -449,13 +750,14 @@
     </style>
   </head>
   <body>
-    <main class="app" data-reader-font="mixed">
+    <main class="app" data-reader-font="mixed" data-reader-theme="neutral" data-reader-text-size="medium">
       <header class="topbar">
         <button class="icon-btn" type="button" aria-label="Back">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
+        <div class="header-stack">
         <div class="title-wrap">
           <h1 class="poem-title">春晓</h1>
           <p class="poet">孟浩然</p>
@@ -468,13 +770,14 @@
               <path d="M6 3h12v18l-6-4-6 4V3z" />
             </svg>
           </button>
-          <button class="icon-btn" type="button" aria-label="More options">
+          <button class="icon-btn" type="button" aria-label="More options" aria-expanded="false" aria-controls="readerOptionsPanel">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <circle cx="5" cy="12" r="1.8" />
               <circle cx="12" cy="12" r="1.8" />
               <circle cx="19" cy="12" r="1.8" />
             </svg>
           </button>
+        </div>
         </div>
       </header>
 
@@ -551,9 +854,63 @@
 
           <div class="bottom-actions">
             <button class="button button-primary" type="button">＋ Save to Vocabulary</button>
-            <button id="readerMoreActions" class="button button-secondary" type="button" aria-label="More actions">⋯</button>
+            <button id="readerMoreActions" class="button button-secondary" type="button" aria-label="More actions" aria-expanded="false" aria-controls="readerOptionsPanel">⋯</button>
           </div>
       </article>
+
+      <button id="readerOptionsBackdrop" class="reader-options-backdrop" type="button" aria-label="Close reader options" hidden></button>
+      <section id="readerOptionsPanel" class="reader-options-panel" hidden aria-label="Reader options" role="dialog" aria-modal="true">
+        <div class="reader-options-header">
+          <div>
+            <p class="eyebrow">Options</p>
+            <h2>Themes</h2>
+          </div>
+          <span id="readerThemeStatus" class="pill">Neutral</span>
+        </div>
+        <div class="reader-scale-row" role="group" aria-label="Reader text size">
+          <button class="reader-scale-option" type="button" data-text-size-choice="small" aria-pressed="false">
+            <span class="reader-scale-option-body">
+              <strong>Small</strong>
+            </span>
+          </button>
+          <button class="reader-scale-option" type="button" data-text-size-choice="medium" aria-pressed="true">
+            <span class="reader-scale-option-body">
+              <strong>Medium</strong>
+            </span>
+          </button>
+          <button class="reader-scale-option" type="button" data-text-size-choice="large" aria-pressed="false">
+            <span class="reader-scale-option-body">
+              <strong>Large</strong>
+            </span>
+          </button>
+        </div>
+        <div class="reader-theme-grid" role="list" aria-label="Reader theme variations">
+          <button class="reader-theme-option" type="button" data-theme-choice="neutral" aria-pressed="true">
+            <span class="reader-theme-option-swatch" data-theme="neutral" aria-hidden="true"></span>
+            <span class="reader-theme-option-body">
+              <strong>Neutral</strong>
+            </span>
+          </button>
+          <button class="reader-theme-option" type="button" data-theme-choice="sepia" aria-pressed="false">
+            <span class="reader-theme-option-swatch" data-theme="sepia" aria-hidden="true"></span>
+            <span class="reader-theme-option-body">
+              <strong>Sepia</strong>
+            </span>
+          </button>
+          <button class="reader-theme-option" type="button" data-theme-choice="ink" aria-pressed="false">
+            <span class="reader-theme-option-swatch" data-theme="ink" aria-hidden="true"></span>
+            <span class="reader-theme-option-body">
+              <strong>Ink</strong>
+            </span>
+          </button>
+          <button class="reader-theme-option" type="button" data-theme-choice="black" aria-pressed="false">
+            <span class="reader-theme-option-swatch" data-theme="black" aria-hidden="true"></span>
+            <span class="reader-theme-option-body">
+              <strong>Black</strong>
+            </span>
+          </button>
+        </div>
+      </section>
 
       <div class="bottom-spacer"></div>
     </main>

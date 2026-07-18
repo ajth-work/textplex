@@ -59,6 +59,8 @@ cd apps/web
 npm run build
 ```
 
+After code changes that affect the running API or site shell, reboot both services before QA so the live preview reflects the current code.
+
 ## Coding Style & Naming Conventions
 
 Use TypeScript and React patterns in `apps/web/`, and Python typing-first code in `apps/api/` and `packages/processor/`. Match surrounding formatting rather than reformatting unrelated code. Prefer descriptive camelCase for TypeScript symbols, snake_case for Python modules and functions, and clear noun-based names for schemas, services, and contracts.
@@ -85,6 +87,8 @@ Treat source books, scans, OCR text, and learner history as sensitive local cont
 Use short imperative commit messages, such as `Add reader shell scaffold` or `Define page-processing contract`. Keep commits scoped to one coherent change. When relevant, mention whether you verified the web app, API, processor tests, or data-contract assumptions.
 
 When a request changes code, docs, tests, local data, or GitHub-tracked work, add a brief `CHANGELOG.md` note that captures the general change and date. Keep it high-level; the goal is to preserve a readable history of what changed, not to log every file touch.
+
+If a task or issue is added to the GitHub project kanban, update the matching entry in `docs/ISSUE_TRACKER.md` in the same change. If `docs/ISSUE_TRACKER.md` is updated, make the corresponding kanban change as well. Treat the two as mirrored views and keep titles, statuses, and scope aligned.
 
 ## Codex Agent Configuration: Token Optimization Protocol
 

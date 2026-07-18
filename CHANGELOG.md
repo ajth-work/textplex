@@ -78,6 +78,25 @@ All notable changes to TextPlex are recorded here.
 - `98fb3a6` - Add study preview page
 - `312179b` - Add activity preview page
 
+### 2026-07-17
+
+- Reader preview now opens a real options panel with neutral, warm sepia, and dark ink themes instead of showing a preview-only toast.
+- Added a pitch black reader theme option to the app reader and static preview reader.
+- Reader theme selections now tint their labels and status pill with the active accent color.
+- Reader preview title text can now use the full available header width instead of shrinking into a narrow column.
+- Added a repo agent note to reboot the API and site after code changes before QA.
+- Reader headers now stack the title above the settings row so the title can span the available viewport width.
+- Reader theme options now open as a centered overlay panel with a backdrop instead of a bottom section.
+- Reader theme options are now compact one-row tiles with the selected tile outlined in accent color.
+- Reader theme tiles now drop the extra copy and use taller swatches for a cleaner compact picker.
+- Reader theme picker heading now says `Themes` and the picker spacing is tighter.
+- Reader theme picker bottom padding is trimmed so the tiles sit closer to the panel edge.
+
+### 2026-07-18
+
+- Added a reader text-size scaler row above the theme tiles in both the app reader and static preview, with local persistence and live scaling of the reading text.
+- Suppressed the character-mode "try character mode" fallback copy once a character lookup resolves successfully.
+
 ### 2026-07-12
 
 - `3d04174` - Add shared contracts and route scaffolding
@@ -122,3 +141,7 @@ All notable changes to TextPlex are recorded here.
 - `working tree` - Add progression benchmarks for official language tests and vocabulary ladders
 - `working tree` - Add learner ecosystem and domestic literacy anchors for vocabulary planning
 - `working tree` - Add a canonical lexicon pack format and Japanese starter pack scaffold
+- `working tree` - Add a repo-local issue tracker mirror and theme store backlog item
+- `working tree` - Require mirrored updates between the issue tracker markdown and the GitHub kanban
+- `working tree` - Resync the repo issue tracker with the current GitHub issue set and mark theme store as local pending
+- `working tree` - Add reader theme variations to the options panel with local persistence

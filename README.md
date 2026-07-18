@@ -47,6 +47,7 @@ data/
 docs/
   ARCHITECTURE.md
   DATA_MODEL.md
+  ISSUE_TRACKER.md
   MVP_BACKLOG.md
   PROCESSING_CONTRACT.md
 scripts/
