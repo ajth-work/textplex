@@ -73,6 +73,22 @@ test("imported records become live book records and resolve by query params", ()
   assert.equal(api.getSelectedBookId(), "little-prince");
 });
 
+test("refreshed books are visible after an archived record is rehydrated", () => {
+  const { window } = loadPreviewData();
+  const api = window.TextPlexPreview;
+  const record = api.createImportedRecord("article", {
+    id: "rehydrated-book",
+    title: "Rehydrated Book",
+    author: "Local import",
+  });
+
+  api.archiveBook(record.id);
+  assert.equal(api.getBook(record.id), null);
+
+  api.upsertBook(record);
+  assert.equal(api.getBook(record.id)?.title, "Rehydrated Book");
+});
+
 test("reading progress persists per book and feeds session summaries", () => {
   const { window } = loadPreviewData();
   const api = window.TextPlexPreview;
@@ -155,6 +171,18 @@ test("preview data hydrates live books from the processor API", async () => {
         top_lexical_entries: [
           { lemma: "这是", display_form: "这是", frequency_in_book: 1, first_page: 1, last_page: 1 },
         ],
+      });
+    }
+
+    if (href.endsWith("/books/api-book")) {
+      return responseJson({
+        id: "api-book",
+        title: "Live Chinese Sample",
+        author: "Local import",
+        language_code: "zh",
+        total_pages: 3,
+        extracted_page_count: 3,
+        status: "extracted",
       });
     }
 
@@ -292,6 +320,7 @@ test("preview data hydrates live books from the processor API", async () => {
   const record = api.getBook("api-book");
   assert.ok(record, "live book should be hydrated into the preview store");
 
+  await api.hydrateBook("api-book");
   const readerProfile = api.getReaderProfile("api-book");
   assert.equal(readerProfile.id, "api-book");
   assert.equal(readerProfile.sentences.length, 3, "live reader preview should expose the fetched pages");

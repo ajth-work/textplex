@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-07-19
+
+- Added GitHub Actions CI for Python tests/Ruff, static site tests, web builds, and non-interactive lint; Pages artifact creation now runs the static site suite first. Added the pinned Next.js ESLint configuration required by the lint job and made private local upload fixtures skip cleanly on hosted runners.
+- Added audit guardrails to AGENTS.md for verification gates, test isolation, dependency bootstrapping, API security boundaries, configuration coverage, and issue-tracker discipline.
+- Completed audit issues #33-#40: fixed extraction/token regressions, isolated backend tests, hardened import/upload boundaries, honored configurable storage roots, restored preview route reachability, and added CI-safe web validation.
+- Added `docs/AUDIT.md` as the reusable audit record and procedure, including parameters, limitations from the 2026-07-19 audit, evidence requirements, cadence, and rules for improving future audits.
+- Filed audit follow-up issues #36-#40 for API boundaries, upload limits, configurable storage, backend test bootstrap, and CI/deployment validation; added verification notes to #33 and #35 and mirrored the tracker state locally.
+- Replaced reader loading fallbacks with skeleton states, delayed preview rendering until live hydration completes, and removed fabricated reader sentences for books awaiting extraction.
+- Added matching skeleton treatment to live web surface loading states and updated reader fallback coverage.
+- Added skeleton hydration and processing states to analysis previews, and preserved the selected article ID when opening analysis from the home page.
+- Bound Add Content controls before slow live-book hydration completes so paste, upload, URL, vocabulary, and OCR actions remain usable immediately.
+- Persisted inferred local API URLs and ensured refreshed API books are removed from archived filters so completed uploads reappear in the library.
+- Split live hydration into fast metadata loading and reader-specific page hydration so reader and analysis skeletons resolve instead of waiting on the entire library.
+- Added a library-detail skeleton gate so seeded book details do not flash before the clicked book record loads.
+- Removed literal Spring Dawn content from reader, analysis, and library-detail shells; record routes now require an explicit book ID and show a missing/loading state instead of silently selecting seeded data.
+- Updated the reader-options regression test to inspect the legacy reader where its archive menu now lives instead of the redirect entry point.
+
 All notable changes to TextPlex are recorded here.
 
 ## Full Commit History
@@ -94,8 +111,25 @@ All notable changes to TextPlex are recorded here.
 
 ### 2026-07-18
 
+- Replaced the matrix reader theme with a ceramic / porcelain glaze theme and softer white-shine text treatment in both reader surfaces.
+- Added a jade theme pack with gold text treatment and a subtle shine layer to both reader surfaces.
 - Added a reader text-size scaler row above the theme tiles in both the app reader and static preview, with local persistence and live scaling of the reading text.
 - Suppressed the character-mode "try character mode" fallback copy once a character lookup resolves successfully.
+- Tightened the agent guidance so changelog updates also prompt a brief matching note in the related issue, kanban item, or PR.
+- Moved the original static Pages shell into `/legacy` and made the preview-style home the default entry point.
+- Moved the legacy link off the home preview and into the profile preview as a single-word shortcut.
+- Split reader font controls into a dedicated font section with font style buttons and a true size slider, and made token text inherit the selected size.
+- Hid the reader's "try character mode" prompt whenever the word-mode definition card already has content.
+- Fixed the legacy home and test panel preview links so they point back to the current root preview pages after moving the shell under `/legacy`.
+- Hid the reader's word-mode fallback prompt when the definition card already has loaded content.
+- Made the static reader preview hide the fallback prompt based on the rendered definition text, not just the lookup placeholder.
+
+### 2026-07-19
+
+- Added a crimson and gold reader theme inspired by the Chinese flag, with warm gold sheen on the selected text and controls.
+- Tightened crimson theme contrast so the reader title, timer chips, and page/session pills stay readable against the red shell.
+- Made token highlights follow each theme accent and aligned the reader card and definition card to the same surface color.
+- Simplified the reader definition card by moving the pronunciation row into the header and turning the star into the save-to-vocabulary control.
 
 ### 2026-07-12
 

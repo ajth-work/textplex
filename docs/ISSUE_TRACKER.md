@@ -2,15 +2,12 @@
 
 This file mirrors the current GitHub issue board state that is visible from this workspace. Keep it updated when a board item changes. If GitHub write access is unavailable, mark the item here as `Local pending` until the remote board can be updated.
 
-Last updated: 2026-07-17
+Last updated: 2026-07-19
 
 ## In Progress
 
 | Item | Issue | Notes |
 | --- | --- | --- |
-| Fix reader endpoint regressions in archive, import, and lexicon parsing | #33 | Current API regression work around extraction, import counts, and lexicon-backed parsing. |
-| Restore site reachability contract for the homepage preview | #34 | Keep the homepage preview string visible in the site check. |
-| Fix sentence tokenization for Latin text to drop terminal punctuation | #35 | Processor rule fix for Latin token boundaries. |
 | Add reader detail analytics surface | #31 | Reader analytics page work from `docs/READER_DETAIL_ANALYTICS.md`. |
 | Add Wikipedia article of the day as reader content | #29 | Source/content ingestion work for article-based reading. |
 
@@ -39,6 +36,14 @@ Last updated: 2026-07-17
 
 | Item | Issue | Notes |
 | --- | --- | --- |
+| Fix reader endpoint regressions in archive, import, and lexicon parsing | #33 | Fixed pasted-text extraction counts, isolated mutable API fixtures, and verified lexicon-backed parsing with declared dependencies installed. |
+| Restore site reachability contract for the homepage preview | #34 | Added the homepage contract text, clean preview route mappings, and live route checks. |
+| Fix sentence tokenization for Latin text to drop terminal punctuation | #35 | Latin token output now excludes punctuation-only matches while preserving sentence text. |
+| Harden API access and filesystem import boundaries | #36 | Removed permissive default CORS patterns, added explicit method/header limits, and restricted path imports to configured roots. |
+| Bound PDF uploads and clean failed imports | #37 | Streamed uploads, enforced byte/page limits, and removed failed temporary upload directories. |
+| Honor configurable book and user data directories | #38 | BOOK_DATA_DIR and USER_DATA_DIR now drive production storage while temporary test roots remain isolated. |
+| Make backend test isolation and dependency bootstrap reliable | #39 | Function-scoped fixtures, app-state restoration, declared processor dependencies, and CI installation now produce a clean suite. |
+| Make web linting and Pages deployment checks CI-safe | #40 | Added committed ESLint config/dependencies and CI checks for site tests, preview reachability, build, and lint. |
 | Wire navigation shell to live product state | #17 | Shell and nav preserve context across routes. |
 | Replace mock data with live API state | #16 | Preview surfaces now use live API responses. |
 | Add backend endpoints for product surfaces | #15 | Analysis, search, study, progress, activity, import, and settings endpoints. |

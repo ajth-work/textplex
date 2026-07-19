@@ -322,17 +322,106 @@
         font-weight: 700;
       }
 
+      .library-detail-loading-skeleton {
+        display: grid;
+        gap: 14px;
+      }
+
+      .library-detail-loading-card,
+      .library-detail-skeleton-line,
+      .library-detail-skeleton-block {
+        display: block;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(31, 36, 48, 0.08) 25%, rgba(31, 36, 48, 0.16) 50%, rgba(31, 36, 48, 0.08) 75%);
+        background-size: 200% 100%;
+        animation: library-detail-skeleton-shimmer 1.4s ease-in-out infinite;
+      }
+
+      .library-detail-loading-card {
+        min-height: 118px;
+        padding: 18px;
+        border-radius: 24px;
+        background-color: rgba(255, 255, 255, 0.78);
+        box-shadow: var(--shadow-soft);
+      }
+
+      .library-detail-loading-hero {
+        display: grid;
+        grid-template-columns: 116px minmax(0, 1fr);
+        gap: 16px;
+        align-items: center;
+        min-height: 148px;
+      }
+
+      .library-detail-skeleton-block {
+        min-height: 116px;
+        border-radius: 20px;
+      }
+
+      .library-detail-skeleton-line {
+        height: 14px;
+        margin: 10px 0;
+      }
+
+      .library-detail-skeleton-line.title { width: 82%; height: 25px; }
+      .library-detail-skeleton-line.medium { width: 72%; }
+      .library-detail-skeleton-line.short { width: 52%; }
+
+      .app:not([data-library-detail-hydrated="true"]) > *:not(#libraryDetailLoadingSkeleton) {
+        display: none;
+      }
+
+      .app[data-library-detail-hydrated="true"] > #libraryDetailLoadingSkeleton {
+        display: none;
+      }
+
+      @keyframes library-detail-skeleton-shimmer {
+        from { background-position: 100% 0; }
+        to { background-position: -100% 0; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .library-detail-skeleton-line,
+        .library-detail-skeleton-block {
+          animation: none;
+        }
+      }
+
       @media (max-width: 390px) {
         .app { padding-inline: 12px; }
         .art-row { grid-template-columns: 116px minmax(0, 1fr); }
         .art { width: 116px; height: 116px; }
         .stats-grid { gap: 8px; }
         .button-row { grid-template-columns: 1fr; }
+
+        .library-detail-loading-hero {
+          grid-template-columns: 96px minmax(0, 1fr);
+        }
       }
     </style>
   </head>
   <body>
     <main class="app">
+      <section id="libraryDetailLoadingSkeleton" class="library-detail-loading-skeleton" aria-label="Loading book details" role="status">
+        <div class="library-detail-loading-card library-detail-loading-hero">
+          <span class="library-detail-skeleton-block"></span>
+          <div>
+            <span class="library-detail-skeleton-line title"></span>
+            <span class="library-detail-skeleton-line short"></span>
+            <span class="library-detail-skeleton-line medium"></span>
+          </div>
+        </div>
+        <div class="library-detail-loading-card">
+          <span class="library-detail-skeleton-line medium"></span>
+          <span class="library-detail-skeleton-line"></span>
+          <span class="library-detail-skeleton-line short"></span>
+        </div>
+        <div class="library-detail-loading-card">
+          <span class="library-detail-skeleton-line title"></span>
+          <span class="library-detail-skeleton-line"></span>
+        </div>
+      </section>
+
       <header class="topbar">
         <button class="icon-btn" type="button" aria-label="Back">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -358,11 +447,11 @@
       <section class="art-row">
         <div class="art" aria-hidden="true"></div>
         <div class="meta">
-          <h1>春晓</h1>
-          <p class="author">孟浩然</p>
+          <h1></h1>
+          <p class="author"></p>
           <div class="tag-row">
-            <span>Chinese • Poetry</span>
-            <span class="tag">HSK 4</span>
+            <span></span>
+            <span class="tag"></span>
           </div>
         </div>
       </section>
@@ -370,53 +459,45 @@
       <article class="card">
         <h2 class="section-title">Reading Progress</h2>
         <div class="progress-top">
-          <span>72% · 3 min left</span>
+          <span></span>
           <span></span>
         </div>
         <div class="progress-bar"><div class="progress-fill"></div></div>
       </article>
 
-      <section class="card">
+            <section class="card">
         <div class="stats-grid">
           <div class="stat">
-            <strong>232</strong>
+            <strong></strong>
             <span>Characters</span>
           </div>
           <div class="stat">
-            <strong>4</strong>
+            <strong></strong>
             <span>Lines</span>
           </div>
           <div class="stat">
-            <strong>1m 45s</strong>
+            <strong></strong>
             <span>Est. Read</span>
           </div>
           <div class="stat">
-            <strong>May 10</strong>
+            <strong></strong>
             <span>Added</span>
           </div>
         </div>
       </section>
 
       <section class="card">
-        <h2 class="section-title">Analysis Summary</h2>
-        <p class="summary">
-          A quiet dawn scene that uses nature images to express the poet's gentle realization of spring.
-        </p>
-        <a class="summary-link" href="./analysis-preview.html">View Full Analysis</a>
-      </section>
-
-      <section class="card">
         <div class="profile-head">
           <h2 class="section-title" style="margin-bottom: 0;">Vocabulary Profile</h2>
-          <span class="sub">HSK 3-4</span>
+          <span class="sub"></span>
         </div>
         <div class="profile-bar" aria-hidden="true">
           <span></span><span></span><span></span>
         </div>
         <div class="profile-labels">
-          <div>Known<br /><strong style="font-size: 16px; color: var(--text);">68%</strong></div>
-          <div>Review<br /><strong style="font-size: 16px; color: var(--text);">22%</strong></div>
-          <div>New<br /><strong style="font-size: 16px; color: var(--text);">10%</strong></div>
+          <div>Known<br /><strong style="font-size: 16px; color: var(--text);"></strong></div>
+          <div>Review<br /><strong style="font-size: 16px; color: var(--text);"></strong></div>
+          <div>New<br /><strong style="font-size: 16px; color: var(--text);"></strong></div>
         </div>
       </section>
 
@@ -434,17 +515,17 @@
       <section class="card reading-list">
         <div class="reading-item">
           <div>
-            <strong>May 11, 2025</strong><br />
-            <span>Reading session</span>
+            <strong></strong><br />
+            <span></span>
           </div>
-          <span>72% · 3 min</span>
+          <span></span>
         </div>
         <div class="reading-item">
           <div>
-            <strong>May 9, 2025</strong><br />
-            <span>Vocabulary review</span>
+            <strong></strong><br />
+            <span></span>
           </div>
-          <span>14 items</span>
+          <span></span>
         </div>
       </section>
     </main>

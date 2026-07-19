@@ -13,6 +13,7 @@ import {
   type BookReaderPageResponse,
   type BookRecord,
 } from "../lib/textplex";
+import { LoadingSkeleton } from "./loading-skeleton";
 
 export function BookDetailView({ bookId }: { bookId: string }) {
   const [book, setBook] = useState<BookRecord | null>(null);
@@ -110,19 +111,19 @@ export function BookDetailView({ bookId }: { bookId: string }) {
       <header className="page-hero">
         <div>
           <span className="eyebrow">Book detail</span>
-          <h1>{book?.title ?? "Loading book..."}</h1>
+            <h1>{book?.title ?? (loading ? <span className="skeleton-line skeleton-line-title" aria-hidden="true" /> : "Book unavailable")}</h1>
           <p className="lede">
             This screen keeps the source scan, the prepared page set, and the extracted reader data in one place before you enter the page view.
           </p>
           {isDemoMode ? <p className="small-copy">Demo mode is active. This is the packaged GitHub Pages reader sample.</p> : null}
         </div>
         <div className="hero-meta card">
-          <strong>{book?.total_pages ?? 0}</strong>
+          <strong>{loading ? <span className="skeleton-line skeleton-line-short" aria-hidden="true" /> : book?.total_pages ?? 0}</strong>
           <span>Total pages in the source PDF</span>
         </div>
       </header>
 
-      {loading ? <div className="card">Loading book details...</div> : null}
+      {loading ? <LoadingSkeleton label="Loading book details" /> : null}
       {error ? <div className="card error-card">{error}</div> : null}
       {extractError ? <div className="card error-card">{extractError}</div> : null}
 

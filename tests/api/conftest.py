@@ -11,17 +11,25 @@ SAMPLE_PAGE_START = 1
 SAMPLE_PAGE_COUNT = 4
 
 
-@pytest.fixture(scope="module")
-def imported_real_scan(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, BookRecord]:
+@pytest.fixture(autouse=True)
+def restore_app_data_root():
+    from app.main import app
+
+    original_data_root = app.state.data_root
+    yield
+    app.state.data_root = original_data_root
+
+
+@pytest.fixture
+def imported_real_scan(tmp_path: Path) -> tuple[Path, BookRecord]:
     if not SOURCE_FIXTURE.exists():
         pytest.skip(f"Missing source fixture: {SOURCE_FIXTURE}")
 
-    data_root = tmp_path_factory.mktemp("textplex-books")
     record = import_book_from_path(
         SOURCE_FIXTURE,
         language_code="en",
         page_start=SAMPLE_PAGE_START,
         page_count=SAMPLE_PAGE_COUNT,
-        data_root=data_root / "books",
+        data_root=tmp_path / "books",
     )
-    return data_root, record
+    return tmp_path, record

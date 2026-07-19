@@ -21,10 +21,11 @@ import {
   type SentenceReadRecord,
   type TokenResult,
 } from "../lib/textplex";
+import { LoadingSkeleton, ReaderLoadingSkeleton } from "./loading-skeleton";
 
 type ReaderTokenMode = "word" | "character";
 type ReaderFontMode = "mixed" | "serif" | "sans";
-type ReaderThemeMode = "neutral" | "sepia" | "ink" | "black";
+type ReaderThemeMode = "neutral" | "sepia" | "ink" | "black" | "jade" | "ceramic" | "crimson";
 type ReaderTextSizeMode = "small" | "medium" | "large";
 
 const readerFontStorageKey = "textplex.readerFont";
@@ -40,11 +41,16 @@ const readerTextSizeLabels: Record<ReaderTextSizeMode, string> = {
   medium: "Medium",
   large: "Large",
 };
+const readerFontOptions: ReaderFontMode[] = ["mixed", "serif", "sans"];
+const readerTextSizeOptions: ReaderTextSizeMode[] = ["small", "medium", "large"];
 const readerThemeLabels: Record<ReaderThemeMode, string> = {
   neutral: "Neutral",
   sepia: "Warm Sepia",
   ink: "Dark Ink",
   black: "Pitch Black",
+  jade: "Jade Gold",
+  ceramic: "Ceramic",
+  crimson: "Crimson Gold",
 };
 const readerTextSizeScales: Record<ReaderTextSizeMode, number> = {
   small: 0.92,
@@ -57,7 +63,18 @@ function resolveReaderFont(value: string | null | undefined): ReaderFontMode {
 }
 
 function resolveReaderTheme(value: string | null | undefined): ReaderThemeMode {
-  return value === "sepia" || value === "ink" || value === "black" || value === "neutral" ? value : "neutral";
+  return value === "sepia" ||
+    value === "ink" ||
+    value === "black" ||
+    value === "jade" ||
+    value === "ceramic" ||
+    value === "crimson" ||
+    value === "matrix" ||
+    value === "neutral"
+    ? value === "matrix"
+      ? "ceramic"
+      : value
+    : "neutral";
 }
 
 function resolveReaderTextSize(value: string | null | undefined): ReaderTextSizeMode {
@@ -267,9 +284,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [error, setError] = useState<string | null>(null);
   const [activeSeconds, setActiveSeconds] = useState(0);
   const [profileSummary, setProfileSummary] = useState<LearningProfileSummary | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
   const [lexiconResult, setLexiconResult] = useState<LexiconLookupResponse | null>(null);
   const [lexiconLoading, setLexiconLoading] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -293,6 +312,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setError(null);
+    setSummary(null);
+    setSummaryLoading(true);
+    setProfileSummary(null);
+    setProfileLoading(true);
 
     async function loadPage() {
       try {
@@ -313,6 +337,10 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
           if (active) {
             setSummary(null);
           }
+        } finally {
+          if (active) {
+            setSummaryLoading(false);
+          }
         }
         try {
           const profileResult = await fetchJson<LearningProfileSummary>("/learning/profile");
@@ -322,6 +350,10 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
         } catch {
           if (active) {
             setProfileSummary(null);
+          }
+        } finally {
+          if (active) {
+            setProfileLoading(false);
           }
         }
       } catch (err) {
@@ -466,7 +498,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const lexiconEntry = lexiconResult?.entries[0] ?? null;
   const tokenLookupMissing = Boolean(selectedToken && !lexiconLoading && !lexiconEntry && !isSentencePunctuation(selectedToken.surface_form));
   const imageUrl = pageData ? resolveResourceUrl(pageData.image_url) : "";
-  const totalPages = pageData?.book.total_pages ?? summary?.page_end ?? pageNumber;
+  const totalPages = pageData?.book.total_pages ?? summary?.page_end ?? null;
   const pageTranslation = page?.page_translation?.trim() || null;
   const selectedSentence = useMemo(
     () => (page ? page.sentences.find((sentence) => sentence.order === selectedSentenceOrder) ?? null : null),
@@ -546,7 +578,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const tokenHskLabel = formatLevelTag(tokenHsk);
   const tokenRadical = lexiconEntry?.radical ?? null;
   const tokenStrokeCount = lexiconEntry?.stroke_count ?? null;
-  const showReaderFallback = tokenLookupMissing && readerTokenMode !== "character";
+  const showReaderFallback = tokenLookupMissing && readerTokenMode !== "character" && tokenDefinition.trim().length === 0;
   const needsExtraction = (pageData?.book.extracted_page_count ?? 0) <= 0;
   const extractionSource = pageData?.extraction?.text_source ?? null;
   const extractionSourceLabel = extractionSource ? extractionSource.toUpperCase() : "UNAVAILABLE";
@@ -607,6 +639,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     });
   }
 
+  function handleSetReaderFont(nextMode: ReaderFontMode) {
+    setReaderFont(nextMode);
+    window.localStorage.setItem(readerFontStorageKey, nextMode);
+  }
+
   function handleSetReaderTheme(nextTheme: ReaderThemeMode) {
     setReaderTheme(nextTheme);
     window.localStorage.setItem(readerThemeStorageKey, nextTheme);
@@ -642,9 +679,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
         <div className="reader-topbar-main">
           <div>
             <span className="eyebrow">Reader</span>
-            <h1>{pageData?.book.title ?? "Loading page..."}</h1>
+            <h1>{pageData?.book.title ?? (loading ? <span className="skeleton-line skeleton-line-title" aria-hidden="true" /> : "Reader unavailable")}</h1>
             <p className="muted">
-              Page {pageNumber} of {totalPages}
+              {loading ? <span className="skeleton-line skeleton-line-short" aria-hidden="true" /> : `Page ${pageNumber}${totalPages ? ` of ${totalPages}` : ""}`}
             </p>
             {isDemoMode ? <p className="small-copy">Demo mode is active. This reader is running from packaged sample data.</p> : null}
           </div>
@@ -655,7 +692,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             </div>
             <div className="timer-chip">
               <span className="muted">Source</span>
-              <strong>{extractionSourceLabel}</strong>
+                <strong>{loading ? <span className="skeleton-line skeleton-line-short" aria-hidden="true" /> : extractionSourceLabel}</strong>
             </div>
             <button
               type="button"
@@ -711,69 +748,118 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             <div className="card-topline">
               <div>
                 <span className="eyebrow">Reader options</span>
-                <h2>Themes</h2>
+                <h2>Fonts and themes</h2>
               </div>
               <button type="button" className="ghost-link" onClick={() => setShowReaderOptions(false)}>
                 Close
               </button>
             </div>
-            <div className="reader-scale-row" role="group" aria-label="Reader text size">
-              {([
-                "small" as ReaderTextSizeMode,
-                "medium" as ReaderTextSizeMode,
-                "large" as ReaderTextSizeMode,
-              ]).map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  className={`reader-scale-option ${readerTextSize === size ? "is-selected" : ""}`}
-                  onClick={() => handleSetReaderTextSize(size)}
-                  aria-pressed={readerTextSize === size}
-                >
-                  <span className="reader-scale-option-body">
-                    <strong>{readerTextSizeLabels[size]}</strong>
-                  </span>
-                </button>
-              ))}
-            </div>
-          <div className="reader-theme-grid" role="list" aria-label="Reader theme variations">
-            {([
-              {
-                value: "neutral" as ReaderThemeMode,
-                title: "Neutral",
-              },
-              {
-                value: "sepia" as ReaderThemeMode,
-                title: "Sepia",
-              },
-              {
-                value: "ink" as ReaderThemeMode,
-                title: "Ink",
-              },
-              {
-                value: "black" as ReaderThemeMode,
-                title: "Black",
-              },
-            ]).map((theme) => (
-                <button
-                key={theme.value}
-                type="button"
-                className={`reader-theme-option ${readerTheme === theme.value ? "is-selected" : ""}`}
-                onClick={() => handleSetReaderTheme(theme.value)}
-                aria-pressed={readerTheme === theme.value}
-              >
-                <span className="reader-theme-option-swatch" data-theme={theme.value} aria-hidden="true" />
-                <span className="reader-theme-option-body">
-                  <strong>{theme.title}</strong>
+            <section className="reader-options-section">
+              <div className="reader-options-section-head">
+                <div>
+                  <span className="eyebrow">Font</span>
+                  <h3>Style and size</h3>
+                </div>
+              </div>
+              <div className="reader-font-row" role="group" aria-label="Reader font style">
+                {readerFontOptions.map((fontMode) => (
+                  <button
+                    key={fontMode}
+                    type="button"
+                    className={`reader-font-option ${readerFont === fontMode ? "is-selected" : ""}`}
+                    onClick={() => handleSetReaderFont(fontMode)}
+                    aria-pressed={readerFont === fontMode}
+                  >
+                    <span className="reader-font-option-body">
+                      <strong>{readerFontLabels[fontMode]}</strong>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <label className="reader-size-slider" htmlFor="reader-text-size-slider">
+                <span className="reader-size-slider-head">
+                  <strong>Text size</strong>
+                  <span>{readerTextSizeLabels[readerTextSize]}</span>
                 </span>
-              </button>
-            ))}
-          </div>
+                <input
+                  id="reader-text-size-slider"
+                  type="range"
+                  min={0}
+                  max={readerTextSizeOptions.length - 1}
+                  step={1}
+                  value={readerTextSizeOptions.indexOf(readerTextSize)}
+                  onChange={(event) => {
+                    const nextIndex = Number(event.target.value);
+                    handleSetReaderTextSize(readerTextSizeOptions[nextIndex] ?? "medium");
+                  }}
+                  aria-label="Reader text size"
+                />
+                <span className="reader-size-slider-scale" aria-hidden="true">
+                  <span>Small</span>
+                  <span>Medium</span>
+                  <span>Large</span>
+                </span>
+              </label>
+            </section>
+            <section className="reader-options-section">
+              <div className="reader-options-section-head">
+                <div>
+                  <span className="eyebrow">Themes</span>
+                  <h3>Reading themes</h3>
+                </div>
+                <span className="pill">{readerThemeLabels[readerTheme]}</span>
+              </div>
+              <div className="reader-theme-grid" role="list" aria-label="Reader theme variations">
+                {([
+                  {
+                    value: "neutral" as ReaderThemeMode,
+                    title: "Neutral",
+                  },
+                  {
+                    value: "sepia" as ReaderThemeMode,
+                    title: "Sepia",
+                  },
+                  {
+                    value: "ink" as ReaderThemeMode,
+                    title: "Ink",
+                  },
+                  {
+                    value: "black" as ReaderThemeMode,
+                    title: "Black",
+                  },
+                  {
+                    value: "jade" as ReaderThemeMode,
+                    title: "Jade",
+                  },
+                  {
+                    value: "ceramic" as ReaderThemeMode,
+                    title: "Ceramic",
+                  },
+                  {
+                    value: "crimson" as ReaderThemeMode,
+                    title: "Crimson Gold",
+                  },
+                ]).map((theme) => (
+                  <button
+                    key={theme.value}
+                    type="button"
+                    className={`reader-theme-option ${readerTheme === theme.value ? "is-selected" : ""}`}
+                    onClick={() => handleSetReaderTheme(theme.value)}
+                    aria-pressed={readerTheme === theme.value}
+                  >
+                    <span className="reader-theme-option-swatch" data-theme={theme.value} aria-hidden="true" />
+                    <span className="reader-theme-option-body">
+                      <strong>{theme.title}</strong>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
           </section>
         </>
       ) : null}
 
-      {loading ? <div className="card">Loading reader page...</div> : null}
+      {loading ? <ReaderLoadingSkeleton /> : null}
       {error ? <div className="card error-card">{error}</div> : null}
       {extractError ? <div className="card error-card">{extractError}</div> : null}
 
@@ -851,7 +937,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     Clear
                   </button>
                 </div>
-                <p className="definition-copy">{tokenDefinition}</p>
+                {lexiconLoading ? (
+                  <LoadingSkeleton label="Loading dictionary entry" className="definition-loading" />
+                ) : (
+                  <p className="definition-copy">{tokenDefinition}</p>
+                )}
                 {showReaderFallback ? (
                   <div className="definition-fallback">
                     <p className="small-copy">Not in the dictionary yet? Try character mode for smaller pieces.</p>
@@ -957,7 +1047,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
               <p className="small-copy">
                 Source: <strong>{extractionSourceLabel}</strong>
               </p>
-              {summary ? (
+              {summaryLoading ? (
+                <LoadingSkeleton label="Loading book frequency" />
+              ) : summary ? (
                 <ul className="frequency-list">
                   {summary.lexical_entries.slice(0, 10).map((entry) => (
                     <li key={entry.lemma}>
@@ -967,7 +1059,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   ))}
                 </ul>
               ) : (
-                <p className="small-copy">Book frequency data is unavailable until extraction finishes.</p>
+                <p className="small-copy">Book frequency data is not available for this extraction.</p>
               )}
             </section>
 
@@ -985,15 +1077,15 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
               <div className="profile-metrics">
                 <div>
                   <span className="eyebrow">Sentences</span>
-                  <strong>{profileSummary?.sentence_reads ?? 0}</strong>
+                    <strong>{profileLoading ? <span className="skeleton-line skeleton-line-short" aria-hidden="true" /> : profileSummary?.sentence_reads ?? 0}</strong>
                 </div>
                 <div>
                   <span className="eyebrow">Words</span>
-                  <strong>{profileSummary?.unique_words_seen ?? 0}</strong>
+                    <strong>{profileLoading ? <span className="skeleton-line skeleton-line-short" aria-hidden="true" /> : profileSummary?.unique_words_seen ?? 0}</strong>
                 </div>
                 <div>
                   <span className="eyebrow">Chars</span>
-                  <strong>{profileSummary?.unique_characters_seen ?? 0}</strong>
+                    <strong>{profileLoading ? <span className="skeleton-line skeleton-line-short" aria-hidden="true" /> : profileSummary?.unique_characters_seen ?? 0}</strong>
                 </div>
               </div>
               <div className="profile-metrics profile-metrics-secondary">
@@ -1023,7 +1115,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     Previous
                   </Link>
                 ) : null}
-                {pageNumber < totalPages ? (
+                {totalPages !== null && pageNumber < totalPages ? (
                   <Link className="button button-secondary" href={`/reader/${bookId}/${pageNumber + 1}`}>
                     Next
                   </Link>

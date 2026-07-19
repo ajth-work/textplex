@@ -2,6 +2,9 @@
   "name": "textplex",
   "private": true,
   "workspaces": ["apps/web"],
+  "devDependencies": {
+    "typescript": "5.4.5"
+  },
   "scripts": {
     "dev:web": "npm --workspace apps/web run dev",
     "build:web": "npm --workspace apps/web run build",

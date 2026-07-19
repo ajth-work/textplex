@@ -357,6 +357,7 @@ def import_text_into_book(
     book.extraction_status = "complete"
     book.extraction_total_pages = extracted_page_count
     book.extraction_pages_processed = extracted_page_count
+    book.extracted_page_count = extracted_page_count
     book.extraction_current_page = book.total_pages if extracted_page_count else None
     book.extraction_started_at = book.extraction_started_at or _utc_now()
     book.extraction_updated_at = _utc_now()

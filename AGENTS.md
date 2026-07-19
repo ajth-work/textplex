@@ -82,11 +82,55 @@ Do not commit `.env`, `.env.*` except `.env.example`, `.venv/`, `node_modules/`,
 
 Treat source books, scans, OCR text, and learner history as sensitive local content. Keep secrets server-side only, and do not place API keys or provider credentials in browser code or committed fixtures.
 
+## Audit Guardrails
+
+The reusable audit procedure and current audit record are in [`docs/AUDIT.md`](docs/AUDIT.md). Use it as the source of truth for audit parameters, evidence, limitations, cadence, and result reporting.
+
+### Verification before handoff
+
+- Do not report backend work as complete while the API or processor suite has failures.
+- Run `apps/api/.venv/Scripts/python.exe -m pytest -q` on Windows after API or processor changes, plus focused tests while iterating.
+- Run `npm run test:site`, `npm run build:web`, and `git diff --check` for site or web changes.
+- `npm run lint:web` must be non-interactive. If it prompts for ESLint setup, fix the configuration before handoff.
+- Run the relevant site tests and web checks before considering GitHub Pages deployment work complete.
+- Record the branch, commit, runtime versions, and dirty-worktree state before auditing; preserve and classify existing changes.
+- Use declared dependency installation in a disposable environment for clean audits. Treat stale virtualenv passes or skipped required fixtures as insufficient evidence.
+- Run live checks on audit-owned ports and processes. Do not infer route reachability from a static file fetch or reuse an unknown service already bound to the port.
+- Record warnings and known limitations separately from passes. A local workflow review is not a substitute for a successful CI run.
+
+### Python test isolation and dependencies
+
+- Prefer function-scoped fixtures for mutable API state.
+- Do not share `app.state.data_root`, registries, SQLite files, or other persistent state across tests unless the fixture restores it.
+- After dependency changes, verify the project from a fresh virtual environment.
+- Keep runtime dependencies in `pyproject.toml`; do not rely on Dockerfiles alone to install them.
+
+### API security boundaries
+
+- Decide whether every new endpoint is local-only, authenticated, or intentionally public before implementation.
+- Never accept arbitrary server filesystem paths from network clients without approved-root validation.
+- Keep production CORS allowlists explicit. Do not use `null` or broad private-network regexes by default.
+- Add upload size, page-count, and resource limits, and clean temporary upload data after failed imports.
+- Treat delete, archive, settings, profile, and learning-event endpoints as protected mutations when network-reachable.
+
+### Configuration and storage
+
+- Every documented environment variable must be read by application code and covered by a configuration test.
+- Storage paths must honor `BOOK_DATA_DIR` and `USER_DATA_DIR` rather than silently falling back to repository paths.
+- Do not add configuration only to Docker Compose or `.env.example`.
+- When an audit identifies a new recurring failure mode, add a regression test and update `docs/AUDIT.md`; add a guardrail here only when it applies broadly to future agent sessions.
+
+### Issue and tracker discipline
+
+- Do not close or mark an implementation issue complete while required tests are red.
+- Check for an existing issue before creating a duplicate regression or audit issue.
+- Keep `docs/ISSUE_TRACKER.md`, GitHub issues, and `CHANGELOG.md` synchronized when work changes repository or tracker state.
+
 ## Commit & Pull Request Guidelines
 
 Use short imperative commit messages, such as `Add reader shell scaffold` or `Define page-processing contract`. Keep commits scoped to one coherent change. When relevant, mention whether you verified the web app, API, processor tests, or data-contract assumptions.
 
-When a request changes code, docs, tests, local data, or GitHub-tracked work, add a brief `CHANGELOG.md` note that captures the general change and date. Keep it high-level; the goal is to preserve a readable history of what changed, not to log every file touch.
+When a request changes code, docs, tests, local data, or GitHub-tracked work, add a brief `CHANGELOG.md` note that captures the general change and date, and add a short matching comment in the related issue, kanban item, or PR when one exists.
 
 If a task or issue is added to the GitHub project kanban, update the matching entry in `docs/ISSUE_TRACKER.md` in the same change. If `docs/ISSUE_TRACKER.md` is updated, make the corresponding kanban change as well. Treat the two as mirrored views and keep titles, statuses, and scope aligned.
 

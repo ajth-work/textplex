@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import shutil
 import threading
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -8,7 +9,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from app.core.paths import get_data_root
+from app.core.paths import get_data_root, get_repo_root, resolve_books_root
 from app.schemas.books import BookExtractionRequest, BookImportRequest, BookPageManifest, BookReaderPageResponse, BookRecord, PageExtractionArtifact, TextImportRequest, TextParseRequest
 from app.schemas.learning import (
     LearningProfileSummary,
@@ -41,32 +42,57 @@ cors_origins = [
     origin.strip()
     for origin in os.getenv(
         "TEXTPLEX_CORS_ORIGINS",
-        "http://127.0.0.1:8200,http://192.168.192.231:8200,null,https://ajth-work.github.io",
+        "http://127.0.0.1:8200",
     ).split(",")
     if origin.strip()
 ]
 cors_origin_regex = os.getenv("TEXTPLEX_CORS_ORIGIN_REGEX") or None
 if cors_origin_regex is None:
-    cors_origin_regex = (
-        r"^https?://(?:"
-        r"localhost|127\.0\.0\.1|::1|"
-        r"10(?:\.\d{1,3}){3}|"
-        r"192\.168\.\d{1,3}\.\d{1,3}|"
-        r"172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2}"
-        r")(?::\d+)?$"
-    )
+    cors_origin_regex = None
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_origin_regex=cors_origin_regex,
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
+
+DEFAULT_MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+
+
+def _books_root() -> Path:
+    return resolve_books_root(app.state.data_root)
+
+
+def _configured_path_roots(environment_name: str, defaults: list[Path]) -> list[Path]:
+    configured = os.getenv(environment_name, "").strip()
+    values = [Path(value).expanduser() for value in configured.split(",") if value.strip()] if configured else defaults
+    return [value.resolve() for value in values]
+
+
+def _is_within_allowed_root(candidate: Path, roots: list[Path]) -> bool:
+    resolved_candidate = candidate.resolve()
+    return any(resolved_candidate == root or root in resolved_candidate.parents for root in roots)
+
+
+def _validate_import_source(source_path: str, *, environment_name: str, defaults: list[Path]) -> Path:
+    resolved_source = Path(source_path).expanduser().resolve()
+    if not _is_within_allowed_root(resolved_source, _configured_path_roots(environment_name, defaults)):
+        raise HTTPException(status_code=403, detail="The requested source path is outside the configured import roots.")
+    return resolved_source
+
+
+def _max_upload_bytes() -> int:
+    raw_value = os.getenv("TEXTPLEX_MAX_UPLOAD_BYTES", str(DEFAULT_MAX_UPLOAD_BYTES)).strip()
+    try:
+        return max(1, int(raw_value))
+    except ValueError:
+        return DEFAULT_MAX_UPLOAD_BYTES
 
 
 def _registry_path() -> Path:
-    return app.state.data_root / "books" / "registry.json"
+    return _books_root() / "registry.json"
 
 
 def _load_book_registry() -> dict[str, BookRecord]:
@@ -92,7 +118,7 @@ def _extract_and_persist_book(book: BookRecord, *, page_start: int, page_count: 
         page_count=page_count,
         force=True,
         ocr_provider=book.ocr_provider,
-        data_root=app.state.data_root / "books",
+        data_root=_books_root(),
     )
 
     book.extraction_status = "complete"
@@ -103,7 +129,7 @@ def _extract_and_persist_book(book: BookRecord, *, page_start: int, page_count: 
     registry = _load_book_registry()
     registry[book.id] = book
     save_registry(_registry_path(), registry)
-    book_path = app.state.data_root / "books" / book.id / "book.json"
+    book_path = _books_root() / book.id / "book.json"
     book_path.write_text(book.model_dump_json(indent=2), encoding="utf-8")
     return book
 
@@ -173,7 +199,7 @@ def _start_background_extraction(book: BookRecord, *, page_start: int, page_coun
                 page_count=page_count,
                 force=True,
                 ocr_provider=book.ocr_provider,
-                data_root=app.state.data_root / "books",
+                data_root=_books_root(),
                 progress_callback=progress_callback,
             )
         except Exception:
@@ -189,7 +215,7 @@ def _persist_book(book: BookRecord) -> BookRecord:
     registry = _load_book_registry()
     registry[book.id] = book
     save_registry(_registry_path(), registry)
-    book_path = app.state.data_root / "books" / book.id / "book.json"
+    book_path = _books_root() / book.id / "book.json"
     book_path.write_text(book.model_dump_json(indent=2), encoding="utf-8")
     return book
 
@@ -217,7 +243,7 @@ def import_text(payload: TextImportRequest) -> BookRecord:
             language_code=payload.language_code,
             title=payload.title,
             author=payload.author,
-            data_root=app.state.data_root / "books",
+            data_root=_books_root(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -246,15 +272,20 @@ def list_archived_books() -> list[BookRecord]:
 @app.post("/books/import", response_model=BookRecord)
 def import_book(payload: BookImportRequest) -> BookRecord:
     try:
-        book = import_book_from_path(
+        source_path = _validate_import_source(
             payload.source_path,
+            environment_name="TEXTPLEX_IMPORT_ROOTS",
+            defaults=[get_repo_root() / "tests" / "fixtures", app.state.data_root / "uploads"],
+        )
+        book = import_book_from_path(
+            source_path,
             language_code=payload.language_code,
             ocr_provider=payload.ocr_provider,
             title=payload.title,
             author=payload.author,
             page_start=payload.page_start,
             page_count=payload.page_count,
-            data_root=app.state.data_root / "books",
+            data_root=_books_root(),
         )
         return _extract_and_persist_book(
             book,
@@ -287,9 +318,15 @@ async def upload_book(
     upload_dir.mkdir(parents=True, exist_ok=True)
     upload_path = upload_dir / filename
 
+    succeeded = False
     try:
-        contents = await file.read()
-        upload_path.write_bytes(contents)
+        total_bytes = 0
+        with upload_path.open("wb") as destination:
+            while chunk := await file.read(1024 * 1024):
+                total_bytes += len(chunk)
+                if total_bytes > _max_upload_bytes():
+                    raise HTTPException(status_code=413, detail="Uploaded PDF exceeds the configured size limit.")
+                destination.write(chunk)
         book = import_book_from_path(
             upload_path,
             language_code=language_code,
@@ -299,9 +336,10 @@ async def upload_book(
             source_filename=filename,
             page_start=page_start,
             page_count=page_count,
-            data_root=app.state.data_root / "books",
+            data_root=_books_root(),
         )
         _start_background_extraction(book, page_start=page_start, page_count=page_count)
+        succeeded = True
         return book
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -309,6 +347,8 @@ async def upload_book(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     finally:
         await file.close()
+        if not succeeded:
+            shutil.rmtree(upload_dir, ignore_errors=True)
 
 
 @app.get("/books/{book_id}", response_model=BookRecord)
@@ -322,7 +362,7 @@ def get_book(book_id: str) -> BookRecord:
 
 @app.get("/books/{book_id}/pages", response_model=BookPageManifest)
 def get_book_pages(book_id: str) -> BookPageManifest:
-    pages_path = app.state.data_root / "books" / book_id / "pages" / "manifest.json"
+    pages_path = _books_root() / book_id / "pages" / "manifest.json"
     if not pages_path.exists():
         raise HTTPException(status_code=404, detail=f"Page manifest not found for book: {book_id}")
     return BookPageManifest.model_validate_json(pages_path.read_text(encoding="utf-8"))
@@ -336,7 +376,7 @@ def get_book_page(book_id: str, page_number: int) -> BookReaderPageResponse:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Book not found: {book_id}") from exc
 
-    pages_path = app.state.data_root / "books" / book_id / "pages" / "manifest.json"
+    pages_path = _books_root() / book_id / "pages" / "manifest.json"
     if not pages_path.exists():
         raise HTTPException(status_code=404, detail=f"Page manifest not found for book: {book_id}")
 
@@ -346,7 +386,7 @@ def get_book_page(book_id: str, page_number: int) -> BookReaderPageResponse:
     except StopIteration as exc:
         raise HTTPException(status_code=404, detail=f"Page not found: {page_number}") from exc
 
-    extraction = load_page_artifact(book_id=book_id, page_number=page_number, data_root=app.state.data_root / "books")
+    extraction = load_page_artifact(book_id=book_id, page_number=page_number, data_root=_books_root())
     image_url = f"/books/{book_id}/pages/{page_number}/image"
     return BookReaderPageResponse(book=book, page=page, image_url=image_url, extraction=extraction)
 
@@ -359,7 +399,7 @@ def get_book_page_image(book_id: str, page_number: int) -> FileResponse:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Book not found: {book_id}") from exc
 
-    pages_root = Path(book.pages_path) if book.pages_path else app.state.data_root / "books" / book_id / "pages"
+    pages_root = Path(book.pages_path) if book.pages_path else _books_root() / book_id / "pages"
     image_path = pages_root / f"page-{page_number:04d}.png"
     if not image_path.exists():
         raise HTTPException(status_code=404, detail=f"Page image not found: {page_number}")
@@ -372,7 +412,7 @@ def delete_book(book_id: str) -> dict[str, str]:
     if book_id not in registry:
         raise HTTPException(status_code=404, detail=f"Book not found: {book_id}")
 
-    delete_book_from_path(book_id, app.state.data_root / "books")
+    delete_book_from_path(book_id, _books_root())
     return {"status": "deleted", "book_id": book_id}
 
 
@@ -415,7 +455,7 @@ def extract_book(book_id: str, payload: BookExtractionRequest) -> dict[str, str]
             page_count=payload.page_count,
             force=payload.force,
             ocr_provider=payload.ocr_provider or book.ocr_provider,
-            data_root=app.state.data_root / "books",
+            data_root=_books_root(),
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -429,18 +469,18 @@ def extract_book(book_id: str, payload: BookExtractionRequest) -> dict[str, str]
     registry[book_id] = book
 
     save_registry(registry_path, registry)
-    book_path = app.state.data_root / "books" / book_id / "book.json"
+    book_path = _books_root() / book_id / "book.json"
     book_path.write_text(book.model_dump_json(indent=2), encoding="utf-8")
     return {"status": "complete", "extraction_path": str(extraction_path)}
 
 
 @app.get("/books/{book_id}/extractions", response_model=BookExtractionResult)
 def get_book_extraction(book_id: str) -> BookExtractionResult:
-    extraction_path = app.state.data_root / "books" / book_id / "extractions" / "book-extraction.json"
+    extraction_path = _books_root() / book_id / "extractions" / "book-extraction.json"
     if not extraction_path.exists():
         raise HTTPException(status_code=404, detail=f"Extraction not found for book: {book_id}")
     extraction = BookExtractionResult.model_validate_json(extraction_path.read_text(encoding="utf-8"))
-    recovered = recover_book_extraction_result(extraction, data_root=app.state.data_root / "books")
+    recovered = recover_book_extraction_result(extraction, data_root=_books_root())
     if recovered is not extraction:
         extraction_path.write_text(recovered.model_dump_json(indent=2), encoding="utf-8")
         return recovered
@@ -479,8 +519,15 @@ def create_sentence_read(payload: SentenceReadCreateRequest) -> SentenceReadReco
 @app.post("/lexicon/import", response_model=LexiconImportSummary)
 def import_lexicon(payload: LexiconImportRequest) -> LexiconImportSummary:
     try:
+        source_root = None
+        if payload.source_root:
+            source_root = _validate_import_source(
+                payload.source_root,
+                environment_name="TEXTPLEX_LEXICON_ROOTS",
+                defaults=[get_repo_root() / "resources" / "lexicon"],
+            )
         return import_lexicon_from_source(
-            payload.source_root,
+            source_root,
             data_root=app.state.data_root,
             language_code=payload.language_code,
             replace_existing=payload.replace_existing,

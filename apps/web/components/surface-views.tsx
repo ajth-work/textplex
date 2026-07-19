@@ -18,6 +18,7 @@ import {
   type SettingsUpdateRequest,
   type StudySurfaceResponse,
 } from "../lib/textplex";
+import { LoadingSkeleton } from "./loading-skeleton";
 
 export function ActivitySurfaceView() {
   const [data, setData] = useState<ActivitySurfaceResponse | null>(null);
@@ -51,11 +52,12 @@ export function ActivitySurfaceView() {
         { href: "/study", label: "Study" },
       ]}
       metrics={[
-        { label: "Feed", value: data ? String(data.event_count) : "..." },
+        { label: "Feed", value: data ? String(data.event_count) : "Loading" },
         { label: "State", value: error ? "Error" : data ? "Loaded" : "Loading", detail: error ?? "Derived from learner events" },
       ]}
     >
       {error ? <section className="card feature-card">{error}</section> : null}
+      {!data && !error ? <LoadingSkeleton label="Loading activity" /> : null}
       {data ? (
         <section className="card feature-card">
           <h2>Recent events</h2>
@@ -110,12 +112,13 @@ export function AnalysisSurfaceView({ bookId }: { bookId: string }) {
         { href: data ? `/reader/${bookId}/1` : "/library", label: "Reader" },
       ]}
       metrics={[
-        { label: "Pages", value: data ? `${data.extracted_page_count}/${data.total_pages}` : "..." },
-        { label: "Lexical entries", value: data ? String(data.lexical_entry_count) : "..." },
-        { label: "Tokens", value: data ? String(data.token_occurrence_count) : "..." },
+        { label: "Pages", value: data ? `${data.extracted_page_count}/${data.total_pages}` : "Loading" },
+        { label: "Lexical entries", value: data ? String(data.lexical_entry_count) : "Loading" },
+        { label: "Tokens", value: data ? String(data.token_occurrence_count) : "Loading" },
       ]}
     >
       {error ? <section className="card feature-card">{error}</section> : null}
+      {!data && !error ? <LoadingSkeleton label="Loading analysis" /> : null}
       {data ? (
         <section className="feature-grid">
           <article className="card feature-card">
@@ -179,12 +182,13 @@ export function ImportSurfaceView() {
         { href: "/progress", label: "Progress" },
       ]}
       metrics={[
-        { label: "Inputs", value: data ? data.supported_inputs.join(", ") : "..." },
-        { label: "Uploads", value: data ? (data.can_upload_pdf ? "Enabled" : "Disabled") : "..." },
-        { label: "Paste", value: data ? (data.can_paste_text ? "Enabled" : "Disabled") : "..." },
+        { label: "Inputs", value: data ? data.supported_inputs.join(", ") : "Loading" },
+        { label: "Uploads", value: data ? (data.can_upload_pdf ? "Enabled" : "Disabled") : "Loading" },
+        { label: "Paste", value: data ? (data.can_paste_text ? "Enabled" : "Disabled") : "Loading" },
       ]}
     >
       {error ? <section className="card feature-card">{error}</section> : null}
+      {!data && !error ? <LoadingSkeleton label="Loading import details" /> : null}
       {data ? (
         <section className="card feature-card">
           <h2>Recent books</h2>
@@ -245,12 +249,13 @@ export function ProgressSurfaceView() {
         { href: "/activity", label: "Activity" },
       ]}
       metrics={[
-        { label: "Sessions", value: data ? String(data.profile.reading_sessions) : "..." },
-        { label: "Sentences", value: data ? String(data.profile.sentence_reads) : "..." },
-        { label: "Vocabulary rows", value: data ? String(data.profile.vocabulary_progress_rows) : "..." },
+        { label: "Sessions", value: data ? String(data.profile.reading_sessions) : "Loading" },
+        { label: "Sentences", value: data ? String(data.profile.sentence_reads) : "Loading" },
+        { label: "Vocabulary rows", value: data ? String(data.profile.vocabulary_progress_rows) : "Loading" },
       ]}
     >
       {error ? <section className="card feature-card">{error}</section> : null}
+      {!data && !error ? <LoadingSkeleton label="Loading progress" /> : null}
       {data ? (
         <section className="feature-grid">
           <article className="card feature-card">
@@ -331,12 +336,13 @@ export function ProfileSurfaceView() {
         { href: "/settings", label: "Settings" },
       ]}
       metrics={[
-        { label: "Sessions", value: data ? String(data.profile.reading_sessions) : "..." },
-        { label: "Page reads", value: data ? String(data.profile.page_reads) : "..." },
-        { label: "Sentence reads", value: data ? String(data.profile.sentence_reads) : "..." },
+        { label: "Sessions", value: data ? String(data.profile.reading_sessions) : "Loading" },
+        { label: "Page reads", value: data ? String(data.profile.page_reads) : "Loading" },
+        { label: "Sentence reads", value: data ? String(data.profile.sentence_reads) : "Loading" },
       ]}
     >
       {error ? <section className="card feature-card">{error}</section> : null}
+      {!data && !error ? <LoadingSkeleton label="Loading profile" /> : null}
       {data ? (
         <section className="feature-grid">
           <article className="card feature-card">
@@ -456,7 +462,7 @@ export function SearchSurfaceView() {
       ]}
       metrics={[
         { label: "Scope", value: "Books, tokens, history" },
-        { label: "Query", value: query || "..." },
+        { label: "Query", value: query || "Loading" },
         { label: "State", value: error ? "Error" : data ? "Loaded" : "Idle" },
       ]}
     >
@@ -474,6 +480,7 @@ export function SearchSurfaceView() {
         </div>
       </section>
       {error ? <section className="card feature-card">{error}</section> : null}
+      {!data && !error && query ? <LoadingSkeleton label="Searching" /> : null}
       {data ? (
         <section className="card feature-card">
           <h2>Results</h2>
@@ -563,14 +570,15 @@ export function SettingsSurfaceView() {
       ]}
       metrics={[
         { label: "Profile", value: "Local first" },
-        { label: "Theme", value: theme },
-        { label: "Reader mode", value: readerMode },
+        { label: "Theme", value: data ? theme : "Loading" },
+        { label: "Reader mode", value: data ? readerMode : "Loading" },
       ]}
     >
       {error ? <section className="card feature-card">{error}</section> : null}
+      {!data && !error ? <LoadingSkeleton label="Loading settings" /> : null}
       <section className="card feature-card">
         <h2>Preferences</h2>
-        <div className="surface-form">
+        {data ? <div className="surface-form">
           <label>
             Theme
             <select className="text-input" value={theme} onChange={(event) => setTheme(event.target.value)}>
@@ -591,7 +599,7 @@ export function SettingsSurfaceView() {
           <button className="button button-primary" type="button" onClick={() => void saveSettings()} disabled={saving}>
             {saving ? "Saving..." : "Save settings"}
           </button>
-        </div>
+        </div> : null}
         {data ? <p className="small-copy">Stored settings: {data.entries.length}</p> : null}
       </section>
     </RoutePage>
@@ -631,11 +639,12 @@ export function StudySurfaceView() {
         { href: "/activity", label: "Activity" },
       ]}
       metrics={[
-        { label: "Queue", value: data ? String(data.queue_size) : "..." },
+        { label: "Queue", value: data ? String(data.queue_size) : "Loading" },
         { label: "State", value: error ? "Error" : data ? "Loaded" : "Loading", detail: "Derived from vocabulary progress" },
       ]}
     >
       {error ? <section className="card feature-card">{error}</section> : null}
+      {!data && !error ? <LoadingSkeleton label="Loading study queue" /> : null}
       {data ? (
         <section className="card feature-card">
           <h2>Queued items</h2>

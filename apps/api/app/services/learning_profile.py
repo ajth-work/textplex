@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from app.core.paths import resolve_books_root, resolve_user_data_root
+
 from app.schemas.learning import (
     LearningProfileSummary,
     LearningTrackJourneyStep,
@@ -141,7 +143,7 @@ def _utc_now() -> str:
 
 
 def get_profile_db_path(data_root: Path) -> Path:
-    return data_root / "user" / "profile.sqlite3"
+    return resolve_user_data_root(data_root) / "profile.sqlite3"
 
 
 def _migration_root() -> Path:
@@ -409,7 +411,7 @@ def record_sentence_read(data_root: Path, payload: SentenceReadCreateRequest) ->
 
 def get_learning_profile_summary(data_root: Path) -> LearningProfileSummary:
     db_path = ensure_profile_database(data_root)
-    registry = load_registry(data_root / "registry.json")
+    registry = load_registry(resolve_books_root(data_root) / "registry.json")
     track_stats: dict[str, dict[str, object]] = {}
 
     def ensure_track(track_code: str, language_code: str | None) -> dict[str, object]:
