@@ -777,6 +777,47 @@
         text-align: center;
       }
 
+      .reader-focus-row {
+        margin-top: 8px;
+      }
+
+      .reader-focus-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        min-height: 50px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface);
+        color: var(--text);
+        text-align: left;
+        cursor: pointer;
+        box-shadow: var(--shadow-soft);
+      }
+
+      .reader-focus-toggle[aria-pressed="true"] {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow-soft);
+      }
+
+      .reader-focus-copy {
+        display: grid;
+        gap: 2px;
+      }
+
+      .reader-focus-copy strong {
+        font-size: 13px;
+        line-height: 1.15;
+      }
+
+      .reader-focus-copy small {
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.2;
+      }
+
       .reader-options-backdrop {
         position: fixed;
         inset: 0;
@@ -799,6 +840,15 @@
         margin-top: 1px;
         font-size: 20px;
         line-height: 1.1;
+      }
+
+      .reader-options-close {
+        flex: 0 0 auto;
+        width: 36px;
+        height: 36px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--text-strong);
       }
 
       .reader-options-copy {
@@ -991,10 +1041,65 @@
         .vocab-char { font-size: 36px; }
         .vocab-pinyin { font-size: 22px; }
       }
+
+      @media (max-width: 600px) {
+        [data-reader-density="compact"] { padding: 10px 12px 16px; }
+        [data-reader-density="compact"] .topbar { gap: 6px; margin-bottom: 8px; }
+        [data-reader-density="compact"] .topbar > .icon-btn,
+        [data-reader-density="compact"] .tool-row > .icon-btn { width: 34px; height: 34px; }
+        [data-reader-density="compact"] .header-stack { gap: 6px; }
+        [data-reader-density="compact"] .poem-title {
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 2;
+          overflow: hidden;
+          font-size: calc(clamp(20px, 5.4vw, 24px) * var(--reader-text-scale));
+          line-height: 1.02;
+        }
+        [data-reader-density="compact"] .poet {
+          max-width: 100%;
+          margin-top: 3px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: calc(13px * var(--reader-text-scale));
+          line-height: 1.1;
+        }
+        [data-reader-density="compact"] .tool-row { gap: 4px; }
+        [data-reader-density="compact"] .tool-row .button {
+          min-height: 38px;
+          padding: 8px 10px;
+          border-radius: 12px;
+          font-size: 13px;
+        }
+        [data-reader-density="compact"] .reader-token-mode-toggle { min-width: 60px; }
+        [data-reader-density="compact"] .font-toggle { min-width: 62px; }
+        [data-reader-density="compact"] .reader-pager { gap: 6px; margin-bottom: 6px; }
+        [data-reader-density="compact"] .pager-btn { width: 34px; height: 34px; }
+        [data-reader-density="compact"] .page-pill { padding: 6px 10px; font-size: 11px; letter-spacing: 0.05em; }
+        [data-reader-density="compact"] .session-pill {
+          flex-wrap: nowrap;
+          gap: 5px;
+          max-width: 100%;
+          margin-bottom: 6px;
+          overflow: hidden;
+          padding: 7px 10px;
+          font-size: 10px;
+          line-height: 1;
+          white-space: nowrap;
+        }
+        [data-reader-density="compact"] .session-pill strong { flex: 0 0 auto; font-size: 11px; }
+        [data-reader-density="compact"] .session-pill > span:first-of-type,
+        [data-reader-density="compact"] .session-pill > span:last-of-type { display: none; }
+        [data-reader-density="compact"] .session-pill > span { min-width: 0; }
+        [data-reader-density="compact"] .reading-surface { border-radius: 24px; }
+        [data-reader-density="compact"] .reading-body { padding: 8px 10px 14px; }
+        [data-reader-density="compact"] .annotated-line { margin: 12px 0 18px; }
+      }
     </style>
   </head>
   <body>
-    <main class="app" data-reader-font="mixed" data-reader-theme="neutral" data-reader-text-size="medium">
+    <main class="app" data-reader-font="mixed" data-reader-theme="neutral" data-reader-text-size="medium" data-reader-density="compact">
       <section id="readerLoadingSkeleton" class="reader-loading-skeleton" aria-label="Loading reader content" role="status">
         <div class="reader-loading-skeleton-card">
           <span class="reader-loading-skeleton-line title"></span>
@@ -1084,7 +1189,7 @@
         <p class="vocab-definition"></p>
       </article>
 
-      <button id="readerOptionsBackdrop" class="reader-options-backdrop" type="button" aria-label="Close reader options" hidden></button>
+      <button id="readerOptionsBackdrop" class="reader-options-backdrop" type="button" aria-label="Dismiss reader options backdrop" hidden></button>
       <section id="readerOptionsPanel" class="reader-options-panel" hidden aria-label="Reader options" role="dialog" aria-modal="true">
         <div class="reader-options-header">
           <div>
@@ -1092,6 +1197,11 @@
             <h2>Themes</h2>
           </div>
           <span id="readerThemeStatus" class="pill">Neutral</span>
+          <button id="readerOptionsClose" class="icon-btn reader-options-close" type="button" aria-label="Close reader options">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
         </div>
         <div class="reader-scale-row" role="group" aria-label="Reader text size">
           <button class="reader-scale-option" type="button" data-text-size-choice="small" aria-pressed="false">
@@ -1108,6 +1218,15 @@
             <span class="reader-scale-option-body">
               <strong>Large</strong>
             </span>
+          </button>
+        </div>
+        <div class="reader-focus-row">
+          <button class="reader-focus-toggle" type="button" data-reader-density-toggle aria-pressed="true">
+            <span class="reader-focus-copy">
+              <strong>Focus mode</strong>
+              <small>Compact reader header</small>
+            </span>
+            <span id="readerDensityStatus" class="pill">On</span>
           </button>
         </div>
         <div class="reader-theme-grid" role="list" aria-label="Reader theme variations">

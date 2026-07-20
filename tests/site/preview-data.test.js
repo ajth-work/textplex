@@ -320,10 +320,15 @@ test("preview data hydrates live books from the processor API", async () => {
   const record = api.getBook("api-book");
   assert.ok(record, "live book should be hydrated into the preview store");
 
-  await api.hydrateBook("api-book");
+  const sentenceEvents = [];
+  await api.hydrateBook("api-book", {
+    onSentence: (event) => sentenceEvents.push(event),
+  });
   const readerProfile = api.getReaderProfile("api-book");
   assert.equal(readerProfile.id, "api-book");
   assert.equal(readerProfile.sentences.length, 3, "live reader preview should expose the fetched pages");
+  assert.equal(sentenceEvents.length, 3, "live hydration should publish each mapped sentence");
+  assert.equal(sentenceEvents[0].processedSentences, 1);
   assert.match(readerProfile.sentences[0].tokens.map((token) => token.surface).join(""), /这是一个测试/);
   assert.equal(readerProfile.sentences[0].vocabulary.reading, "zhè shì");
 

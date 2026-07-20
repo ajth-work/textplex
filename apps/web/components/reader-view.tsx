@@ -21,15 +21,20 @@ import {
   type SentenceReadRecord,
   type TokenResult,
 } from "../lib/textplex";
+import {
+  appThemeLabels,
+  persistAppTheme,
+  readStoredAppTheme,
+  type AppTheme,
+} from "../lib/theme";
 import { LoadingSkeleton, ReaderLoadingSkeleton } from "./loading-skeleton";
 
 type ReaderTokenMode = "word" | "character";
 type ReaderFontMode = "mixed" | "serif" | "sans";
-type ReaderThemeMode = "neutral" | "sepia" | "ink" | "black" | "jade" | "ceramic" | "crimson";
+type ReaderThemeMode = AppTheme;
 type ReaderTextSizeMode = "small" | "medium" | "large";
 
 const readerFontStorageKey = "textplex.readerFont";
-const readerThemeStorageKey = "textplex.readerTheme";
 const readerTextSizeStorageKey = "textplex.readerTextSize";
 const readerFontLabels: Record<ReaderFontMode, string> = {
   mixed: "Mixed",
@@ -43,15 +48,7 @@ const readerTextSizeLabels: Record<ReaderTextSizeMode, string> = {
 };
 const readerFontOptions: ReaderFontMode[] = ["mixed", "serif", "sans"];
 const readerTextSizeOptions: ReaderTextSizeMode[] = ["small", "medium", "large"];
-const readerThemeLabels: Record<ReaderThemeMode, string> = {
-  neutral: "Neutral",
-  sepia: "Warm Sepia",
-  ink: "Dark Ink",
-  black: "Pitch Black",
-  jade: "Jade Gold",
-  ceramic: "Ceramic",
-  crimson: "Crimson Gold",
-};
+const readerThemeLabels: Record<ReaderThemeMode, string> = appThemeLabels;
 const readerTextSizeScales: Record<ReaderTextSizeMode, number> = {
   small: 0.92,
   medium: 1,
@@ -60,21 +57,6 @@ const readerTextSizeScales: Record<ReaderTextSizeMode, number> = {
 
 function resolveReaderFont(value: string | null | undefined): ReaderFontMode {
   return value === "serif" || value === "sans" || value === "mixed" ? value : "mixed";
-}
-
-function resolveReaderTheme(value: string | null | undefined): ReaderThemeMode {
-  return value === "sepia" ||
-    value === "ink" ||
-    value === "black" ||
-    value === "jade" ||
-    value === "ceramic" ||
-    value === "crimson" ||
-    value === "matrix" ||
-    value === "neutral"
-    ? value === "matrix"
-      ? "ceramic"
-      : value
-    : "neutral";
 }
 
 function resolveReaderTextSize(value: string | null | undefined): ReaderTextSizeMode {
@@ -305,7 +287,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
     setReaderTokenMode(resolveReaderTokenMode(window.localStorage.getItem("textplex.readerTokenMode")));
     setReaderFont(resolveReaderFont(window.localStorage.getItem(readerFontStorageKey)));
-    setReaderTheme(resolveReaderTheme(window.localStorage.getItem(readerThemeStorageKey)));
+    setReaderTheme(readStoredAppTheme() ?? "neutral");
     setReaderTextSize(resolveReaderTextSize(window.localStorage.getItem(readerTextSizeStorageKey)));
   }, []);
 
@@ -386,6 +368,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       window.clearInterval(timer);
     };
   }, []);
+
+  useEffect(() => {
+    activeSecondsRef.current = 0;
+    setActiveSeconds(0);
+  }, [bookId, pageNumber]);
 
   useEffect(() => {
     activeSecondsRef.current = activeSeconds;
@@ -646,7 +633,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
   function handleSetReaderTheme(nextTheme: ReaderThemeMode) {
     setReaderTheme(nextTheme);
-    window.localStorage.setItem(readerThemeStorageKey, nextTheme);
+    persistAppTheme(nextTheme);
   }
 
   function handleSetReaderTextSize(nextSize: ReaderTextSizeMode) {
@@ -811,34 +798,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
               </div>
               <div className="reader-theme-grid" role="list" aria-label="Reader theme variations">
                 {([
-                  {
-                    value: "neutral" as ReaderThemeMode,
-                    title: "Neutral",
-                  },
-                  {
-                    value: "sepia" as ReaderThemeMode,
-                    title: "Sepia",
-                  },
-                  {
-                    value: "ink" as ReaderThemeMode,
-                    title: "Ink",
-                  },
-                  {
-                    value: "black" as ReaderThemeMode,
-                    title: "Black",
-                  },
-                  {
-                    value: "jade" as ReaderThemeMode,
-                    title: "Jade",
-                  },
-                  {
-                    value: "ceramic" as ReaderThemeMode,
-                    title: "Ceramic",
-                  },
-                  {
-                    value: "crimson" as ReaderThemeMode,
-                    title: "Crimson Gold",
-                  },
+                  { value: "neutral" as ReaderThemeMode, title: readerThemeLabels.neutral },
+                  { value: "sepia" as ReaderThemeMode, title: readerThemeLabels.sepia },
+                  { value: "ink" as ReaderThemeMode, title: readerThemeLabels.ink },
+                  { value: "black" as ReaderThemeMode, title: readerThemeLabels.black },
+                  { value: "jade" as ReaderThemeMode, title: readerThemeLabels.jade },
+                  { value: "ceramic" as ReaderThemeMode, title: readerThemeLabels.ceramic },
+                  { value: "crimson" as ReaderThemeMode, title: readerThemeLabels.crimson },
                 ]).map((theme) => (
                   <button
                     key={theme.value}

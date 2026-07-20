@@ -18,6 +18,15 @@ import {
   type SettingsUpdateRequest,
   type StudySurfaceResponse,
 } from "../lib/textplex";
+import {
+  appThemeLabels,
+  appThemeOptions,
+  persistAppTheme,
+  readStoredAppTheme,
+  resolveAppTheme,
+  resolveAppThemeFromSettings,
+  type AppTheme,
+} from "../lib/theme";
 import { LoadingSkeleton } from "./loading-skeleton";
 
 export function ActivitySurfaceView() {
@@ -382,7 +391,7 @@ export function ProfileSurfaceView() {
               )}
             </div>
             <p className="small-copy">
-              Theme: {settingsMap.get("theme") ?? "night"} • Reader mode: {settingsMap.get("readerMode") ?? "sentence"}
+              Theme: {appThemeLabels[resolveAppTheme(settingsMap.get("theme"))]} • Reader mode: {settingsMap.get("readerMode") ?? "sentence"}
             </p>
           </article>
           <article className="card feature-card">
@@ -509,7 +518,7 @@ export function SettingsSurfaceView() {
   const [data, setData] = useState<SettingsSurfaceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [theme, setTheme] = useState("night");
+  const [theme, setTheme] = useState<AppTheme>(() => readStoredAppTheme() ?? "neutral");
   const [readerMode, setReaderMode] = useState("sentence");
 
   useEffect(() => {
@@ -520,11 +529,9 @@ export function SettingsSurfaceView() {
           return;
         }
         setData(result);
-        const themeEntry = result.entries.find((entry) => entry.key === "theme");
+        const nextTheme = resolveAppThemeFromSettings(result.entries);
         const modeEntry = result.entries.find((entry) => entry.key === "readerMode");
-        if (themeEntry) {
-          setTheme(themeEntry.value);
-        }
+        setTheme(nextTheme);
         if (modeEntry) {
           setReaderMode(modeEntry.value);
         }
@@ -550,6 +557,7 @@ export function SettingsSurfaceView() {
       };
       const result = await putJson<SettingsSurfaceResponse>("/settings", payload);
       setData(result);
+      persistAppTheme(theme);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save settings.");
@@ -570,7 +578,7 @@ export function SettingsSurfaceView() {
       ]}
       metrics={[
         { label: "Profile", value: "Local first" },
-        { label: "Theme", value: data ? theme : "Loading" },
+        { label: "Theme", value: data ? appThemeLabels[theme] : "Loading" },
         { label: "Reader mode", value: data ? readerMode : "Loading" },
       ]}
     >
@@ -580,12 +588,13 @@ export function SettingsSurfaceView() {
         <h2>Preferences</h2>
         {data ? <div className="surface-form">
           <label>
-            Theme
-            <select className="text-input" value={theme} onChange={(event) => setTheme(event.target.value)}>
-              <option value="day">Day</option>
-              <option value="night">Night</option>
-              <option value="sepia">Sepia</option>
-              <option value="forest">Forest</option>
+            App theme
+            <select className="text-input" value={theme} onChange={(event) => setTheme(resolveAppTheme(event.target.value))}>
+              {appThemeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.title}
+                </option>
+              ))}
             </select>
           </label>
           <label>

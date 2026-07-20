@@ -1,11 +1,24 @@
 # Changelog
 
-## 2026-07-19
+## 2026-07-20
+
+- Replaced the Add Content Paste Text sample shortcut with a real paste form that submits article text to `/texts/import`, hydrates the processed reader record, and opens the new book.
+- Added a regression test covering pasted text submission and navigation to the created reader record.
+- Documented the Codex scheduled-task companion for the Sunday repository audit, including worktree isolation and report-only boundaries.
+- Added page-by-page reader hydration progress and a visible retry/error state so imported readers do not remain indefinitely on “Preparing”.
+- Modeled pasted text as one logical reader page containing parsed sentences, and grouped older pasted records the same way so sentence counts are not presented as physical pages.
+- Published the first hydrated sentence immediately in the reader, continued sentence hydration in the background, and preserved reader markup while processing so loaded content replaces skeletons instead of leaving the page blank.
+- Added a compact mobile reader header with a two-line title limit, tighter controls and navigation, and a single-line session summary to give the reading surface more viewport space.
+- Made the compact reader header an optional persisted Focus mode toggle in the reader settings panel.
+- Added an explicit X close button to the reader options panel.
+
+## 2026-07-20
 
 - Added GitHub Actions CI for Python tests/Ruff, static site tests, web builds, and non-interactive lint; Pages artifact creation now runs the static site suite first. Added the pinned Next.js ESLint configuration required by the lint job and made private local upload fixtures skip cleanly on hosted runners.
 - Added audit guardrails to AGENTS.md for verification gates, test isolation, dependency bootstrapping, API security boundaries, configuration coverage, and issue-tracker discipline.
 - Completed audit issues #33-#40: fixed extraction/token regressions, isolated backend tests, hardened import/upload boundaries, honored configurable storage roots, restored preview route reachability, and added CI-safe web validation.
 - Added `docs/AUDIT.md` as the reusable audit record and procedure, including parameters, limitations from the 2026-07-19 audit, evidence requirements, cadence, and rules for improving future audits.
+- Added a Sunday GitHub Actions workflow that runs the full automated audit with fresh Python/Node dependencies, API health, live preview routes, tests, build, lint, and formatting checks.
 - Filed audit follow-up issues #36-#40 for API boundaries, upload limits, configurable storage, backend test bootstrap, and CI/deployment validation; added verification notes to #33 and #35 and mirrored the tracker state locally.
 - Replaced reader loading fallbacks with skeleton states, delayed preview rendering until live hydration completes, and removed fabricated reader sentences for books awaiting extraction.
 - Added matching skeleton treatment to live web surface loading states and updated reader fallback coverage.
@@ -16,6 +29,11 @@
 - Added a library-detail skeleton gate so seeded book details do not flash before the clicked book record loads.
 - Removed literal Spring Dawn content from reader, analysis, and library-detail shells; record routes now require an explicit book ID and show a missing/loading state instead of silently selecting seeded data.
 - Updated the reader-options regression test to inspect the legacy reader where its archive menu now lives instead of the redirect entry point.
+- Reconciled the local issue tracker with issue acceptance criteria: #10, #11, #18, and #19 are implemented; #9, #12, and #20 remain open with their current gaps documented.
+- Closed GitHub issues #10, #11, #18, and #19 with verification comments and synchronized #19 to the Done column on the TextPlex Feature Board.
+- Completed the import-to-reader-to-profile learning projection by materializing sentence exposures into the user exposure ledger and vocabulary progress, adding an end-to-end import/read/profile test, and resetting reader page timers between pages.
+- Marked issue #19 complete after import, reader, profile, progress, and study verification passed.
+- Made the web build and lint runner resolve workspace-local Next dependencies consistently.
 
 All notable changes to TextPlex are recorded here.
 

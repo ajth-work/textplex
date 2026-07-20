@@ -598,6 +598,7 @@
     getSelectedBookId,
     selectBook,
     upsertBook,
+    appendHydratedSentence,
     archiveBook,
     getReadingProgress,
     recordReadingProgress,
@@ -1168,6 +1169,57 @@
     saveStore(store);
     window.localStorage.setItem(SELECTION_KEY, normalized.id);
     return normalized;
+  }
+
+  function appendHydratedSentence(bookId, sentence, options = {}) {
+    const record = getBook(bookId);
+    if (!record || !sentence || typeof sentence !== "object") {
+      return null;
+    }
+
+    const mergeAsText = options.mergeAsText === true;
+    const pageNumber = mergeAsText ? 1 : Math.max(1, Number(options.pageNumber) || 1);
+    const currentPages = Array.isArray(record.reader?.pages)
+      ? record.reader.pages.map((page, index) => normalizeReaderPage(page, index + 1))
+      : [];
+    const targetIndex = mergeAsText ? 0 : currentPages.findIndex((page) => page.pageNumber === pageNumber);
+    const nextPages = currentPages.length ? currentPages.slice() : [];
+    const resolvedIndex = mergeAsText ? 0 : targetIndex >= 0 ? targetIndex : nextPages.length;
+
+    if (!nextPages[resolvedIndex]) {
+      nextPages[resolvedIndex] = normalizeReaderPage({ pageNumber, sentences: [] }, pageNumber);
+    }
+
+    const existingSentences = Array.isArray(nextPages[resolvedIndex].sentences)
+      ? nextPages[resolvedIndex].sentences
+      : [];
+    const sentenceKey = JSON.stringify({
+      tokens: sentence.tokens ?? [],
+      translation: sentence.translation ?? [],
+    });
+    const alreadyAdded = existingSentences.some((candidate) => JSON.stringify({
+      tokens: candidate.tokens ?? [],
+      translation: candidate.translation ?? [],
+    }) === sentenceKey);
+    if (!alreadyAdded) {
+      nextPages[resolvedIndex] = {
+        ...nextPages[resolvedIndex],
+        pageNumber,
+        sentences: [...existingSentences, sentence],
+      };
+    }
+
+    const nextSentences = nextPages.flatMap((page) => page?.sentences ?? []);
+    return upsertBook({
+      ...record,
+      readerState: "ready",
+      reader: {
+        ...record.reader,
+        pageCount: nextPages.length,
+        pages: nextPages,
+        sentences: nextSentences,
+      },
+    });
   }
 
   function archiveBook(bookId) {
@@ -1808,6 +1860,9 @@
     }
     if (Array.isArray(reader.pages) && reader.pages.length) {
       const normalizedPages = reader.pages.map((page, index) => normalizeReaderPage(page, index + 1));
+      if (record.isLive) {
+        return normalizedPages;
+      }
       const pageSentenceCounts = normalizedPages.map((page) => (Array.isArray(page.sentences) ? page.sentences.length : 0));
       const shouldExpand = normalizedPages.length < minimumPages && pageSentenceCounts.every((count) => count <= 1);
       if (!shouldExpand) {
@@ -2377,7 +2432,7 @@
     }
   }
 
-  async function hydrateBook(bookId) {
+  async function hydrateBook(bookId, options = {}) {
     const normalizedId = String(bookId ?? "").trim();
     const fetchImpl = typeof window.fetch === "function" ? window.fetch.bind(window) : null;
     const baseUrl = getProcessorBaseUrl();
@@ -2395,7 +2450,11 @@
       return null;
     }
 
-    const record = await mapApiBookToPreviewRecord(fetchImpl, baseUrl, apiBook, { includeReaderData: true });
+    const record = await mapApiBookToPreviewRecord(fetchImpl, baseUrl, apiBook, {
+      includeReaderData: true,
+      onProgress: options?.onProgress,
+      onSentence: options?.onSentence,
+    });
     if (!record) {
       return null;
     }
@@ -2413,19 +2472,35 @@
     }
 
     const includeReaderData = options.includeReaderData === true;
+    const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
+    const onSentence = typeof options.onSentence === "function" ? options.onSentence : null;
     const analysis = await fetchJsonMaybe(fetchImpl, `${baseUrl}/analysis/${encodeURIComponent(book.id)}`, { timeoutMs: 2500 });
     const manifest = includeReaderData
       ? await fetchJsonMaybe(fetchImpl, `${baseUrl}/books/${encodeURIComponent(book.id)}/pages`, { timeoutMs: 5000 })
       : null;
     const pageRecords = Array.isArray(manifest?.pages) ? manifest.pages : [];
+    const isPastedText = String(book.source_filename ?? "").toLowerCase() === "pasted-text";
+    const totalContentUnits = isPastedText
+      ? Math.max(1, Number(analysis?.sentence_count ?? 0) || pageRecords.length)
+      : pageRecords.length;
     const liveReaderPages = [];
     const lexiconCache = new Map();
+    let processedContentUnits = 0;
+    let processedSentences = 0;
 
     for (const page of pageRecords) {
       const pageNumber = Number(page?.page_number);
       if (!Number.isFinite(pageNumber) || pageNumber < 1) {
         continue;
       }
+
+      onProgress?.({
+        phase: "page-start",
+        pageNumber,
+        processedPages: isPastedText ? processedContentUnits : liveReaderPages.length,
+        totalPages: totalContentUnits,
+        unitLabel: isPastedText ? "sentences" : "pages",
+      });
 
       const pageResponse = await fetchJsonMaybe(fetchImpl, `${baseUrl}/books/${encodeURIComponent(book.id)}/pages/${pageNumber}`, {
         timeoutMs: 5000,
@@ -2443,6 +2518,16 @@
         );
         if (mappedSentence) {
           mappedPageSentences.push(mappedSentence);
+          processedSentences += 1;
+          onSentence?.({
+            pageNumber,
+            sentence: mappedSentence,
+            processedSentences,
+            totalSentences: isPastedText
+              ? totalContentUnits
+              : Math.max(1, Number(analysis?.sentence_count ?? 0) || 1),
+            unitLabel: isPastedText ? "sentences" : "pages",
+          });
         }
       }
 
@@ -2451,18 +2536,37 @@
         sentences: mappedPageSentences,
         imageUrl: pageResponse?.image_url ? new URL(pageResponse.image_url, baseUrl).href : "",
       });
+      if (!isPastedText) {
+        processedContentUnits += 1;
+      }
+      onProgress?.({
+        phase: "page-complete",
+        pageNumber,
+        processedPages: isPastedText ? processedContentUnits : liveReaderPages.length,
+        totalPages: totalContentUnits,
+        unitLabel: isPastedText ? "sentences" : "pages",
+      });
     }
 
-    const readerSentences = liveReaderPages.flatMap((page) => page.sentences);
+    const logicalReaderPages = isPastedText && liveReaderPages.length > 1
+      ? [{
+          pageNumber: 1,
+          sentences: liveReaderPages.flatMap((page) => page.sentences),
+          imageUrl: liveReaderPages[0]?.imageUrl ?? "",
+        }]
+      : liveReaderPages;
+    const readerSentences = logicalReaderPages.flatMap((page) => page.sentences);
     const firstPageNumber = Number(pageRecords[0]?.page_number ?? 1);
     const firstPageImage = includeReaderData && Number.isFinite(firstPageNumber)
       ? await fetchJsonMaybe(fetchImpl, `${baseUrl}/books/${encodeURIComponent(book.id)}/pages/${firstPageNumber}`, { timeoutMs: 5000 })
       : null;
     const processedAt = book.processed_at ?? book.created_at ?? new Date().toISOString();
-    const totalPages = Number(book.total_pages ?? analysis?.total_pages ?? liveReaderPages.length ?? 1);
-    const extractedPages = Number(book.extracted_page_count ?? analysis?.extracted_page_count ?? liveReaderPages.length ?? 0);
+    const physicalTotalPages = Number(book.total_pages ?? analysis?.total_pages ?? liveReaderPages.length ?? 1);
+    const physicalExtractedPages = Number(book.extracted_page_count ?? analysis?.extracted_page_count ?? liveReaderPages.length ?? 0);
+    const hasExtraction = Boolean(analysis?.has_extraction ?? physicalExtractedPages > 0);
+    const totalPages = isPastedText ? (hasExtraction ? 1 : 0) : physicalTotalPages;
+    const extractedPages = isPastedText ? (hasExtraction ? 1 : 0) : physicalExtractedPages;
     const progress = totalPages > 0 ? Math.min(100, Math.round((extractedPages / totalPages) * 100)) : 0;
-    const hasExtraction = Boolean(analysis?.has_extraction ?? extractedPages > 0);
     const contentType = inferContentType(book);
     const kindLabel = inferKindLabel(book);
     const languageLabelValue = languageLabel(book.language_code ?? "zh");
@@ -2536,7 +2640,7 @@
       },
       reader: {
         progressPrefix: kindLabel,
-        pages: liveReaderPages,
+        pages: logicalReaderPages,
         sentences: readerSentences,
         imageUrl:
           firstPageImage?.image_url ? new URL(firstPageImage.image_url, baseUrl).href : makePreviewImage({

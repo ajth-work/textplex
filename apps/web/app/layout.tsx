@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AppShell } from "../components/app-shell";
+import { ThemeProvider } from "../components/theme-provider";
 
 export const metadata: Metadata = {
   title: "TextPlex",
@@ -9,11 +10,30 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function () {
+                try {
+                  var theme = localStorage.getItem("textplex.theme") || localStorage.getItem("textplex.readerTheme") || "neutral";
+                  if (theme === "day") theme = "neutral";
+                  if (theme === "night") theme = "ink";
+                  if (theme === "forest") theme = "jade";
+                  if (theme === "matrix") theme = "ceramic";
+                  document.documentElement.dataset.appTheme = theme;
+                  document.documentElement.style.colorScheme = (theme === "ink" || theme === "black" || theme === "jade" || theme === "crimson") ? "dark" : "light";
+                } catch (error) {}
+              })();
+            `,
+          }}
+        />
         <div className="app-frame">
-          <AppShell />
-          <div className="app-shell-content">{children}</div>
+          <ThemeProvider>
+            <AppShell />
+            <div className="app-shell-content">{children}</div>
+          </ThemeProvider>
         </div>
       </body>
     </html>

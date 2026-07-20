@@ -744,7 +744,7 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
       })),
       settings: {
         entries: [
-          { key: "theme", value: "night" },
+          { key: "theme", value: "neutral" },
           { key: "readerMode", value: "sentence" },
           { key: "ocrProvider", value: "openai" },
         ],
@@ -755,7 +755,7 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
   if (route === "/settings") {
     return {
       entries: [
-        { key: "theme", value: "night" },
+        { key: "theme", value: "neutral" },
         { key: "readerMode", value: "sentence" },
       ],
     } satisfies SettingsSurfaceResponse;

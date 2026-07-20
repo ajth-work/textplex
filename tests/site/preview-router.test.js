@@ -785,6 +785,130 @@ test("import preview exposes a visible processor URL control", async () => {
   assert.match(statusNode.textContent, /http:\/\/127\.0\.0\.1:8201/);
 });
 
+test("import preview processes pasted text and opens the created reader record", async () => {
+  const pasteRow = createNode("section");
+  const pasteTitleNode = createNode("h3");
+  pasteTitleNode.textContent = "Paste Text";
+  pasteRow.querySelector = (selector) => (selector === "h3" ? pasteTitleNode : null);
+
+  const pastePanel = createNode("section");
+  pastePanel.hidden = true;
+  const pasteTitle = createNode("input");
+  pasteTitle.value = "Copied article";
+  const pasteAuthor = createNode("input");
+  pasteAuthor.value = "Web source";
+  const pasteLanguage = createNode("select");
+  pasteLanguage.value = "en";
+  const pasteText = createNode("textarea");
+  pasteText.value = "This is copied article text. It should become a real reader record.";
+  const pasteStatus = createNode("p");
+  const pasteCancel = createNode("button");
+  const pasteSubmit = createNode("button");
+  const importStatusCard = createNode("section");
+  const importStatusBadge = createNode("span");
+  const importStatusText = createNode("p");
+  const importProgressTrack = createNode("div");
+  const importProgressFill = createNode("div");
+  const importPageProgressTrack = createNode("div");
+  const importPageProgressFill = createNode("div");
+  const importPageProgressText = createNode("p");
+
+  const browser = loadPreviewRouter({
+    pathname: "/import-preview.html",
+    localStorageSeed: {
+      "textplex.processorBaseUrl": "http://processor.test:8201",
+    },
+    fetchImpl: async (url, options = {}) => {
+      const href = String(url);
+      if (options.method === "POST" && href.endsWith("/texts/import")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "pasted-book", title: "Copied article" }),
+        };
+      }
+      if (href.endsWith("/books")) {
+        return { ok: true, status: 200, json: async () => [] };
+      }
+      if (href.endsWith("/books/pasted-book")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: "pasted-book",
+            title: "Copied article",
+            author: "Web source",
+            language_code: "en",
+            total_pages: 1,
+            extracted_page_count: 1,
+            extraction_status: "complete",
+          }),
+        };
+      }
+      if (href.endsWith("/books/pasted-book/pages")) {
+        return { ok: true, status: 200, json: async () => ({ pages: [{ page_number: 1 }] }) };
+      }
+      if (href.endsWith("/books/pasted-book/pages/1")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            extraction: {
+              page: {
+                sentences: [{
+                  order: 1,
+                  text: "This is copied article text.",
+                  tokens: [{ surface_form: "copied", lemma: "copy", token_kind: "word" }],
+                }],
+              },
+            },
+          }),
+        };
+      }
+      if (href.includes("/analysis/")) {
+        return { ok: true, status: 200, json: async () => ({ has_extraction: true, sentence_count: 1 }) };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    },
+    selectorMap: {
+      ".option-row": [pasteRow],
+      ".recent-list": createNode("div"),
+      "[data-processor-action]": [],
+      "[data-ocr-provider]": [],
+      "#importLog [data-step]": [],
+      "button, a": [],
+    },
+    idMap: {
+      pastePanel,
+      pasteTitle,
+      pasteAuthor,
+      pasteLanguage,
+      pasteText,
+      pasteStatus,
+      pasteCancel,
+      pasteSubmit,
+      importStatusCard,
+      importStatusBadge,
+      importStatusText,
+      importProgressTrack,
+      importProgressFill,
+      importPageProgressTrack,
+      importPageProgressFill,
+      importPageProgressText,
+    },
+  });
+
+  await browser.window.TextPlexPreviewRouter.ready;
+  pasteRow.click();
+  assert.equal(pastePanel.hidden, false);
+  pasteSubmit.click();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.equal(browser.window.location.pathname, "/reader-preview.html");
+  assert.equal(new URLSearchParams(browser.window.location.search).get("book"), "pasted-book");
+  assert.equal(browser.window.TextPlexPreview.getBook("pasted-book").title, "Copied article");
+});
+
 test("import preview upload row opens a PDF chooser instead of synthesizing a record", async () => {
   const uploadRow = createNode("section");
   const uploadTitle = createNode("h3");

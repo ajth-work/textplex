@@ -1,24 +1,37 @@
 :root {
-  color-scheme: dark;
-  --bg: #07111c;
-  --bg-soft: #0d1a2a;
-  --panel: rgba(248, 244, 236, 0.94);
+  color-scheme: light;
+  --bg: #f2efe8;
+  --bg-soft: #fffaf2;
+  --panel: rgba(255, 252, 246, 0.97);
   --panel-strong: #fffaf2;
-  --ink: #15202b;
-  --ink-soft: #52606d;
-  --line: rgba(21, 32, 43, 0.12);
+  --ink: #1f2732;
+  --ink-soft: #5f6b77;
+  --line: rgba(31, 39, 50, 0.12);
   --accent: #d97706;
   --accent-strong: #ea580c;
   --accent-soft: rgba(217, 119, 6, 0.12);
-  --shadow: 0 24px 60px rgba(0, 0, 0, 0.26);
+  --shadow: 0 24px 60px rgba(44, 32, 18, 0.14);
   --radius-xl: 28px;
   --radius-lg: 20px;
   --radius-md: 14px;
+  --app-page-bg:
+    radial-gradient(circle at top left, rgba(217, 119, 6, 0.16), transparent 28%),
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.12), transparent 30%),
+    linear-gradient(180deg, #f8f3eb 0%, #efe6d8 48%, #e7dcc9 100%);
+  --app-grid-line: rgba(31, 39, 50, 0.04);
+  --app-body-color: #1f2732;
+  --hero-meta-bg: linear-gradient(180deg, rgba(255, 250, 242, 0.96), rgba(244, 236, 224, 0.96));
+  --hero-meta-color: var(--ink);
+  --surface-soft: rgba(31, 39, 50, 0.05);
+  --surface-strong: rgba(255, 252, 246, 0.72);
+  --surface-border: rgba(31, 39, 50, 0.08);
+  --button-secondary-bg: rgba(255, 255, 255, 0.78);
+  --button-secondary-border: rgba(31, 39, 50, 0.16);
+  --button-secondary-color: var(--ink);
+  --input-bg: rgba(255, 255, 255, 0.84);
+  --input-color: var(--ink);
   font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
-  background:
-    radial-gradient(circle at top left, rgba(217, 119, 6, 0.2), transparent 28%),
-    radial-gradient(circle at top right, rgba(14, 165, 233, 0.16), transparent 30%),
-    linear-gradient(180deg, #09111a 0%, #07111c 45%, #04080d 100%);
+  background: var(--app-page-bg);
 }
 
 * {
@@ -32,11 +45,8 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  color: #f7f2ea;
-  background:
-    radial-gradient(circle at top left, rgba(234, 88, 12, 0.14), transparent 26%),
-    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.1), transparent 22%),
-    linear-gradient(180deg, #09111a 0%, #07111c 55%, #05090e 100%);
+  color: var(--app-body-color);
+  background: var(--app-page-bg);
 }
 
 body::before {
@@ -44,9 +54,226 @@ body::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-image: linear-gradient(var(--app-grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--app-grid-line) 1px, transparent 1px);
   background-size: 32px 32px;
   mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.65), transparent);
+}
+
+html[data-app-theme="neutral"] {
+  color-scheme: light;
+  --bg: #f2efe8;
+  --bg-soft: #fffaf2;
+  --panel: rgba(255, 252, 246, 0.97);
+  --panel-strong: #fffaf2;
+  --ink: #1f2732;
+  --ink-soft: #5f6b77;
+  --line: rgba(31, 39, 50, 0.12);
+  --accent: #d97706;
+  --accent-strong: #ea580c;
+  --accent-soft: rgba(217, 119, 6, 0.12);
+  --shadow: 0 24px 60px rgba(44, 32, 18, 0.14);
+  --app-page-bg:
+    radial-gradient(circle at top left, rgba(217, 119, 6, 0.16), transparent 28%),
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.12), transparent 30%),
+    linear-gradient(180deg, #f8f3eb 0%, #efe6d8 48%, #e7dcc9 100%);
+  --app-grid-line: rgba(31, 39, 50, 0.04);
+  --app-body-color: #1f2732;
+  --hero-meta-bg: linear-gradient(180deg, rgba(255, 250, 242, 0.96), rgba(244, 236, 224, 0.96));
+  --hero-meta-color: var(--ink);
+  --surface-soft: rgba(31, 39, 50, 0.05);
+  --surface-strong: rgba(255, 252, 246, 0.72);
+  --surface-border: rgba(31, 39, 50, 0.08);
+  --button-secondary-bg: rgba(255, 255, 255, 0.78);
+  --button-secondary-border: rgba(31, 39, 50, 0.16);
+  --button-secondary-color: var(--ink);
+  --input-bg: rgba(255, 255, 255, 0.84);
+  --input-color: var(--ink);
+}
+
+html[data-app-theme="sepia"] {
+  color-scheme: light;
+  --bg: #f0e0ca;
+  --bg-soft: #fff5e7;
+  --panel: rgba(255, 247, 233, 0.98);
+  --panel-strong: #fff7ea;
+  --ink: #2f2218;
+  --ink-soft: #6c5845;
+  --line: rgba(47, 34, 24, 0.11);
+  --accent: #b86215;
+  --accent-strong: #d97706;
+  --accent-soft: rgba(184, 98, 21, 0.13);
+  --shadow: 0 26px 64px rgba(74, 44, 20, 0.22);
+  --app-page-bg:
+    radial-gradient(circle at top left, rgba(194, 110, 41, 0.18), transparent 28%),
+    radial-gradient(circle at top right, rgba(232, 172, 100, 0.12), transparent 24%),
+    linear-gradient(180deg, #f7ead6 0%, #ead5b7 54%, #d9c09a 100%);
+  --app-grid-line: rgba(47, 34, 24, 0.04);
+  --app-body-color: #2f2218;
+  --hero-meta-bg: linear-gradient(180deg, rgba(255, 249, 241, 0.98), rgba(242, 228, 208, 0.98));
+  --hero-meta-color: var(--ink);
+  --surface-soft: rgba(47, 34, 24, 0.05);
+  --surface-strong: rgba(255, 250, 243, 0.78);
+  --surface-border: rgba(47, 34, 24, 0.1);
+  --button-secondary-bg: rgba(255, 250, 243, 0.86);
+  --button-secondary-border: rgba(47, 34, 24, 0.14);
+  --button-secondary-color: var(--ink);
+  --input-bg: rgba(255, 250, 243, 0.9);
+  --input-color: var(--ink);
+}
+
+html[data-app-theme="ink"] {
+  color-scheme: dark;
+  --bg: #071019;
+  --bg-soft: #0d1522;
+  --panel: rgba(15, 19, 30, 0.95);
+  --panel-strong: #111725;
+  --ink: #f4f7fb;
+  --ink-soft: rgba(244, 247, 251, 0.7);
+  --line: rgba(255, 255, 255, 0.09);
+  --accent: #d8b16a;
+  --accent-strong: #efc77b;
+  --accent-soft: rgba(216, 177, 106, 0.15);
+  --shadow: 0 28px 64px rgba(0, 0, 0, 0.44);
+  --app-page-bg:
+    radial-gradient(circle at top left, rgba(224, 184, 109, 0.14), transparent 26%),
+    radial-gradient(circle at top right, rgba(90, 116, 153, 0.12), transparent 22%),
+    linear-gradient(180deg, #071019 0%, #05080d 100%);
+  --app-grid-line: rgba(255, 255, 255, 0.05);
+  --app-body-color: #f4f7fb;
+  --hero-meta-bg: linear-gradient(180deg, rgba(20, 25, 38, 0.96), rgba(15, 19, 30, 0.96));
+  --hero-meta-color: #f4f7fb;
+  --surface-soft: rgba(255, 255, 255, 0.05);
+  --surface-strong: rgba(10, 13, 22, 0.78);
+  --surface-border: rgba(255, 255, 255, 0.09);
+  --button-secondary-bg: rgba(255, 255, 255, 0.08);
+  --button-secondary-border: rgba(255, 255, 255, 0.12);
+  --button-secondary-color: #f4f7fb;
+  --input-bg: rgba(255, 255, 255, 0.06);
+  --input-color: #f4f7fb;
+}
+
+html[data-app-theme="black"] {
+  color-scheme: dark;
+  --bg: #020203;
+  --bg-soft: #07080c;
+  --panel: rgba(8, 9, 12, 0.98);
+  --panel-strong: #0b0c0f;
+  --ink: #f7f8fb;
+  --ink-soft: rgba(247, 248, 251, 0.68);
+  --line: rgba(255, 255, 255, 0.08);
+  --accent: #d9bf7a;
+  --accent-strong: #f1d28b;
+  --accent-soft: rgba(217, 191, 122, 0.14);
+  --shadow: 0 30px 70px rgba(0, 0, 0, 0.6);
+  --app-page-bg:
+    radial-gradient(circle at top left, rgba(136, 166, 255, 0.08), transparent 24%),
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.04), transparent 20%),
+    linear-gradient(180deg, #020203 0%, #000000 100%);
+  --app-grid-line: rgba(255, 255, 255, 0.04);
+  --app-body-color: #f7f8fb;
+  --hero-meta-bg: linear-gradient(180deg, rgba(18, 18, 21, 0.96), rgba(8, 9, 12, 0.98));
+  --hero-meta-color: #f7f8fb;
+  --surface-soft: rgba(255, 255, 255, 0.05);
+  --surface-strong: rgba(8, 9, 12, 0.82);
+  --surface-border: rgba(255, 255, 255, 0.08);
+  --button-secondary-bg: rgba(255, 255, 255, 0.06);
+  --button-secondary-border: rgba(255, 255, 255, 0.12);
+  --button-secondary-color: #f7f8fb;
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --input-color: #f7f8fb;
+}
+
+html[data-app-theme="jade"] {
+  color-scheme: dark;
+  --bg: #0a1f16;
+  --bg-soft: #10271c;
+  --panel: rgba(9, 28, 20, 0.96);
+  --panel-strong: #0e241a;
+  --ink: #f4df9c;
+  --ink-soft: rgba(244, 223, 156, 0.76);
+  --line: rgba(244, 223, 156, 0.14);
+  --accent: #e2c15f;
+  --accent-strong: #f6de87;
+  --accent-soft: rgba(226, 193, 95, 0.18);
+  --shadow: 0 28px 64px rgba(2, 8, 5, 0.58);
+  --app-page-bg:
+    radial-gradient(circle at top left, rgba(29, 98, 69, 0.28), transparent 28%),
+    radial-gradient(circle at top right, rgba(241, 210, 123, 0.16), transparent 24%),
+    linear-gradient(180deg, #0a1f16 0%, #050a08 100%);
+  --app-grid-line: rgba(244, 223, 156, 0.06);
+  --app-body-color: #f4df9c;
+  --hero-meta-bg: linear-gradient(180deg, rgba(11, 34, 24, 0.96), rgba(9, 28, 20, 0.98));
+  --hero-meta-color: #f4df9c;
+  --surface-soft: rgba(255, 255, 255, 0.05);
+  --surface-strong: rgba(9, 28, 20, 0.84);
+  --surface-border: rgba(244, 223, 156, 0.14);
+  --button-secondary-bg: rgba(255, 255, 255, 0.06);
+  --button-secondary-border: rgba(244, 223, 156, 0.16);
+  --button-secondary-color: #f4df9c;
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --input-color: #f4df9c;
+}
+
+html[data-app-theme="ceramic"] {
+  color-scheme: light;
+  --bg: #f5f2ed;
+  --bg-soft: #fcfaf6;
+  --panel: rgba(252, 249, 243, 0.98);
+  --panel-strong: #fffdf8;
+  --ink: #23262f;
+  --ink-soft: rgba(35, 38, 47, 0.7);
+  --line: rgba(81, 85, 95, 0.12);
+  --accent: #748191;
+  --accent-strong: #5e6a78;
+  --accent-soft: rgba(116, 129, 145, 0.14);
+  --shadow: 0 28px 64px rgba(64, 54, 43, 0.2);
+  --app-page-bg:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.82), transparent 26%),
+    radial-gradient(circle at top right, rgba(147, 164, 186, 0.16), transparent 24%),
+    linear-gradient(180deg, #faf7f0 0%, #efe7da 100%);
+  --app-grid-line: rgba(81, 85, 95, 0.04);
+  --app-body-color: #23262f;
+  --hero-meta-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(235, 231, 223, 0.96));
+  --hero-meta-color: #23262f;
+  --surface-soft: rgba(81, 85, 95, 0.05);
+  --surface-strong: rgba(252, 249, 243, 0.8);
+  --surface-border: rgba(81, 85, 95, 0.1);
+  --button-secondary-bg: rgba(255, 255, 255, 0.82);
+  --button-secondary-border: rgba(81, 85, 95, 0.12);
+  --button-secondary-color: #23262f;
+  --input-bg: rgba(255, 255, 255, 0.88);
+  --input-color: #23262f;
+}
+
+html[data-app-theme="crimson"] {
+  color-scheme: light;
+  --bg: #7a1219;
+  --bg-soft: #531015;
+  --panel: rgba(255, 248, 232, 0.97);
+  --panel-strong: #fff6de;
+  --ink: #5b1016;
+  --ink-soft: rgba(91, 16, 22, 0.72);
+  --line: rgba(91, 16, 22, 0.12);
+  --accent: #b98a1f;
+  --accent-strong: #dbac36;
+  --accent-soft: rgba(185, 138, 31, 0.16);
+  --shadow: 0 26px 60px rgba(42, 6, 9, 0.24);
+  --app-page-bg:
+    radial-gradient(circle at top left, rgba(255, 229, 153, 0.18), transparent 28%),
+    radial-gradient(circle at top right, rgba(165, 22, 34, 0.3), transparent 24%),
+    linear-gradient(180deg, #7a1219 0%, #2b0609 100%);
+  --app-grid-line: rgba(255, 255, 255, 0.04);
+  --app-body-color: #fff7e7;
+  --hero-meta-bg: linear-gradient(180deg, rgba(255, 247, 229, 0.96), rgba(243, 227, 185, 0.96));
+  --hero-meta-color: #5b1016;
+  --surface-soft: rgba(91, 16, 22, 0.05);
+  --surface-strong: rgba(255, 248, 232, 0.8);
+  --surface-border: rgba(91, 16, 22, 0.1);
+  --button-secondary-bg: linear-gradient(180deg, rgba(255, 250, 236, 0.92), rgba(243, 227, 185, 0.82));
+  --button-secondary-border: rgba(185, 138, 31, 0.18);
+  --button-secondary-color: #5b1016;
+  --input-bg: rgba(255, 250, 243, 0.92);
+  --input-color: #5b1016;
 }
 
 a {
@@ -299,7 +526,7 @@ main {
 .card {
   background: var(--panel);
   color: var(--ink);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow);
   backdrop-filter: blur(16px);
@@ -336,7 +563,7 @@ main {
   max-width: 62ch;
   font-size: 1.05rem;
   line-height: 1.7;
-  color: rgba(247, 242, 234, 0.82);
+  color: var(--ink-soft);
 }
 
 .eyebrow {
@@ -346,7 +573,7 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.18em;
   font-size: 0.72rem;
-  color: rgba(247, 242, 234, 0.64);
+  color: var(--ink-soft);
 }
 
 .hero-meta {
@@ -354,7 +581,8 @@ main {
   display: grid;
   gap: 0.35rem;
   text-align: right;
-  background: linear-gradient(180deg, rgba(255, 250, 242, 0.96), rgba(245, 239, 228, 0.96));
+  background: var(--hero-meta-bg);
+  color: var(--hero-meta-color);
 }
 
 .hero-meta strong {
@@ -395,9 +623,9 @@ main {
 }
 
 .button-secondary {
-  background: rgba(255, 255, 255, 0.24);
-  border-color: rgba(255, 255, 255, 0.18);
-  color: #fff;
+  background: var(--button-secondary-bg);
+  border-color: var(--button-secondary-border);
+  color: var(--button-secondary-color);
 }
 
 .feature-grid,
@@ -494,7 +722,7 @@ dt {
 .inspector-grid div {
   padding: 0.8rem 0.85rem;
   border-radius: var(--radius-md);
-  background: rgba(10, 15, 24, 0.05);
+  background: var(--surface-soft);
   border: 1px solid var(--line);
 }
 
@@ -522,7 +750,7 @@ dt {
 .profile-metrics div {
   padding: 0.8rem 0.85rem;
   border-radius: var(--radius-md);
-  background: rgba(10, 15, 24, 0.05);
+  background: var(--surface-soft);
   border: 1px solid var(--line);
 }
 
@@ -574,7 +802,7 @@ dt {
   gap: 0.75rem;
   padding: 0.75rem 0.85rem;
   border-radius: var(--radius-md);
-  background: rgba(10, 15, 24, 0.05);
+  background: var(--surface-soft);
   border: 1px solid var(--line);
 }
 
@@ -639,7 +867,7 @@ dt {
 .roadmap-detail {
   padding: 0.75rem 0.85rem;
   border-radius: var(--radius-md);
-  background: rgba(10, 15, 24, 0.05);
+  background: var(--surface-soft);
   border: 1px solid var(--line);
 }
 
@@ -670,7 +898,7 @@ dt {
 .surface-list-item {
   padding: 0.85rem 0.9rem;
   border-radius: var(--radius-md);
-  background: rgba(10, 15, 24, 0.05);
+  background: var(--surface-soft);
   border: 1px solid var(--line);
 }
 
@@ -697,8 +925,8 @@ dt {
   padding: 0.75rem 0.95rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.72);
-  color: var(--ink);
+  background: var(--input-bg);
+  color: var(--input-color);
 }
 
 .page-tile {
@@ -706,7 +934,7 @@ dt {
   gap: 0.4rem;
   padding: 1rem;
   border-radius: var(--radius-md);
-  background: rgba(10, 15, 24, 0.05);
+  background: var(--surface-soft);
   border: 1px solid var(--line);
 }
 
@@ -971,7 +1199,7 @@ dt {
   padding: 0.45rem 0.65rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.48);
+  background: var(--surface-strong);
   color: var(--ink);
   cursor: pointer;
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
@@ -989,7 +1217,7 @@ dt {
 
 .reader-scale-option.is-selected {
   border-color: var(--accent);
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--panel);
   box-shadow: 0 0 0 2px var(--accent-soft), 0 10px 18px rgba(0, 0, 0, 0.08);
 }
 
@@ -1059,7 +1287,7 @@ dt {
   padding: 0.5rem 0.7rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.48);
+  background: var(--surface-strong);
   color: var(--ink);
   cursor: pointer;
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
@@ -1077,7 +1305,7 @@ dt {
 
 .reader-font-option.is-selected {
   border-color: var(--accent);
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--panel);
   box-shadow: 0 0 0 2px var(--accent-soft), 0 10px 18px rgba(0, 0, 0, 0.08);
 }
 
@@ -1103,7 +1331,7 @@ dt {
   padding: 0.8rem 0.9rem;
   border-radius: var(--radius-lg);
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.44);
+  background: var(--surface-strong);
 }
 
 .reader-shell[data-reader-theme="ink"] .reader-size-slider,
@@ -1160,7 +1388,7 @@ dt {
   padding: 0.8rem;
   border-radius: var(--radius-lg);
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.52);
+  background: var(--surface-strong);
   color: var(--ink);
   cursor: pointer;
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
@@ -1178,7 +1406,7 @@ dt {
 
 .reader-theme-option.is-selected {
   border-color: var(--accent);
-  background: rgba(255, 255, 255, 0.76);
+  background: var(--panel);
   box-shadow: 0 0 0 2px var(--accent-soft), 0 12px 24px rgba(0, 0, 0, 0.12);
 }
 
@@ -1202,7 +1430,7 @@ dt {
   height: 4.2rem;
   border-radius: 16px;
   border: 1px solid var(--line);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 .reader-theme-option-swatch[data-theme="neutral"] {
@@ -1338,7 +1566,7 @@ dt {
   padding: 0.75rem 0.8rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--surface-strong);
 }
 
 .definition-grid dt {
@@ -1504,8 +1732,8 @@ dt {
   padding-left: 0.55rem;
   padding-right: 0.55rem;
   border-radius: var(--radius-md);
-  background: rgba(24, 163, 110, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(24, 163, 110, 0.18);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .reading-progress-card {
@@ -1516,8 +1744,8 @@ dt {
   margin-top: 1rem;
   padding: 1rem 1.05rem;
   border-radius: calc(var(--radius-lg) - 2px);
-  background: rgba(255, 255, 255, 0.56);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: var(--surface-strong);
+  border: 1px solid var(--surface-border);
   font-family: var(--reader-body-font);
 }
 

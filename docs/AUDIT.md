@@ -15,6 +15,7 @@ This is the reusable audit record and operating procedure for TextPlex. The deta
 | Host | Windows PowerShell |
 | Python | 3.11.2 via `apps/api/.venv` |
 | Node/npm | Node 18.15.0 / npm 9.5.0 locally; CI uses Node 20 |
+| Scheduled audit | Sundays at 13:00 UTC via `.github/workflows/weekly-audit.yml` |
 | Sensitive data policy | Do not inspect, copy, or commit private books, OCR output, learner data, secrets, or generated databases |
 
 The audit was performed against the checkout as it existed, not a clean commit. Existing user changes were preserved. That is useful for real handoff review, but it means audit findings must identify whether a failure belongs to the baseline, the active change, or the environment.
@@ -187,4 +188,22 @@ Run the focused checks for every implementation change. Run the full procedure:
 - after changes to dependencies, CI, storage, authentication, uploads, or network exposure;
 - at least monthly while the project is actively changing.
 
+GitHub Actions runs the automated full audit every Sunday at 13:00 UTC and supports manual dispatch. The scheduled workflow provides repeatable test, build, lint, live-route, and API-health evidence; it does not replace human review of threat boundaries, new configuration, warnings, or sensitive-data handling.
+
 When an audit finds a new class of failure, add three things in the same workstream: a regression test, a concise `AGENTS.md` guardrail if the rule applies to future sessions, and a parameter or limitation entry here. This keeps the audit smaller and more reliable over time instead of turning it into an unbounded checklist.
+
+## Codex scheduled-task companion
+
+Use a Codex scheduled task for the human-readable review that follows the automated GitHub run. Schedule it for Sundays at 15:00 UTC so the GitHub audit has time to finish. Create it from ChatGPT web or the ChatGPT desktop app under **Scheduled**; Codex CLI and the IDE extension do not provide the scheduling management interface.
+
+Prefer a standalone task in a dedicated worktree so the review cannot modify unfinished local work. The computer must remain powered on with the desktop app running when the task needs local project files. The task should be report-only unless a later prompt explicitly authorizes edits, issue changes, commits, or pushes.
+
+Suggested task prompt:
+
+```text
+Every Sunday, perform the TextPlex repository audit using docs/AUDIT.md and AGENTS.md.
+
+Review the current repository state and the latest GitHub Actions Weekly Audit run. Run the focused checks required by the audit, classify each result as pass, failure, warning, or limitation, and compare findings with the previous audit record. Pay special attention to API security boundaries, configuration coverage, dependency drift, test isolation, live route reachability, and sensitive-data handling.
+
+Do not inspect private books, OCR output, learner data, secrets, or generated databases. Do not edit files, create/close issues, commit, or push. Report actionable findings with file paths, evidence, severity, and a recommended next step. If there are no new findings, say so clearly.
+```

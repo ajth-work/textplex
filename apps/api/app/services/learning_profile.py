@@ -202,6 +202,110 @@ def _sentence_read_from_row(row: sqlite3.Row) -> SentenceReadRecord:
     )
 
 
+def _refresh_vocabulary_progress(connection: sqlite3.Connection, language_code: str, lemma: str) -> None:
+    exposure_summary = connection.execute(
+        """
+        SELECT
+            COUNT(*) AS raw_exposures,
+            COALESCE(SUM(weight), 0) AS weighted_exposure,
+            COUNT(DISTINCT book_id || ':' || page_number) AS unique_pages,
+            COUNT(DISTINCT book_id) AS unique_books,
+            MIN(occurred_at) AS first_seen_at,
+            MAX(occurred_at) AS last_seen_at
+        FROM exposure_ledger
+        WHERE language_code = ? AND lemma = ?
+        """,
+        (language_code, lemma),
+    ).fetchone()
+    if exposure_summary is None or int(exposure_summary["raw_exposures"] or 0) <= 0:
+        return
+
+    existing = connection.execute(
+        "SELECT manual_override FROM vocabulary_progress WHERE language_code = ? AND lemma = ?",
+        (language_code, lemma),
+    ).fetchone()
+    manual_override = existing["manual_override"] if existing is not None else None
+    raw_exposures = int(exposure_summary["raw_exposures"] or 0)
+    weighted_exposure = float(exposure_summary["weighted_exposure"] or 0.0)
+    state = str(manual_override) if manual_override else (
+        "review" if raw_exposures >= 5 else "learning" if raw_exposures >= 2 else "new"
+    )
+    confidence_score = min(1.0, round(weighted_exposure / 10.0, 3))
+
+    connection.execute(
+        """
+        INSERT INTO vocabulary_progress (
+            language_code,
+            lemma,
+            raw_exposures,
+            weighted_exposure,
+            unique_pages,
+            unique_books,
+            help_requests,
+            first_seen_at,
+            last_seen_at,
+            state,
+            confidence_score,
+            manual_override
+        )
+        VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
+        ON CONFLICT(language_code, lemma) DO UPDATE SET
+            raw_exposures = excluded.raw_exposures,
+            weighted_exposure = excluded.weighted_exposure,
+            unique_pages = excluded.unique_pages,
+            unique_books = excluded.unique_books,
+            first_seen_at = excluded.first_seen_at,
+            last_seen_at = excluded.last_seen_at,
+            state = excluded.state,
+            confidence_score = excluded.confidence_score,
+            manual_override = excluded.manual_override
+        """,
+        (
+            language_code,
+            lemma,
+            raw_exposures,
+            weighted_exposure,
+            int(exposure_summary["unique_pages"] or 0),
+            int(exposure_summary["unique_books"] or 0),
+            exposure_summary["first_seen_at"],
+            exposure_summary["last_seen_at"],
+            state,
+            confidence_score,
+            manual_override,
+        ),
+    )
+
+
+def _record_exposure(
+    connection: sqlite3.Connection,
+    *,
+    language_code: str,
+    lemma: str,
+    book_id: str,
+    page_number: int,
+    exposure_type: str,
+    weight: float,
+    occurred_at: str,
+) -> None:
+    cursor = connection.execute(
+        """
+        INSERT OR IGNORE INTO exposure_ledger (
+            language_code,
+            lemma,
+            book_id,
+            page_number,
+            exposure_type,
+            weight,
+            occurred_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (language_code, lemma, book_id, page_number, exposure_type, weight, occurred_at),
+    )
+    if cursor.rowcount:
+        _refresh_vocabulary_progress(connection, language_code, lemma)
+
+
 def create_reading_session(data_root: Path, payload: ReadingSessionCreateRequest) -> ReadingSessionRecord:
     started_at = payload.started_at or _utc_now()
     session_id = f"session-{uuid4().hex}"
@@ -282,6 +386,11 @@ def record_page_read(data_root: Path, payload: PageReadCreateRequest) -> PageRea
 
 def record_sentence_read(data_root: Path, payload: SentenceReadCreateRequest) -> SentenceReadRecord:
     completed_at = payload.completed_at or _utc_now()
+    registry = load_registry(resolve_books_root(data_root) / "registry.json")
+    book = registry.get(payload.book_id)
+    if book is None:
+        raise KeyError(f"Book not found: {payload.book_id}")
+    language_code = str(getattr(book, "language_code", None) or "local")
 
     with _connect(data_root) as connection:
         session_row = connection.execute(
@@ -358,6 +467,16 @@ def record_sentence_read(data_root: Path, payload: SentenceReadCreateRequest) ->
                 ),
             )
             token_count += 1
+            _record_exposure(
+                connection,
+                language_code=language_code,
+                lemma=normalized_form,
+                book_id=payload.book_id,
+                page_number=payload.page_number,
+                exposure_type="word_read" if token_kind == "word" else "character_read",
+                weight=1.0 if token_kind == "word" else 0.5,
+                occurred_at=completed_at,
+            )
 
             if token_kind == "word" and any("\u4e00" <= character <= "\u9fff" for character in surface_form):
                 for character in surface_form:
@@ -393,6 +512,16 @@ def record_sentence_read(data_root: Path, payload: SentenceReadCreateRequest) ->
                         ),
                     )
                     character_count += 1
+                    _record_exposure(
+                        connection,
+                        language_code=language_code,
+                        lemma=character,
+                        book_id=payload.book_id,
+                        page_number=payload.page_number,
+                        exposure_type="character_read",
+                        weight=0.5,
+                        occurred_at=completed_at,
+                    )
 
         connection.commit()
         row = connection.execute(

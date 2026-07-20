@@ -472,21 +472,81 @@ function wireReaderPreview() {
     return;
   }
 
-  const profile = previewData?.getReaderProfile?.(bookId);
+  let profile = previewData?.getReaderProfile?.(bookId);
   if (!profile) {
     renderMissingReaderState(bookId);
     return;
   }
 
   if (profile.readerState === "waiting" || profile.pages.length === 0) {
-    renderReaderProcessingState(profile);
+    renderReaderProcessingState(profile, "Preparing the page text and vocabulary data.");
     if (previewData?.hydrateBook) {
-      void previewData.hydrateBook(bookId).then(() => {
-        if (currentBookId() === bookId) {
-          wireReaderPreview();
+      const hydrationRuns = window.__textplexReaderHydrationRuns ?? (window.__textplexReaderHydrationRuns = new Map());
+      if (hydrationRuns.has(bookId)) {
+        return;
+      }
+
+      const hydrationRun = { opened: false };
+      const hydrationPromise = previewData.hydrateBook(bookId, {
+        onProgress: ({ phase, pageNumber, processedPages, totalPages, unitLabel = "pages" }) => {
+          if (currentBookId() !== bookId) {
+            return;
+          }
+          const progress = unitLabel === "sentences"
+            ? phase === "page-start"
+              ? `Loading sentence ${Math.min(processedPages + 1, totalPages)} of ${totalPages}...`
+              : `Loaded ${processedPages} of ${totalPages} sentences.`
+            : phase === "page-start"
+              ? `Loading page ${pageNumber} of ${totalPages}...`
+              : `Loaded ${processedPages} of ${totalPages} pages.`;
+          updateReaderProcessingStatus(progress);
+        },
+        onSentence: ({ pageNumber, sentence, processedSentences, totalSentences, unitLabel = "pages" }) => {
+          if (currentBookId() !== bookId) {
+            return;
+          }
+
+          const partialBook = previewData.appendHydratedSentence?.(bookId, sentence, {
+            pageNumber,
+            mergeAsText: unitLabel === "sentences",
+          });
+          if (!partialBook) {
+            return;
+          }
+
+          updateReaderProcessingStatus(
+            unitLabel === "sentences"
+              ? `Loaded ${processedSentences} of ${totalSentences} sentences.`
+              : `Loaded page ${pageNumber}.`,
+          );
+
+          if (!hydrationRun.opened) {
+            hydrationRun.opened = true;
+            wireReaderPreview();
+          } else {
+            window.__textplexReaderRenderers?.get(bookId)?.refresh?.();
+          }
+        },
+      });
+      hydrationRun.promise = hydrationPromise;
+      hydrationRuns.set(bookId, hydrationRun);
+      void hydrationPromise.then((hydratedBook) => {
+        if (currentBookId() === bookId && hydratedBook) {
+          if (hydrationRun.opened) {
+            window.__textplexReaderRenderers?.get(bookId)?.refresh?.();
+          } else {
+            wireReaderPreview();
+          }
+        } else if (currentBookId() === bookId) {
+          renderReaderProcessingError(profile, "The reader record could not be loaded from the processor.");
         }
       }).catch((error) => {
         console.warn("[TextPlexPreviewRouter] Reader hydration failed:", error);
+        if (currentBookId() === bookId) {
+          renderReaderProcessingError(profile, error instanceof Error ? error.message : "The processor did not return the reader data.");
+        }
+      }).finally(() => {
+        hydrationRuns.delete(bookId);
       });
     }
     return;
@@ -509,8 +569,11 @@ function wireReaderPreview() {
   const moreButton = document.getElementById("readerMoreActions");
   const readerOptionButtons = Array.from(document.querySelectorAll('button[aria-label="More options"], button[aria-label="More actions"]'));
   const readerOptionsBackdrop = document.getElementById("readerOptionsBackdrop");
+  const readerOptionsClose = document.getElementById("readerOptionsClose");
   const readerThemePanel = document.getElementById("readerOptionsPanel");
   const readerThemeStatus = document.getElementById("readerThemeStatus");
+  const readerDensityToggle = document.querySelector("[data-reader-density-toggle]");
+  const readerDensityStatus = document.getElementById("readerDensityStatus");
   const readerTextSizeChoices = Array.from(document.querySelectorAll("[data-text-size-choice]"));
   const readerThemeChoices = Array.from(document.querySelectorAll("[data-theme-choice]"));
   const tokenModeToggle = document.getElementById("readerTokenModeToggle");
@@ -521,6 +584,7 @@ function wireReaderPreview() {
   const readerFontStorageKey = "textplex.readerFont";
   const readerThemeStorageKey = "textplex.readerTheme";
   const readerTextSizeStorageKey = "textplex.readerTextSize";
+  const readerDensityStorageKey = "textplex.readerDensity";
   const savedVocabularyStorageKey = "textplex.preview.savedVocabulary";
   const missingLookupMessage = "No dictionary entry found in imported lexicon.";
   const pageStateKey = `textplex:reader-page:${bookId}`;
@@ -535,6 +599,7 @@ function wireReaderPreview() {
   let readerFont = resolveReaderFont(window.localStorage.getItem(readerFontStorageKey) ?? "mixed");
   let readerTheme = resolveReaderTheme(window.localStorage.getItem(readerThemeStorageKey) ?? "neutral");
   let readerTextSize = resolveReaderTextSize(window.localStorage.getItem(readerTextSizeStorageKey) ?? "medium");
+  let readerDensity = resolveReaderDensity(window.localStorage.getItem(readerDensityStorageKey) ?? readerApp?.dataset.readerDensity ?? "compact");
   let readerOptionsOpen = false;
 
   function setReaderTokenMode(nextMode) {
@@ -580,6 +645,17 @@ function wireReaderPreview() {
 
     readerTextSize = normalizedSize;
     window.localStorage.setItem(readerTextSizeStorageKey, readerTextSize);
+    syncReaderOptionsState();
+  }
+
+  function setReaderDensity(nextDensity) {
+    const normalizedDensity = resolveReaderDensity(nextDensity);
+    if (normalizedDensity === readerDensity) {
+      return;
+    }
+
+    readerDensity = normalizedDensity;
+    window.localStorage.setItem(readerDensityStorageKey, readerDensity);
     syncReaderOptionsState();
   }
 
@@ -668,6 +744,10 @@ function wireReaderPreview() {
     return value === "small" || value === "large" || value === "medium" ? value : "medium";
   }
 
+  function resolveReaderDensity(value) {
+    return value === "full" ? "full" : "compact";
+  }
+
   function formatReaderThemeLabel(value) {
     switch (resolveReaderTheme(value)) {
       case "sepia":
@@ -701,15 +781,26 @@ function wireReaderPreview() {
   function syncReaderOptionsState() {
     const normalizedTheme = resolveReaderTheme(readerTheme);
     const normalizedTextSize = resolveReaderTextSize(readerTextSize);
+    const normalizedDensity = resolveReaderDensity(readerDensity);
     readerTheme = normalizedTheme;
     readerTextSize = normalizedTextSize;
+    readerDensity = normalizedDensity;
     if (readerApp) {
       readerApp.dataset.readerTheme = normalizedTheme;
       readerApp.dataset.readerTextSize = normalizedTextSize;
+      readerApp.dataset.readerDensity = normalizedDensity;
     }
     document.body.dataset.readerTheme = normalizedTheme;
     if (readerThemeStatus) {
       readerThemeStatus.textContent = formatReaderThemeLabel(normalizedTheme);
+    }
+    if (readerDensityToggle) {
+      const isCompact = normalizedDensity === "compact";
+      readerDensityToggle.setAttribute("aria-pressed", String(isCompact));
+      readerDensityToggle.setAttribute("aria-label", `Focus mode ${isCompact ? "on" : "off"}`);
+    }
+    if (readerDensityStatus) {
+      readerDensityStatus.textContent = normalizedDensity === "compact" ? "On" : "Off";
     }
     if (readerThemePanel) {
       readerThemePanel.hidden = !readerOptionsOpen;
@@ -740,7 +831,7 @@ function wireReaderPreview() {
     syncReaderOptionsState();
   }
 
-  const pages = Array.isArray(profile.pages) && profile.pages.length
+  let pages = Array.isArray(profile.pages) && profile.pages.length
     ? profile.pages
     : Array.isArray(profile.sentences)
       ? profile.sentences.map((sentence, index) => ({
@@ -749,7 +840,7 @@ function wireReaderPreview() {
           imageUrl: "",
         }))
       : [];
-  const pageCount = Math.max(pages.length, 1);
+  let pageCount = Math.max(pages.length, 1);
   const params = new URL(window.location.href).searchParams;
   const legacyQueryPage = Number.parseInt(params.get("sentence") ?? "", 10);
   const queryPage = Number.parseInt(params.get("page") ?? "", 10);
@@ -770,13 +861,16 @@ function wireReaderPreview() {
       : 0;
 
   pageIndex = clamp(pageIndex, 0, pageCount - 1);
-  const completedPages = clamp(Number.parseInt(profile.reading?.completedPages ?? 0, 10) || 0, 0, pageCount);
+  let completedPages = clamp(Number.parseInt(profile.reading?.completedPages ?? 0, 10) || 0, 0, pageCount);
   if (pageIndex < completedPages) {
     pageIndex = Math.min(completedPages, pageCount - 1);
     sentenceIndex = 0;
   }
 
   function render() {
+    document.querySelectorAll(".reader-processing-state").forEach((node) => node.remove?.());
+    document.querySelector(".vocab-top")?.removeAttribute?.("hidden");
+    document.querySelector(".vocab-definition")?.removeAttribute?.("hidden");
     const currentPage = pages[pageIndex] ?? pages[0] ?? { pageNumber: 1, sentences: [] };
     const pageSentences = Array.isArray(currentPage.sentences) ? currentPage.sentences : [];
     const currentSentenceCount = Math.max(pageSentences.length, 1);
@@ -830,6 +924,7 @@ function wireReaderPreview() {
     if (lines[0]) {
       const tokenMarkup = buildSentenceTokenMarkup(sentence, readerTokenMode, selectedTokenIndex);
 
+      lines[0].removeAttribute?.("hidden");
       lines[0].style.display = "";
       lines[0].innerHTML = `<div class="sentence-row" aria-label="${escapeHtml(profile.title)} page ${pageIndex + 1} sentence ${sentenceIndex + 1}">${tokenMarkup}</div>`;
       const tokenButtons = Array.from(lines[0].querySelectorAll(".token"));
@@ -850,6 +945,7 @@ function wireReaderPreview() {
     }
 
     if (lines[1]) {
+      lines[1].removeAttribute?.("hidden");
       lines[1].style.display = "none";
     }
 
@@ -913,7 +1009,7 @@ function wireReaderPreview() {
         sessionPill.hidden = false;
         sessionPill.innerHTML = `
           <strong>${escapeHtml(startLabel)}</strong>
-          <span>to ${escapeHtml(endLabel)}</span>
+          <span class="session-range">to ${escapeHtml(endLabel)}</span>
           <span>· ${escapeHtml(durationLabel)}</span>
           <span>· ${escapeHtml(formatNumber(charCount))} chars</span>
           <span>· ${escapeHtml(averageLabel)}/char</span>
@@ -952,6 +1048,30 @@ function wireReaderPreview() {
     window.sessionStorage.setItem(sentenceStateKey, String(sentenceIndex));
     window.sessionStorage.setItem(tokenStateKey(pageIndex, sentenceIndex, readerTokenMode), String(selectedTokenIndex));
     document.title = `${profile.title} ? P${pageIndex + 1}/${pageCount} ? S${sentenceIndex + 1}/${currentSentenceCount} ? TextPlex Reader Preview`;
+  }
+
+  function refreshFromStore() {
+    const nextProfile = previewData?.getReaderProfile?.(bookId);
+    if (!nextProfile || nextProfile.readerState === "waiting" || !nextProfile.pages.length) {
+      return;
+    }
+
+    profile = nextProfile;
+    pages = Array.isArray(profile.pages) && profile.pages.length
+      ? profile.pages
+      : Array.isArray(profile.sentences)
+        ? profile.sentences.map((sentence, index) => ({
+            pageNumber: index + 1,
+            sentences: [sentence],
+            imageUrl: "",
+          }))
+        : [];
+    pageCount = Math.max(pages.length, 1);
+    completedPages = clamp(Number.parseInt(profile.reading?.completedPages ?? 0, 10) || 0, 0, pageCount);
+    pageIndex = clamp(pageIndex, 0, pageCount - 1);
+    const currentPageSentenceCount = Array.isArray(pages[pageIndex]?.sentences) ? pages[pageIndex].sentences.length : 0;
+    sentenceIndex = clamp(sentenceIndex, 0, Math.max(currentPageSentenceCount - 1, 0));
+    render();
   }
 
   function countSentenceCharacters(sentence) {
@@ -1041,6 +1161,8 @@ function wireReaderPreview() {
     render();
   }
 
+  const readerRenderers = window.__textplexReaderRenderers ?? (window.__textplexReaderRenderers = new Map());
+  readerRenderers.set(bookId, { refresh: refreshFromStore });
   render();
   if (tokenModeToggle) {
     tokenModeToggle.addEventListener("click", () => {
@@ -1067,6 +1189,10 @@ function wireReaderPreview() {
   readerOptionsBackdrop?.addEventListener("click", () => {
     toggleReaderOptions(false);
   });
+  readerOptionsClose?.addEventListener("click", (event) => {
+    event.preventDefault();
+    toggleReaderOptions(false);
+  });
   readerThemeChoices.forEach((button) => {
     button.addEventListener("click", (event) => {
       event.preventDefault();
@@ -1078,6 +1204,10 @@ function wireReaderPreview() {
       event.preventDefault();
       setReaderTextSize(button.getAttribute("data-text-size-choice") ?? "medium");
     });
+  });
+  readerDensityToggle?.addEventListener("click", (event) => {
+    event.preventDefault();
+    setReaderDensity(readerDensity === "compact" ? "full" : "compact");
   });
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && readerOptionsOpen) {
@@ -1561,6 +1691,14 @@ function wireSearchPreview() {
 
 function wireImportPreview() {
   const rows = Array.from(document.querySelectorAll(".option-row"));
+  const pastePanel = document.getElementById("pastePanel");
+  const pasteTitle = document.getElementById("pasteTitle");
+  const pasteAuthor = document.getElementById("pasteAuthor");
+  const pasteLanguage = document.getElementById("pasteLanguage");
+  const pasteText = document.getElementById("pasteText");
+  const pasteStatus = document.getElementById("pasteStatus");
+  const pasteCancel = document.getElementById("pasteCancel");
+  const pasteSubmit = document.getElementById("pasteSubmit");
   const recentList = document.querySelector(".recent-list");
   const processorInput = document.getElementById("processorBaseUrl");
   const processorStatus = document.getElementById("processorStatus");
@@ -1701,6 +1839,100 @@ function wireImportPreview() {
       state: "error",
       percent: 100,
     });
+  }
+
+  function openPastePanel() {
+    if (!pastePanel) {
+      toast("Paste import is unavailable in this preview.");
+      return;
+    }
+    pastePanel.hidden = false;
+    pasteText?.focus?.();
+  }
+
+  function closePastePanel() {
+    if (pastePanel) {
+      pastePanel.hidden = true;
+    }
+    if (pasteStatus) {
+      pasteStatus.classList.remove("paste-error");
+      pasteStatus.textContent = "The processor API will create the reader pages and vocabulary data.";
+    }
+  }
+
+  async function submitPastedText() {
+    const text = String(pasteText?.value ?? "").trim();
+    const baseUrl = previewData?.getProcessorBaseUrl?.();
+    if (!text) {
+      if (pasteStatus) {
+        pasteStatus.classList.add("paste-error");
+        pasteStatus.textContent = "Paste some article text before processing it.";
+      }
+      pasteText?.focus?.();
+      return;
+    }
+    if (!baseUrl) {
+      if (pasteStatus) {
+        pasteStatus.classList.add("paste-error");
+        pasteStatus.textContent = "Set the processor API URL before processing pasted text.";
+      }
+      return;
+    }
+
+    if (pasteSubmit) {
+      pasteSubmit.disabled = true;
+    }
+    if (pasteStatus) {
+      pasteStatus.classList.remove("paste-error");
+      pasteStatus.textContent = "Processing pasted text...";
+    }
+    setImportActivity("processing", "Processing pasted text into reader pages.", {
+      badge: "Processing",
+      state: "busy",
+      percent: 48,
+    });
+
+    try {
+      const response = await window.fetch(`${baseUrl}/texts/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          title: String(pasteTitle?.value ?? "").trim() || null,
+          author: String(pasteAuthor?.value ?? "").trim() || null,
+          language_code: String(pasteLanguage?.value ?? "zh"),
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.detail || `Text import failed: ${response.status}`);
+      }
+      const hydratedBook = await previewData?.hydrateBook?.(payload.id);
+      if (!hydratedBook) {
+        throw new Error("The text was imported, but the reader record could not be loaded.");
+      }
+      previewData?.selectBook?.(payload.id);
+      setImportActivity("opening", `Opening ${payload.title || "pasted text"}.`, {
+        badge: "Done",
+        state: "done",
+        percent: 100,
+      });
+      if (pasteStatus) {
+        pasteStatus.textContent = "Text processed. Opening the reader...";
+      }
+      navigateTo(`${routes.reader}?book=${encodeURIComponent(payload.id)}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to process pasted text.";
+      if (pasteStatus) {
+        pasteStatus.classList.add("paste-error");
+        pasteStatus.textContent = message;
+      }
+      setImportError(message);
+    } finally {
+      if (pasteSubmit) {
+        pasteSubmit.disabled = false;
+      }
+    }
   }
 
   function loadImportSession() {
@@ -1989,6 +2221,11 @@ function wireImportPreview() {
         return;
       }
 
+      if (label === "paste text") {
+        openPastePanel();
+        return;
+      }
+
       const record = previewData?.createImportedRecord?.(importKind, createImportTemplate(importKind, label));
       if (record) {
         navigateTo(`${routes.reader}?book=${encodeURIComponent(record.id)}`);
@@ -2001,6 +2238,11 @@ function wireImportPreview() {
         row.click();
       }
     });
+  });
+
+  pasteCancel?.addEventListener("click", closePastePanel);
+  pasteSubmit?.addEventListener("click", () => {
+    void submitPastedText();
   });
 
   importPdfInput?.addEventListener("change", async () => {
@@ -2618,7 +2860,25 @@ function renderMissingReaderState(bookId) {
   document.title = "Book not found · TextPlex Reader Preview";
 }
 
-function renderReaderProcessingState(profile) {
+function updateReaderProcessingStatus(message) {
+  const status = document.getElementById("readerProcessingStatus");
+  if (status) {
+    status.textContent = message;
+  }
+}
+
+function appendReaderProcessingMarkup(node, markup) {
+  if (!node) {
+    return;
+  }
+  if (typeof node.insertAdjacentHTML === "function") {
+    node.insertAdjacentHTML("beforeend", markup);
+    return;
+  }
+  node.innerHTML += markup;
+}
+
+function renderReaderProcessingState(profile, message = "Preparing the page text and vocabulary data.") {
   const title = document.querySelector(".poem-title");
   const author = document.querySelector(".poet");
   const pager = document.getElementById("readerPager");
@@ -2635,26 +2895,61 @@ function renderReaderProcessingState(profile) {
     pager.innerHTML = "";
   }
   if (readingBody) {
-    readingBody.innerHTML = `
+    readingBody.querySelectorAll(".annotated-line").forEach((line) => {
+      line.setAttribute("hidden", "true");
+    });
+    readingBody.querySelector(".reader-processing-state")?.remove?.();
+    appendReaderProcessingMarkup(readingBody, `
       <div class="reader-processing-state" role="status" aria-live="polite">
         <span class="reader-loading-skeleton-line"></span>
         <span class="reader-loading-skeleton-line medium"></span>
         <span class="reader-loading-skeleton-line short"></span>
-        <p>Preparing the page text and vocabulary data.</p>
+        <p id="readerProcessingStatus">${escapeHtml(message)}</p>
       </div>
-    `;
+    `);
   }
   if (vocabSheet) {
-    vocabSheet.innerHTML = `
-      <div class="sheet-handle" aria-hidden="true"></div>
+    vocabSheet.querySelector(".vocab-top")?.setAttribute("hidden", "true");
+    vocabSheet.querySelector(".vocab-definition")?.setAttribute("hidden", "true");
+    vocabSheet.querySelector(".reader-processing-state")?.remove?.();
+    appendReaderProcessingMarkup(vocabSheet, `
       <div class="reader-processing-state" role="status" aria-live="polite">
         <span class="reader-loading-skeleton-line short"></span>
         <span class="reader-loading-skeleton-line medium"></span>
         <p>Definition data will appear after extraction.</p>
       </div>
-    `;
+    `);
   }
   document.title = `${profile.title || "Reader"} - Preparing - TextPlex Reader Preview`;
+}
+
+function renderReaderProcessingError(profile, detail) {
+  const readingBody = document.querySelector(".reading-body");
+  const vocabSheet = document.querySelector(".vocab-sheet");
+  const safeDetail = escapeHtml(detail || "The processor did not return the reader data.");
+  if (readingBody) {
+    readingBody.querySelectorAll(".annotated-line").forEach((line) => line.setAttribute("hidden", "true"));
+    readingBody.querySelector(".reader-processing-state")?.remove?.();
+    appendReaderProcessingMarkup(readingBody, `
+      <div class="reader-processing-state" role="alert">
+        <strong>Reader data could not be loaded</strong>
+        <p>${safeDetail}</p>
+        <button class="button button-secondary" type="button" data-reader-retry>Retry</button>
+      </div>
+    `);
+  }
+  if (vocabSheet) {
+    vocabSheet.querySelector(".vocab-top")?.setAttribute("hidden", "true");
+    vocabSheet.querySelector(".vocab-definition")?.setAttribute("hidden", "true");
+    vocabSheet.querySelector(".reader-processing-state")?.remove?.();
+    appendReaderProcessingMarkup(vocabSheet, `
+      <div class="reader-processing-state" role="alert">
+        <p>Try again after checking the processor connection.</p>
+      </div>
+    `);
+  }
+  document.querySelector("[data-reader-retry]")?.addEventListener("click", () => window.location.reload());
+  document.title = `${profile.title || "Reader"} - Loading error - TextPlex Reader Preview`;
 }
 
 function renderPreviewLoadError(error) {

@@ -97,6 +97,7 @@ The reusable audit procedure and current audit record are in [`docs/AUDIT.md`](d
 - Use declared dependency installation in a disposable environment for clean audits. Treat stale virtualenv passes or skipped required fixtures as insufficient evidence.
 - Run live checks on audit-owned ports and processes. Do not infer route reachability from a static file fetch or reuse an unknown service already bound to the port.
 - Record warnings and known limitations separately from passes. A local workflow review is not a substitute for a successful CI run.
+- The Sunday workflow in `.github/workflows/weekly-audit.yml` is automated evidence, not a replacement for human review of new security boundaries, configuration, warnings, or sensitive-data handling.
 
 ### Python test isolation and dependencies
 

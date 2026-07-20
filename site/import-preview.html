@@ -103,7 +103,47 @@
         padding: 14px;
         margin-bottom: 12px;
         min-height: 78px;
+        cursor: pointer;
       }
+
+      .paste-panel {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+        margin: 4px 0 14px;
+        border: 1px solid rgba(31, 51, 95, 0.14);
+        background: rgba(255, 255, 255, 0.96);
+      }
+
+      .paste-panel[hidden] { display: none; }
+      .paste-panel h2 { margin: 0; font-size: 18px; font-weight: 900; letter-spacing: -0.03em; }
+      .paste-panel p { margin: 0; color: var(--muted); font-size: 13px; font-weight: 700; line-height: 1.45; }
+      .paste-fields { display: grid; gap: 10px; }
+      .paste-fields input, .paste-fields select, .paste-fields textarea {
+        width: 100%;
+        border: 1px solid rgba(31, 36, 48, 0.12);
+        border-radius: 14px;
+        padding: 12px 13px;
+        color: var(--text);
+        background: #fff;
+        font: inherit;
+      }
+      .paste-fields textarea { min-height: 180px; resize: vertical; line-height: 1.5; }
+      .paste-actions { display: flex; gap: 10px; }
+      .paste-actions button {
+        flex: 1 1 0;
+        min-height: 44px;
+        border: 0;
+        border-radius: 13px;
+        padding: 10px 14px;
+        font: inherit;
+        font-weight: 900;
+        cursor: pointer;
+      }
+      .paste-cancel { color: var(--text); background: #eef0f4; }
+      .paste-submit { color: #fff; background: var(--accent); }
+      .paste-submit:disabled { opacity: 0.55; cursor: wait; }
+      .paste-error { color: #b44e3d !important; }
 
       .option-icon {
         width: 44px;
@@ -521,6 +561,29 @@
         <div class="option-text">
           <h3>Paste Text</h3>
           <p>Paste or type any text</p>
+        </div>
+      </section>
+
+      <section class="card paste-panel" id="pastePanel" aria-label="Paste text import" hidden>
+        <h2>Paste text</h2>
+        <p>Add the article text, choose its language, and TextPlex will process it into a reader record.</p>
+        <div class="paste-fields">
+          <input id="pasteTitle" type="text" autocomplete="off" placeholder="Title (optional)" aria-label="Pasted text title" />
+          <input id="pasteAuthor" type="text" autocomplete="off" placeholder="Author or source (optional)" aria-label="Pasted text author" />
+          <select id="pasteLanguage" aria-label="Pasted text language">
+            <option value="zh">Chinese</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+            <option value="ru">Russian</option>
+            <option value="he">Hebrew</option>
+            <option value="en">English</option>
+          </select>
+          <textarea id="pasteText" aria-label="Text to process" placeholder="Paste the article here..."></textarea>
+        </div>
+        <p id="pasteStatus" role="status">The processor API will create the reader pages and vocabulary data.</p>
+        <div class="paste-actions">
+          <button class="paste-cancel" id="pasteCancel" type="button">Cancel</button>
+          <button class="paste-submit" id="pasteSubmit" type="button">Process text</button>
         </div>
       </section>
 

@@ -10,6 +10,14 @@ import {
   demoLibraryBooks,
   demoLearningProfileSummary,
 } from "../lib/demo-data";
+import {
+  appThemeLabels,
+  appThemeOptions,
+  persistAppTheme,
+  readStoredAppTheme,
+  resolveAppTheme,
+  type AppTheme,
+} from "../lib/theme";
 import type {
   BookAnalysisSurfaceResponse,
   ImportSurfaceResponse,
@@ -237,6 +245,7 @@ export function MockProgressSurfaceView() {
 }
 
 export function MockProfileSurfaceView() {
+  const currentTheme = readStoredAppTheme() ?? "neutral";
   const data = {
     profile: demoLearningProfileSummary,
     books: demoLibraryBooks.map((book, index) => ({
@@ -248,7 +257,7 @@ export function MockProfileSurfaceView() {
     })),
     settings: {
       entries: [
-        { key: "theme", value: "night" },
+        { key: "theme", value: currentTheme },
         { key: "readerMode", value: "sentence" },
         { key: "ocrProvider", value: "openai" },
       ],
@@ -444,16 +453,18 @@ export function MockSearchSurfaceView() {
 }
 
 export function MockSettingsSurfaceView() {
+  const initialTheme = readStoredAppTheme() ?? "neutral";
   const [data, setData] = useState<SettingsSurfaceResponse>({
     entries: [
-      { key: "theme", value: "night" },
+      { key: "theme", value: initialTheme },
       { key: "readerMode", value: "sentence" },
     ],
   });
-  const [theme, setTheme] = useState("night");
+  const [theme, setTheme] = useState<AppTheme>(initialTheme);
   const [readerMode, setReaderMode] = useState("sentence");
 
   function saveSettings() {
+    persistAppTheme(theme);
     setData({
       entries: [
         { key: "theme", value: theme },
@@ -474,7 +485,7 @@ export function MockSettingsSurfaceView() {
       ]}
       metrics={[
         { label: "Profile", value: "Local first" },
-        { label: "Theme", value: theme },
+        { label: "Theme", value: appThemeLabels[theme] },
         { label: "Reader mode", value: readerMode },
       ]}
     >
@@ -482,12 +493,13 @@ export function MockSettingsSurfaceView() {
         <h2>Preferences</h2>
         <div className="surface-form">
           <label>
-            Theme
-            <select className="text-input" value={theme} onChange={(event) => setTheme(event.target.value)}>
-              <option value="day">Day</option>
-              <option value="night">Night</option>
-              <option value="sepia">Sepia</option>
-              <option value="forest">Forest</option>
+            App theme
+            <select className="text-input" value={theme} onChange={(event) => setTheme(resolveAppTheme(event.target.value))}>
+              {appThemeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.title}
+                </option>
+              ))}
             </select>
           </label>
           <label>
