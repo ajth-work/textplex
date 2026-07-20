@@ -444,6 +444,101 @@
       .plant i:nth-child(2) { left: 40px; bottom: 24px; transform: rotate(26deg); }
       .plant i:nth-child(3) { left: 50px; bottom: 14px; transform: rotate(-24deg); }
 
+      .analysis-loading-skeleton {
+        display: grid;
+        gap: 14px;
+        padding-top: 2px;
+      }
+
+      .analysis-loading-card {
+        min-height: 118px;
+        padding: 18px;
+        border: 1px solid rgba(31, 36, 48, 0.06);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.78);
+        box-shadow: var(--shadow-soft);
+      }
+
+      .analysis-loading-hero {
+        display: grid;
+        grid-template-columns: 112px minmax(0, 1fr);
+        gap: 16px;
+        align-items: center;
+        min-height: 128px;
+      }
+
+      .analysis-skeleton-block,
+      .analysis-skeleton-line {
+        display: block;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(31, 36, 48, 0.08) 25%, rgba(31, 36, 48, 0.16) 50%, rgba(31, 36, 48, 0.08) 75%);
+        background-size: 200% 100%;
+        animation: analysis-skeleton-shimmer 1.4s ease-in-out infinite;
+      }
+
+      .analysis-skeleton-block {
+        min-height: 112px;
+        border-radius: 20px;
+      }
+
+      .analysis-skeleton-line {
+        height: 14px;
+        margin: 10px 0;
+      }
+
+      .analysis-skeleton-line.title {
+        width: 82%;
+        height: 24px;
+      }
+
+      .analysis-skeleton-line.short {
+        width: 54%;
+      }
+
+      .analysis-skeleton-line.medium {
+        width: 72%;
+      }
+
+      .analysis-skeleton-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .analysis-loading-skeleton[hidden] {
+        display: none;
+      }
+
+      .app:not([data-analysis-hydrated="true"]) > *:not(#analysisLoadingSkeleton) {
+        display: none;
+      }
+
+      .app[data-analysis-hydrated="true"] > #analysisLoadingSkeleton {
+        display: none;
+      }
+
+      .analysis-processing-state {
+        text-align: center;
+      }
+
+      .analysis-processing-state p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      @keyframes analysis-skeleton-shimmer {
+        from { background-position: 100% 0; }
+        to { background-position: -100% 0; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .analysis-skeleton-block,
+        .analysis-skeleton-line {
+          animation: none;
+        }
+      }
+
       @media (max-width: 390px) {
         .app {
           padding-inline: 12px;
@@ -466,11 +561,40 @@
         .distribution-label strong {
           font-size: 16px;
         }
+
+        .analysis-loading-hero {
+          grid-template-columns: 96px minmax(0, 1fr);
+        }
+
+        .analysis-skeleton-grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
   <body>
     <main class="app">
+      <section id="analysisLoadingSkeleton" class="analysis-loading-skeleton" aria-label="Loading text analysis" role="status">
+        <div class="analysis-loading-card analysis-loading-hero">
+          <span class="analysis-skeleton-block"></span>
+          <div>
+            <span class="analysis-skeleton-line title"></span>
+            <span class="analysis-skeleton-line short"></span>
+            <span class="analysis-skeleton-line medium"></span>
+          </div>
+        </div>
+        <div class="analysis-loading-card">
+          <span class="analysis-skeleton-line medium"></span>
+          <span class="analysis-skeleton-line"></span>
+          <span class="analysis-skeleton-line short"></span>
+        </div>
+        <div class="analysis-skeleton-grid">
+          <div class="analysis-loading-card"><span class="analysis-skeleton-block"></span></div>
+          <div class="analysis-loading-card"><span class="analysis-skeleton-block"></span></div>
+        </div>
+        <div class="analysis-loading-card"><span class="analysis-skeleton-line title"></span></div>
+      </section>
+
       <header class="topbar">
         <button class="icon-btn" type="button" aria-label="Back">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -490,27 +614,28 @@
       <section class="hero">
         <div class="art" aria-hidden="true"></div>
         <div class="text-meta">
-          <h2 id="analysisTitle" class="poem">春晓</h2>
-          <p id="analysisAuthor" class="author-cn">孟浩然</p>
-          <p id="analysisMeta" class="meta-line">232 characters · Poetry</p>
-          <p id="analysisDate" class="meta-line">Analyzed May 10, 2024</p>
-          <span class="tag" style="margin-top: 12px;">Synthetic demo content</span>
+          <h2 id="analysisTitle" class="poem"></h2>
+          <p id="analysisAuthor" class="author-cn"></p>
+          <p id="analysisMeta" class="meta-line"></p>
+          <p id="analysisDate" class="meta-line"></p>
+          <span class="tag" style="margin-top: 12px;"></span>
         </div>
       </section>
 
+      <div id="analysisResults">
       <section class="sample-card">
         <h3 class="subhead" style="margin-bottom: 10px;">Sample Text</h3>
-        <p id="analysisSample">这是一个用于演示的短段落，展示 TextPlex 如何分析书籍、记录词汇暴露，并保持内容可测试。</p>
-        <p id="analysisSampleNote" class="small-copy">This panel uses synthetic text only.</p>
+        <p id="analysisSample"></p>
+        <p id="analysisSampleNote" class="small-copy"></p>
       </section>
 
       <section class="card">
         <div class="dual-grid">
           <article class="difficulty">
             <h3 class="subhead">Overall Difficulty</h3>
-            <div id="analysisRing" class="ring" style="background: conic-gradient(var(--green) 78%, rgba(0,0,0,0.08) 0);">
+            <div id="analysisRing" class="ring">
               <span>
-                <strong id="analysisScore">78</strong>
+                <strong id="analysisScore"></strong>
                 <small>/100</small>
               </span>
             </div>
@@ -518,9 +643,9 @@
 
           <article class="level-box" style="border-left: 1px solid var(--line); padding-left: 18px;">
             <h3 class="subhead">Estimated Level</h3>
-            <p id="analysisLevel" class="hsk">HSK 4</p>
-            <p id="analysisLevelSub" class="level-sub">Upper Intermediate</p>
-            <p id="analysisLevelNote" class="level-note">Suitable for your level ✓</p>
+            <p id="analysisLevel" class="hsk"></p>
+            <p id="analysisLevelSub" class="level-sub"></p>
+            <p id="analysisLevelNote" class="level-note"></p>
           </article>
         </div>
       </section>
@@ -544,20 +669,20 @@
         </div>
         <div class="distribution-labels">
           <div class="distribution-label">
-            <strong>9%</strong>
-            <span>HSK 1-2</span>
+            <strong></strong>
+            <span></span>
           </div>
           <div class="distribution-label">
-            <strong>37%</strong>
-            <span>HSK 3-4</span>
+            <strong></strong>
+            <span></span>
           </div>
           <div class="distribution-label">
-            <strong>34%</strong>
-            <span>HSK 5</span>
+            <strong></strong>
+            <span></span>
           </div>
           <div class="distribution-label">
-            <strong>20%</strong>
-            <span>HSK 6</span>
+            <strong></strong>
+            <span></span>
           </div>
         </div>
       </section>
@@ -565,28 +690,29 @@
       <section class="metric-grid">
         <article class="metric">
           <h3>Average Vocabulary Level</h3>
-          <strong style="color: var(--green);">HSK 3.6</strong>
+          <strong style="color: var(--green);"></strong>
         </article>
         <article class="metric">
           <h3>Unknown Words</h3>
-          <strong>14</strong>
-          <span>(8.2%)</span>
+          <strong></strong>
+          <span></span>
         </article>
         <article class="metric">
           <h3>Estimated Comprehension</h3>
-          <strong style="color: var(--green);">82%</strong>
+          <strong style="color: var(--green);"></strong>
         </article>
       </section>
 
       <h2 class="section-heading">Recommended for You</h2>
       <article class="rec-card">
-        <p id="analysisRecommendation">This text is a great fit for building classic vocabulary and improving reading fluency.</p>
+        <p id="analysisRecommendation"></p>
         <div class="plant" aria-hidden="true">
           <i></i>
           <i></i>
           <i></i>
         </div>
       </article>
+      </div>
     </main>
     <script src="./preview-data.js"></script>
     <script type="module" src="./preview-router.js"></script>

@@ -732,6 +732,108 @@ function shouldExpandTokenIntoCharacters(surface) {
   return isCjk(text) && Array.from(text).length > 1;
 }
 
+const pinyinSyllablePattern = /^(?:(?:zh|ch|sh)|[bpmfdtnlgkhjqxrzcsyw])?(?:a|ai|an|ang|ao|e|ei|en|eng|er|o|ong|ou|i|ia|ian|iang|iao|ie|in|ing|iong|iu|u|ua|uai|uan|uang|ue|ui|un|uo|v|ve|van|vn)$/;
+const pinyinSeparatorPattern = /[\s'’\-.0-9]/u;
+
+function normalizePinyinCharacter(character) {
+  switch (character) {
+    case "ā":
+    case "á":
+    case "ǎ":
+    case "à":
+      return "a";
+    case "ē":
+    case "é":
+    case "ě":
+    case "è":
+      return "e";
+    case "ī":
+    case "í":
+    case "ǐ":
+    case "ì":
+      return "i";
+    case "ō":
+    case "ó":
+    case "ǒ":
+    case "ò":
+      return "o";
+    case "ū":
+    case "ú":
+    case "ǔ":
+    case "ù":
+      return "u";
+    case "ǖ":
+    case "ǘ":
+    case "ǚ":
+    case "ǜ":
+    case "ü":
+      return "v";
+    default:
+      return character.toLowerCase();
+  }
+}
+
+function isValidPinyinChunk(chunk) {
+  return pinyinSyllablePattern.test(chunk);
+}
+
+function splitConcatenatedPinyin(romanization, characterCount) {
+  const sourceCharacters = Array.from(String(romanization ?? "").trim()).filter((character) => !pinyinSeparatorPattern.test(character));
+  if (!sourceCharacters.length || characterCount <= 0) {
+    return null;
+  }
+
+  const normalizedCharacters = sourceCharacters.map((character) => normalizePinyinCharacter(character));
+  const maxChunkLength = Math.min(7, normalizedCharacters.length);
+  const memo = new Map();
+
+  function splitFrom(startIndex, remainingCount) {
+    const memoKey = `${startIndex}:${remainingCount}`;
+    if (memo.has(memoKey)) {
+      return memo.get(memoKey) ?? null;
+    }
+
+    const remainingCharacters = normalizedCharacters.length - startIndex;
+    if (remainingCount <= 0 || remainingCharacters < remainingCount) {
+      memo.set(memoKey, null);
+      return null;
+    }
+
+    if (remainingCount === 1) {
+      const chunk = normalizedCharacters.slice(startIndex).join("");
+      if (!chunk || !isValidPinyinChunk(chunk)) {
+        memo.set(memoKey, null);
+        return null;
+      }
+
+      const tail = sourceCharacters.slice(startIndex).join("");
+      memo.set(memoKey, [tail]);
+      return [tail];
+    }
+
+    const maxEndIndex = Math.min(normalizedCharacters.length - (remainingCount - 1), startIndex + maxChunkLength);
+    for (let endIndex = startIndex + 1; endIndex <= maxEndIndex; endIndex += 1) {
+      const chunk = normalizedCharacters.slice(startIndex, endIndex).join("");
+      if (!isValidPinyinChunk(chunk)) {
+        continue;
+      }
+
+      const tail = splitFrom(endIndex, remainingCount - 1);
+      if (tail) {
+        const head = sourceCharacters.slice(startIndex, endIndex).join("");
+        const result = [head, ...tail];
+        memo.set(memoKey, result);
+        return result;
+      }
+    }
+
+    memo.set(memoKey, null);
+    return null;
+  }
+
+  return splitFrom(0, characterCount);
+}
+
 function splitRomanizationByCharacters(romanization, characterCount) {
   const syllables = String(romanization ?? "")
     .trim()
@@ -761,6 +863,13 @@ function splitRomanizationByCharacters(romanization, characterCount) {
       }
     }
     return readings;
+  }
+
+  if (syllables.length === 1 && characterCount > 1) {
+    const splitSyllables = splitConcatenatedPinyin(romanization, characterCount);
+    if (splitSyllables && splitSyllables.length === characterCount) {
+      return splitSyllables;
+    }
   }
 
   const readings = Array.from({ length: characterCount }, () => "");

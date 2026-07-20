@@ -1,4 +1,6 @@
 ﻿const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const { test } = require("node:test");
 
 const { createNode, createPagerNode, createSentenceLineNode, loadPreviewData, loadPreviewRouter } = require("./helpers/browser-context");
@@ -11,6 +13,7 @@ test("router helpers resolve preview routes and render icon-button cards", async
 
   assert.ok(router, "router helpers should be exported to window");
   assert.equal(router.currentBookId(), "spring-dawn");
+  assert.equal(router.currentBookId({ requireExplicit: true }), "");
 
   preview.setSelectedTrackCode("jlpt");
 
@@ -455,6 +458,31 @@ test("chinese reader tokens keep pinyin attached to each token", async () => {
   assert.match(lineOne.innerHTML, /data-token-surface="\u662F"/);
 });
 
+test("record routes require an explicit book id instead of selecting the seeded record", async () => {
+  const browser = loadPreviewRouter({
+    pathname: "/reader-preview.html",
+    search: "?book=little-prince",
+  });
+
+  await browser.window.TextPlexPreviewRouter.ready;
+
+  assert.equal(browser.window.TextPlexPreviewRouter.currentBookId({ requireExplicit: true }), "little-prince");
+});
+
+test("record page shells do not contain seeded Spring Dawn content", () => {
+  const repoRoot = path.resolve(__dirname, "../..");
+  const pages = [
+    "site/reader-preview.html",
+    "site/analysis-preview.html",
+    "site/library-detail-preview.html",
+  ];
+
+  for (const page of pages) {
+    const html = fs.readFileSync(path.join(repoRoot, page), "utf8");
+    assert.doesNotMatch(html, /Spring Dawn|Spring sleep|Synthetic demo content|春晓|孟浩然/iu, page);
+  }
+});
+
 test("reader preview moves the highlight when a different token is clicked", async () => {
   const titleNode = createNode("h1");
   const authorNode = createNode("p");
@@ -714,8 +742,7 @@ test("reader preview shows a not-found state when the lookup misses", async () =
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.equal(browser.document.querySelector(".vocab-definition").textContent, "No dictionary entry found in imported lexicon.");
-  assert.equal(browser.document.getElementById("readerDefinitionFallback").hidden, false);
-  browser.document.getElementById("readerFallbackModeToggle").click();
+  browser.document.getElementById("readerTokenModeToggle").click();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.match(lineOne.innerHTML, /data-token-surface="示"/);
   assert.match(lineOne.innerHTML, /data-token-surface="例"/);
@@ -790,6 +817,47 @@ test("import preview upload row opens a PDF chooser instead of synthesizing a re
   uploadRow.click();
 
   assert.equal(clicked, true);
+});
+
+test("import preview binds controls before live hydration finishes", async () => {
+  const uploadRow = createNode("section");
+  const uploadTitle = createNode("h3");
+  uploadTitle.textContent = "Upload File";
+  uploadRow.querySelector = (selector) => (selector === "h3" ? uploadTitle : null);
+
+  let clicked = false;
+  const importPdfInput = createNode("input");
+  importPdfInput.click = () => {
+    clicked = true;
+  };
+
+  let resolveBooks;
+  const browser = loadPreviewRouter({
+    pathname: "/import-preview.html",
+    localStorageSeed: {
+      "textplex.processorBaseUrl": "http://processor.test:8201",
+    },
+    fetchImpl: () => new Promise((resolve) => {
+      resolveBooks = resolve;
+    }),
+    selectorMap: {
+      ".option-row": [uploadRow],
+      ".recent-list": createNode("div"),
+      "[data-processor-action]": [],
+      "button, a": [],
+    },
+    idMap: {
+      importPdfInput,
+      processorStatus: createNode("p"),
+      processorBaseUrl: createNode("input"),
+    },
+  });
+
+  uploadRow.click();
+  assert.equal(clicked, true);
+
+  resolveBooks({ ok: true, json: async () => [] });
+  await browser.window.TextPlexPreviewRouter.ready;
 });
 
 test("import preview shows processor upload progress while a PDF is being imported", async () => {

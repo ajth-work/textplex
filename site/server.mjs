@@ -21,6 +21,18 @@ const MIME_TYPES = {
   ".txt": "text/plain; charset=utf-8",
 };
 
+const ROUTE_FILES = {
+  "/": "index.html",
+  "/library": "library-preview.html",
+  "/search": "search-preview.html",
+  "/study": "study-preview.html",
+  "/progress": "progress-preview.html",
+  "/activity": "activity-preview.html",
+  "/import": "import-preview.html",
+  "/settings": "profile-preview.html",
+  "/profile": "profile-preview.html",
+};
+
 let activeRun = null;
 
 function baseReport() {
@@ -185,7 +197,11 @@ function sendJson(res, statusCode, payload) {
 }
 
 async function serveStatic(req, res, pathname) {
-  const relativePath = pathname === "/" ? "/index.html" : pathname;
+  const routeFile = ROUTE_FILES[pathname]
+    || (pathname.startsWith("/analysis/") ? "analysis-preview.html" : null)
+    || (pathname.startsWith("/reader/") ? "reader-preview.html" : null)
+    || (pathname.startsWith("/books/") ? "library-detail-preview.html" : null);
+  const relativePath = routeFile ? `/${routeFile}` : pathname;
   const decodedPath = decodeURIComponent(relativePath);
   const safePath = path.normalize(decodedPath).replace(/^([.]{2}[\/\\])+/, "");
   const filePath = path.join(SITE_ROOT, safePath);

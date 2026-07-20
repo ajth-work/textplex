@@ -17,9 +17,24 @@ export default function HomePage() {
           TextPlex turns a scanned PDF into page images, extracted text, and a reader surface that keeps vocabulary, navigation, and reading context together.
         </p>
         <p className="small-copy">
-          {isDemoMode
-            ? "This export is built for GitHub Pages so you can inspect the reader layout without the backend."
-            : "For the full upload and OCR workflow, start the Docker stack; for a static preview, build the GitHub Pages demo export."}
+          {isDemoMode ? (
+            <>
+              This export is built for GitHub Pages so you can inspect the reader layout without the backend. See the{" "}
+              <Link className="ghost-link" href="/roadmap">
+                implementation roadmap
+              </Link>{" "}
+              for the language pack rollout.
+            </>
+          ) : (
+            <>
+              For the full upload and OCR workflow, start the Docker stack; for a static preview, build the GitHub
+              Pages demo export. The{" "}
+              <Link className="ghost-link" href="/roadmap">
+                implementation roadmap
+              </Link>{" "}
+              tracks the language pack rollout.
+            </>
+          )}
         </p>
         <div className="button-row">
           <Link className="button button-primary" href="/library">
@@ -28,13 +43,16 @@ export default function HomePage() {
           <Link className="button button-secondary" href={`/analysis/${DEMO_BOOK_ID}`}>
             View analysis
           </Link>
-          <Link className="button button-secondary" href="/progress">
-            Progress
-          </Link>
-          <Link className="button button-secondary" href="/study">
-            Study
-          </Link>
-        </div>
+        <Link className="button button-secondary" href="/progress">
+          Progress
+        </Link>
+        <Link className="button button-secondary" href="/study">
+          Study
+        </Link>
+        <Link className="button button-secondary" href="/roadmap">
+          Roadmap
+        </Link>
+      </div>
       </section>
 
       <section className="feature-grid">

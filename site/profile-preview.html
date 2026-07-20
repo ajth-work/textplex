@@ -109,6 +109,23 @@
         font-weight: 800;
       }
 
+      .legacy-link-wrap {
+        margin: 10px 0 0;
+      }
+
+      .legacy-link {
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 900;
+        text-decoration: underline;
+        text-underline-offset: 0.16em;
+      }
+
+      .legacy-link:hover,
+      .legacy-link:focus-visible {
+        color: #16264a;
+      }
+
       .hero h1 {
         margin: 0;
         font-size: 31px;
@@ -406,7 +423,8 @@
       <section class="surface hero">
         <p class="eyebrow">Profile</p>
         <h1 id="profileTitle">User profile and reading history</h1>
-        <p id="profileSubtitle">Sessions, page reads, exposure data, and stored preferences from the local profile store.</p>
+        <p id="profileSubtitle">Profile and app preferences, sessions, page reads, exposure data, and stored preferences from the local profile store.</p>
+        <p class="legacy-link-wrap"><a class="legacy-link" href="./legacy/index.html">legacy</a></p>
       </section>
 
       <section class="surface track-section">

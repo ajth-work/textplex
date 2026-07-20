@@ -54,7 +54,7 @@ export function RoutePage({
             {metrics.map((metric) => (
               <div key={metric.label}>
                 <dt>{metric.label}</dt>
-                <dd>{metric.value}</dd>
+                <dd>{metric.value === "Loading" ? <span className="metric-skeleton" aria-label="Loading" /> : metric.value}</dd>
                 {metric.detail ? <p className="small-copy">{metric.detail}</p> : null}
               </div>
             ))}

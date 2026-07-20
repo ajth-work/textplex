@@ -5,6 +5,7 @@ import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 
 import { fetchJson, formatDateTime, isDemoMode, postFormData, type BookRecord } from "../lib/textplex";
+import { LoadingSkeleton } from "./loading-skeleton";
 
 function BookCard({ book }: { book: BookRecord }) {
   return (
@@ -147,7 +148,7 @@ export function LibraryView() {
         </div>
       </header>
 
-      {loading ? <div className="card">Loading books...</div> : null}
+      {loading ? <LoadingSkeleton label="Loading books" /> : null}
       {error ? <div className="card error-card">{error}</div> : null}
 
       {!loading && !error && books.length === 0 ? (

@@ -582,6 +582,7 @@
     trackKey: TRACK_KEY,
     ready: hydrateFromApi(),
     refreshFromApi: hydrateFromApi,
+    hydrateBook,
     getProcessorBaseUrl,
     setProcessorBaseUrl,
     getOcrProvider,
@@ -711,6 +712,8 @@
     return {
       id,
       contentType: value.contentType ?? "book",
+      isLive: Boolean(value.isLive),
+      readerState: value.readerState === "waiting" ? "waiting" : "ready",
       languageCode: value.languageCode ?? "zh",
       title: value.title ?? value.titleCn ?? id,
       titleCn: value.titleCn ?? value.title ?? id,
@@ -1160,9 +1163,7 @@
       lastOpenedAt: normalized.lastOpenedAt ?? new Date().toISOString(),
     });
     store.books = books;
-    if (!store.archivedBookIds.includes(normalized.id)) {
-      store.archivedBookIds = store.archivedBookIds.filter((id) => id !== normalized.id);
-    }
+    store.archivedBookIds = store.archivedBookIds.filter((id) => id !== normalized.id);
     store.selectedBookId = normalized.id;
     saveStore(store);
     window.localStorage.setItem(SELECTION_KEY, normalized.id);
@@ -1612,6 +1613,7 @@
       date: record.analysis?.analysisDate ?? "",
       score: record.analysis?.score ?? 0,
       ring: record.analysis?.ring ?? "#3f9b68",
+      analysisState: record.analysis?.analysisState === "waiting" ? "waiting" : "ready",
       level: record.analysis?.level ?? "",
       levelSub: record.analysis?.levelSub ?? "",
       levelNote: record.analysis?.levelNote ?? "",
@@ -1684,6 +1686,7 @@
       contentType: record.contentType,
       pageCount: pages.length,
       totalSentences: sentences.length,
+      readerState: record.readerState ?? "ready",
       pages,
       sentences,
       imageUrl: pages[0]?.imageUrl ?? record.reader?.imageUrl ?? "",
@@ -1800,6 +1803,9 @@
 
   function ensureReaderPages(record, minimumPages = 3) {
     const reader = record.reader ?? {};
+    if (record.readerState === "waiting") {
+      return Array.isArray(reader.pages) ? reader.pages.map((page, index) => normalizeReaderPage(page, index + 1)) : [];
+    }
     if (Array.isArray(reader.pages) && reader.pages.length) {
       const normalizedPages = reader.pages.map((page, index) => normalizeReaderPage(page, index + 1));
       const pageSentenceCounts = normalizedPages.map((page) => (Array.isArray(page.sentences) ? page.sentences.length : 0));
@@ -2279,7 +2285,12 @@
     }
 
     const inferred = inferProcessorBaseUrl();
-    return inferred ? stripTrailingSlash(inferred) : "";
+    if (inferred) {
+      const normalized = stripTrailingSlash(inferred);
+      window.localStorage.setItem(PROCESSOR_URL_KEY, normalized);
+      return normalized;
+    }
+    return "";
   }
 
   function getOcrProvider() {
@@ -2362,16 +2373,50 @@
       }
     } catch (error) {
       console.warn("[TextPlexPreview] Live API hydration skipped:", error);
+      throw error;
     }
   }
 
-  async function mapApiBookToPreviewRecord(fetchImpl, baseUrl, book) {
+  async function hydrateBook(bookId) {
+    const normalizedId = String(bookId ?? "").trim();
+    const fetchImpl = typeof window.fetch === "function" ? window.fetch.bind(window) : null;
+    const baseUrl = getProcessorBaseUrl();
+    if (!normalizedId || !fetchImpl || !baseUrl) {
+      return null;
+    }
+
+    const previousSelection = getSelectedBookId();
+    const apiBook = await fetchJsonMaybe(
+      fetchImpl,
+      `${baseUrl}/books/${encodeURIComponent(normalizedId)}`,
+      { timeoutMs: 5000 },
+    );
+    if (!apiBook) {
+      return null;
+    }
+
+    const record = await mapApiBookToPreviewRecord(fetchImpl, baseUrl, apiBook, { includeReaderData: true });
+    if (!record) {
+      return null;
+    }
+
+    upsertBook(record);
+    if (previousSelection && previousSelection !== normalizedId && getBook(previousSelection)) {
+      selectBook(previousSelection);
+    }
+    return record;
+  }
+
+  async function mapApiBookToPreviewRecord(fetchImpl, baseUrl, book, options = {}) {
     if (!book || typeof book !== "object" || !book.id) {
       return null;
     }
 
-    const analysis = await fetchJsonMaybe(fetchImpl, `${baseUrl}/analysis/${encodeURIComponent(book.id)}`);
-    const manifest = await fetchJsonMaybe(fetchImpl, `${baseUrl}/books/${encodeURIComponent(book.id)}/pages`);
+    const includeReaderData = options.includeReaderData === true;
+    const analysis = await fetchJsonMaybe(fetchImpl, `${baseUrl}/analysis/${encodeURIComponent(book.id)}`, { timeoutMs: 2500 });
+    const manifest = includeReaderData
+      ? await fetchJsonMaybe(fetchImpl, `${baseUrl}/books/${encodeURIComponent(book.id)}/pages`, { timeoutMs: 5000 })
+      : null;
     const pageRecords = Array.isArray(manifest?.pages) ? manifest.pages : [];
     const liveReaderPages = [];
     const lexiconCache = new Map();
@@ -2382,10 +2427,9 @@
         continue;
       }
 
-      const pageResponse = await fetchJsonMaybe(
-        fetchImpl,
-        `${baseUrl}/books/${encodeURIComponent(book.id)}/pages/${pageNumber}`,
-      );
+      const pageResponse = await fetchJsonMaybe(fetchImpl, `${baseUrl}/books/${encodeURIComponent(book.id)}/pages/${pageNumber}`, {
+        timeoutMs: 5000,
+      });
       const sentences = Array.isArray(pageResponse?.extraction?.page?.sentences) ? pageResponse.extraction.page.sentences : [];
       const mappedPageSentences = [];
 
@@ -2409,19 +2453,10 @@
       });
     }
 
-    const fallbackSentence = createFallbackApiSentence(book, analysis);
-    if (!liveReaderPages.length) {
-      liveReaderPages.push({
-        pageNumber: 1,
-        sentences: [fallbackSentence],
-        imageUrl: "",
-      });
-    }
-
     const readerSentences = liveReaderPages.flatMap((page) => page.sentences);
     const firstPageNumber = Number(pageRecords[0]?.page_number ?? 1);
-    const firstPageImage = Number.isFinite(firstPageNumber)
-      ? await fetchJsonMaybe(fetchImpl, `${baseUrl}/books/${encodeURIComponent(book.id)}/pages/${firstPageNumber}`)
+    const firstPageImage = includeReaderData && Number.isFinite(firstPageNumber)
+      ? await fetchJsonMaybe(fetchImpl, `${baseUrl}/books/${encodeURIComponent(book.id)}/pages/${firstPageNumber}`, { timeoutMs: 5000 })
       : null;
     const processedAt = book.processed_at ?? book.created_at ?? new Date().toISOString();
     const totalPages = Number(book.total_pages ?? analysis?.total_pages ?? liveReaderPages.length ?? 1);
@@ -2444,6 +2479,8 @@
     return createRecord({
       id: String(book.id),
       contentType,
+      isLive: true,
+      readerState: includeReaderData && hasExtraction && readerSentences.length > 0 ? "ready" : "waiting",
       languageCode: book.language_code ?? "zh",
       title: String(book.title ?? book.id),
       titleCn: String(book.title ?? book.id),
@@ -2461,6 +2498,7 @@
       },
       analysis: {
         tag: analysisState,
+        analysisState: hasExtraction ? "ready" : "waiting",
         score: progress || (hasExtraction ? 75 : 45),
         date: formatShortDate(new Date(processedAt)),
         ring: hasExtraction ? "#3f9b68" : "#5c7fe6",
@@ -2568,22 +2606,6 @@
     };
   }
 
-  function createFallbackApiSentence(book, analysis) {
-    const label = String(book.title ?? "Live content");
-    return {
-      phonetics: [],
-      tokens: [{ surface: label }],
-      translation: [],
-      vocabulary: {
-        surface: label,
-        reading: "",
-        tag: analysis?.has_extraction ? "Live" : "Queued",
-        definition: "Live API content",
-        exampleCn: label,
-        exampleEn: "Loaded from the local processor.",
-      },
-    };
-  }
 
   async function lookupLexiconEntry(fetchImpl, baseUrl, languageCode, term, lexiconCache) {
     const normalizedKey = `${languageCode}:${String(term).trim()}`;

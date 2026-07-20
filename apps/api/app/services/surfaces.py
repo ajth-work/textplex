@@ -26,6 +26,7 @@ from app.schemas.surfaces import (
 from app.services.book_registry import load_registry
 from app.services.book_extraction import recover_book_extraction_result
 from app.services.learning_profile import ensure_profile_database, get_learning_profile_summary
+from app.core.paths import resolve_books_root
 from processor.contracts import BookExtractionResult
 
 
@@ -34,7 +35,7 @@ def _utc_now() -> str:
 
 
 def _books_root(data_root: Path) -> Path:
-    return data_root / "books"
+    return resolve_books_root(data_root)
 
 
 def _book_artifact_path(data_root: Path, book_id: str) -> Path:
@@ -46,7 +47,7 @@ def _load_book_extraction(data_root: Path, book_id: str) -> BookExtractionResult
     if not artifact_path.exists():
         return None
     extraction = BookExtractionResult.model_validate_json(artifact_path.read_text(encoding="utf-8"))
-    recovered = recover_book_extraction_result(extraction, data_root=data_root / "books")
+    recovered = recover_book_extraction_result(extraction, data_root=_books_root(data_root))
     if recovered is not extraction:
         artifact_path.write_text(recovered.model_dump_json(indent=2), encoding="utf-8")
         return recovered

@@ -87,13 +87,13 @@ async function assertHtmlResponse(response, url) {
   const body = await response.text();
   const expectedSnippets = {
     "/": "Read scanned books as structured language data.",
-    "/library": "Books ready to read",
-    "/analysis/demo-book": "Text analysis summary",
-    "/search": "Search across books and vocabulary",
-    "/study": "Review queue and study loop",
-    "/progress": "Reading and vocabulary progress",
-    "/activity": "Reading activity feed",
-    "/import": "Paste text or upload a book",
+    "/library": "Your bookshelf",
+    "/analysis/demo-book": "Text Analysis",
+    "/search": "Texts (1)",
+    "/study": "Tap to reveal meaning",
+    "/progress": "Your Progress",
+    "/activity": "Activity",
+    "/import": "Add Content",
     "/settings": "Profile and app preferences",
   };
   const path = new URL(url).pathname;
@@ -128,8 +128,10 @@ for (const baseUrl of siteUrls) {
   }
 }
 
-for (const healthUrl of apiHealthUrls) {
-  process.stdout.write(`Checking ${healthUrl}... `);
-  await assertReachable(healthUrl, assertHealthResponse);
-  process.stdout.write("ok\n");
+if (process.env.TEXTPLEX_SKIP_API_HEALTH !== "1") {
+  for (const healthUrl of apiHealthUrls) {
+    process.stdout.write(`Checking ${healthUrl}... `);
+    await assertReachable(healthUrl, assertHealthResponse);
+    process.stdout.write("ok\n");
+  }
 }

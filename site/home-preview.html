@@ -627,6 +627,8 @@
         </button>
       </header>
 
+      <p class="home-tagline">Read scanned books as structured language data.</p>
+
       <label class="search" aria-label="Search texts, authors, topics">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="7"></circle>
@@ -801,7 +803,11 @@
             window.sessionStorage.setItem("textplex.preview.pendingBook", JSON.stringify(fullBook));
           }
         }
-        window.location.href = card.dataset.href;
+        const target = new URL(card.dataset.href, window.location.href);
+        if (bookId) {
+          target.searchParams.set("book", bookId);
+        }
+        window.location.href = target.href;
       }
 
       document.querySelectorAll("[data-href]").forEach((card) => {

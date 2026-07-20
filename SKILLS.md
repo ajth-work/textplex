@@ -1,6 +1,6 @@
 # TextPlex Codex Skill
 
-This document mirrors the local Codex skill you can keep for TextPlex-specific work.
+This file mirrors the local `textplex` skill. Use it for repeatable TextPlex workflow guidance; use `AGENTS.md` for repo-level policy and commands.
 
 Suggested install target:
 
@@ -18,6 +18,10 @@ description: Use when working on the TextPlex repo, reading pipeline, OCR/extrac
 
 # TextPlex
 
+## Purpose
+
+Use this skill for repeatable TextPlex workflows and implementation habits. For repo-wide conventions, commands, and PR expectations, follow `AGENTS.md`.
+
 ## Canonical Surfaces
 
 - Repo path: `C:\Users\Andrew-John\Documents\TextPlex`
@@ -31,58 +35,25 @@ description: Use when working on the TextPlex repo, reading pipeline, OCR/extrac
 
 Use the local TextPlex repo as the primary operating space. Treat the blueprint PDF as product-direction context, and treat the repo docs as the implementation source of truth unless the user says otherwise.
 
-## Default Workflow
+## Workflow
 
-1. Work from the canonical repo path.
-2. Read the relevant app, API, processor, and contract files before editing.
-3. Keep changes tightly scoped to the requested TextPlex behavior.
-4. Update docs when a change affects architecture, contracts, schema boundaries, or MVP scope.
+1. Read the relevant app, API, processor, and contract files before editing.
+2. Keep changes tightly scoped to the requested TextPlex behavior.
+3. Keep book truth and learner truth separate.
+4. When a request changes code, docs, tests, local data, or GitHub-tracked work, add a brief `CHANGELOG.md` entry that summarizes the general change and date.
 5. Run the smallest meaningful verification for the area changed.
 6. Build the web app before shipping reader/dashboard UI changes when feasible.
 7. Do not treat placeholder scaffolding as product-complete behavior; wire contracts deliberately.
 
-## Local Review
+## When This Skill Fits
 
-Preferred commands:
+- Reader and library UI changes
+- FastAPI endpoint and schema updates
+- Processor contracts, tokenization, extraction, or OCR work
+- Learner profile and exposure logic
+- Documentation updates tied to TextPlex behavior
 
-```powershell
-npm install
-cd apps/web; npm run dev
-cd apps/web; npm run build
-cd apps/api; python -m venv .venv
-cd apps/api; .venv\Scripts\Activate.ps1
-cd apps/api; pip install -e . -e ../../packages/processor
-cd apps/api; uvicorn app.main:app --reload
-cd apps/api; pytest
-cd packages/processor; pytest
-```
-
-If a command cannot be run because dependencies are not installed yet, state that clearly and keep the verification summary honest.
-
-## Core Product Rule
-
-Book truth and learner truth are separate.
-
-- A book database stores what exists in the book.
-- A learner profile database stores what the reader has encountered, asked about, reviewed, or likely knows.
-
-Do not store learner-specific progress state inside a portable book database.
-
-## Processing And Data Rules
-
-The first vertical slice is:
-
-1. import a scanned PDF
-2. split it into page images
-3. extract and normalize text
-4. store structured page/token data in a book database
-5. serve reader-ready page payloads
-6. record page-read events
-7. update learner exposure and vocabulary progress
-
-Keep processing results structured and validated before database writes. Preserve stable contracts between processor output, API payloads, and reader consumption.
-
-## Security And Local Content
+## Local-Sensitive Content
 
 Treat source books, scans, OCR text, learner profile data, and generated SQLite databases as local-sensitive artifacts. Never commit private source material, personal learning history, or secrets. Keep provider credentials in environment variables or server-only configuration.
 

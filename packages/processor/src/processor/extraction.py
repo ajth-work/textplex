@@ -280,7 +280,11 @@ def tokenize_sentence(sentence: str, language_code: str) -> list[TokenResult]:
     if language_code.lower().startswith("zh"):
         surfaces = _tokenize_chinese_sentence(sentence)
     else:
-        surfaces = [match.group(0) for match in _TOKEN_RE.finditer(sentence)]
+        surfaces = [
+            match.group(0)
+            for match in _TOKEN_RE.finditer(sentence)
+            if not _is_punctuation_token(match.group(0))
+        ]
 
     tokens: list[TokenResult] = []
     for index, surface_form in enumerate(surfaces, start=1):

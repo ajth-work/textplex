@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import sqlite3
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -29,7 +30,7 @@ def ensure_lexicon_database(data_root: Path) -> Path:
     if db_path.exists() and db_path.stat().st_size > 0:
         return db_path
 
-    with sqlite3.connect(db_path) as connection:
+    with closing(sqlite3.connect(db_path)) as connection:
         for migration_file in sorted(_migration_root().glob("*.sql")):
             connection.executescript(migration_file.read_text(encoding="utf-8"))
         connection.commit()
@@ -39,22 +40,22 @@ def ensure_lexicon_database(data_root: Path) -> Path:
 
 def _lexicon_entry_count(data_root: Path) -> int:
     db_path = ensure_lexicon_database(data_root)
-    with sqlite3.connect(db_path) as connection:
+    with closing(sqlite3.connect(db_path)) as connection:
         row = connection.execute("SELECT COUNT(*) FROM lexicon_entries").fetchone()
     return int(row[0] if row else 0)
 
 
-def _ensure_seeded_lexicon(data_root: Path) -> None:
+def _ensure_seeded_lexicon(data_root: Path, *, language_code: str = "zh") -> None:
     if _lexicon_entry_count(data_root) > 0:
         return
-    import_lexicon_from_source(None, data_root=data_root, replace_existing=False)
+    import_lexicon_from_source(None, data_root=data_root, language_code=language_code, replace_existing=False)
 
 
 def _connect(data_root: Path) -> sqlite3.Connection:
     db_path = ensure_lexicon_database(data_root)
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
-    return connection
+    return closing(connection)
 
 
 def _normalized_header_map(columns: Iterable[str]) -> dict[str, str]:
@@ -94,6 +95,7 @@ def _upsert_rows(
         surface_form = _safe_text(row.get("surface_form")) or _safe_text(row.get("character")) or _safe_text(row.get("term"))
         if not surface_form:
             continue
+        resolved_entry_type = _safe_text(row.get("entry_type")) or entry_type
 
         connection.execute(
             """
@@ -128,7 +130,7 @@ def _upsert_rows(
             """,
             (
                 language_code,
-                entry_type,
+                resolved_entry_type,
                 surface_form,
                 _safe_text(row.get("pinyin")),
                 _safe_int(row.get("tone")),
@@ -154,7 +156,7 @@ def _read_csv_rows(csv_path: Path) -> list[dict[str, Any]]:
 
 
 def _read_db_rows(db_path: Path, query: str) -> list[dict[str, Any]]:
-    with sqlite3.connect(db_path) as connection:
+    with closing(sqlite3.connect(db_path)) as connection:
         connection.row_factory = sqlite3.Row
         return [dict(row) for row in connection.execute(query).fetchall()]
 
@@ -167,6 +169,56 @@ def _source_candidates(source_root: Path, relative_paths: list[Path]) -> Path | 
     return None
 
 
+def _normalized_language_code(language_code: str) -> str:
+    return language_code.split("-", 1)[0].strip().lower()
+
+
+def _import_from_canonical_pack(
+    *,
+    connection: sqlite3.Connection,
+    source_root: Path,
+    language_code: str,
+    replace_existing: bool,
+) -> tuple[int, int, int]:
+    source_db = _source_candidates(source_root, [Path("lexicon.sqlite3")])
+    source_csv = _source_candidates(source_root, [Path("lexicon.csv")])
+
+    if source_db is None and source_csv is None:
+        raise FileNotFoundError(
+            "Could not find a canonical lexicon pack. Expected lexicon.sqlite3 or lexicon.csv in the supplied root."
+        )
+
+    if replace_existing:
+        connection.execute("DELETE FROM lexicon_entries")
+
+    if source_db is not None:
+        rows = _read_db_rows(source_db, "SELECT * FROM lexicon_entries ORDER BY id")
+        if not rows:
+            raise FileNotFoundError(f"Could not find any rows in {source_db}.")
+        imported_rows = _upsert_rows(
+            connection=connection,
+            rows=rows,
+            language_code=language_code,
+            entry_type="word",
+            source_name=source_db.name,
+            source_path=str(source_db),
+        )
+        vocabulary_rows = len([row for row in rows if _safe_text(row.get("entry_type")) in (None, "", "word")])
+        character_rows = len([row for row in rows if _safe_text(row.get("entry_type")) == "character"])
+        return vocabulary_rows, character_rows, imported_rows
+
+    rows = _read_csv_rows(source_csv)
+    imported_rows = _upsert_rows(
+        connection=connection,
+        rows=rows,
+        language_code=language_code,
+        entry_type="word",
+        source_name=source_csv.name,
+        source_path=str(source_csv),
+    )
+    return len(rows), 0, imported_rows
+
+
 def import_lexicon_from_source(
     source_root: str | Path | None = None,
     *,
@@ -174,8 +226,39 @@ def import_lexicon_from_source(
     language_code: str = "zh",
     replace_existing: bool = False,
 ) -> LexiconImportSummary:
-    resolved_source_root = Path(source_root).expanduser().resolve() if source_root else get_lexicon_source_root().resolve()
+    normalized_language_code = _normalized_language_code(language_code)
+    resolved_source_root = (
+        Path(source_root).expanduser().resolve()
+        if source_root
+        else get_lexicon_source_root(normalized_language_code).resolve()
+    )
     db_path = ensure_lexicon_database(data_root)
+
+    canonical_pack_root = _source_candidates(
+        resolved_source_root,
+        [
+            Path("lexicon.sqlite3"),
+            Path("lexicon.csv"),
+        ],
+    )
+
+    if canonical_pack_root is not None:
+        with _connect(data_root) as connection:
+            vocabulary_rows, character_rows, imported_rows = _import_from_canonical_pack(
+                connection=connection,
+                source_root=resolved_source_root,
+                language_code=normalized_language_code,
+                replace_existing=replace_existing,
+            )
+            connection.commit()
+
+        return LexiconImportSummary(
+            database_path=str(db_path),
+            source_root=str(resolved_source_root),
+            vocabulary_rows=vocabulary_rows,
+            character_rows=character_rows,
+            imported_rows=imported_rows,
+        )
 
     vocab_db = _source_candidates(
         resolved_source_root,
@@ -205,9 +288,13 @@ def import_lexicon_from_source(
     )
 
     if vocab_db is None and vocab_csv is None:
-        raise FileNotFoundError("Could not find a full vocabulary source in the supplied root.")
+        raise FileNotFoundError(
+            f"Could not find a vocabulary source for {normalized_language_code} in the supplied root."
+        )
     if char_db is None and char_csv is None:
-        raise FileNotFoundError("Could not find a full character source in the supplied root.")
+        raise FileNotFoundError(
+            f"Could not find a character source for {normalized_language_code} in the supplied root."
+        )
 
     with _connect(data_root) as connection:
         if replace_existing:
@@ -226,7 +313,7 @@ def import_lexicon_from_source(
             imported_rows += _upsert_rows(
                 connection=connection,
                 rows=rows,
-                language_code=language_code,
+                language_code=normalized_language_code,
                 entry_type="word",
                 source_name=vocab_db.name,
                 source_path=str(vocab_db),
@@ -245,7 +332,7 @@ def import_lexicon_from_source(
                     }
                     for row in rows
                 ],
-                language_code=language_code,
+                language_code=normalized_language_code,
                 entry_type="word",
                 source_name=vocab_csv.name,
                 source_path=str(vocab_csv),
@@ -273,7 +360,7 @@ def import_lexicon_from_source(
             imported_rows += _upsert_rows(
                 connection=connection,
                 rows=rows,
-                language_code=language_code,
+                language_code=normalized_language_code,
                 entry_type="character",
                 source_name=char_db.name,
                 source_path=str(char_db),
@@ -297,7 +384,7 @@ def import_lexicon_from_source(
                     }
                     for row in rows
                 ],
-                language_code=language_code,
+                language_code=normalized_language_code,
                 entry_type="character",
                 source_name=char_csv.name,
                 source_path=str(char_csv),
@@ -320,9 +407,10 @@ def lookup_lexicon_entry(
     language_code: str,
     term: str,
 ) -> LexiconLookupResponse:
-    _ensure_seeded_lexicon(data_root)
+    normalized_language_code = _normalized_language_code(language_code)
+    _ensure_seeded_lexicon(data_root, language_code=normalized_language_code)
     db_path = ensure_lexicon_database(data_root)
-    with sqlite3.connect(db_path) as connection:
+    with closing(sqlite3.connect(db_path)) as connection:
         connection.row_factory = sqlite3.Row
         rows = connection.execute(
             """
@@ -331,12 +419,12 @@ def lookup_lexicon_entry(
             WHERE language_code = ? AND surface_form = ?
             ORDER BY CASE entry_type WHEN 'word' THEN 0 ELSE 1 END, frequency_rank IS NULL, frequency_rank ASC, id ASC
             """,
-            (language_code, term),
+            (normalized_language_code, term),
         ).fetchall()
 
     return LexiconLookupResponse(
         query=term,
-        language_code=language_code,
+        language_code=normalized_language_code,
         entries=[
             LexiconEntryRecord(
                 id=row["id"],
@@ -365,14 +453,15 @@ def lookup_lexicon_pinyin_map(
     language_code: str,
     terms: Iterable[str],
 ) -> dict[str, str]:
+    normalized_language_code = _normalized_language_code(language_code)
     normalized_terms = [term.strip() for term in terms if isinstance(term, str) and term.strip()]
     if not normalized_terms:
         return {}
 
-    _ensure_seeded_lexicon(data_root)
+    _ensure_seeded_lexicon(data_root, language_code=normalized_language_code)
     db_path = ensure_lexicon_database(data_root)
     placeholders = ", ".join("?" for _ in normalized_terms)
-    with sqlite3.connect(db_path) as connection:
+    with closing(sqlite3.connect(db_path)) as connection:
         connection.row_factory = sqlite3.Row
         rows = connection.execute(
             f"""
@@ -381,7 +470,7 @@ def lookup_lexicon_pinyin_map(
             WHERE language_code = ? AND surface_form IN ({placeholders}) AND pinyin IS NOT NULL AND pinyin != ''
             ORDER BY CASE entry_type WHEN 'word' THEN 0 ELSE 1 END, frequency_rank IS NULL, frequency_rank ASC, id ASC
             """,
-            [language_code, *normalized_terms],
+            [normalized_language_code, *normalized_terms],
         ).fetchall()
 
         pinyin_map: dict[str, str] = {}
@@ -435,14 +524,15 @@ def lookup_lexicon_entry_map(
     language_code: str,
     terms: Iterable[str],
 ) -> dict[str, LexiconEntryRecord]:
+    normalized_language_code = _normalized_language_code(language_code)
     normalized_terms = [term.strip() for term in terms if isinstance(term, str) and term.strip()]
     if not normalized_terms:
         return {}
 
-    _ensure_seeded_lexicon(data_root)
+    _ensure_seeded_lexicon(data_root, language_code=normalized_language_code)
     db_path = ensure_lexicon_database(data_root)
     placeholders = ", ".join("?" for _ in normalized_terms)
-    with sqlite3.connect(db_path) as connection:
+    with closing(sqlite3.connect(db_path)) as connection:
         connection.row_factory = sqlite3.Row
         rows = connection.execute(
             f"""
@@ -451,7 +541,7 @@ def lookup_lexicon_entry_map(
             WHERE language_code = ? AND surface_form IN ({placeholders})
             ORDER BY CASE entry_type WHEN 'word' THEN 0 ELSE 1 END, frequency_rank IS NULL, frequency_rank ASC, id ASC
             """,
-            [language_code, *normalized_terms],
+            [normalized_language_code, *normalized_terms],
         ).fetchall()
 
     entry_map: dict[str, LexiconEntryRecord] = {}

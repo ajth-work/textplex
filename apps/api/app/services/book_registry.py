@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +24,14 @@ from app.services.ocr import normalize_ocr_provider
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _max_pdf_pages() -> int:
+    raw_value = os.getenv("TEXTPLEX_MAX_PDF_PAGES", "1000").strip()
+    try:
+        return max(1, int(raw_value))
+    except ValueError:
+        return 1000
 
 
 def _book_id_from_hash(source_sha256: str) -> str:
@@ -187,6 +196,8 @@ def import_book_from_path(
         source_title = reader.metadata.title if reader.metadata else None
         source_author = reader.metadata.author if reader.metadata else None
         total_pages = len(reader.pages)
+        if total_pages > _max_pdf_pages():
+            raise ValueError("The PDF exceeds the configured page limit.")
         source_filename = resolved_source_path.name
 
     book_id = _book_id_from_hash(source_sha256)

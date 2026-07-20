@@ -25,12 +25,36 @@ const ready = boot();
 
 async function boot() {
   const previewReady = previewData?.ready ?? Promise.resolve();
-  void previewReady.catch((error) => {
-    console.warn("[TextPlexPreviewRouter] Preview hydration skipped:", error);
-  });
+  const app = document.querySelector(".app");
+  app?.setAttribute("aria-busy", "true");
   bindNavigationButtons();
   bindTextActions();
-  bindPageSpecificActions();
+  const importBoundBeforeHydration = currentFile === "import-preview.html";
+  if (importBoundBeforeHydration) {
+    wireImportPreview();
+  }
+  try {
+    await previewReady;
+  } catch (error) {
+    console.warn("[TextPlexPreviewRouter] Preview hydration failed:", error);
+    if (importBoundBeforeHydration) {
+      const processorStatus = document.getElementById("processorStatus");
+      if (processorStatus) {
+        processorStatus.textContent = "Live data is unavailable. Local import controls remain available.";
+      }
+      app?.setAttribute("aria-busy", "false");
+      return;
+    }
+    renderPreviewLoadError(error);
+    return;
+  }
+  if (!importBoundBeforeHydration) {
+    bindPageSpecificActions();
+  }
+  app?.setAttribute("data-reader-hydrated", "true");
+  app?.setAttribute("data-analysis-hydrated", "true");
+  app?.setAttribute("data-library-detail-hydrated", "true");
+  app?.setAttribute("aria-busy", "false");
 }
 
 function bindNavigationButtons() {
@@ -49,6 +73,10 @@ function bindNavigationButtons() {
     .forEach((button) => {
       button.addEventListener("click", () => {
         const label = button.getAttribute("aria-label");
+
+        if (currentFile === "reader-preview.html" && (label === "More options" || label === "More actions")) {
+          return;
+        }
 
         if (label === "Bookmark") {
           button.classList.toggle("is-active");
@@ -356,7 +384,12 @@ function wireHomePreview() {
 }
 
 function wireAnalysisPreview() {
-  const profileKey = currentBookId();
+  const profileKey = currentBookId({ requireExplicit: true });
+  if (!profileKey) {
+    renderMissingBookState("analysis", profileKey);
+    return;
+  }
+
   const profile = previewData?.getAnalysisProfile?.(profileKey);
   if (!profile) {
     renderMissingBookState("analysis", profileKey);
@@ -364,6 +397,11 @@ function wireAnalysisPreview() {
   }
 
   previewData?.selectBook?.(profileKey);
+
+  if (profile.analysisState === "waiting") {
+    renderAnalysisProcessingState(profile);
+    return;
+  }
 
   const art = document.querySelector(".art");
   const title = document.getElementById("analysisTitle");
@@ -428,10 +466,29 @@ function wireAnalysisPreview() {
 }
 
 function wireReaderPreview() {
-  const bookId = currentBookId();
+  const bookId = currentBookId({ requireExplicit: true });
+  if (!bookId) {
+    renderMissingReaderState(bookId);
+    return;
+  }
+
   const profile = previewData?.getReaderProfile?.(bookId);
   if (!profile) {
     renderMissingReaderState(bookId);
+    return;
+  }
+
+  if (profile.readerState === "waiting" || profile.pages.length === 0) {
+    renderReaderProcessingState(profile);
+    if (previewData?.hydrateBook) {
+      void previewData.hydrateBook(bookId).then(() => {
+        if (currentBookId() === bookId) {
+          wireReaderPreview();
+        }
+      }).catch((error) => {
+        console.warn("[TextPlexPreviewRouter] Reader hydration failed:", error);
+      });
+    }
     return;
   }
 
@@ -448,25 +505,37 @@ function wireReaderPreview() {
   const vocabDefinition = document.querySelector(".vocab-definition");
   const exampleCn = document.querySelector(".example-cn");
   const exampleEn = document.querySelector(".example-en");
-  const saveButton = document.querySelector(".button-primary");
+  const vocabSaveButton = document.querySelector("[data-vocab-save]");
   const moreButton = document.getElementById("readerMoreActions");
+  const readerOptionButtons = Array.from(document.querySelectorAll('button[aria-label="More options"], button[aria-label="More actions"]'));
+  const readerOptionsBackdrop = document.getElementById("readerOptionsBackdrop");
+  const readerThemePanel = document.getElementById("readerOptionsPanel");
+  const readerThemeStatus = document.getElementById("readerThemeStatus");
+  const readerTextSizeChoices = Array.from(document.querySelectorAll("[data-text-size-choice]"));
+  const readerThemeChoices = Array.from(document.querySelectorAll("[data-theme-choice]"));
   const tokenModeToggle = document.getElementById("readerTokenModeToggle");
   const fontToggle = document.getElementById("readerFontToggle");
-  const fallbackModeToggle = document.getElementById("readerFallbackModeToggle");
-  const fallbackModeWrap = document.getElementById("readerDefinitionFallback");
   const readerApp = document.querySelector(".app");
   const processorBaseUrl = previewData?.getProcessorBaseUrl?.() ?? "";
   const readerTokenModeStorageKey = "textplex.readerTokenMode";
   const readerFontStorageKey = "textplex.readerFont";
+  const readerThemeStorageKey = "textplex.readerTheme";
+  const readerTextSizeStorageKey = "textplex.readerTextSize";
+  const savedVocabularyStorageKey = "textplex.preview.savedVocabulary";
   const missingLookupMessage = "No dictionary entry found in imported lexicon.";
   const pageStateKey = `textplex:reader-page:${bookId}`;
   const sentenceStateKey = `textplex:reader-sentence:${bookId}`;
   const tokenStateKey = (page, sentence, mode) => `textplex:reader-token:${bookId}:${page}:${sentence}:${mode}`;
   const tokenLookupCache = new Map();
   const tokenLookupPending = new Map();
+  let savedVocabulary = loadSavedVocabulary();
+  let activeVocabularySelection = null;
   let activeTokenLookupKey = "";
   let readerTokenMode = resolveReaderTokenMode(window.localStorage.getItem(readerTokenModeStorageKey) ?? "word");
   let readerFont = resolveReaderFont(window.localStorage.getItem(readerFontStorageKey) ?? "mixed");
+  let readerTheme = resolveReaderTheme(window.localStorage.getItem(readerThemeStorageKey) ?? "neutral");
+  let readerTextSize = resolveReaderTextSize(window.localStorage.getItem(readerTextSizeStorageKey) ?? "medium");
+  let readerOptionsOpen = false;
 
   function setReaderTokenMode(nextMode) {
     const normalizedMode = resolveReaderTokenMode(nextMode);
@@ -490,6 +559,185 @@ function wireReaderPreview() {
     readerFont = normalizedMode;
     window.localStorage.setItem(readerFontStorageKey, readerFont);
     render();
+  }
+
+  function setReaderTheme(nextTheme) {
+    const normalizedTheme = resolveReaderTheme(nextTheme);
+    if (normalizedTheme === readerTheme) {
+      return;
+    }
+
+    readerTheme = normalizedTheme;
+    window.localStorage.setItem(readerThemeStorageKey, readerTheme);
+    syncReaderOptionsState();
+  }
+
+  function setReaderTextSize(nextSize) {
+    const normalizedSize = resolveReaderTextSize(nextSize);
+    if (normalizedSize === readerTextSize) {
+      return;
+    }
+
+    readerTextSize = normalizedSize;
+    window.localStorage.setItem(readerTextSizeStorageKey, readerTextSize);
+    syncReaderOptionsState();
+  }
+
+  function loadSavedVocabulary() {
+    try {
+      const rawValue = window.localStorage.getItem(savedVocabularyStorageKey);
+      if (!rawValue) {
+        return [];
+      }
+
+      const parsedValue = JSON.parse(rawValue);
+      return Array.isArray(parsedValue) ? parsedValue.filter((entry) => entry && typeof entry.key === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function persistSavedVocabulary() {
+    window.localStorage.setItem(savedVocabularyStorageKey, JSON.stringify(savedVocabulary));
+  }
+
+  function buildVocabularySaveKey(selection) {
+    if (!selection) {
+      return "";
+    }
+
+    return [
+      bookId,
+      normalizeText(String(selection.surface ?? "")),
+      normalizeText(String(selection.reading ?? "")),
+    ].join(":");
+  }
+
+  function updateVocabularySaveButton(selection) {
+    if (!vocabSaveButton) {
+      return;
+    }
+
+    const saveKey = buildVocabularySaveKey(selection);
+    const isSaved = Boolean(saveKey) && savedVocabulary.some((entry) => entry.key === saveKey);
+    vocabSaveButton.classList.toggle("is-active", isSaved);
+    vocabSaveButton.setAttribute("aria-pressed", String(isSaved));
+    vocabSaveButton.setAttribute("aria-label", isSaved ? "Remove from Vocabulary" : "Save to Vocabulary");
+    vocabSaveButton.title = isSaved ? "Remove from Vocabulary" : "Save to Vocabulary";
+  }
+
+  function toggleVocabularySave(selection) {
+    const saveKey = buildVocabularySaveKey(selection);
+    if (!saveKey) {
+      return;
+    }
+
+    const existingIndex = savedVocabulary.findIndex((entry) => entry.key === saveKey);
+    if (existingIndex >= 0) {
+      savedVocabulary.splice(existingIndex, 1);
+      persistSavedVocabulary();
+      updateVocabularySaveButton(selection);
+      toast("Removed from the preview vocabulary list.");
+      return;
+    }
+
+    savedVocabulary.unshift({
+      key: saveKey,
+      bookId,
+      surface: String(selection.surface ?? ""),
+      reading: String(selection.reading ?? ""),
+      definition: String(selection.definition ?? ""),
+      tag: String(selection.tag ?? ""),
+      savedAt: new Date().toISOString(),
+    });
+    persistSavedVocabulary();
+    updateVocabularySaveButton(selection);
+    toast("Saved to the preview vocabulary list.");
+  }
+
+  function resolveReaderTheme(value) {
+    if (value === "matrix") {
+      return "ceramic";
+    }
+    return value === "sepia" || value === "ink" || value === "black" || value === "jade" || value === "ceramic" || value === "crimson"
+      ? value
+      : "neutral";
+  }
+
+  function resolveReaderTextSize(value) {
+    return value === "small" || value === "large" || value === "medium" ? value : "medium";
+  }
+
+  function formatReaderThemeLabel(value) {
+    switch (resolveReaderTheme(value)) {
+      case "sepia":
+        return "Warm Sepia";
+      case "ink":
+        return "Dark Ink";
+      case "black":
+        return "Pitch Black";
+      case "jade":
+        return "Jade Gold";
+      case "ceramic":
+        return "Ceramic";
+      case "crimson":
+        return "Crimson Gold";
+      default:
+        return "Neutral";
+    }
+  }
+
+  function formatReaderTextSizeLabel(value) {
+    switch (resolveReaderTextSize(value)) {
+      case "small":
+        return "Small";
+      case "large":
+        return "Large";
+      default:
+        return "Medium";
+    }
+  }
+
+  function syncReaderOptionsState() {
+    const normalizedTheme = resolveReaderTheme(readerTheme);
+    const normalizedTextSize = resolveReaderTextSize(readerTextSize);
+    readerTheme = normalizedTheme;
+    readerTextSize = normalizedTextSize;
+    if (readerApp) {
+      readerApp.dataset.readerTheme = normalizedTheme;
+      readerApp.dataset.readerTextSize = normalizedTextSize;
+    }
+    document.body.dataset.readerTheme = normalizedTheme;
+    if (readerThemeStatus) {
+      readerThemeStatus.textContent = formatReaderThemeLabel(normalizedTheme);
+    }
+    if (readerThemePanel) {
+      readerThemePanel.hidden = !readerOptionsOpen;
+    }
+    if (readerOptionsBackdrop) {
+      readerOptionsBackdrop.hidden = !readerOptionsOpen;
+    }
+    readerOptionButtons.forEach((button) => {
+      button.setAttribute("aria-expanded", String(readerOptionsOpen));
+    });
+    readerThemeChoices.forEach((button) => {
+      const theme = resolveReaderTheme(button.getAttribute("data-theme-choice"));
+      const selected = theme === normalizedTheme;
+      button.classList.toggle("is-selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    readerTextSizeChoices.forEach((button) => {
+      const textSize = resolveReaderTextSize(button.getAttribute("data-text-size-choice"));
+      const selected = textSize === normalizedTextSize;
+      button.classList.toggle("is-selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+      button.setAttribute("aria-label", `Text size ${formatReaderTextSizeLabel(textSize)}`);
+    });
+  }
+
+  function toggleReaderOptions(forceOpen = null) {
+    readerOptionsOpen = typeof forceOpen === "boolean" ? forceOpen : !readerOptionsOpen;
+    syncReaderOptionsState();
   }
 
   const pages = Array.isArray(profile.pages) && profile.pages.length
@@ -557,7 +805,10 @@ function wireReaderPreview() {
     }
     if (readerApp) {
       readerApp.dataset.readerFont = readerFont;
+      readerApp.dataset.readerTheme = readerTheme;
+      readerApp.dataset.readerTextSize = readerTextSize;
     }
+    document.body.dataset.readerTheme = readerTheme;
     if (tokenModeToggle) {
       tokenModeToggle.textContent = readerTokenMode === "character" ? "Char" : "Word";
       tokenModeToggle.classList.toggle("is-active", readerTokenMode === "character");
@@ -575,16 +826,6 @@ function wireReaderPreview() {
       fontToggle.setAttribute("aria-label", `Cycle reader font. Current: ${fontLabel}`);
       fontToggle.title = `Reader font: ${fontLabel}`;
       fontToggle.disabled = !sentence;
-    }
-    const tokenLookupMissing = selectedTokenState.definition === missingLookupMessage;
-    if (fallbackModeToggle) {
-      fallbackModeToggle.textContent = readerTokenMode === "character" ? "Word mode" : "Try Char mode";
-      fallbackModeToggle.setAttribute("aria-label", readerTokenMode === "character" ? "Switch to word mode" : "Try character mode");
-      fallbackModeToggle.title = readerTokenMode === "character" ? "Switch back to word mode" : "Switch to character mode";
-      fallbackModeToggle.hidden = !tokenLookupMissing;
-    }
-    if (fallbackModeWrap) {
-      fallbackModeWrap.hidden = !tokenLookupMissing;
     }
     if (lines[0]) {
       const tokenMarkup = buildSentenceTokenMarkup(sentence, readerTokenMode, selectedTokenIndex);
@@ -642,20 +883,22 @@ function wireReaderPreview() {
       }
     }
     if (vocabDefinition) {
-      vocabDefinition.textContent = selectedTokenState.definition ?? "Synthetic sentence preview.";
+      const lookupPending = Boolean(selectedTokenLookupKey && tokenLookupPending.has(selectedTokenLookupKey));
+      vocabDefinition.classList.toggle("is-loading", lookupPending);
+      vocabDefinition.textContent = lookupPending ? "" : selectedTokenState.definition ?? "No dictionary entry found in imported lexicon.";
     }
+    activeVocabularySelection = selectedTokenState;
+    updateVocabularySaveButton(selectedTokenState);
     if (exampleCn) {
       exampleCn.textContent = selectedTokenState.exampleCn ?? "";
     }
     if (exampleEn) {
       exampleEn.innerHTML = selectedTokenState.exampleEn ?? "";
     }
-    if (saveButton) {
-      saveButton.textContent = "Save to Vocabulary";
-    }
     if (moreButton) {
       moreButton.setAttribute("aria-label", "More actions");
     }
+    syncReaderOptionsState();
     if (sessionPill) {
       const activeSession = reading?.activeSession ?? null;
       if (activeSession) {
@@ -809,11 +1052,38 @@ function wireReaderPreview() {
       setReaderFont(nextReaderFontMode(readerFont));
     });
   }
-  if (fallbackModeToggle) {
-    fallbackModeToggle.addEventListener("click", () => {
-      setReaderTokenMode("character");
+  if (vocabSaveButton) {
+    vocabSaveButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      toggleVocabularySave(activeVocabularySelection);
     });
   }
+  readerOptionButtons.forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      toggleReaderOptions();
+    });
+  });
+  readerOptionsBackdrop?.addEventListener("click", () => {
+    toggleReaderOptions(false);
+  });
+  readerThemeChoices.forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      setReaderTheme(button.getAttribute("data-theme-choice") ?? "neutral");
+    });
+  });
+  readerTextSizeChoices.forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      setReaderTextSize(button.getAttribute("data-text-size-choice") ?? "medium");
+    });
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && readerOptionsOpen) {
+      toggleReaderOptions(false);
+    }
+  });
   window.addEventListener("pagehide", finalizeCurrentSession);
   window.addEventListener("beforeunload", finalizeCurrentSession);
 
@@ -1024,7 +1294,12 @@ function wireReaderPreview() {
 
 function wireLibraryDetailPreview() {
 
-  const bookId = currentBookId();
+  const bookId = currentBookId({ requireExplicit: true });
+  if (!bookId) {
+    renderMissingBookState("library", bookId);
+    return;
+  }
+
   const profile = previewData?.getLibraryProfile?.(bookId);
   if (!profile) {
     renderMissingBookState("library", bookId);
@@ -2343,6 +2618,108 @@ function renderMissingReaderState(bookId) {
   document.title = "Book not found · TextPlex Reader Preview";
 }
 
+function renderReaderProcessingState(profile) {
+  const title = document.querySelector(".poem-title");
+  const author = document.querySelector(".poet");
+  const pager = document.getElementById("readerPager");
+  const readingBody = document.querySelector(".reading-body");
+  const vocabSheet = document.querySelector(".vocab-sheet");
+
+  if (title) {
+    title.textContent = profile.title || "Reader";
+  }
+  if (author) {
+    author.textContent = profile.author || "";
+  }
+  if (pager) {
+    pager.innerHTML = "";
+  }
+  if (readingBody) {
+    readingBody.innerHTML = `
+      <div class="reader-processing-state" role="status" aria-live="polite">
+        <span class="reader-loading-skeleton-line"></span>
+        <span class="reader-loading-skeleton-line medium"></span>
+        <span class="reader-loading-skeleton-line short"></span>
+        <p>Preparing the page text and vocabulary data.</p>
+      </div>
+    `;
+  }
+  if (vocabSheet) {
+    vocabSheet.innerHTML = `
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="reader-processing-state" role="status" aria-live="polite">
+        <span class="reader-loading-skeleton-line short"></span>
+        <span class="reader-loading-skeleton-line medium"></span>
+        <p>Definition data will appear after extraction.</p>
+      </div>
+    `;
+  }
+  document.title = `${profile.title || "Reader"} - Preparing - TextPlex Reader Preview`;
+}
+
+function renderPreviewLoadError(error) {
+  const app = document.querySelector(".app");
+  if (!app) {
+    return;
+  }
+
+  const detail = error instanceof Error ? error.message : "The preview data could not be loaded.";
+  app.setAttribute("data-reader-hydrated", "true");
+  app.setAttribute("data-analysis-hydrated", "true");
+  app.setAttribute("data-library-detail-hydrated", "true");
+  app.setAttribute("aria-busy", "false");
+  app.innerHTML = `
+    <section class="reader-processing-state" role="alert">
+      <strong>Unable to load preview data</strong>
+      <p>${escapeHtml(detail)}</p>
+      <button class="button button-secondary" type="button" data-preview-retry>Retry</button>
+    </section>
+  `;
+  app.querySelector("[data-preview-retry]")?.addEventListener("click", () => window.location.reload());
+  document.title = "Preview unavailable - TextPlex";
+}
+
+function renderAnalysisProcessingState(profile) {
+  const art = document.querySelector(".art");
+  const title = document.getElementById("analysisTitle");
+  const author = document.getElementById("analysisAuthor");
+  const meta = document.getElementById("analysisMeta");
+  const date = document.getElementById("analysisDate");
+  const heroTag = document.querySelector(".text-meta .tag");
+  const results = document.getElementById("analysisResults");
+
+  if (art) {
+    art.style.background = profile.art;
+  }
+  if (title) {
+    title.textContent = profile.title || "Text Analysis";
+  }
+  if (author) {
+    author.textContent = profile.author || "";
+  }
+  if (meta) {
+    meta.textContent = profile.meta || "Analysis pending";
+  }
+  if (date) {
+    date.textContent = profile.date || "Awaiting extraction";
+  }
+  if (heroTag) {
+    heroTag.textContent = profile.tag || "Queued";
+  }
+  if (results) {
+    results.innerHTML = `
+      <section class="card analysis-processing-state" role="status" aria-live="polite">
+        <span class="analysis-skeleton-line medium"></span>
+        <span class="analysis-skeleton-line"></span>
+        <span class="analysis-skeleton-line short"></span>
+        <h2 class="card-title" style="margin-top: 20px;">Analysis is still processing</h2>
+        <p class="meta-line">The live book record is available. Vocabulary and reading metrics will appear after extraction finishes.</p>
+      </section>
+    `;
+  }
+  document.title = `${profile.title || "Text Analysis"} - Preparing - TextPlex`;
+}
+
 function setProfileLabel(node, label, value) {
   if (!node) {
     return;
@@ -2539,8 +2916,18 @@ function bookIcon() {
   `;
 }
 
-function currentBookId() {
-  return previewData?.resolveBookId?.(window.location) || previewData?.getSelectedBookId?.() || "spring-dawn";
+function currentBookId({ requireExplicit = false } = {}) {
+  const params = new URLSearchParams(window.location.search ?? "");
+  const explicitBookId = params.get("book") || params.get("entry") || params.get("record") || params.get("id");
+  if (explicitBookId) {
+    return explicitBookId;
+  }
+
+  if (requireExplicit) {
+    return "";
+  }
+
+  return previewData?.getSelectedBookId?.() || "";
 }
 
 function currentTrackCode() {
@@ -2743,6 +3130,108 @@ function shouldExpandTokenIntoCharacters(surface) {
   return isCjk(text) && Array.from(text).length > 1;
 }
 
+const pinyinSyllablePattern = /^(?:(?:zh|ch|sh)|[bpmfdtnlgkhjqxrzcsyw])?(?:a|ai|an|ang|ao|e|ei|en|eng|er|o|ong|ou|i|ia|ian|iang|iao|ie|in|ing|iong|iu|u|ua|uai|uan|uang|ue|ui|un|uo|v|ve|van|vn)$/;
+const pinyinSeparatorPattern = /[\s'’\-.0-9]/u;
+
+function normalizePinyinCharacter(character) {
+  switch (character) {
+    case "ā":
+    case "á":
+    case "ǎ":
+    case "à":
+      return "a";
+    case "ē":
+    case "é":
+    case "ě":
+    case "è":
+      return "e";
+    case "ī":
+    case "í":
+    case "ǐ":
+    case "ì":
+      return "i";
+    case "ō":
+    case "ó":
+    case "ǒ":
+    case "ò":
+      return "o";
+    case "ū":
+    case "ú":
+    case "ǔ":
+    case "ù":
+      return "u";
+    case "ǖ":
+    case "ǘ":
+    case "ǚ":
+    case "ǜ":
+    case "ü":
+      return "v";
+    default:
+      return character.toLowerCase();
+  }
+}
+
+function isValidPinyinChunk(chunk) {
+  return pinyinSyllablePattern.test(chunk);
+}
+
+function splitConcatenatedPinyin(romanization, characterCount) {
+  const sourceCharacters = Array.from(String(romanization ?? "").trim()).filter((character) => !pinyinSeparatorPattern.test(character));
+  if (!sourceCharacters.length || characterCount <= 0) {
+    return null;
+  }
+
+  const normalizedCharacters = sourceCharacters.map((character) => normalizePinyinCharacter(character));
+  const maxChunkLength = Math.min(7, normalizedCharacters.length);
+  const memo = new Map();
+
+  function splitFrom(startIndex, remainingCount) {
+    const memoKey = `${startIndex}:${remainingCount}`;
+    if (memo.has(memoKey)) {
+      return memo.get(memoKey) ?? null;
+    }
+
+    const remainingCharacters = normalizedCharacters.length - startIndex;
+    if (remainingCount <= 0 || remainingCharacters < remainingCount) {
+      memo.set(memoKey, null);
+      return null;
+    }
+
+    if (remainingCount === 1) {
+      const chunk = normalizedCharacters.slice(startIndex).join("");
+      if (!chunk || !isValidPinyinChunk(chunk)) {
+        memo.set(memoKey, null);
+        return null;
+      }
+
+      const tail = sourceCharacters.slice(startIndex).join("");
+      memo.set(memoKey, [tail]);
+      return [tail];
+    }
+
+    const maxEndIndex = Math.min(normalizedCharacters.length - (remainingCount - 1), startIndex + maxChunkLength);
+    for (let endIndex = startIndex + 1; endIndex <= maxEndIndex; endIndex += 1) {
+      const chunk = normalizedCharacters.slice(startIndex, endIndex).join("");
+      if (!isValidPinyinChunk(chunk)) {
+        continue;
+      }
+
+      const tail = splitFrom(endIndex, remainingCount - 1);
+      if (tail) {
+        const head = sourceCharacters.slice(startIndex, endIndex).join("");
+        const result = [head, ...tail];
+        memo.set(memoKey, result);
+        return result;
+      }
+    }
+
+    memo.set(memoKey, null);
+    return null;
+  }
+
+  return splitFrom(0, characterCount);
+}
+
 function splitRomanizationByCharacters(romanization, characterCount) {
   const syllables = String(romanization ?? "")
     .trim()
@@ -2757,13 +3246,33 @@ function splitRomanizationByCharacters(romanization, characterCount) {
     return Array.from({ length: characterCount }, () => "");
   }
 
-  if (syllables.length >= characterCount) {
-    return syllables.slice(0, characterCount);
+  if (syllables.length === characterCount) {
+    return syllables;
   }
 
-  const readings = [...syllables];
-  while (readings.length < characterCount) {
-    readings.push("");
+  if (syllables.length > characterCount) {
+    const readings = Array.from({ length: characterCount }, () => "");
+    const lastIndex = characterCount - 1;
+    for (let index = 0; index < syllables.length; index += 1) {
+      if (index < lastIndex) {
+        readings[index] = syllables[index];
+      } else {
+        readings[lastIndex] = readings[lastIndex] ? `${readings[lastIndex]} ${syllables[index]}` : syllables[index];
+      }
+    }
+    return readings;
+  }
+
+  if (syllables.length === 1 && characterCount > 1) {
+    const splitSyllables = splitConcatenatedPinyin(romanization, characterCount);
+    if (splitSyllables && splitSyllables.length === characterCount) {
+      return splitSyllables;
+    }
+  }
+
+  const readings = Array.from({ length: characterCount }, () => "");
+  for (let index = 0; index < syllables.length; index += 1) {
+    readings[index] = syllables[index];
   }
   return readings;
 }

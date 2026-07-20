@@ -132,7 +132,7 @@ TextPlex now vendors the Chinese reference sets locally under:
 resources/lexicon/chinese-character-recognition/
 ```
 
-The lexicon import endpoint defaults to that bundled source, so a normal import call only needs the language and overwrite flag if you want to refresh the local lookup database.
+The lexicon import endpoint defaults to the language-specific source root for the requested language. For Chinese, that still points at the bundled reference set above. For future language packs, the importer also recognizes a canonical `lexicon.sqlite3` or `lexicon.csv` in `resources/lexicon/<language>/`.
 
 Example:
 

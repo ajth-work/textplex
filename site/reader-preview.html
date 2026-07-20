@@ -11,17 +11,197 @@
     <link rel="stylesheet" href="./preview-wide.css" />
     <style>
       :root {
-        --bg: #f6f2eb;
+        --bg-start: #f6f2eb;
+        --bg-end: #ede4d7;
+        --glow-a: rgba(255, 255, 255, 0.55);
+        --glow-b: rgba(31, 51, 95, 0.05);
         --surface: rgba(255, 255, 255, 0.9);
         --surface-strong: #ffffff;
         --surface-muted: #f5f1ea;
         --text: #202633;
+        --text-strong: #121826;
+        --text-soft: #465064;
         --muted: #787f8d;
         --accent: #1f335f;
+        --accent-strong: #182847;
+        --accent-soft: rgba(31, 51, 95, 0.12);
         --green: #3f9b68;
         --line: rgba(31, 36, 48, 0.08);
+        --line-strong: rgba(31, 36, 48, 0.12);
         --shadow: 0 18px 40px rgba(20, 24, 35, 0.08);
         --shadow-soft: 0 10px 24px rgba(20, 24, 35, 0.06);
+        --pill-bg: rgba(31, 36, 48, 0.08);
+        --pill-text: #1f2430;
+      }
+
+      body[data-reader-theme="sepia"] {
+        --bg-start: #f4e2c7;
+        --bg-end: #e1c9a8;
+        --glow-a: rgba(255, 255, 255, 0.42);
+        --glow-b: rgba(139, 91, 48, 0.08);
+        --surface: rgba(255, 248, 239, 0.92);
+        --surface-strong: #fffaf2;
+        --surface-muted: #f2e4d4;
+        --text: #2a2018;
+        --text-strong: #1f1710;
+        --text-soft: #4f3c2e;
+        --muted: #7a6656;
+        --accent: #8c541f;
+        --accent-strong: #6f4016;
+        --accent-soft: rgba(140, 84, 31, 0.14);
+        --green: #6f7f36;
+        --line: rgba(77, 53, 31, 0.1);
+        --line-strong: rgba(77, 53, 31, 0.16);
+        --shadow: 0 18px 40px rgba(88, 58, 29, 0.1);
+        --shadow-soft: 0 10px 24px rgba(88, 58, 29, 0.07);
+        --pill-bg: rgba(77, 53, 31, 0.08);
+        --pill-text: #4d351f;
+      }
+
+      body[data-reader-theme="ink"] {
+        --bg-start: #10151d;
+        --bg-end: #07090d;
+        --glow-a: rgba(122, 162, 255, 0.08);
+        --glow-b: rgba(255, 255, 255, 0.04);
+        --surface: rgba(20, 24, 31, 0.96);
+        --surface-strong: #151920;
+        --surface-muted: #1d222c;
+        --text: #eef2f8;
+        --text-strong: #f7f9fc;
+        --text-soft: #cad1de;
+        --muted: #a6afbf;
+        --accent: #86a8ff;
+        --accent-strong: #5d7fe0;
+        --accent-soft: rgba(134, 168, 255, 0.16);
+        --green: #7ecfa0;
+        --line: rgba(255, 255, 255, 0.08);
+        --line-strong: rgba(255, 255, 255, 0.12);
+        --shadow: 0 22px 48px rgba(0, 0, 0, 0.5);
+        --shadow-soft: 0 12px 28px rgba(0, 0, 0, 0.35);
+        --pill-bg: rgba(255, 255, 255, 0.08);
+        --pill-text: #eef2f8;
+      }
+
+      body[data-reader-theme="black"] {
+        --bg-start: #020203;
+        --bg-end: #000000;
+        --glow-a: rgba(136, 166, 255, 0.08);
+        --glow-b: rgba(255, 255, 255, 0.02);
+        --surface: rgba(10, 11, 14, 0.98);
+        --surface-strong: #0b0c0f;
+        --surface-muted: #111318;
+        --text: #f7f8fb;
+        --text-strong: #ffffff;
+        --text-soft: #d9dee8;
+        --muted: #aeb6c5;
+        --accent: #d9bf7a;
+        --accent-strong: #f1d28b;
+        --accent-soft: rgba(217, 191, 122, 0.14);
+        --green: #8dd6a6;
+        --line: rgba(255, 255, 255, 0.08);
+        --line-strong: rgba(255, 255, 255, 0.12);
+        --shadow: 0 22px 48px rgba(0, 0, 0, 0.65);
+        --shadow-soft: 0 12px 28px rgba(0, 0, 0, 0.42);
+        --pill-bg: rgba(255, 255, 255, 0.06);
+        --pill-text: #f7f8fb;
+      }
+
+      body[data-reader-theme="jade"] {
+        --bg-start: #0a1f16;
+        --bg-end: #050a08;
+        --glow-a: rgba(29, 98, 69, 0.28);
+        --glow-b: rgba(241, 210, 123, 0.16);
+        --surface: rgba(9, 28, 20, 0.96);
+        --surface-strong: #0e241a;
+        --surface-muted: #123123;
+        --text: #f4df9c;
+        --text-strong: #f8e8b7;
+        --text-soft: #d9c47f;
+        --muted: #b99d52;
+        --accent: #e2c15f;
+        --accent-strong: #f6de87;
+        --accent-soft: rgba(226, 193, 95, 0.18);
+        --green: #f2d773;
+        --line: rgba(244, 223, 156, 0.14);
+        --line-strong: rgba(244, 223, 156, 0.22);
+        --shadow: 0 22px 48px rgba(2, 8, 5, 0.58);
+        --shadow-soft: 0 12px 28px rgba(2, 8, 5, 0.38);
+        --pill-bg: rgba(255, 255, 255, 0.06);
+        --pill-text: #f4df9c;
+      }
+
+      body[data-reader-theme="ceramic"] {
+        --bg-start: #faf7f0;
+        --bg-end: #eee5d8;
+        --glow-a: rgba(255, 255, 255, 0.86);
+        --glow-b: rgba(146, 160, 178, 0.12);
+        --surface: rgba(252, 249, 243, 0.98);
+        --surface-strong: #fffdf8;
+        --surface-muted: #f2ebe2;
+        --text: #23262f;
+        --text-strong: #1b1d24;
+        --text-soft: #5d6470;
+        --muted: #798190;
+        --accent: #748191;
+        --accent-strong: #5e6a78;
+        --accent-soft: rgba(116, 129, 145, 0.14);
+        --green: #6f7f36;
+        --line: rgba(81, 85, 95, 0.12);
+        --line-strong: rgba(81, 85, 95, 0.18);
+        --shadow: 0 22px 48px rgba(64, 54, 43, 0.18);
+        --shadow-soft: 0 12px 28px rgba(64, 54, 43, 0.08);
+        --pill-bg: rgba(81, 85, 95, 0.08);
+        --pill-text: #474d58;
+      }
+
+      body[data-reader-theme="crimson"] {
+        --bg-start: #7a1219;
+        --bg-end: #2b0609;
+        --glow-a: rgba(255, 229, 153, 0.18);
+        --glow-b: rgba(165, 22, 34, 0.3);
+        --surface: rgba(255, 248, 232, 0.97);
+        --surface-strong: #fff6de;
+        --surface-muted: #f4ead0;
+        --text: #5b1016;
+        --text-strong: #421015;
+        --text-soft: #7d3c42;
+        --muted: #946169;
+        --accent: #b98a1f;
+        --accent-strong: #dbac36;
+        --accent-soft: rgba(185, 138, 31, 0.16);
+        --green: #b98a1f;
+        --line: rgba(91, 16, 22, 0.12);
+        --line-strong: rgba(91, 16, 22, 0.18);
+        --shadow: 0 22px 48px rgba(42, 6, 9, 0.24);
+        --shadow-soft: 0 12px 28px rgba(42, 6, 9, 0.12);
+        --pill-bg: rgba(255, 248, 232, 0.92);
+        --pill-text: #5b1016;
+      }
+
+      body[data-reader-theme="crimson"] .poem-title {
+        color: #fff7e7;
+        text-shadow:
+          0 1px 0 rgba(71, 11, 16, 0.8),
+          0 0 12px rgba(255, 245, 214, 0.16);
+      }
+
+      body[data-reader-theme="crimson"] .poet {
+        color: rgba(255, 245, 214, 0.82);
+      }
+
+      body[data-reader-theme="crimson"] .reader-pager .page-pill,
+      body[data-reader-theme="crimson"] .session-pill {
+        background: linear-gradient(180deg, rgba(255, 248, 232, 0.94), rgba(243, 227, 185, 0.88));
+        color: #5b1016;
+      }
+
+      body[data-reader-theme="crimson"] .session-pill span {
+        color: rgba(91, 16, 22, 0.7);
+      }
+
+      body[data-reader-theme="crimson"] .session-pill strong,
+      body[data-reader-theme="crimson"] .reader-pager .page-pill {
+        color: #4c0d12;
       }
 
       * { box-sizing: border-box; }
@@ -31,8 +211,9 @@
         color: var(--text);
         font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         background:
-          radial-gradient(circle at top, rgba(255,255,255,0.95), transparent 42%),
-          linear-gradient(180deg, #fbf9f4 0%, #f1ece4 100%);
+          radial-gradient(circle at top, var(--glow-a), transparent 42%),
+          radial-gradient(circle at top right, var(--glow-b), transparent 34%),
+          linear-gradient(180deg, var(--bg-start) 0%, var(--bg-end) 100%);
       }
 
       .app {
@@ -40,8 +221,10 @@
         min-height: 100vh;
         margin: 0 auto;
         padding: 18px 16px 22px;
+        color: var(--text);
         --reader-display-font: Georgia, "Times New Roman", serif;
         --reader-body-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --reader-text-scale: 1;
       }
 
       .app[data-reader-font="serif"] {
@@ -54,6 +237,18 @@
         --reader-body-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
 
+      .app[data-reader-text-size="small"] {
+        --reader-text-scale: 0.92;
+      }
+
+      .app[data-reader-text-size="medium"] {
+        --reader-text-scale: 1;
+      }
+
+      .app[data-reader-text-size="large"] {
+        --reader-text-scale: 1.1;
+      }
+
       .font-toggle {
         min-width: 70px;
       }
@@ -62,7 +257,7 @@
         font-family: var(--reader-body-font);
       }
 
-      .status-row, .topbar, .tool-row, .info-line, .pill-row, .bottom-actions {
+      .status-row, .topbar, .tool-row, .info-line, .pill-row {
         display: flex;
         align-items: center;
       }
@@ -70,7 +265,7 @@
       .status-row {
         justify-content: space-between;
         margin-bottom: 12px;
-        color: #121826;
+        color: var(--text-strong);
         font-size: 15px;
         font-weight: 600;
       }
@@ -81,7 +276,10 @@
       }
 
       .topbar {
+        display: flex;
+        align-items: flex-start;
         justify-content: space-between;
+        gap: 12px;
         margin-bottom: 18px;
       }
 
@@ -91,14 +289,14 @@
         border: 0;
         border-radius: 50%;
         background: transparent;
-        color: #2a3140;
+        color: var(--text-strong);
         display: grid;
         place-items: center;
         cursor: pointer;
       }
 
       .icon-btn.is-active {
-        color: #2f7d53;
+        color: var(--accent-strong);
       }
 
       .tool-row {
@@ -110,17 +308,17 @@
         padding-inline: 12px;
         border-radius: 999px;
         background: var(--surface);
-        border: 1px solid rgba(31, 36, 48, 0.08);
-        color: #2a3140;
+        border: 1px solid var(--line);
+        color: var(--text-strong);
         font-size: 13px;
         font-weight: 800;
         letter-spacing: 0.04em;
       }
 
       .reader-token-mode-toggle.is-active {
-        background: rgba(63, 155, 104, 0.16);
+        background: var(--accent-soft);
         border-color: rgba(63, 155, 104, 0.28);
-        color: #2f7d53;
+        color: var(--green);
       }
 
       .reader-pager {
@@ -139,8 +337,8 @@
         margin: 0 0 12px;
         padding: 10px 14px;
         border-radius: 999px;
-        background: rgba(31, 36, 48, 0.08);
-        color: #1f2430;
+        background: var(--pill-bg);
+        color: var(--pill-text);
         font-size: 12px;
         font-weight: 800;
         letter-spacing: 0.01em;
@@ -152,7 +350,7 @@
       }
 
       .session-pill span {
-        color: #5d6470;
+        color: var(--muted);
         font-weight: 700;
       }
 
@@ -162,8 +360,8 @@
         justify-content: center;
         padding: 8px 14px;
         border-radius: 999px;
-        background: rgba(31, 36, 48, 0.08);
-        color: #1f2430;
+        background: var(--pill-bg);
+        color: var(--pill-text);
         font-size: 13px;
         font-weight: 900;
         letter-spacing: 0.08em;
@@ -182,7 +380,7 @@
         display: grid;
         place-items: center;
         background: var(--surface);
-        color: #2a3140;
+        color: var(--text-strong);
         box-shadow: var(--shadow-soft);
       }
 
@@ -191,27 +389,43 @@
         box-shadow: none;
       }
 
+      .header-stack {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
       .title-wrap {
-        text-align: center;
-        flex: 1;
+        text-align: left;
       }
 
       .poem-title {
         margin: 0;
         font-family: var(--reader-display-font);
-        font-size: clamp(24px, 6vw, 30px);
+        font-size: calc(clamp(24px, 6vw, 30px) * var(--reader-text-scale));
         line-height: 1.08;
         letter-spacing: -0.05em;
-        max-width: 11em;
-        margin-inline: auto;
+        width: 100%;
+        max-width: none;
+        margin-inline: 0;
+        overflow-wrap: anywhere;
       }
 
       .poet {
         margin: 8px 0 0;
-        color: #787f8d;
+        color: var(--muted);
         font-family: var(--reader-body-font);
-        font-size: 16px;
+        font-size: calc(16px * var(--reader-text-scale));
         font-weight: 700;
+      }
+
+      .settings-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
       }
 
       .reading-surface {
@@ -237,7 +451,7 @@
         align-items: flex-end;
         gap: 8px 12px;
         font-family: var(--reader-body-font);
-        font-size: 26px;
+        font-size: calc(26px * var(--reader-text-scale));
         line-height: 1.5;
         letter-spacing: 0.02em;
       }
@@ -263,9 +477,9 @@
       .token-reading {
         min-height: 1.2em;
         margin-bottom: 6px;
-        color: #8d9199;
+        color: var(--muted);
         font-family: var(--reader-body-font);
-        font-size: 11px;
+        font-size: calc(11px * var(--reader-text-scale));
         font-weight: 700;
         line-height: 1;
         text-align: center;
@@ -279,7 +493,9 @@
 
       .token.is-selected,
       .token.highlight {
-        background: rgba(109, 199, 163, 0.22);
+        background: var(--accent-soft);
+        box-shadow: inset 0 -0.08em 0 var(--accent-strong);
+        color: var(--text-strong);
       }
 
       .token.is-selected .token-surface,
@@ -294,9 +510,9 @@
 
       .translation {
         margin: 22px 0 0;
-        color: #465064;
+        color: var(--text-soft);
         font-family: var(--reader-body-font);
-        font-size: 19px;
+        font-size: calc(19px * var(--reader-text-scale));
         line-height: 1.55;
         font-weight: 600;
       }
@@ -310,47 +526,61 @@
         height: 4px;
         margin: 2px auto 10px;
         border-radius: 999px;
-        background: rgba(31, 36, 48, 0.16);
+        background: var(--line);
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
       }
 
       .vocab-sheet {
         position: relative;
         margin-top: 14px;
-        background: var(--surface-strong);
-        border: 1px solid rgba(31, 36, 48, 0.06);
+        background: var(--surface);
+        border: 1px solid var(--line);
         border-radius: 30px;
         box-shadow: var(--shadow);
         padding: 12px 16px 18px;
       }
 
       .vocab-top {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
         gap: 12px;
       }
 
+      .vocab-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        justify-self: end;
+      }
+
       .vocab-head {
-        display: grid;
-        gap: 4px;
+        min-width: 0;
       }
 
       .vocab-char {
         margin: 0;
         font-family: var(--reader-display-font);
-        font-size: 40px;
+        font-size: calc(42px * var(--reader-text-scale));
         line-height: 1;
         letter-spacing: -0.05em;
+      }
+
+      .vocab-meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        justify-self: start;
       }
 
       .vocab-pinyin {
         display: flex;
         align-items: center;
         gap: 8px;
-        margin: 8px 0 0;
         font-family: var(--reader-body-font);
-        font-size: 24px;
+        font-size: calc(20px * var(--reader-text-scale));
         font-weight: 700;
       }
 
@@ -359,58 +589,380 @@
         align-items: center;
         padding: 6px 11px;
         border-radius: 999px;
-        background: rgba(63, 155, 104, 0.14);
-        color: #2f7d53;
+        background: var(--accent-soft);
+        color: var(--green);
         font-size: 12px;
         font-weight: 800;
       }
 
       .vocab-definition {
         margin: 14px 0 0;
-        color: #475061;
+        color: var(--text-soft);
         font-family: var(--reader-body-font);
-        font-size: 16px;
+        font-size: calc(16px * var(--reader-text-scale));
         line-height: 1.55;
       }
 
-      .definition-fallback {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
+      .reader-loading-skeleton {
+        display: grid;
+        gap: 14px;
+        padding: 14px 0;
+      }
+
+      .reader-loading-skeleton-card {
+        display: grid;
+        gap: 12px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 30px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .reader-loading-skeleton-line,
+      .reader-loading-skeleton-control,
+      .reader-loading-skeleton-icon {
+        display: block;
+        background: linear-gradient(100deg, var(--surface-muted) 20%, var(--surface-strong) 38%, var(--surface-muted) 55%);
+        background-size: 220% 100%;
+        animation: reader-skeleton-shimmer 1.6s ease-in-out infinite;
+      }
+
+      .reader-loading-skeleton-line {
+        width: 100%;
+        height: 18px;
+        border-radius: 999px;
+      }
+
+      .reader-loading-skeleton-line.title { width: min(68%, 220px); height: 30px; }
+      .reader-loading-skeleton-line.author { width: 110px; height: 15px; }
+      .reader-loading-skeleton-line.short { width: 42%; }
+      .reader-loading-skeleton-line.medium { width: 78%; }
+      .reader-loading-skeleton-line:nth-child(3n) { width: 88%; }
+
+      .reader-loading-skeleton-toolbar {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) auto auto;
         gap: 10px;
-        margin-top: 6px;
+        align-items: center;
       }
 
-      .definition-fallback .small-copy {
-        flex: 1 1 100%;
+      .reader-loading-skeleton-control {
+        height: 42px;
+        border-radius: 999px;
+      }
+
+      .reader-loading-skeleton-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+      }
+
+      .reader-loading-skeleton-reading { min-height: 300px; align-content: center; }
+      .reader-loading-skeleton-definition { min-height: 120px; align-content: center; }
+
+      .reader-processing-state {
+        display: grid;
+        gap: 12px;
+        place-items: center;
+        min-height: 240px;
+        padding: 24px 18px;
+        color: var(--text);
+        text-align: center;
+      }
+
+      .reader-processing-state p {
+        max-width: 280px;
         margin: 0;
-      }
-
-      .example-box {
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top: 1px solid var(--line);
-      }
-
-      .example-cn {
-        margin: 0;
-        font-family: var(--reader-body-font);
-        font-size: 17px;
+        color: var(--muted);
+        font-size: 14px;
         font-weight: 700;
         line-height: 1.45;
       }
 
-      .example-en {
-        margin: 4px 0 0;
+      @keyframes reader-skeleton-shimmer {
+        from { background-position: 100% 0; }
+        to { background-position: -100% 0; }
+      }
+
+      .app:not([data-reader-hydrated="true"]) > *:not(#readerLoadingSkeleton) {
+        display: none;
+      }
+
+      .app[data-reader-hydrated="true"] > #readerLoadingSkeleton {
+        display: none;
+      }
+
+      .vocab-definition.is-loading {
+        min-height: 18px;
+      }
+
+      .vocab-definition.is-loading::before {
+        content: "";
+        display: block;
+        width: 82%;
+        height: 18px;
+        border-radius: 999px;
+        background: linear-gradient(100deg, var(--surface-muted) 20%, var(--surface-strong) 38%, var(--surface-muted) 55%);
+        background-size: 220% 100%;
+        animation: reader-skeleton-shimmer 1.6s ease-in-out infinite;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .reader-loading-skeleton-line,
+        .reader-loading-skeleton-control,
+        .reader-loading-skeleton-icon,
+        .vocab-definition.is-loading::before {
+          animation: none;
+        }
+      }
+
+
+      .reader-options-panel {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 30;
+        width: min(390px, calc(100vw - 1.5rem));
+        max-height: calc(100vh - 2rem);
+        overflow: auto;
+        padding: 14px 16px 10px;
+        border-radius: 26px;
+        background: var(--surface-strong);
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+      }
+
+      .reader-scale-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 2px;
+      }
+
+      .reader-scale-option {
+        display: grid;
+        place-items: center;
+        min-height: 48px;
+        padding: 10px 12px;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--text);
+        text-align: center;
+        cursor: pointer;
+        box-shadow: var(--shadow-soft);
+      }
+
+      .reader-scale-option.is-selected {
+        border-color: var(--accent);
+        background: var(--surface-strong);
+        box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow-soft);
+      }
+
+      .reader-scale-option.is-selected strong {
+        color: var(--accent);
+      }
+
+      .reader-scale-option-body {
+        display: grid;
+        gap: 0;
+        min-width: 0;
+      }
+
+      .reader-scale-option-body strong {
+        font-size: 13px;
+        line-height: 1.15;
+        text-align: center;
+      }
+
+      .reader-options-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 25;
+        border: 0;
+        padding: 0;
+        background: rgba(3, 6, 12, 0.48);
+        backdrop-filter: blur(3px);
+        cursor: pointer;
+      }
+
+      .reader-options-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .reader-options-header h2 {
+        margin-top: 1px;
+        font-size: 20px;
+        line-height: 1.1;
+      }
+
+      .reader-options-copy {
+        margin-top: 8px;
         color: var(--muted);
-        font-family: var(--reader-body-font);
         font-size: 14px;
         line-height: 1.45;
       }
 
-      .bottom-actions {
-        gap: 10px;
-        margin-top: 16px;
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: var(--pill-bg);
+        color: var(--pill-text);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+      }
+
+      .reader-theme-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(7.4rem, 1fr));
+        gap: 6px;
+        margin-top: 0;
+      }
+
+      .reader-theme-option {
+        display: grid;
+        gap: 8px;
+        align-content: start;
+        width: 100%;
+        min-height: 126px;
+        padding: 10px;
+        border-radius: 20px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--text);
+        text-align: left;
+        box-shadow: var(--shadow-soft);
+      }
+
+      .reader-theme-option:hover {
+        transform: translateY(-1px);
+        border-color: var(--line-strong);
+      }
+
+      .reader-theme-option.is-selected {
+        border-color: var(--accent);
+        background: var(--surface-strong);
+        box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow-soft);
+      }
+
+      .reader-theme-option.is-selected strong {
+        color: var(--accent);
+      }
+
+      .reader-theme-option-swatch {
+        width: 100%;
+        height: 62px;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        overflow: hidden;
+      }
+
+      .reader-theme-option-swatch[data-theme="neutral"] {
+        background:
+          linear-gradient(180deg, #fcfaf6 0%, #efeadf 100%);
+      }
+
+      .reader-theme-option-swatch[data-theme="sepia"] {
+        background:
+          linear-gradient(180deg, #fff7ea 0%, #e1c9a8 100%);
+      }
+
+      .reader-theme-option-swatch[data-theme="ink"] {
+        background:
+          linear-gradient(180deg, #1a202b 0%, #080b10 100%);
+      }
+
+      .reader-theme-option-swatch[data-theme="black"] {
+        background:
+          linear-gradient(180deg, #020203 0%, #0d1016 100%);
+      }
+
+      .reader-theme-option-swatch[data-theme="jade"] {
+        background:
+          linear-gradient(180deg, #08241a 0%, #134a35 100%);
+      }
+
+      .reader-theme-option-swatch[data-theme="ceramic"] {
+        background:
+          radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.98), transparent 28%),
+          linear-gradient(180deg, #fdfaf4 0%, #ebe3d7 100%);
+      }
+
+      .reader-theme-option-swatch[data-theme="crimson"] {
+        background:
+          radial-gradient(circle at 34% 28%, rgba(255, 243, 184, 0.9), transparent 20%),
+          linear-gradient(180deg, #771219 0%, #c8242c 100%);
+      }
+
+      .reader-theme-option-body {
+        display: grid;
+        gap: 0;
+        min-width: 0;
+      }
+
+      .reader-theme-option-body strong {
+        font-size: 13px;
+        line-height: 1.15;
+        text-align: center;
+      }
+
+      body[data-reader-theme="jade"] .poem-title,
+      body[data-reader-theme="jade"] .vocab-char,
+      body[data-reader-theme="jade"] .vocab-pinyin,
+      body[data-reader-theme="jade"] .sentence-row,
+      body[data-reader-theme="jade"] .translation,
+      body[data-reader-theme="jade"] .reader-theme-option.is-selected strong,
+      body[data-reader-theme="jade"] .reader-scale-option.is-selected strong,
+      body[data-reader-theme="jade"] .reader-token-mode-toggle.is-active,
+      body[data-reader-theme="jade"] .tag,
+      body[data-reader-theme="jade"] .button {
+        text-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.18),
+          0 0 12px rgba(246, 222, 135, 0.14);
+      }
+
+      body[data-reader-theme="ceramic"] .poem-title,
+      body[data-reader-theme="ceramic"] .vocab-char,
+      body[data-reader-theme="ceramic"] .vocab-pinyin,
+      body[data-reader-theme="ceramic"] .sentence-row,
+      body[data-reader-theme="ceramic"] .translation,
+      body[data-reader-theme="ceramic"] .reader-theme-option.is-selected strong,
+      body[data-reader-theme="ceramic"] .reader-scale-option.is-selected strong,
+      body[data-reader-theme="ceramic"] .reader-token-mode-toggle.is-active,
+      body[data-reader-theme="ceramic"] .tag,
+      body[data-reader-theme="ceramic"] .button {
+        text-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.72),
+          0 0 12px rgba(255, 255, 255, 0.22);
+      }
+
+      body[data-reader-theme="crimson"] .poem-title,
+      body[data-reader-theme="crimson"] .vocab-char,
+      body[data-reader-theme="crimson"] .vocab-pinyin,
+      body[data-reader-theme="crimson"] .sentence-row,
+      body[data-reader-theme="crimson"] .translation,
+      body[data-reader-theme="crimson"] .reader-theme-option.is-selected strong,
+      body[data-reader-theme="crimson"] .reader-scale-option.is-selected strong,
+      body[data-reader-theme="crimson"] .reader-token-mode-toggle.is-active,
+      body[data-reader-theme="crimson"] .tag,
+      body[data-reader-theme="crimson"] .button {
+        text-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.7),
+          0 0 12px rgba(219, 172, 54, 0.22);
+      }
+
+      #readerThemeStatus {
+        background: var(--accent-soft);
+        color: var(--accent-strong);
       }
 
       .button {
@@ -422,18 +974,11 @@
         cursor: pointer;
       }
 
-      .button-primary {
-        flex: 1;
-        color: white;
-        background: linear-gradient(180deg, var(--accent), #182847);
-        box-shadow: 0 14px 28px rgba(31, 51, 95, 0.25);
-      }
-
       .button-secondary {
         width: 58px;
-        color: #2a3140;
+        color: var(--text-strong);
         background: var(--surface);
-        border: 1px solid rgba(31, 36, 48, 0.08);
+        border: 1px solid var(--line);
       }
 
       .bottom-spacer {
@@ -449,16 +994,39 @@
     </style>
   </head>
   <body>
-    <main class="app" data-reader-font="mixed">
+    <main class="app" data-reader-font="mixed" data-reader-theme="neutral" data-reader-text-size="medium">
+      <section id="readerLoadingSkeleton" class="reader-loading-skeleton" aria-label="Loading reader content" role="status">
+        <div class="reader-loading-skeleton-card">
+          <span class="reader-loading-skeleton-line title"></span>
+          <span class="reader-loading-skeleton-line author"></span>
+          <div class="reader-loading-skeleton-toolbar">
+            <span class="reader-loading-skeleton-control"></span>
+            <span class="reader-loading-skeleton-control"></span>
+            <span class="reader-loading-skeleton-icon"></span>
+            <span class="reader-loading-skeleton-icon"></span>
+          </div>
+        </div>
+        <div class="reader-loading-skeleton-card reader-loading-skeleton-reading">
+          <span class="reader-loading-skeleton-line"></span>
+          <span class="reader-loading-skeleton-line medium"></span>
+          <span class="reader-loading-skeleton-line"></span>
+          <span class="reader-loading-skeleton-line short"></span>
+        </div>
+        <div class="reader-loading-skeleton-card reader-loading-skeleton-definition">
+          <span class="reader-loading-skeleton-line short"></span>
+          <span class="reader-loading-skeleton-line medium"></span>
+        </div>
+      </section>
       <header class="topbar">
         <button class="icon-btn" type="button" aria-label="Back">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
+        <div class="header-stack">
         <div class="title-wrap">
-          <h1 class="poem-title">春晓</h1>
-          <p class="poet">孟浩然</p>
+          <h1 class="poem-title"></h1>
+          <p class="poet"></p>
         </div>
         <div class="tool-row">
           <button id="readerTokenModeToggle" class="button button-secondary reader-token-mode-toggle" type="button" aria-pressed="false" aria-label="Switch to character mode">Word</button>
@@ -468,13 +1036,14 @@
               <path d="M6 3h12v18l-6-4-6 4V3z" />
             </svg>
           </button>
-          <button class="icon-btn" type="button" aria-label="More options">
+          <button class="icon-btn" type="button" aria-label="More options" aria-expanded="false" aria-controls="readerOptionsPanel">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <circle cx="5" cy="12" r="1.8" />
               <circle cx="12" cy="12" r="1.8" />
               <circle cx="19" cy="12" r="1.8" />
             </svg>
           </button>
+        </div>
         </div>
       </header>
 
@@ -484,76 +1053,108 @@
       <article class="reading-surface">
         <div class="reading-body">
           <div class="annotated-line">
-            <div class="pinyin-row">
-              <span>chūn</span><span>mián</span><span>bù</span><span>jué</span><span>xiǎo</span><span></span><span>chù</span><span>chù</span><span>wén</span><span>tí</span><span>niǎo</span>
-            </div>
-            <div class="sentence-row" aria-label="Spring sleep poem line 1">
-              <span class="char">春</span>
-              <span class="char">眠</span>
-              <span class="char">不</span>
-              <span class="char highlight">觉</span>
-              <span class="char">晓</span>
-              <span class="char">，</span>
-              <span class="char">处</span>
-              <span class="char">处</span>
-              <span class="char">闻</span>
-              <span class="char">啼</span>
-              <span class="char">鸟</span>
-              <span class="char">。</span>
-            </div>
+            <div class="pinyin-row"></div>
+            <div class="sentence-row"></div>
           </div>
 
           <div class="annotated-line" style="margin-top: 10px;">
-            <div class="pinyin-row">
-              <span>yè</span><span>lái</span><span>fēng</span><span>yǔ</span><span>shēng</span><span></span><span>huā</span><span>luò</span><span>zhī</span><span>duō</span><span>shǎo</span>
-            </div>
-            <div class="sentence-row" aria-label="Spring sleep poem line 2">
-              <span class="char">夜</span>
-              <span class="char">来</span>
-              <span class="char">风</span>
-              <span class="char">雨</span>
-              <span class="char">声</span>
-              <span class="char">，</span>
-              <span class="char">花</span>
-              <span class="char">落</span>
-              <span class="char">知</span>
-              <span class="char">多</span>
-              <span class="char">少</span>
-              <span class="char">。</span>
-            </div>
+            <div class="pinyin-row"></div>
+            <div class="sentence-row"></div>
           </div>
         </div>
-      </article>
-
-      <article class="vocab-sheet">
+      </article>      <article class="vocab-sheet">
         <div class="sheet-handle" aria-hidden="true"></div>
         <div class="vocab-top">
           <div class="vocab-head">
-            <h2 class="vocab-char">觉</h2>
-            <div class="vocab-pinyin">
-              <span>jué</span>
-              <span aria-hidden="true">🔊</span>
-              <span class="tag">HSK 3</span>
-            </div>
+            <h2 class="vocab-char"></h2>
           </div>
-          <button class="icon-btn" type="button" aria-label="Favorite">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 21.3l-6.7 3.7 1.3-7.5L1 12l7.5-1.1L12 4l3.5 6.9L23 12l-5.6 5.5 1.3 7.5z" transform="scale(0.8) translate(3 0)" />
-            </svg>
-          </button>
+          <div class="vocab-meta-row">
+            <div class="vocab-pinyin"></div>
+          </div>
+          <div class="vocab-actions">
+            <button class="icon-btn" type="button" aria-label="Save to Vocabulary" aria-pressed="false" data-vocab-save>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 21.3l-6.7 3.7 1.3-7.5L1 12l7.5-1.1L12 4l3.5 6.9L23 12l-5.6 5.5 1.3 7.5z" transform="scale(0.8) translate(3 0)" />
+              </svg>
+            </button>
+            <button id="readerMoreActions" class="icon-btn" type="button" aria-label="More actions" aria-expanded="false" aria-controls="readerOptionsPanel">⋯</button>
+          </div>
         </div>
 
-          <p class="vocab-definition">v. to feel; to sense; to realize; to wake up</p>
-          <div class="definition-fallback" id="readerDefinitionFallback" hidden>
-            <p class="small-copy" id="readerDefinitionFallbackHint">Not in the dictionary yet? Try character mode for smaller pieces.</p>
-            <button id="readerFallbackModeToggle" class="button button-secondary button-compact" type="button">Try Char mode</button>
-          </div>
-
-          <div class="bottom-actions">
-            <button class="button button-primary" type="button">＋ Save to Vocabulary</button>
-            <button id="readerMoreActions" class="button button-secondary" type="button" aria-label="More actions">⋯</button>
-          </div>
+        <p class="vocab-definition"></p>
       </article>
+
+      <button id="readerOptionsBackdrop" class="reader-options-backdrop" type="button" aria-label="Close reader options" hidden></button>
+      <section id="readerOptionsPanel" class="reader-options-panel" hidden aria-label="Reader options" role="dialog" aria-modal="true">
+        <div class="reader-options-header">
+          <div>
+            <p class="eyebrow">Options</p>
+            <h2>Themes</h2>
+          </div>
+          <span id="readerThemeStatus" class="pill">Neutral</span>
+        </div>
+        <div class="reader-scale-row" role="group" aria-label="Reader text size">
+          <button class="reader-scale-option" type="button" data-text-size-choice="small" aria-pressed="false">
+            <span class="reader-scale-option-body">
+              <strong>Small</strong>
+            </span>
+          </button>
+          <button class="reader-scale-option" type="button" data-text-size-choice="medium" aria-pressed="true">
+            <span class="reader-scale-option-body">
+              <strong>Medium</strong>
+            </span>
+          </button>
+          <button class="reader-scale-option" type="button" data-text-size-choice="large" aria-pressed="false">
+            <span class="reader-scale-option-body">
+              <strong>Large</strong>
+            </span>
+          </button>
+        </div>
+        <div class="reader-theme-grid" role="list" aria-label="Reader theme variations">
+          <button class="reader-theme-option" type="button" data-theme-choice="neutral" aria-pressed="true">
+            <span class="reader-theme-option-swatch" data-theme="neutral" aria-hidden="true"></span>
+            <span class="reader-theme-option-body">
+              <strong>Neutral</strong>
+            </span>
+          </button>
+          <button class="reader-theme-option" type="button" data-theme-choice="sepia" aria-pressed="false">
+            <span class="reader-theme-option-swatch" data-theme="sepia" aria-hidden="true"></span>
+            <span class="reader-theme-option-body">
+              <strong>Sepia</strong>
+            </span>
+          </button>
+          <button class="reader-theme-option" type="button" data-theme-choice="ink" aria-pressed="false">
+            <span class="reader-theme-option-swatch" data-theme="ink" aria-hidden="true"></span>
+            <span class="reader-theme-option-body">
+              <strong>Ink</strong>
+            </span>
+          </button>
+          <button class="reader-theme-option" type="button" data-theme-choice="black" aria-pressed="false">
+            <span class="reader-theme-option-swatch" data-theme="black" aria-hidden="true"></span>
+            <span class="reader-theme-option-body">
+              <strong>Black</strong>
+            </span>
+          </button>
+          <button class="reader-theme-option" type="button" data-theme-choice="jade" aria-pressed="false">
+            <span class="reader-theme-option-swatch" data-theme="jade" aria-hidden="true"></span>
+            <span class="reader-theme-option-body">
+              <strong>Jade</strong>
+            </span>
+          </button>
+          <button class="reader-theme-option" type="button" data-theme-choice="ceramic" aria-pressed="false">
+            <span class="reader-theme-option-swatch" data-theme="ceramic" aria-hidden="true"></span>
+            <span class="reader-theme-option-body">
+              <strong>Ceramic</strong>
+            </span>
+          </button>
+          <button class="reader-theme-option" type="button" data-theme-choice="crimson" aria-pressed="false">
+            <span class="reader-theme-option-swatch" data-theme="crimson" aria-hidden="true"></span>
+            <span class="reader-theme-option-body">
+              <strong>Crimson Gold</strong>
+            </span>
+          </button>
+        </div>
+      </section>
 
       <div class="bottom-spacer"></div>
     </main>
@@ -561,5 +1162,3 @@
     <script type="module" src="./preview-router.js"></script>
   </body>
 </html>
-
-
