@@ -327,7 +327,7 @@ Use this section to move from a component ID to the issue that owns its pending 
 | `import.form`, `import.progress-card`, `import.recent-books-card`, `import.book-item` | Consolidate standalone preview features into the Next.js app (Local pending) | Phase 2 import slice; Next now submits pasted text and PDF uploads to the API and tracks background extraction. |
 | `analysis.difficulty-card`, `analysis.vocabulary-distribution-card`, `analysis.summary-card`, `analysis.sentence-hsk-chart`, `analysis.page-hsk-chart`, `book-detail.extraction-snapshot-card`, `book-detail.page-hsk-chart`, `reader.sentence-hsk-chart` | Frontend migration Phase 3 (Local complete) | API-backed sentence/page/book HSK analytics now render in Next analysis and book-detail routes with compatibility previews retained. |
 | `settings.roadmap-card` | Untracked | Settings discovery entry for the existing Roadmap route; create a dedicated tracker item if roadmap navigation becomes a larger product initiative. |
-| `profile.legacy-link` | Frontend migration Phase 4 | Explicit rollback/compatibility entry from the canonical Next profile surface to the standalone legacy shell. |
+| `profile.legacy-link` | Frontend migration Phase 4 (Complete) | Explicit rollback/compatibility entry from the canonical Next profile surface to the standalone legacy shell. |
 
 ## Update rule for new UI
 

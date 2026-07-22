@@ -31,6 +31,11 @@
 
 - Added the first versioned Supabase migration for account-owned learner profiles and per-user settings, including ownership RLS, updated-at triggers, and automatic profile creation for new Auth users.
 - Documented the detailed Next.js and standalone frontend consolidation issue locally while GitHub reauthentication is pending.
+
+## 2026-07-22
+
+- Completed the Phase 4 exit review and opened Phase 5 for hosted identity, user-owned learner state, local-profile migration, and server-authoritative theme entitlements.
+- Added the Phase 5 baseline contract test for Supabase Auth session handling and profile/settings ownership RLS.
 - Completed the Phase 1 frontend migration inventory and contract reconciliation for routes, API ownership, endpoint families, and browser storage keys.
 - Marked frontend migration Phase 1 complete and ready for reader/options migration in Phase 2.
 - Added the roadmap to the standalone site at `8200`, including `/roadmap` and the root entry-point redirect.

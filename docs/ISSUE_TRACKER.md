@@ -2,7 +2,7 @@
 
 This file mirrors the current GitHub issue board state that is visible from this workspace. Keep it updated when a board item changes. If GitHub write access is unavailable, mark the item here as `Local pending` until the remote board can be updated.
 
-Last updated: 2026-07-21
+Last updated: 2026-07-22
 
 Remote issue state and kanban status are now synchronized for #10, #11, #18, #19, and #43. Issue #19 was added to the TextPlex Feature Board and placed in Done after the Project scope was granted. Issue #43 tracks the move from the anonymous local profile to hosted, authenticated, cross-device learner accounts. GitHub issue creation is currently Local pending because the available GitHub credentials require reauthentication.
 
@@ -10,6 +10,7 @@ Remote issue state and kanban status are now synchronized for #10, #11, #18, #19
 
 | Item | Issue | Notes |
 | --- | --- | --- |
+| Frontend migration Phase 5: hosted identity and learner state | Phase 5 | Kickoff slice: reconcile Supabase authentication with API-owned profile/settings, define local-profile migration, and establish server-authoritative theme entitlements. See `docs/FRONTEND_MIGRATION_PHASE_5.md`. |
 | Add reader detail analytics surface | #31 | Reader analytics page work from `docs/READER_DETAIL_ANALYTICS.md`. |
 | Add Wikipedia article of the day as reader content | #29 | Source/content ingestion work for article-based reading. |
 
@@ -30,7 +31,7 @@ Remote issue state and kanban status are now synchronized for #10, #11, #18, #19
 | [011] Add vocabulary and progress insights | #9 | Progress and study surfaces exist; exposure aggregation and vocabulary-state reporting remain incomplete. |
 | [008] Build the mobile home dashboard | #12 | Preview mockup exists, but the live home route still needs Continue Reading, Recent Analyses, and Goals data surfaces. |
 | Create shared TextPlex contract layer | #20 | TypeScript contracts exist, but API schemas still duplicate rather than wrap the shared shapes. |
-| Consolidate standalone preview features into the Next.js app | Ready for Phase 4 exit review | Phase 3 is complete: Next owns the reader HSK visualization/metadata slice, real paste-text/PDF import flow, background extraction progress, compact saved-token definition card, explicit reader loading/error states, sentence-level HSK analysis charts, and book-detail page-level HSK charts. Phase 4 deployment, import-to-reader-progress, legacy navigation, inventory mapping, Docker build/lint, API/static/Next tests, and live route evidence are complete. See `docs/FRONTEND_MIGRATION_PHASE_1.md` through `docs/FRONTEND_MIGRATION_PHASE_4.md` for the exit record and rollback procedure. Affected IDs: `reader.header`, `reader.options-dialog`, `reader.page-card`, `reader.token-inspector`, `reader.sentence-hsk-chart`, `import.form`, `import.progress-card`, `import.recent-books-card`, `import.book-item`, `profile.legacy-link`, `analysis.sentence-hsk-chart`, `analysis.page-hsk-chart`, `book-detail.page-hsk-chart`. |
+| Consolidate standalone preview features into the Next.js app | Phase 4 complete | Phase 4 exit review passed: Next is canonical on `3000`, API on `8201`, legacy is explicit on `8200`, import-to-reader-progress works without a port switch, and deployment/test/rollback evidence is recorded in `docs/FRONTEND_MIGRATION_PHASE_4.md`. Affected IDs: `reader.header`, `reader.options-dialog`, `reader.page-card`, `reader.token-inspector`, `reader.sentence-hsk-chart`, `import.form`, `import.progress-card`, `import.recent-books-card`, `import.book-item`, `profile.legacy-link`, `analysis.sentence-hsk-chart`, `analysis.page-hsk-chart`, `book-detail.page-hsk-chart`. |
 | Resolve stable Next transitive PostCSS audit findings | Local pending | `npm audit --omit=dev` reports two moderate PostCSS findings nested under stable Next `16.2.11`; npm recommends an unsafe downgrade, so revisit when a stable Next release updates the dependency. |
 | Add theme store and commerce entitlements | Local pending | Parent initiative for a production theme catalog, customer checkout, payment fulfillment, and server-authoritative theme ownership. The shop stays on the existing site/API boundary; no separate port is required. Prototype surfaces exist at `/profile/themes` and the standalone preview. See the sub-issue plan below. |
 
@@ -71,8 +72,8 @@ Remote issue state and kanban status are now synchronized for #10, #11, #18, #19
 1. Inventory and contract reconciliation. Complete; see `docs/FRONTEND_MIGRATION_PHASE_1.md`.
 2. Migrate reader, reader options, import, and processor progress flows. Complete; see `docs/FRONTEND_MIGRATION_PHASE_2.md`.
 3. Migrate analysis, charts, book-detail analytics, and resolved loading/error states. Complete; see `docs/FRONTEND_MIGRATION_PHASE_3.md`.
-4. Make Next.js the canonical Docker/browser entry point and explicitly scope the standalone shell. In progress; see `docs/FRONTEND_MIGRATION_PHASE_4.md`.
-5. Reconcile hosted authentication, profile settings, learner-state migration, and production theme entitlements. Planned after the deployment boundary is stable.
+4. Make Next.js the canonical Docker/browser entry point and explicitly scope the standalone shell. Complete; see `docs/FRONTEND_MIGRATION_PHASE_4.md`.
+5. Reconcile hosted authentication, profile settings, learner-state migration, and production theme entitlements. In progress; see `docs/FRONTEND_MIGRATION_PHASE_5.md`.
 
 **Acceptance criteria:**
 
