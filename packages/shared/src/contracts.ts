@@ -437,6 +437,52 @@ export interface HostedProfileSurfaceResponse {
   settings: HostedSettingEntry[];
 }
 
+export interface HostedProfileUpdateRequest {
+  display_name?: string | null;
+  target_language?: string;
+  learning_track?: string;
+  proficiency_level?: string | null;
+}
+
+export interface ProfileMigrationRequest {
+  conflict_policy: "merge_non_destructive";
+}
+
+export interface ProfileMigrationResponse {
+  status: "ready" | "empty" | "already_migrated" | "completed";
+  conflict_policy: "merge_non_destructive";
+  source_fingerprint: string;
+  source_counts: Record<string, number>;
+  target_counts: Record<string, number>;
+  imported_rows: Record<string, number>;
+  message: string;
+}
+
+export interface ThemeCatalogItem {
+  id: string;
+  title: string;
+  description: string;
+  price_cents: number;
+  is_free: boolean;
+  is_owned: boolean;
+  preview_available: boolean;
+}
+
+export interface ThemeBundleCatalogItem {
+  id: string;
+  title: string;
+  description: string;
+  theme_ids: string[];
+  price_cents: number;
+  is_owned: boolean;
+}
+
+export interface ThemeCatalogResponse {
+  mode: "local" | "hosted";
+  themes: ThemeCatalogItem[];
+  bundles: ThemeBundleCatalogItem[];
+}
+
 export interface ActivityEvent {
   kind: "page_read" | "sentence_read" | "definition_lookup" | "reading_session";
   occurred_at: string;

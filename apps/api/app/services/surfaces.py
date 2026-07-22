@@ -226,9 +226,15 @@ def search_surfaces(data_root: Path, query: str, *, limit: int = 20) -> SearchSu
     return SearchSurfaceResponse(query=query, result_count=len(limited_results), results=limited_results)
 
 
-def get_study_surface(data_root: Path, *, language_code: str | None = None, limit: int = 50) -> StudySurfaceResponse:
+def get_study_surface(
+    data_root: Path,
+    *,
+    language_code: str | None = None,
+    limit: int = 50,
+    owner_id: str | None = None,
+) -> StudySurfaceResponse:
     limit = max(0, limit)
-    db_path = ensure_profile_database(data_root)
+    db_path = ensure_profile_database(data_root, owner_id)
     with sqlite3.connect(db_path) as connection:
         connection.row_factory = sqlite3.Row
         rows = connection.execute(
@@ -273,11 +279,11 @@ def get_study_surface(data_root: Path, *, language_code: str | None = None, limi
     return StudySurfaceResponse(queue_size=len(items), queued_items=items)
 
 
-def get_progress_surface(data_root: Path) -> ProgressSurfaceResponse:
-    profile = get_learning_profile_summary(data_root)
+def get_progress_surface(data_root: Path, *, owner_id: str | None = None) -> ProgressSurfaceResponse:
+    profile = get_learning_profile_summary(data_root, owner_id=owner_id)
     registry = load_registry(_books_root(data_root) / "registry.json")
     title_map = _book_title_map(registry)
-    db_path = ensure_profile_database(data_root)
+    db_path = ensure_profile_database(data_root, owner_id)
     aggregate: dict[str, ProgressBookSummary] = {}
 
     with sqlite3.connect(db_path) as connection:
@@ -326,9 +332,9 @@ def get_progress_surface(data_root: Path) -> ProgressSurfaceResponse:
     return ProgressSurfaceResponse(profile=profile, books=books)
 
 
-def get_profile_surface(data_root: Path) -> ProfileSurfaceResponse:
-    progress = get_progress_surface(data_root)
-    settings = load_settings_surface(data_root)
+def get_profile_surface(data_root: Path, *, owner_id: str | None = None) -> ProfileSurfaceResponse:
+    progress = get_progress_surface(data_root, owner_id=owner_id)
+    settings = load_settings_surface(data_root, owner_id=owner_id)
     return ProfileSurfaceResponse(
         profile=progress.profile,
         books=progress.books,
@@ -336,11 +342,16 @@ def get_profile_surface(data_root: Path) -> ProfileSurfaceResponse:
     )
 
 
-def get_activity_surface(data_root: Path, *, limit: int = 50) -> ActivitySurfaceResponse:
+def get_activity_surface(
+    data_root: Path,
+    *,
+    limit: int = 50,
+    owner_id: str | None = None,
+) -> ActivitySurfaceResponse:
     limit = max(0, limit)
     registry = load_registry(_books_root(data_root) / "registry.json")
     title_map = _book_title_map(registry)
-    db_path = ensure_profile_database(data_root)
+    db_path = ensure_profile_database(data_root, owner_id)
     events: list[ActivityEvent] = []
 
     with sqlite3.connect(db_path) as connection:
@@ -464,16 +475,21 @@ def get_import_surface(data_root: Path, *, default_language: str = "zh") -> Impo
     )
 
 
-def load_settings_surface(data_root: Path) -> SettingsSurfaceResponse:
-    db_path = ensure_profile_database(data_root)
+def load_settings_surface(data_root: Path, *, owner_id: str | None = None) -> SettingsSurfaceResponse:
+    db_path = ensure_profile_database(data_root, owner_id)
     with sqlite3.connect(db_path) as connection:
         connection.row_factory = sqlite3.Row
         rows = connection.execute("SELECT key, value FROM settings ORDER BY key ASC").fetchall()
     return SettingsSurfaceResponse(entries=[SettingEntry(key=row["key"], value=row["value"]) for row in rows])
 
 
-def update_settings_surface(data_root: Path, payload: SettingsUpdateRequest) -> SettingsSurfaceResponse:
-    db_path = ensure_profile_database(data_root)
+def update_settings_surface(
+    data_root: Path,
+    payload: SettingsUpdateRequest,
+    *,
+    owner_id: str | None = None,
+) -> SettingsSurfaceResponse:
+    db_path = ensure_profile_database(data_root, owner_id)
     with sqlite3.connect(db_path) as connection:
         connection.row_factory = sqlite3.Row
         for entry in payload.entries:
@@ -491,4 +507,4 @@ def update_settings_surface(data_root: Path, payload: SettingsUpdateRequest) -> 
                 (key, entry.value, _utc_now()),
             )
         connection.commit()
-    return load_settings_surface(data_root)
+    return load_settings_surface(data_root, owner_id=owner_id)

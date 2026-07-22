@@ -34,6 +34,8 @@
 
 ## 2026-07-22
 
+- Phase 5: completed the hosted identity boundary with account-scoped learner storage, authenticated profile/settings updates, non-destructive local-profile migration, server-authoritative theme catalog/entitlement validation, and explicit hosted/local UI states. Checkout and hosted learner-event replication remain deferred.
+- Added `docs/TECHNOLOGY_STACK.md` as the versioned source of truth for the TextPlex runtimes, frameworks, dependencies, infrastructure, external services, and upgrade procedure.
 - Phase 5: added the authenticated read-only `/profile/hosted` API contract, Supabase ownership-filtered profile/settings hydration, shared response types, profile-surface account state, inventory coverage, and focused API/web tests. Local learner metrics and mutations remain unchanged pending the ownership migration work.
 
 - Completed the Phase 4 exit review and opened Phase 5 for hosted identity, user-owned learner state, local-profile migration, and server-authoritative theme entitlements.

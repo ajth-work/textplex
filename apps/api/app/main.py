@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from app.core.paths import get_data_root, get_repo_root, resolve_books_root
-from app.schemas.auth import AuthMeResponse, HostedProfileSurfaceResponse
+from app.schemas.auth import AuthMeResponse, HostedProfileSurfaceResponse, HostedProfileUpdateRequest
 from app.schemas.books import BookExtractionRequest, BookImportRequest, BookPageManifest, BookReaderPageResponse, BookRecord, PageExtractionArtifact, TextImportRequest, TextParseRequest
 from app.schemas.learning import (
     LearningProfileSummary,
@@ -22,7 +22,7 @@ from app.schemas.learning import (
     SentenceReadRecord,
 )
 from app.schemas.lexicon import LexiconImportRequest, LexiconImportSummary, LexiconLookupResponse
-from app.schemas.surfaces import BookAnalysisSurfaceResponse, ImportSurfaceResponse, ProgressSurfaceResponse, ProfileSurfaceResponse, SearchSurfaceResponse, SettingsSurfaceResponse, SettingsUpdateRequest, StudySurfaceResponse, ActivitySurfaceResponse
+from app.schemas.surfaces import ActivitySurfaceResponse, BookAnalysisSurfaceResponse, ImportSurfaceResponse, ProgressSurfaceResponse, ProfileSurfaceResponse, SearchSurfaceResponse, SettingEntry, SettingsSurfaceResponse, SettingsUpdateRequest, StudySurfaceResponse
 from app.services.book_extraction import (
     extract_book_text,
     import_text_into_book,
@@ -30,10 +30,14 @@ from app.services.book_extraction import (
     parse_text_into_page_artifact,
     recover_book_extraction_result,
 )
+from app.schemas.migration import ProfileMigrationRequest, ProfileMigrationResponse
+from app.schemas.themes import ThemeCatalogResponse
 from app.services.book_registry import delete_book_from_path, import_book_from_path, load_registry, save_registry
-from app.services.auth import AuthenticatedUserContext, get_authenticated_user_context, get_current_user, get_hosted_profile
+from app.services.auth import AuthenticatedUserContext, get_authenticated_user_context, get_current_user, get_hosted_profile, get_hosted_settings, get_optional_user_context, get_public_user_context, update_hosted_profile, update_hosted_settings
 from app.services.learning_profile import create_reading_session, get_learning_profile_summary, record_page_read, record_sentence_read
 from app.services.lexicon import import_lexicon_from_source, lookup_lexicon_entry
+from app.services.profile_migration import apply_profile_migration, preview_profile_migration
+from app.services.themes import get_theme_catalog, validate_theme_settings
 from app.services.surfaces import get_activity_surface, get_book_analysis_surface, get_import_surface, get_progress_surface, get_profile_surface, get_study_surface, load_settings_surface, search_surfaces, update_settings_surface
 from processor.contracts import BookExtractionResult
 
@@ -490,8 +494,10 @@ def get_book_extraction(book_id: str) -> BookExtractionResult:
 
 
 @app.get("/learning/profile", response_model=LearningProfileSummary)
-def get_learning_profile() -> LearningProfileSummary:
-    return get_learning_profile_summary(app.state.data_root)
+def get_learning_profile(
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> LearningProfileSummary:
+    return get_learning_profile_summary(app.state.data_root, owner_id=context.user.id if context else None)
 
 
 @app.get("/auth/me", response_model=AuthMeResponse)
@@ -500,25 +506,34 @@ def get_authenticated_user(user: AuthMeResponse = Depends(get_current_user)) -> 
 
 
 @app.post("/learning/sessions", response_model=ReadingSessionRecord)
-def open_learning_session(payload: ReadingSessionCreateRequest) -> ReadingSessionRecord:
+def open_learning_session(
+    payload: ReadingSessionCreateRequest,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> ReadingSessionRecord:
     _book_exists(payload.book_id)
-    return create_reading_session(app.state.data_root, payload)
+    return create_reading_session(app.state.data_root, payload, owner_id=context.user.id if context else None)
 
 
 @app.post("/learning/page-reads", response_model=PageReadRecord)
-def create_page_read(payload: PageReadCreateRequest) -> PageReadRecord:
+def create_page_read(
+    payload: PageReadCreateRequest,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> PageReadRecord:
     _book_exists(payload.book_id)
     try:
-        return record_page_read(app.state.data_root, payload)
+        return record_page_read(app.state.data_root, payload, owner_id=context.user.id if context else None)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.post("/learning/sentence-reads", response_model=SentenceReadRecord)
-def create_sentence_read(payload: SentenceReadCreateRequest) -> SentenceReadRecord:
+def create_sentence_read(
+    payload: SentenceReadCreateRequest,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> SentenceReadRecord:
     _book_exists(payload.book_id)
     try:
-        return record_sentence_read(app.state.data_root, payload)
+        return record_sentence_read(app.state.data_root, payload, owner_id=context.user.id if context else None)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -566,18 +581,31 @@ def search_surface(query: str, limit: int = 20) -> SearchSurfaceResponse:
 
 
 @app.get("/study", response_model=StudySurfaceResponse)
-def study_surface(language_code: str | None = None, limit: int = 50) -> StudySurfaceResponse:
-    return get_study_surface(app.state.data_root, language_code=language_code, limit=limit)
+def study_surface(
+    language_code: str | None = None,
+    limit: int = 50,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> StudySurfaceResponse:
+    return get_study_surface(
+        app.state.data_root,
+        language_code=language_code,
+        limit=limit,
+        owner_id=context.user.id if context else None,
+    )
 
 
 @app.get("/progress", response_model=ProgressSurfaceResponse)
-def progress_surface() -> ProgressSurfaceResponse:
-    return get_progress_surface(app.state.data_root)
+def progress_surface(
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> ProgressSurfaceResponse:
+    return get_progress_surface(app.state.data_root, owner_id=context.user.id if context else None)
 
 
 @app.get("/profile", response_model=ProfileSurfaceResponse)
-def profile_surface() -> ProfileSurfaceResponse:
-    return get_profile_surface(app.state.data_root)
+def profile_surface(
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> ProfileSurfaceResponse:
+    return get_profile_surface(app.state.data_root, owner_id=context.user.id if context else None)
 
 
 @app.get("/profile/hosted", response_model=HostedProfileSurfaceResponse)
@@ -587,9 +615,46 @@ def hosted_profile_surface(
     return get_hosted_profile(context)
 
 
+@app.put("/profile/hosted", response_model=HostedProfileSurfaceResponse)
+def put_hosted_profile(
+    payload: HostedProfileUpdateRequest,
+    context: AuthenticatedUserContext = Depends(get_authenticated_user_context),
+) -> HostedProfileSurfaceResponse:
+    return update_hosted_profile(context, payload)
+
+
+@app.get("/profile/migration", response_model=ProfileMigrationResponse)
+def get_profile_migration(
+    context: AuthenticatedUserContext = Depends(get_authenticated_user_context),
+) -> ProfileMigrationResponse:
+    return preview_profile_migration(app.state.data_root, context.user.id)
+
+
+@app.post("/profile/migration", response_model=ProfileMigrationResponse)
+def post_profile_migration(
+    payload: ProfileMigrationRequest,
+    context: AuthenticatedUserContext = Depends(get_authenticated_user_context),
+) -> ProfileMigrationResponse:
+    return apply_profile_migration(app.state.data_root, context.user.id, payload)
+
+
+@app.get("/themes/catalog", response_model=ThemeCatalogResponse)
+def themes_catalog(
+    context: AuthenticatedUserContext | None = Depends(get_public_user_context),
+) -> ThemeCatalogResponse:
+    return get_theme_catalog(context)
+
+
 @app.get("/activity", response_model=ActivitySurfaceResponse)
-def activity_surface(limit: int = 50) -> ActivitySurfaceResponse:
-    return get_activity_surface(app.state.data_root, limit=limit)
+def activity_surface(
+    limit: int = 50,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> ActivitySurfaceResponse:
+    return get_activity_surface(
+        app.state.data_root,
+        limit=limit,
+        owner_id=context.user.id if context else None,
+    )
 
 
 @app.get("/import", response_model=ImportSurfaceResponse)
@@ -598,10 +663,29 @@ def import_surface() -> ImportSurfaceResponse:
 
 
 @app.get("/settings", response_model=SettingsSurfaceResponse)
-def get_settings_surface() -> SettingsSurfaceResponse:
-    return load_settings_surface(app.state.data_root)
+def get_settings_surface(
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> SettingsSurfaceResponse:
+    if context:
+        hosted_entries = get_hosted_settings(context)
+        return SettingsSurfaceResponse(entries=[SettingEntry.model_validate(entry) for entry in hosted_entries])
+    return load_settings_surface(app.state.data_root, owner_id=context.user.id if context else None)
 
 
 @app.put("/settings", response_model=SettingsSurfaceResponse)
-def put_settings_surface(payload: SettingsUpdateRequest) -> SettingsSurfaceResponse:
-    return update_settings_surface(app.state.data_root, payload)
+def put_settings_surface(
+    payload: SettingsUpdateRequest,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> SettingsSurfaceResponse:
+    if context:
+        validate_theme_settings(payload, context)
+        hosted_entries = update_hosted_settings(
+            context,
+            [{"key": entry.key, "value": entry.value} for entry in payload.entries],
+        )
+        return SettingsSurfaceResponse(entries=[SettingEntry.model_validate(entry) for entry in hosted_entries])
+    return update_settings_surface(
+        app.state.data_root,
+        payload,
+        owner_id=context.user.id if context else None,
+    )

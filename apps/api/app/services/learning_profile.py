@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -142,16 +143,20 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def get_profile_db_path(data_root: Path) -> Path:
-    return resolve_user_data_root(data_root) / "profile.sqlite3"
+def get_profile_db_path(data_root: Path, owner_id: str | None = None) -> Path:
+    user_root = resolve_user_data_root(data_root)
+    if not owner_id:
+        return user_root / "profile.sqlite3"
+    owner_key = hashlib.sha256(owner_id.encode("utf-8")).hexdigest()[:32]
+    return user_root / "accounts" / owner_key / "profile.sqlite3"
 
 
 def _migration_root() -> Path:
     return Path(__file__).resolve().parents[1] / "db" / "migrations" / "user"
 
 
-def ensure_profile_database(data_root: Path) -> Path:
-    db_path = get_profile_db_path(data_root)
+def ensure_profile_database(data_root: Path, owner_id: str | None = None) -> Path:
+    db_path = get_profile_db_path(data_root, owner_id)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     migration_root = _migration_root()
@@ -165,8 +170,8 @@ def ensure_profile_database(data_root: Path) -> Path:
     return db_path
 
 
-def _connect(data_root: Path) -> sqlite3.Connection:
-    db_path = ensure_profile_database(data_root)
+def _connect(data_root: Path, owner_id: str | None = None) -> sqlite3.Connection:
+    db_path = ensure_profile_database(data_root, owner_id)
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
@@ -306,10 +311,15 @@ def _record_exposure(
         _refresh_vocabulary_progress(connection, language_code, lemma)
 
 
-def create_reading_session(data_root: Path, payload: ReadingSessionCreateRequest) -> ReadingSessionRecord:
+def create_reading_session(
+    data_root: Path,
+    payload: ReadingSessionCreateRequest,
+    *,
+    owner_id: str | None = None,
+) -> ReadingSessionRecord:
     started_at = payload.started_at or _utc_now()
     session_id = f"session-{uuid4().hex}"
-    with _connect(data_root) as connection:
+    with _connect(data_root, owner_id) as connection:
         connection.execute(
             """
             INSERT INTO reading_sessions (id, book_id, started_at, ended_at, active_seconds)
@@ -327,13 +337,18 @@ def create_reading_session(data_root: Path, payload: ReadingSessionCreateRequest
     )
 
 
-def record_page_read(data_root: Path, payload: PageReadCreateRequest) -> PageReadRecord:
+def record_page_read(
+    data_root: Path,
+    payload: PageReadCreateRequest,
+    *,
+    owner_id: str | None = None,
+) -> PageReadRecord:
     completed_at = _utc_now()
     estimated_seconds = max(payload.active_seconds, 30)
     completion_ratio = 0.0 if estimated_seconds <= 0 else min(payload.active_seconds / estimated_seconds, 1.0)
     counted_as_read = int(payload.active_seconds >= 15 or completion_ratio >= 0.75)
 
-    with _connect(data_root) as connection:
+    with _connect(data_root, owner_id) as connection:
         session_row = connection.execute(
             "SELECT id FROM reading_sessions WHERE id = ? AND book_id = ?",
             (payload.session_id, payload.book_id),
@@ -384,7 +399,12 @@ def record_page_read(data_root: Path, payload: PageReadCreateRequest) -> PageRea
     return _page_read_from_row(row)
 
 
-def record_sentence_read(data_root: Path, payload: SentenceReadCreateRequest) -> SentenceReadRecord:
+def record_sentence_read(
+    data_root: Path,
+    payload: SentenceReadCreateRequest,
+    *,
+    owner_id: str | None = None,
+) -> SentenceReadRecord:
     completed_at = payload.completed_at or _utc_now()
     registry = load_registry(resolve_books_root(data_root) / "registry.json")
     book = registry.get(payload.book_id)
@@ -392,7 +412,7 @@ def record_sentence_read(data_root: Path, payload: SentenceReadCreateRequest) ->
         raise KeyError(f"Book not found: {payload.book_id}")
     language_code = str(getattr(book, "language_code", None) or "local")
 
-    with _connect(data_root) as connection:
+    with _connect(data_root, owner_id) as connection:
         session_row = connection.execute(
             "SELECT id FROM reading_sessions WHERE id = ? AND book_id = ?",
             (payload.session_id, payload.book_id),
@@ -538,8 +558,12 @@ def record_sentence_read(data_root: Path, payload: SentenceReadCreateRequest) ->
     return _sentence_read_from_row(row)
 
 
-def get_learning_profile_summary(data_root: Path) -> LearningProfileSummary:
-    db_path = ensure_profile_database(data_root)
+def get_learning_profile_summary(
+    data_root: Path,
+    *,
+    owner_id: str | None = None,
+) -> LearningProfileSummary:
+    db_path = ensure_profile_database(data_root, owner_id)
     registry = load_registry(resolve_books_root(data_root) / "registry.json")
     track_stats: dict[str, dict[str, object]] = {}
 

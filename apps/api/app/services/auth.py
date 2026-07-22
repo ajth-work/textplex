@@ -14,6 +14,7 @@ from app.schemas.auth import (
     AuthMeResponse,
     HostedProfileRecord,
     HostedProfileSurfaceResponse,
+    HostedProfileUpdateRequest,
     HostedSettingEntry,
 )
 
@@ -33,6 +34,10 @@ def _supabase_publishable_key() -> str:
         os.getenv("SUPABASE_PUBLISHABLE_KEY", "").strip()
         or os.getenv("SUPABASE_ANON_KEY", "").strip()
     )
+
+
+def supabase_is_configured() -> bool:
+    return bool(_supabase_url() and _supabase_publishable_key())
 
 
 def _bearer_token(authorization: str | None) -> str:
@@ -107,11 +112,34 @@ def get_authenticated_user_context(
     return AuthenticatedUserContext(user=_auth_me_response(_load_auth_user(token)), access_token=token)
 
 
+def get_optional_user_context(
+    authorization: str | None = Header(default=None),
+) -> AuthenticatedUserContext | None:
+    if not supabase_is_configured():
+        return None
+    return get_authenticated_user_context(authorization)
+
+
+def get_public_user_context(
+    authorization: str | None = Header(default=None),
+) -> AuthenticatedUserContext | None:
+    if not authorization:
+        return None
+    return get_authenticated_user_context(authorization)
+
+
 def get_current_user(authorization: str | None = Header(default=None)) -> AuthMeResponse:
     return get_authenticated_user_context(authorization).user
 
 
-def _supabase_rest_get(path: str, token: str) -> Any:
+def _supabase_rest_request(
+    path: str,
+    token: str,
+    *,
+    method: str = "GET",
+    payload: Any = None,
+    prefer: str | None = None,
+) -> Any:
     project_url = _supabase_url()
     publishable_key = _supabase_publishable_key()
     if not project_url or not publishable_key:
@@ -120,17 +148,25 @@ def _supabase_rest_get(path: str, token: str) -> Any:
             detail="Supabase hosted profile storage is not configured on the API.",
         )
 
+    headers = {
+        "Accept": "application/json",
+        "apikey": publishable_key,
+        "Authorization": f"Bearer {token}",
+    }
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+    if prefer:
+        headers["Prefer"] = prefer
     request = Request(
         f"{project_url}/rest/v1/{path}",
-        headers={
-            "Accept": "application/json",
-            "apikey": publishable_key,
-            "Authorization": f"Bearer {token}",
-        },
+        data=json.dumps(payload).encode("utf-8") if payload is not None else None,
+        headers=headers,
+        method=method,
     )
     try:
         with urlopen(request, timeout=5) as response:
-            return json.loads(response.read().decode("utf-8"))
+            raw_payload = response.read().decode("utf-8")
+            return json.loads(raw_payload) if raw_payload else None
     except HTTPError as exc:
         if exc.code in {401, 403}:
             raise HTTPException(
@@ -143,6 +179,10 @@ def _supabase_rest_get(path: str, token: str) -> Any:
         raise HTTPException(status_code=502, detail="Supabase hosted profile storage is unavailable.") from exc
 
 
+def _supabase_rest_get(path: str, token: str) -> Any:
+    return _supabase_rest_request(path, token)
+
+
 def get_hosted_profile(context: AuthenticatedUserContext) -> HostedProfileSurfaceResponse:
     user_id = quote(context.user.id, safe="")
     profile_payload = _supabase_rest_get(
@@ -153,10 +193,7 @@ def get_hosted_profile(context: AuthenticatedUserContext) -> HostedProfileSurfac
     if not isinstance(profile_payload, list) or not profile_payload:
         raise HTTPException(status_code=404, detail="Hosted learner profile was not found.")
 
-    settings_payload = _supabase_rest_get(
-        f"user_settings?select=key,value,updated_at&user_id=eq.{user_id}&order=key.asc",
-        context.access_token,
-    )
+    settings_payload = get_hosted_settings(context)
     if not isinstance(settings_payload, list):
         raise HTTPException(status_code=502, detail="Supabase returned invalid hosted settings.")
 
@@ -167,3 +204,55 @@ def get_hosted_profile(context: AuthenticatedUserContext) -> HostedProfileSurfac
         raise HTTPException(status_code=502, detail="Supabase returned an invalid hosted profile.") from exc
 
     return HostedProfileSurfaceResponse(user=context.user, profile=profile, settings=settings)
+
+
+def get_hosted_settings(context: AuthenticatedUserContext) -> list[dict[str, Any]]:
+    user_id = quote(context.user.id, safe="")
+    payload = _supabase_rest_get(
+        f"user_settings?select=key,value,updated_at&user_id=eq.{user_id}&order=key.asc",
+        context.access_token,
+    )
+    if not isinstance(payload, list):
+        raise HTTPException(status_code=502, detail="Supabase returned invalid hosted settings.")
+    return payload
+
+
+def update_hosted_settings(
+    context: AuthenticatedUserContext,
+    entries: list[dict[str, str]],
+) -> list[dict[str, Any]]:
+    rows = [
+        {"user_id": context.user.id, "key": entry["key"].strip(), "value": entry["value"]}
+        for entry in entries
+        if entry.get("key", "").strip()
+    ]
+    if rows:
+        _supabase_rest_request(
+            "user_settings?on_conflict=user_id,key",
+            context.access_token,
+            method="POST",
+            payload=rows,
+            prefer="resolution=merge-duplicates,return=minimal",
+        )
+    return get_hosted_settings(context)
+
+
+def update_hosted_profile(
+    context: AuthenticatedUserContext,
+    payload: HostedProfileUpdateRequest,
+) -> HostedProfileSurfaceResponse:
+    values = payload.model_dump(exclude_unset=True)
+    if values.get("display_name") is None:
+        values.pop("display_name", None)
+    elif isinstance(values.get("display_name"), str) and not values["display_name"].strip():
+        values["display_name"] = "Reader"
+    if values:
+        user_id = quote(context.user.id, safe="")
+        _supabase_rest_request(
+            f"profiles?id=eq.{user_id}",
+            context.access_token,
+            method="PATCH",
+            payload=values,
+            prefer="return=minimal",
+        )
+    return get_hosted_profile(context)

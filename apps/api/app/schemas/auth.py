@@ -30,3 +30,10 @@ class HostedProfileSurfaceResponse(BaseModel):
     user: AuthMeResponse
     profile: HostedProfileRecord
     settings: list[HostedSettingEntry]
+
+
+class HostedProfileUpdateRequest(BaseModel):
+    display_name: str | None = None
+    target_language: str | None = None
+    learning_track: str | None = None
+    proficiency_level: str | None = None

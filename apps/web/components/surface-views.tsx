@@ -18,12 +18,16 @@ import {
   type BookRecord,
   type ImportSurfaceResponse,
   type HostedProfileSurfaceResponse,
+  type HostedProfileUpdateRequest,
+  type ProfileMigrationRequest,
+  type ProfileMigrationResponse,
   type ProgressSurfaceResponse,
   type ProfileSurfaceResponse,
   type SearchSurfaceResponse,
   type SettingsSurfaceResponse,
   type SettingsUpdateRequest,
   type StudySurfaceResponse,
+  type ThemeCatalogResponse,
 } from "../lib/textplex";
 import {
   appThemeLabels,
@@ -519,6 +523,11 @@ export function ProfileSurfaceView() {
   const [data, setData] = useState<ProfileSurfaceResponse | null>(null);
   const [hostedData, setHostedData] = useState<HostedProfileSurfaceResponse | null>(null);
   const [hostedError, setHostedError] = useState<string | null>(null);
+  const [hostedDisplayName, setHostedDisplayName] = useState("");
+  const [hostedSaving, setHostedSaving] = useState(false);
+  const [migration, setMigration] = useState<ProfileMigrationResponse | null>(null);
+  const [migrationError, setMigrationError] = useState<string | null>(null);
+  const [migrationSaving, setMigrationSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -543,6 +552,8 @@ export function ProfileSurfaceView() {
     if (authLoading || !authenticatedUser) {
       setHostedData(null);
       setHostedError(null);
+      setMigration(null);
+      setMigrationError(null);
       return undefined;
     }
 
@@ -551,6 +562,7 @@ export function ProfileSurfaceView() {
       .then((result) => {
         if (active) {
           setHostedData(result);
+          setHostedDisplayName(result.profile.display_name ?? "");
           setHostedError(null);
         }
       })
@@ -563,6 +575,58 @@ export function ProfileSurfaceView() {
       active = false;
     };
   }, [authLoading, authenticatedUser]);
+
+  useEffect(() => {
+    if (authLoading || !authenticatedUser) {
+      return undefined;
+    }
+
+    let active = true;
+    void fetchJson<ProfileMigrationResponse>("/profile/migration")
+      .then((result) => {
+        if (active) {
+          setMigration(result);
+          setMigrationError(null);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          setMigrationError(err instanceof Error ? err.message : "Unable to check local profile migration.");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [authLoading, authenticatedUser]);
+
+  async function migrateLocalProfile() {
+    setMigrationSaving(true);
+    try {
+      const payload: ProfileMigrationRequest = { conflict_policy: "merge_non_destructive" };
+      const result = await postJson<ProfileMigrationResponse>("/profile/migration", payload);
+      setMigration(result);
+      setMigrationError(null);
+    } catch (err) {
+      setMigrationError(err instanceof Error ? err.message : "Unable to migrate the local profile.");
+    } finally {
+      setMigrationSaving(false);
+    }
+  }
+
+  async function saveHostedProfile() {
+    setHostedSaving(true);
+    try {
+      const payload: HostedProfileUpdateRequest = { display_name: hostedDisplayName.trim() || null };
+      const result = await putJson<HostedProfileSurfaceResponse>("/profile/hosted", payload);
+      setHostedData(result);
+      setHostedDisplayName(result.profile.display_name ?? "");
+      setHostedError(null);
+    } catch (err) {
+      setHostedError(err instanceof Error ? err.message : "Unable to save hosted profile.");
+    } finally {
+      setHostedSaving(false);
+    }
+  }
 
   const settingsMap = new Map(data?.settings.entries.map((entry) => [entry.key, entry.value]) ?? []);
   const selectedTrack =
@@ -599,10 +663,37 @@ export function ProfileSurfaceView() {
         <section className="card feature-card" data-inventory-id="profile.hosted-account-card">
           <h2>Hosted account</h2>
           <p>{hostedData.user.email ?? hostedData.profile.display_name ?? hostedData.user.id}</p>
+          <label>
+            Display name
+            <input className="text-input" value={hostedDisplayName} onChange={(event) => setHostedDisplayName(event.target.value)} />
+          </label>
+          <button className="button button-secondary" type="button" onClick={() => void saveHostedProfile()} disabled={hostedSaving}>
+            {hostedSaving ? "Saving..." : "Save hosted profile"}
+          </button>
           <p className="small-copy">
             {hostedData.profile.target_language} · {hostedData.profile.learning_track} · {hostedData.profile.proficiency_level ?? "Level not set"}
           </p>
           <p className="small-copy">Hosted settings: {hostedData.settings.length}</p>
+        </section>
+      ) : null}
+      {authenticatedUser ? (
+        <section className="card feature-card" data-inventory-id="profile.migration-card">
+          <h2>Local profile migration</h2>
+          {migrationError ? <p className="small-copy">{migrationError}</p> : null}
+          {!migration && !migrationError ? <LoadingSkeleton label="Checking local profile migration" /> : null}
+          {migration ? (
+            <>
+              <p>{migration.message}</p>
+              <p className="small-copy">
+                Anonymous rows: {Object.values(migration.source_counts).reduce((sum, count) => sum + count, 0)} · Account rows: {Object.values(migration.target_counts).reduce((sum, count) => sum + count, 0)}
+              </p>
+              {migration.status === "ready" ? (
+                <button className="button button-primary" type="button" onClick={() => void migrateLocalProfile()} disabled={migrationSaving}>
+                  {migrationSaving ? "Migrating..." : "Merge local profile"}
+                </button>
+              ) : null}
+            </>
+          ) : null}
         </section>
       ) : null}
       {error ? <section className="card feature-card">{error}</section> : null}
@@ -681,6 +772,7 @@ export function ProfileSurfaceView() {
 
 export function ThemeShopSurfaceView() {
   const [data, setData] = useState<SettingsSurfaceResponse | null>(null);
+  const [catalog, setCatalog] = useState<ThemeCatalogResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -699,6 +791,22 @@ export function ThemeShopSurfaceView() {
         if (active) {
           setError(err instanceof Error ? err.message : "Unable to load the theme shop.");
         }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void fetchJson<ThemeCatalogResponse>("/themes/catalog")
+      .then((result) => {
+        if (active) {
+          setCatalog(result);
+        }
+      })
+      .catch(() => {
+        // The local-only theme preview remains usable if hosted catalog storage is unavailable.
       });
     return () => {
       active = false;
@@ -736,6 +844,7 @@ export function ThemeShopSurfaceView() {
   }
 
   const selectedOption = appThemeOptions.find((option) => option.value === theme) ?? appThemeOptions[0];
+  const serverThemeMap = new Map(catalog?.themes.map((item) => [item.id, item]) ?? []);
   const formatPrice = (price: number) => `$${price.toFixed(2)}`;
 
   return (
@@ -743,15 +852,15 @@ export function ThemeShopSurfaceView() {
       eyebrow="Theme shop"
       title="Find a reading atmosphere that fits"
       description="Browse the complete visual collection for TextPlex. Pick a theme to preview it across the app, then save it to your learner profile."
-      badge={`${appThemeOptions.length} themes`}
+      badge={`${catalog?.themes.length ?? appThemeOptions.length} themes`}
       links={[
         { href: "/profile", label: "Back to Profile" },
         { href: "/settings", label: "Settings" },
       ]}
       metrics={[
-        { label: "Collection", value: `${appThemeOptions.length} packs` },
+        { label: "Collection", value: `${catalog?.themes.length ?? appThemeOptions.length} themes` },
         { label: "Selected", value: appThemeLabels[theme] },
-        { label: "Storage", value: "Profile-backed" },
+        { label: "Storage", value: catalog ? "Server catalog" : "Local preview" },
       ]}
     >
       {error ? <section className="card feature-card">{error}</section> : null}
@@ -808,7 +917,15 @@ export function ThemeShopSurfaceView() {
                 <span className="global-theme-option-copy">
                   <strong>{option.title}</strong>
                   <span>{option.description}</span>
-                  <span>{formatPrice(option.price)}</span>
+                  <span>
+                    {serverThemeMap.get(option.value)
+                      ? serverThemeMap.get(option.value)?.is_owned
+                        ? "Owned"
+                        : catalog?.mode === "hosted"
+                          ? "Preview only"
+                          : formatPrice((serverThemeMap.get(option.value)?.price_cents ?? 0) / 100)
+                      : formatPrice(option.price)}
+                  </span>
                 </span>
               </button>
             ))}
@@ -922,6 +1039,7 @@ export function SearchSurfaceView() {
 }
 
 export function SettingsSurfaceView() {
+  const { configured: authConfigured, user: authenticatedUser } = useAuth();
   const [data, setData] = useState<SettingsSurfaceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -977,14 +1095,14 @@ export function SettingsSurfaceView() {
     <RoutePage
       eyebrow="Settings"
       title="Profile and app preferences"
-      description="Display preferences and local reading behavior are stored in the user profile database."
+      description={authenticatedUser ? "Display preferences are stored in the authenticated hosted profile." : authConfigured ? "Sign in to load and save hosted preferences, or continue in local-only mode." : "Display preferences and local reading behavior are stored in the local profile database."}
       badge="Live"
       links={[
         { href: "/library", label: "Library" },
         { href: "/activity", label: "Activity" },
       ]}
       metrics={[
-        { label: "Profile", value: "Local first" },
+        { label: "Profile", value: authenticatedUser ? "Hosted account" : authConfigured ? "Sign-in available" : "Local first" },
         { label: "Theme", value: data ? appThemeLabels[theme] : "Loading" },
         { label: "Reader mode", value: data ? readerMode : "Loading" },
       ]}

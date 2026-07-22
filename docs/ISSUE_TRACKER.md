@@ -10,7 +10,6 @@ Remote issue state and kanban status are now synchronized for #10, #11, #18, #19
 
 | Item | Issue | Notes |
 | --- | --- | --- |
-| Frontend migration Phase 5: hosted identity and learner state | Phase 5 | Kickoff slice: reconcile Supabase authentication with API-owned profile/settings, define local-profile migration, and establish server-authoritative theme entitlements. See `docs/FRONTEND_MIGRATION_PHASE_5.md`. |
 | Add reader detail analytics surface | #31 | Reader analytics page work from `docs/READER_DETAIL_ANALYTICS.md`. |
 | Add Wikipedia article of the day as reader content | #29 | Source/content ingestion work for article-based reading. |
 
@@ -121,6 +120,7 @@ These local IDs are the planned child issues for the `Add theme store and commer
 
 | Item | Issue | Notes |
 | --- | --- | --- |
+| Frontend migration Phase 5: hosted identity and learner state | Phase 5 | Complete. Authenticated profile/settings reads and writes, account-scoped learner storage, non-destructive local-profile migration, server-authoritative theme catalog/entitlement validation, UI states, and focused ownership tests are implemented. Checkout and hosted learner-event replication remain future work. See `docs/FRONTEND_MIGRATION_PHASE_5.md`. |
 | Fix reader endpoint regressions in archive, import, and lexicon parsing | #33 | Fixed pasted-text extraction counts, isolated mutable API fixtures, and verified lexicon-backed parsing with declared dependencies installed. |
 | Restore site reachability contract for the homepage preview | #34 | Added the homepage contract text, clean preview route mappings, and live route checks. |
 | Fix sentence tokenization for Latin text to drop terminal punctuation | #35 | Latin token output now excludes punctuation-only matches while preserving sentence text. |

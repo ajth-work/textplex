@@ -321,6 +321,11 @@ export function MockProfileSurfaceView() {
         <p className="small-copy">zh · hsk · HSK 3</p>
         <p className="small-copy">Hosted settings: {data.settings.entries.length}</p>
       </section>
+      <section className="card feature-card" data-inventory-id="profile.migration-card">
+        <h2>Local profile migration</h2>
+        <p className="small-copy">Demo migration preview: local sample data is ready for a non-destructive account merge.</p>
+        <button className="button button-secondary" type="button" disabled>Demo preview only</button>
+      </section>
       <section className="feature-grid">
           <article className="card feature-card">
             <h2>Learning summary</h2>
