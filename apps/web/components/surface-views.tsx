@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { RoutePage } from "./route-page";
+import { useAuth } from "./auth-provider";
 import {
   fetchJson,
   formatDateTime,
@@ -16,6 +17,7 @@ import {
   type BookAnalysisSurfaceResponse,
   type BookRecord,
   type ImportSurfaceResponse,
+  type HostedProfileSurfaceResponse,
   type ProgressSurfaceResponse,
   type ProfileSurfaceResponse,
   type SearchSurfaceResponse,
@@ -513,7 +515,10 @@ export function ProgressSurfaceView() {
 }
 
 export function ProfileSurfaceView() {
+  const { loading: authLoading, user: authenticatedUser } = useAuth();
   const [data, setData] = useState<ProfileSurfaceResponse | null>(null);
+  const [hostedData, setHostedData] = useState<HostedProfileSurfaceResponse | null>(null);
+  const [hostedError, setHostedError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -533,6 +538,31 @@ export function ProfileSurfaceView() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (authLoading || !authenticatedUser) {
+      setHostedData(null);
+      setHostedError(null);
+      return undefined;
+    }
+
+    let active = true;
+    void fetchJson<HostedProfileSurfaceResponse>("/profile/hosted")
+      .then((result) => {
+        if (active) {
+          setHostedData(result);
+          setHostedError(null);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          setHostedError(err instanceof Error ? err.message : "Unable to load hosted profile.");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [authLoading, authenticatedUser]);
 
   const settingsMap = new Map(data?.settings.entries.map((entry) => [entry.key, entry.value]) ?? []);
   const selectedTrack =
@@ -559,6 +589,22 @@ export function ProfileSurfaceView() {
       <p className="small-copy profile-legacy-link" data-inventory-id="profile.legacy-link">
         <a href={legacySurfaceUrl}>legacy</a>
       </p>
+      {hostedError ? (
+        <section className="card feature-card" data-inventory-id="profile.hosted-account-card">
+          <h2>Hosted account</h2>
+          <p className="small-copy">{hostedError}</p>
+        </section>
+      ) : null}
+      {hostedData ? (
+        <section className="card feature-card" data-inventory-id="profile.hosted-account-card">
+          <h2>Hosted account</h2>
+          <p>{hostedData.user.email ?? hostedData.profile.display_name ?? hostedData.user.id}</p>
+          <p className="small-copy">
+            {hostedData.profile.target_language} · {hostedData.profile.learning_track} · {hostedData.profile.proficiency_level ?? "Level not set"}
+          </p>
+          <p className="small-copy">Hosted settings: {hostedData.settings.length}</p>
+        </section>
+      ) : null}
       {error ? <section className="card feature-card">{error}</section> : null}
       {!data && !error ? <LoadingSkeleton label="Loading profile" /> : null}
       {data ? (

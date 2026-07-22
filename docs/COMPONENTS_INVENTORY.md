@@ -191,6 +191,7 @@ Live source: `apps/web/components/surface-views.tsx` (`ProfileSurfaceView`); dem
 | `profile.theme-picker` | card | Global theme | Live app theme preview and profile-backed theme save. |
 | `profile.theme-shop-entry` | region | Theme shop entry | Featured 2×3 theme grid and navigation tile for the full theme collection. |
 | `profile.legacy-link` | region | Legacy compatibility link | Explicit profile entry point to the standalone legacy reader shell. |
+| `profile.hosted-account-card` | card | Hosted account | Authenticated hosted profile identity and hosted settings count; demo uses a clearly labeled packaged account. |
 | `profile.preferences-card` | card | Preferences | Saved settings and current reader mode/theme values. |
 | `profile.book-activity-card` | card | Book activity | Per-book reading activity history. |
 | `profile.loading-state` | region | Profile loading | Loading skeleton for profile data. |
@@ -328,6 +329,7 @@ Use this section to move from a component ID to the issue that owns its pending 
 | `analysis.difficulty-card`, `analysis.vocabulary-distribution-card`, `analysis.summary-card`, `analysis.sentence-hsk-chart`, `analysis.page-hsk-chart`, `book-detail.extraction-snapshot-card`, `book-detail.page-hsk-chart`, `reader.sentence-hsk-chart` | Frontend migration Phase 3 (Local complete) | API-backed sentence/page/book HSK analytics now render in Next analysis and book-detail routes with compatibility previews retained. |
 | `settings.roadmap-card` | Untracked | Settings discovery entry for the existing Roadmap route; create a dedicated tracker item if roadmap navigation becomes a larger product initiative. |
 | `profile.legacy-link` | Frontend migration Phase 4 (Complete) | Explicit rollback/compatibility entry from the canonical Next profile surface to the standalone legacy shell. |
+| `profile.hosted-account-card` | Frontend migration Phase 5 (In Progress) | Authenticated read-only hosted profile hydration; local learner metrics remain the default profile source. |
 
 ## Update rule for new UI
 

@@ -417,6 +417,26 @@ export interface ProfileSurfaceResponse {
   settings: SettingsSurfaceResponse;
 }
 
+export interface HostedProfileRecord {
+  id: string;
+  display_name: string | null;
+  target_language: string;
+  learning_track: string;
+  proficiency_level: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HostedSettingEntry extends SettingEntry {
+  updated_at: string;
+}
+
+export interface HostedProfileSurfaceResponse {
+  user: AuthMeResponse;
+  profile: HostedProfileRecord;
+  settings: HostedSettingEntry[];
+}
+
 export interface ActivityEvent {
   kind: "page_read" | "sentence_read" | "definition_lookup" | "reading_session";
   occurred_at: string;

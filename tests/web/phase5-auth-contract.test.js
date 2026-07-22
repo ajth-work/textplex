@@ -20,6 +20,20 @@ test("Phase 5 starts from an explicit Supabase identity boundary", () => {
   assert.match(supabaseClient, /autoRefreshToken: true/);
 });
 
+test("Phase 5 exposes an authenticated hosted profile read path", () => {
+  const authService = read("apps", "api", "app", "services", "auth.py");
+  const main = read("apps", "api", "app", "main.py");
+  const profileSurface = read("apps", "web", "components", "surface-views.tsx");
+  const sharedContracts = read("packages", "shared", "src", "contracts.ts");
+
+  assert.match(authService, /get_authenticated_user_context/);
+  assert.match(authService, /get_hosted_profile/);
+  assert.match(main, /@app\.get\("\/profile\/hosted"/);
+  assert.match(profileSurface, /fetchJson<HostedProfileSurfaceResponse>\("\/profile\/hosted"\)/);
+  assert.match(profileSurface, /profile\.hosted-account-card/);
+  assert.match(sharedContracts, /HostedProfileSurfaceResponse/);
+});
+
 test("Phase 5 starts from user-owned profile and settings RLS", () => {
   const migration = read("supabase", "migrations", "20260721130000_create_profiles.sql");
   const phase = read("docs", "FRONTEND_MIGRATION_PHASE_5.md");

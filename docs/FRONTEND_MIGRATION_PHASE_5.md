@@ -15,8 +15,10 @@ This phase also turns the existing theme-shop prototype into a safe catalog and 
 
 - [x] Close Phase 4 and preserve the explicit legacy rollback path.
 - [x] Confirm the existing Supabase Auth provider, callback route, profile migration, and user-settings RLS foundation.
-- [ ] Define the authenticated API request contract and reject unauthenticated learner-state mutations.
-- [ ] Add a user-scoped profile/settings client that hydrates the Next profile and settings surfaces from hosted state when configured.
+- [x] Define the authenticated API request contract and add a read-only hosted profile endpoint with server-side ownership filtering.
+- [x] Add a user-scoped hosted profile/settings read path that hydrates the Next profile surface when a Supabase session exists.
+- [ ] Protect learner-state mutations and reject missing, expired, malformed, or mismatched identity tokens.
+- [ ] Move the full Next profile and settings surfaces from local state to hosted state when configured.
 - [ ] Define export/import and migration rules for the anonymous local profile without overwriting hosted learner state.
 - [ ] Define the theme catalog and entitlement contract before adding checkout or payment-provider code.
 - [x] Add a baseline auth/RLS contract test before enabling hosted persistence by default.
@@ -57,6 +59,10 @@ Phase 5 is complete when:
 ## First Implementation Target
 
 Start with the authenticated API request contract and a read-only hosted profile hydration path. Do not add checkout, payment-provider integration, or destructive local-data migration until token validation and ownership tests are green.
+
+### Phase 5 kickoff implementation
+
+The first slice exposes `GET /profile/hosted`. It validates the Supabase bearer token through `/auth/v1/user`, queries `profiles` and `user_settings` with the authenticated subject as the ownership filter, and returns no local learner metrics. The Next profile surface displays this hosted identity read path only when a Supabase session is present; the existing local `/profile` request remains the source for local reading history and metrics.
 
 ## Non-goals
 

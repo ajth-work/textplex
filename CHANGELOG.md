@@ -34,6 +34,8 @@
 
 ## 2026-07-22
 
+- Phase 5: added the authenticated read-only `/profile/hosted` API contract, Supabase ownership-filtered profile/settings hydration, shared response types, profile-surface account state, inventory coverage, and focused API/web tests. Local learner metrics and mutations remain unchanged pending the ownership migration work.
+
 - Completed the Phase 4 exit review and opened Phase 5 for hosted identity, user-owned learner state, local-profile migration, and server-authoritative theme entitlements.
 - Added the Phase 5 baseline contract test for Supabase Auth session handling and profile/settings ownership RLS.
 - Completed the Phase 1 frontend migration inventory and contract reconciliation for routes, API ownership, endpoint families, and browser storage keys.

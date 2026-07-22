@@ -315,6 +315,12 @@ export function MockProfileSurfaceView() {
       <p className="small-copy profile-legacy-link" data-inventory-id="profile.legacy-link">
         <a href={legacySurfaceUrl}>legacy</a>
       </p>
+      <section className="card feature-card" data-inventory-id="profile.hosted-account-card">
+        <h2>Hosted account</h2>
+        <p>demo.reader@example.com</p>
+        <p className="small-copy">zh · hsk · HSK 3</p>
+        <p className="small-copy">Hosted settings: {data.settings.entries.length}</p>
+      </section>
       <section className="feature-grid">
           <article className="card feature-card">
             <h2>Learning summary</h2>
