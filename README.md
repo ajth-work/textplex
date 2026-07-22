@@ -103,7 +103,7 @@ npm run dev:web
 
 ### Docker Desktop preview
 
-If you want the full reader in a browser with the API and web app running together, use Docker Desktop:
+The canonical Docker stack runs the Next.js product on `3000` and the processor API on `8201`:
 
 ```powershell
 docker compose up --build
@@ -111,10 +111,10 @@ docker compose up --build
 
 Then open:
 
-- [Site shell](http://127.0.0.1:8200/)
+- [Canonical Next app](http://127.0.0.1:3000/)
 - [API health](http://127.0.0.1:8201/health)
 
-If you want the processor API reachable from the GitHub Pages shell on the same desktop, keep the API container exposed on `http://127.0.0.1:8201` and make sure your browser origin is allowed by `TEXTPLEX_CORS_ORIGINS`. The default Docker compose file already allows the local site shell and the published Pages shell.
+The Next browser bundle uses `TEXTPLEX_BROWSER_API_URL` at build time; the default is `http://127.0.0.1:8201`. If the app is opened from another device, set that value to the host-reachable API URL before rebuilding.
 
 ### Site shell
 
@@ -122,13 +122,15 @@ GitHub Pages now serves the static browser shell from `site/`. It is a plain HTM
 
 Open the shell, save your processor URL, and the reader will call the remote API from the browser. That keeps GitHub Pages lightweight while the processor can run in Docker, on a VPS, or anywhere else with CORS enabled.
 
-If you run the static shell locally on the desktop, use `http://127.0.0.1:8200` as the single browser-facing site endpoint.
+The static shell is retained for GitHub Pages and explicit legacy/preview compatibility. It is not the default local product entry point.
 
-To start the canonical local stack:
+To start the legacy shell locally:
 
 ```powershell
-docker compose up --build site api
+docker compose --profile legacy up --build site api
 ```
+
+Then open [the legacy/preview shell](http://127.0.0.1:8200/).
 
 For a desktop-hosted processor, point the shell at:
 

@@ -26,6 +26,7 @@
     "test:web": "node ./scripts/check_web_reachability.mjs",
     "test:web:reader": "node --test tests/web/reader-route.test.js",
     "test:web:phase3": "node --test tests/web/analysis-book-detail.test.js",
+    "test:web:phase4": "node --test tests/web/phase4-deployment.test.js",
     "test:site": "node --test tests/site",
     "test:maintenance": "node --test tests/maintenance/update-repair-cycle.test.js",
     "maintenance:check": "node ./scripts/update-repair-cycle.mjs --mode report",

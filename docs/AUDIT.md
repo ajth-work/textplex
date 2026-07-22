@@ -49,6 +49,12 @@ The audit was performed against the checkout as it existed, not a clean commit. 
 - Pinned both web declarations to exact `16.2.11` versions and regenerated the lockfile under Node 24.
 - Verification passed: full Next runner-image build, web lint, 41 Node 24 site/route tests, and npm production audit with zero vulnerabilities.
 
+## 2026-07-21 Phase 4 deployment-boundary verification
+
+- Added the Next web service to the default Compose topology on `3000`; the API remains on `8201` and the standalone site is scoped to the explicit `legacy` profile on `8200`.
+- Verification passed: Node 24 Next Docker build, canonical route reachability on `3000`, legacy route reachability on `8200`, API health, and a CORS preflight from `http://127.0.0.1:3000`.
+- Remaining evidence: import-to-reader-to-progress in Next, the explicit legacy navigation link, final component-inventory cross-reference, and the full maintenance repair cycle.
+
 ## Scope and parameters
 
 Review these surfaces whenever the audit runs:

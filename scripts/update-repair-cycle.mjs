@@ -207,6 +207,7 @@ function verify() {
   run(npmCommand, ["audit", "--omit=dev"]);
   run(npmCommand, ["run", "test:maintenance"]);
   run(npmCommand, ["run", "test:site"]);
+  run(npmCommand, ["run", "test:web:phase4"]);
   run(npmCommand, ["run", "test:web:reader"]);
   run(npmCommand, ["run", "test:web:phase3"]);
   run(npmCommand, ["run", "lint:web"]);

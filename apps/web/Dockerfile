@@ -9,6 +9,15 @@ RUN mkdir -p apps/web/node_modules
 FROM node:24-bookworm-slim AS builder
 WORKDIR /workspace
 
+ARG NEXT_PUBLIC_TEXTPLEX_API_URL=http://127.0.0.1:8201
+ARG NEXT_PUBLIC_TEXTPLEX_DEMO_MODE=false
+ARG NEXT_PUBLIC_SUPABASE_URL=
+ARG NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+ENV NEXT_PUBLIC_TEXTPLEX_API_URL=$NEXT_PUBLIC_TEXTPLEX_API_URL
+ENV NEXT_PUBLIC_TEXTPLEX_DEMO_MODE=$NEXT_PUBLIC_TEXTPLEX_DEMO_MODE
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+
 COPY --from=deps /workspace/node_modules ./node_modules
 COPY --from=deps /workspace/apps/web/node_modules ./apps/web/node_modules
 COPY . .
@@ -29,6 +38,7 @@ COPY --from=builder /workspace/apps/web/.next ./apps/web/.next
 COPY --from=builder /workspace/apps/web/app ./apps/web/app
 COPY --from=builder /workspace/apps/web/components ./apps/web/components
 COPY --from=builder /workspace/apps/web/lib ./apps/web/lib
+COPY --from=builder /workspace/apps/web/scripts ./apps/web/scripts
 
 EXPOSE 3000
 

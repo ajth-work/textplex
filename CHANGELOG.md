@@ -6,6 +6,7 @@
 - Added a controlled update and repair cycle with read-only drift reporting, explicit in-range npm updates, lockfile repair, dependency reinstall, verification gates, and weekly audit integration.
 - Started frontend migration Phase 4: documented the canonical Next.js deployment target on `3000`, API boundary on `8201`, and explicit standalone/GitHub Pages compatibility boundary on `8200`.
 - Reconciled the frontend migration tracker so completed Phase 3 work is separated from the Phase 4 deployment and legacy cutover work.
+- Implemented the Phase 4 deployment-boundary slice: Compose now runs Next on `3000`, keeps the API on `8201`, scopes the static shell behind the `legacy` profile, and verifies canonical and legacy route reachability.
 - Verified Next.js and `eslint-config-next` are already at the latest stable `16.2.11` release, then pinned both declarations exactly to prevent pre-Phase 4 version drift.
 - Added a narrowly pinned npm 11 install-script approval for `unrs-resolver@1.12.2` so Node 24 builds remain explicit without allowing arbitrary dependency scripts.
 - Began frontend migration Phase 2 in the Next reader with HSK token visualization, definition metadata, stable inventory markers, and removal of stale character-mode fallback copy. Added `docs/FRONTEND_MIGRATION_PHASE_2.md` and synchronized the issue tracker.

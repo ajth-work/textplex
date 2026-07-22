@@ -71,34 +71,39 @@ npm run build:web
 
 From the library page, the `Upload PDF` button lets you send a local PDF directly into TextPlex through the browser.
 
-Smoke-check the live reader and the API rewrite after the server is running:
+Smoke-check the canonical Next reader and API after the stack is running:
 
 ```powershell
 npm run check:web
 ```
 
-By default the smoke test checks both `http://127.0.0.1:8200` and the current ZeroTier address `http://192.168.192.231:8200`. If your ZeroTier IP changes, override it with:
+By default the smoke test checks `http://127.0.0.1:3000` and `http://127.0.0.1:8201/health`. To check the legacy shell instead, override the web URL:
 
 ```powershell
-$env:TEXTPLEX_WEB_BASE_URLS="http://127.0.0.1:8200,http://YOUR-ZEROTIER-IP:8200"
+$env:TEXTPLEX_WEB_BASE_URLS="http://127.0.0.1:8200"
 npm run check:web
 ```
 
 ### Canonical local stack
 
-Run the browser-facing site shell and processor API together:
+Run the canonical Next browser app and processor API together:
 
 ```powershell
-docker compose up --build site api
+docker compose up --build
 ```
 
 Then inspect:
 
-- `http://127.0.0.1:8200/`
+- `http://127.0.0.1:3000/`
 - `http://127.0.0.1:8201/health`
-- `http://192.168.192.231:8200/` from another device on the LAN
 
-The legacy Docker Next.js app is not part of the default preview stack.
+The standalone shell remains available through the explicit `legacy` profile:
+
+```powershell
+docker compose --profile legacy up --build site api
+```
+
+Open `http://127.0.0.1:8200/` only when testing the GitHub Pages/legacy compatibility surface.
 
 ## API
 

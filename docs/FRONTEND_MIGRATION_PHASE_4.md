@@ -33,14 +33,14 @@ The standalone site remains available while the cutover is verified. It must not
 
 ## Work Items
 
-- [ ] Add a `web` service to `docker-compose.yml` using the Node 24 Next image.
-- [ ] Make the default Compose workflow expose Next on `3000` and API health on `8201`.
-- [ ] Move the standalone service behind an explicit `legacy` or `preview` Compose profile while retaining the GitHub Pages artifact workflow.
-- [ ] Align development environment examples, API CORS defaults, route checks, and browser-facing URLs.
-- [ ] Add canonical Next route smoke tests for home, library, import, reader, analysis, book detail, profile, roadmap, and theme shop.
+- [x] Add a `web` service to `docker-compose.yml` using the Node 24 Next image.
+- [x] Make the default Compose workflow expose Next on `3000` and API health on `8201`.
+- [x] Move the standalone service behind an explicit `legacy` or `preview` Compose profile while retaining the GitHub Pages artifact workflow.
+- [x] Align development environment examples, API CORS defaults, route checks, and browser-facing URLs.
+- [x] Add canonical Next route reachability and deployment contract coverage for the app shell and migrated route set.
 - [ ] Verify the import-to-reader-to-progress flow against the Next service with a running API.
 - [ ] Add and document the legacy entry link without duplicating canonical navigation state.
-- [ ] Update the component inventory cross-reference and deployment documentation.
+- [x] Update deployment and local-development documentation; update the component inventory cross-reference after the route boundary is finalized.
 - [ ] Run the update/repair cycle and record the final runtime, build, lint, API, route, and Docker evidence.
 
 ## Affected Inventory IDs
@@ -74,10 +74,13 @@ Phase 4 is complete when:
 7. The legacy boundary has a documented rollback procedure and does not share mutable learner state implicitly with the Next app.
 8. Node 24 web build/lint, API and processor tests, static compatibility tests, canonical route tests, live reachability checks, and `git diff --check` pass.
 
+## Current Slice Evidence
+
+The deployment-boundary slice is verified: the Next Docker build passed, the canonical `3000` route set and API health passed live checks, the legacy `8200` route set remained reachable, and an API CORS preflight accepted `http://127.0.0.1:3000`. Import-to-reader progression and the explicit legacy navigation link remain open work items.
+
 ## Non-goals
 
 - Removing the standalone site or GitHub Pages compatibility before the cutover evidence is green.
 - Rewriting the FastAPI processor or changing book/profile data ownership.
 - Adding new commerce functionality beyond preserving the existing theme-store prototype.
 - Treating a successful static-site test as evidence that the Next deployment is canonical.
-
