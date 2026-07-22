@@ -42,6 +42,10 @@ The live web app reads `NEXT_PUBLIC_SUPABASE_URL` and
 values identify the Supabase project; never put a Supabase secret/service key in
 browser-exposed variables.
 
+The canonical profile page exposes a `legacy` compatibility link. Set
+`TEXTPLEX_LEGACY_URL` when the standalone shell is hosted somewhere other than
+`http://127.0.0.1:8200/legacy/index.html`.
+
 The first account migration is tracked under `supabase/migrations/`. After
 linking the CLI to the hosted project, validate pending schema changes with:
 

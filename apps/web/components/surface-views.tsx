@@ -8,6 +8,7 @@ import { RoutePage } from "./route-page";
 import {
   fetchJson,
   formatDateTime,
+  legacySurfaceUrl,
   postFormData,
   postJson,
   putJson,
@@ -555,6 +556,9 @@ export function ProfileSurfaceView() {
         { label: "Sentence reads", value: data ? String(data.profile.sentence_reads) : "Loading" },
       ]}
     >
+      <p className="small-copy profile-legacy-link" data-inventory-id="profile.legacy-link">
+        <a href={legacySurfaceUrl}>legacy</a>
+      </p>
       {error ? <section className="card feature-card">{error}</section> : null}
       {!data && !error ? <LoadingSkeleton label="Loading profile" /> : null}
       {data ? (

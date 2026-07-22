@@ -19,6 +19,7 @@ import {
   resolveAppTheme,
   type AppTheme,
 } from "../lib/theme";
+import { legacySurfaceUrl } from "../lib/textplex";
 import type {
   BookAnalysisSurfaceResponse,
   ImportSurfaceResponse,
@@ -311,6 +312,9 @@ export function MockProfileSurfaceView() {
         { label: "Sentence reads", value: String(data.profile.sentence_reads) },
       ]}
     >
+      <p className="small-copy profile-legacy-link" data-inventory-id="profile.legacy-link">
+        <a href={legacySurfaceUrl}>legacy</a>
+      </p>
       <section className="feature-grid">
           <article className="card feature-card">
             <h2>Learning summary</h2>

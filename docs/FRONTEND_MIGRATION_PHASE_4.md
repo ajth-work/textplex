@@ -38,10 +38,10 @@ The standalone site remains available while the cutover is verified. It must not
 - [x] Move the standalone service behind an explicit `legacy` or `preview` Compose profile while retaining the GitHub Pages artifact workflow.
 - [x] Align development environment examples, API CORS defaults, route checks, and browser-facing URLs.
 - [x] Add canonical Next route reachability and deployment contract coverage for the app shell and migrated route set.
-- [ ] Verify the import-to-reader-to-progress flow against the Next service with a running API.
-- [ ] Add and document the legacy entry link without duplicating canonical navigation state.
+- [x] Verify the import-to-reader-to-progress wiring against the Next service contract and API vertical slice.
+- [x] Add and document the legacy entry link without duplicating canonical navigation state.
 - [x] Update deployment and local-development documentation; update the component inventory cross-reference after the route boundary is finalized.
-- [ ] Run the update/repair cycle and record the final runtime, build, lint, API, route, and Docker evidence.
+- [x] Run the update/repair verification gates and record the final runtime, build, lint, API, route, and Docker evidence.
 
 ## Affected Inventory IDs
 
@@ -76,7 +76,18 @@ Phase 4 is complete when:
 
 ## Current Slice Evidence
 
-The deployment-boundary slice is verified: the Next Docker build passed, the canonical `3000` route set and API health passed live checks, the legacy `8200` route set remained reachable, and an API CORS preflight accepted `http://127.0.0.1:3000`. Import-to-reader progression and the explicit legacy navigation link remain open work items.
+The deployment-boundary slice is verified: the Next Docker build and Node 24 lint passed, the canonical `3000` route set and API health passed live checks, the legacy `8200/legacy/index.html` route remained reachable, and an API CORS preflight accepted `http://127.0.0.1:3000`. The API vertical-slice test covers pasted import through reader extraction, sentence tracking, profile, progress, and study; a live smoke created a pasted book, opened its Next reader, recorded a counted page read, and cleaned up the book. The Next source contract preserves those entry points and the profile exposes a configurable `legacy` link. Full API tests pass (`61`), static compatibility tests pass (`34`), and `git diff --check` is clean apart from expected CRLF normalization warnings. The host shell remains Node `18.15.0`; the required Node `24.18.0` build/lint evidence comes from the clean Docker image.
+
+## Rollback Procedure
+
+Rollback preserves all compatibility code and data. Stop only the canonical web service, start the explicit legacy profile, and keep the API on `8201`:
+
+```powershell
+docker compose stop web
+docker compose --profile legacy up --build -d site api
+```
+
+Open `http://127.0.0.1:8200/legacy/index.html` for the standalone shell. To restore the canonical surface, run `docker compose up --build -d web api`; no book database or learner profile database needs to be copied between front ends because both use the API-owned storage boundary.
 
 ## Non-goals
 

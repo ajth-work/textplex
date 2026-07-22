@@ -2,6 +2,9 @@
 
 ## 2026-07-21
 
+- Phase 4: wired the canonical Next import-to-reader-progress path to the existing API vertical slice and added a configurable `legacy` profile link with inventory coverage.
+- Maintenance: made the web lint command invoke ESLint through Node so the required check works with the Windows workspace install.
+- Maintenance: included the web ESLint config in the production image so the Node 24 container can run its lint gate directly.
 - Upgraded the supported runtime baseline from Node 20 to Node 24 LTS across local versioning, Docker, CI, GitHub Pages, and weekly audit workflows.
 - Added a controlled update and repair cycle with read-only drift reporting, explicit in-range npm updates, lockfile repair, dependency reinstall, verification gates, and weekly audit integration.
 - Started frontend migration Phase 4: documented the canonical Next.js deployment target on `3000`, API boundary on `8201`, and explicit standalone/GitHub Pages compatibility boundary on `8200`.

@@ -55,6 +55,7 @@ export type {
 
 export const apiBaseUrl = process.env.NEXT_PUBLIC_TEXTPLEX_API_URL ?? "/api";
 export const isDemoMode = process.env.NEXT_PUBLIC_TEXTPLEX_DEMO_MODE === "true";
+export const legacySurfaceUrl = process.env.NEXT_PUBLIC_TEXTPLEX_LEGACY_URL ?? "http://127.0.0.1:8200/legacy/index.html";
 
 export function resolveResourceUrl(pathname: string): string {
   if (

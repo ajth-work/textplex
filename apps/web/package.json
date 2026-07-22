@@ -6,7 +6,7 @@
     "dev": "node scripts/next-no-lockfile-patch.js dev",
     "build": "node scripts/next-no-lockfile-patch.js build",
     "start": "node scripts/next-no-lockfile-patch.js start",
-    "lint": "eslint app components lib --max-warnings=0"
+    "lint": "node ../../node_modules/eslint/bin/eslint.js app components lib --max-warnings=0"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.109.0",
