@@ -32,6 +32,12 @@
         --shadow-soft: 0 10px 24px rgba(20, 24, 35, 0.06);
         --pill-bg: rgba(31, 36, 48, 0.08);
         --pill-text: #1f2430;
+        --hsk-level-1: #006b35;
+        --hsk-level-2: #24a342;
+        --hsk-level-3: #b0b20e;
+        --hsk-level-4: #e78f09;
+        --hsk-level-5: #df492d;
+        --hsk-level-6: #8b0e2b;
       }
 
       body[data-reader-theme="sepia"] {
@@ -584,6 +590,10 @@
         font-weight: 700;
       }
 
+      .vocab-level-pill {
+        white-space: nowrap;
+      }
+
       .tag {
         display: inline-flex;
         align-items: center;
@@ -706,6 +716,87 @@
         background: linear-gradient(100deg, var(--surface-muted) 20%, var(--surface-strong) 38%, var(--surface-muted) 55%);
         background-size: 220% 100%;
         animation: reader-skeleton-shimmer 1.6s ease-in-out infinite;
+      }
+
+      .reader-chart-card {
+        margin-top: 14px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        background: var(--surface);
+        box-shadow: var(--shadow-soft);
+      }
+
+      .reader-chart-header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .reader-chart-header h2 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 900;
+      }
+
+      .reader-chart-header span,
+      .reader-chart-empty {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .reader-chart-scroll {
+        margin-top: 12px;
+        overflow-x: auto;
+        scrollbar-width: thin;
+      }
+
+      .reader-chart {
+        display: block;
+        width: 100%;
+        min-width: 320px;
+        height: 180px;
+      }
+
+      .reader-chart-grid,
+      .reader-chart-axis {
+        stroke: var(--line);
+        stroke-width: 1;
+      }
+
+      .reader-chart-grid-label,
+      .reader-chart-x-label {
+        fill: var(--muted);
+        font-family: var(--reader-body-font);
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .reader-chart-line {
+        fill: none;
+        stroke: var(--accent);
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 2;
+        opacity: 0.72;
+      }
+
+      .reader-chart-point {
+        stroke: var(--surface-strong);
+        stroke-width: 2;
+      }
+
+      .reader-chart-point[data-level="1"] { fill: var(--hsk-level-1); }
+      .reader-chart-point[data-level="2"] { fill: var(--hsk-level-2); }
+      .reader-chart-point[data-level="3"] { fill: var(--hsk-level-3); }
+      .reader-chart-point[data-level="4"] { fill: var(--hsk-level-4); }
+      .reader-chart-point[data-level="5"] { fill: var(--hsk-level-5); }
+      .reader-chart-point[data-level="6"] { fill: var(--hsk-level-6); }
+
+      .reader-chart-empty {
+        margin: 12px 0 0;
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -1097,6 +1188,8 @@
         [data-reader-density="compact"] .annotated-line { margin: 12px 0 18px; }
       }
     </style>
+    <link rel="stylesheet" href="./preview-theme.css" />
+    <script src="./preview-theme.js"></script>
   </head>
   <body>
     <main class="app" data-reader-font="mixed" data-reader-theme="neutral" data-reader-text-size="medium" data-reader-density="compact">
@@ -1174,7 +1267,11 @@
             <h2 class="vocab-char"></h2>
           </div>
           <div class="vocab-meta-row">
-            <div class="vocab-pinyin"></div>
+            <div class="vocab-pinyin">
+              <span data-vocab-reading></span>
+              <span aria-hidden="true">&#128266;</span>
+              <span class="tag vocab-level-pill" data-vocab-level hidden></span>
+            </div>
           </div>
           <div class="vocab-actions">
             <button class="icon-btn" type="button" aria-label="Save to Vocabulary" aria-pressed="false" data-vocab-save>
@@ -1187,6 +1284,17 @@
         </div>
 
         <p class="vocab-definition"></p>
+      </article>
+
+      <article id="readerTokenChart" class="reader-chart-card">
+        <div class="reader-chart-header">
+          <h2>Sentence HSK profile</h2>
+          <span id="readerTokenChartMeta">Token order</span>
+        </div>
+        <div class="reader-chart-scroll">
+          <svg id="readerTokenChartSvg" class="reader-chart" role="img" aria-label="HSK level by token order"></svg>
+        </div>
+        <p id="readerTokenChartEmpty" class="reader-chart-empty" hidden>No token-level HSK data available for this sentence.</p>
       </article>
 
       <button id="readerOptionsBackdrop" class="reader-options-backdrop" type="button" aria-label="Dismiss reader options backdrop" hidden></button>

@@ -614,6 +614,8 @@
         }
       }
     </style>
+    <link rel="stylesheet" href="./preview-theme.css" />
+    <script src="./preview-theme.js"></script>
   </head>
   <body>
     <main class="app">
@@ -778,8 +780,8 @@
                 <span class="chip">${item.tag}</span>
               </div>
               <div>
-                <div class="score" style="--pct:${item.score}; --ring:${item.ring}">
-                  <span>${item.score}</span>
+                <div class="score" style="--pct:${item.score}; --ring:${item.ring}" aria-label="${item.level ?? "Expected level unavailable"}">
+                  <span>${item.level ?? "Unavailable"}</span>
                 </div>
                 <div class="score-meta">${item.date}</div>
               </div>

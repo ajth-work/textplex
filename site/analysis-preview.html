@@ -24,6 +24,12 @@
         --blue: #5b82e3;
         --purple: #9b8be6;
         --orange: #ef9860;
+        --hsk-level-1: #006b35;
+        --hsk-level-2: #24a342;
+        --hsk-level-3: #b0b20e;
+        --hsk-level-4: #e78f09;
+        --hsk-level-5: #df492d;
+        --hsk-level-6: #8b0e2b;
       }
 
       * {
@@ -179,18 +185,11 @@
         gap: 12px;
       }
 
-      .dual-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
-      }
-
-      .difficulty,
-      .level-box {
+      .difficulty {
         display: grid;
         place-items: center;
         text-align: center;
-        min-height: 138px;
+        min-height: 176px;
       }
 
       .subhead {
@@ -201,12 +200,12 @@
       }
 
       .ring {
-        width: 100px;
-        height: 100px;
+        width: 124px;
+        height: 124px;
         border-radius: 50%;
         display: grid;
         place-items: center;
-        background: conic-gradient(var(--green) 78%, rgba(0, 0, 0, 0.08) 0);
+        background: conic-gradient(var(--hsk-level-1) 0 16.666%, var(--hsk-level-2) 16.666% 33.333%, var(--hsk-level-3) 33.333% 50%, var(--hsk-level-4) 50% 66.666%, var(--hsk-level-5) 66.666% 83.333%, var(--hsk-level-6) 83.333% 100%);
         position: relative;
       }
 
@@ -225,39 +224,25 @@
       }
 
       .ring strong {
+        display: grid;
+        gap: 2px;
+        line-height: 1;
+        letter-spacing: -0.05em;
+        white-space: nowrap;
+      }
+
+      .ring-score-prefix,
+      .ring-score-value {
         display: block;
-        font-size: 32px;
-        line-height: 1;
-        letter-spacing: -0.04em;
       }
 
-      .ring small {
-        color: var(--muted);
-        font-size: 14px;
-        font-weight: 700;
+      .ring-score-prefix {
+        font-size: 18px;
+        letter-spacing: -0.03em;
       }
 
-      .hsk {
-        margin: 0;
-        font-family: Georgia, "Times New Roman", serif;
-        font-size: 36px;
-        line-height: 1;
-        color: var(--green);
-        letter-spacing: -0.04em;
-      }
-
-      .level-sub {
-        margin: 10px 0 0;
-        font-size: 15px;
-        font-weight: 700;
-        color: #4a5060;
-      }
-
-      .level-note {
-        margin: 4px 0 0;
-        color: var(--green);
-        font-size: 13px;
-        font-weight: 800;
+      .ring-score-value {
+        font-size: 28px;
       }
 
       .sample-card {
@@ -289,30 +274,36 @@
         border-radius: 999px;
         overflow: hidden;
         display: grid;
-        grid-template-columns: 9fr 37fr 34fr 20fr;
         box-shadow: inset 0 0 0 1px rgba(31, 36, 48, 0.04);
         margin: 10px 0 16px;
       }
 
-      .bar-segment:nth-child(1) {
-        background: var(--green);
+      .bar-segment[data-level-index="1"] {
+        background: var(--hsk-level-1) !important;
       }
 
-      .bar-segment:nth-child(2) {
-        background: var(--blue);
+      .bar-segment[data-level-index="2"] {
+        background: var(--hsk-level-2) !important;
       }
 
-      .bar-segment:nth-child(3) {
-        background: var(--purple);
+      .bar-segment[data-level-index="3"] {
+        background: var(--hsk-level-3) !important;
       }
 
-      .bar-segment:nth-child(4) {
-        background: var(--orange);
+      .bar-segment[data-level-index="4"] {
+        background: var(--hsk-level-4) !important;
+      }
+
+      .bar-segment[data-level-index="5"] {
+        background: var(--hsk-level-5) !important;
+      }
+
+      .bar-segment[data-level-index="6"] {
+        background: var(--hsk-level-6) !important;
       }
 
       .distribution-labels {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 8px;
       }
 
@@ -327,12 +318,103 @@
         letter-spacing: -0.02em;
       }
 
-      .distribution-label span {
+      .distribution-label-level {
         display: block;
-        margin-top: 4px;
         font-size: 12px;
         color: var(--muted);
         font-weight: 700;
+      }
+
+      .distribution-label-percentage {
+        display: block;
+        font-size: 18px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+
+      .analysis-chart-card {
+        display: grid;
+        gap: 16px;
+      }
+
+      .analysis-chart-block {
+        min-width: 0;
+      }
+
+      .analysis-chart-block + .analysis-chart-block {
+        padding-top: 16px;
+        border-top: 1px solid var(--line);
+      }
+
+      .analysis-chart-heading {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .analysis-chart-heading h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      .analysis-chart-heading span,
+      .analysis-chart-empty {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .analysis-chart-scroll {
+        margin-top: 10px;
+        overflow-x: auto;
+        scrollbar-width: thin;
+      }
+
+      .analysis-chart {
+        display: block;
+        width: 100%;
+        min-width: 320px;
+        height: 190px;
+      }
+
+      .analysis-chart-grid,
+      .analysis-chart-axis {
+        stroke: var(--line);
+        stroke-width: 1;
+      }
+
+      .analysis-chart-grid-label,
+      .analysis-chart-x-label {
+        fill: var(--muted);
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .analysis-chart-line {
+        fill: none;
+        stroke: var(--green);
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 2;
+        opacity: 0.72;
+      }
+
+      .analysis-chart-point {
+        stroke: var(--surface-strong);
+        stroke-width: 2;
+      }
+
+      .analysis-chart-point[data-level="1"] { fill: var(--hsk-level-1); }
+      .analysis-chart-point[data-level="2"] { fill: var(--hsk-level-2); }
+      .analysis-chart-point[data-level="3"] { fill: var(--hsk-level-3); }
+      .analysis-chart-point[data-level="4"] { fill: var(--hsk-level-4); }
+      .analysis-chart-point[data-level="5"] { fill: var(--hsk-level-5); }
+      .analysis-chart-point[data-level="6"] { fill: var(--hsk-level-6); }
+
+      .analysis-chart-empty {
+        margin: 10px 0 0;
       }
 
       .metric-grid {
@@ -553,7 +635,6 @@
           height: 112px;
         }
 
-        .dual-grid,
         .metric-grid {
           grid-template-columns: 1fr;
         }
@@ -571,9 +652,11 @@
         }
       }
     </style>
+    <link rel="stylesheet" href="./preview-theme.css" />
+    <script src="./preview-theme.js"></script>
   </head>
   <body>
-    <main class="app">
+    <main class="app analysis-page">
       <section id="analysisLoadingSkeleton" class="analysis-loading-skeleton" aria-label="Loading text analysis" role="status">
         <div class="analysis-loading-card analysis-loading-hero">
           <span class="analysis-skeleton-block"></span>
@@ -630,29 +713,22 @@
       </section>
 
       <section class="card">
-        <div class="dual-grid">
-          <article class="difficulty">
-            <h3 class="subhead">Overall Difficulty</h3>
-            <div id="analysisRing" class="ring">
-              <span>
-                <strong id="analysisScore"></strong>
-                <small>/100</small>
-              </span>
-            </div>
-          </article>
-
-          <article class="level-box" style="border-left: 1px solid var(--line); padding-left: 18px;">
-            <h3 class="subhead">Estimated Level</h3>
-            <p id="analysisLevel" class="hsk"></p>
-            <p id="analysisLevelSub" class="level-sub"></p>
-            <p id="analysisLevelNote" class="level-note"></p>
-          </article>
-        </div>
+        <article class="difficulty">
+          <h3 class="subhead">Text difficulty</h3>
+          <div id="analysisRing" class="ring" aria-label="HSK text difficulty">
+            <span>
+              <strong id="analysisScore">
+                <span id="analysisScorePrefix" class="ring-score-prefix">HSK</span>
+                <span id="analysisScoreValue" class="ring-score-value"></span>
+              </strong>
+            </span>
+          </div>
+        </article>
       </section>
 
       <section class="card">
         <div class="info-row">
-          <h3 class="subhead" style="margin-bottom: 6px;">Vocabulary Level Distribution</h3>
+          <h3 class="subhead" style="margin-bottom: 6px;">HSK Character Level Distribution</h3>
           <button class="icon-btn" type="button" aria-label="Info" style="width: 30px; height: 30px;">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
               <circle cx="12" cy="12" r="9"></circle>
@@ -661,45 +737,43 @@
             </svg>
           </button>
         </div>
-        <div class="distribution-bar" aria-hidden="true">
-          <div class="bar-segment"></div>
-          <div class="bar-segment"></div>
-          <div class="bar-segment"></div>
-          <div class="bar-segment"></div>
+        <div id="analysisDistributionLevels" class="distribution-labels" aria-label="HSK levels"></div>
+        <div id="analysisDistributionBar" class="distribution-bar" aria-label="HSK character level distribution"></div>
+        <div id="analysisDistributionPercentages" class="distribution-labels" aria-label="HSK percentages"></div>
+      </section>
+
+      <section class="card analysis-chart-card" aria-label="Text HSK progression">
+        <div class="analysis-chart-block">
+          <div class="analysis-chart-heading">
+            <h3>Sentence HSK average</h3>
+            <span id="analysisSentenceChartMeta">Sentence order</span>
+          </div>
+          <div class="analysis-chart-scroll">
+            <svg id="analysisSentenceChart" class="analysis-chart" role="img" aria-label="HSK average by sentence order"></svg>
+          </div>
+          <p id="analysisSentenceChartEmpty" class="analysis-chart-empty" hidden>No sentence-level HSK data available for this text.</p>
         </div>
-        <div class="distribution-labels">
-          <div class="distribution-label">
-            <strong></strong>
-            <span></span>
+        <div class="analysis-chart-block">
+          <div class="analysis-chart-heading">
+            <h3>Page HSK average</h3>
+            <span id="analysisPageChartMeta">Page order</span>
           </div>
-          <div class="distribution-label">
-            <strong></strong>
-            <span></span>
+          <div class="analysis-chart-scroll">
+            <svg id="analysisPageChart" class="analysis-chart" role="img" aria-label="HSK average by page order"></svg>
           </div>
-          <div class="distribution-label">
-            <strong></strong>
-            <span></span>
-          </div>
-          <div class="distribution-label">
-            <strong></strong>
-            <span></span>
-          </div>
+          <p id="analysisPageChartEmpty" class="analysis-chart-empty" hidden>No page-level HSK data available for this text.</p>
         </div>
       </section>
 
       <section class="metric-grid">
         <article class="metric">
-          <h3>Average Vocabulary Level</h3>
-          <strong style="color: var(--green);"></strong>
-        </article>
-        <article class="metric">
           <h3>Unknown Words</h3>
-          <strong></strong>
-          <span></span>
+          <strong id="analysisUnknownWords"></strong>
+          <span id="analysisUnknownRate"></span>
         </article>
         <article class="metric">
-          <h3>Estimated Comprehension</h3>
-          <strong style="color: var(--green);"></strong>
+          <h3>Comprehension</h3>
+          <strong id="analysisComprehension" style="color: var(--green);"></strong>
         </article>
       </section>
 

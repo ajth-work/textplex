@@ -1,7 +1,90 @@
 # Changelog
 
+## 2026-07-21
+
+- Upgraded the supported runtime baseline from Node 20 to Node 24 LTS across local versioning, Docker, CI, GitHub Pages, and weekly audit workflows.
+- Added a controlled update and repair cycle with read-only drift reporting, explicit in-range npm updates, lockfile repair, dependency reinstall, verification gates, and weekly audit integration.
+- Started frontend migration Phase 4: documented the canonical Next.js deployment target on `3000`, API boundary on `8201`, and explicit standalone/GitHub Pages compatibility boundary on `8200`.
+- Reconciled the frontend migration tracker so completed Phase 3 work is separated from the Phase 4 deployment and legacy cutover work.
+- Verified Next.js and `eslint-config-next` are already at the latest stable `16.2.11` release, then pinned both declarations exactly to prevent pre-Phase 4 version drift.
+- Added a narrowly pinned npm 11 install-script approval for `unrs-resolver@1.12.2` so Node 24 builds remain explicit without allowing arbitrary dependency scripts.
+- Began frontend migration Phase 2 in the Next reader with HSK token visualization, definition metadata, stable inventory markers, and removal of stale character-mode fallback copy. Added `docs/FRONTEND_MIGRATION_PHASE_2.md` and synchronized the issue tracker.
+- Cleared the Next reader image lint warning, documented the port `3000` build-lock cleanup, and documented the writable npm-cache workaround for restricted local cache logs.
+- Added the Node 20 project version marker and route-level `Suspense` boundaries to address local runtime and App Router deoptimization warnings before the next migration phase.
+- Upgraded Next.js to `16.2.11`, Supabase to `2.109.0`, and fixed the Next workspace launcher so clean Node 20 Docker builds resolve the root-installed dependency correctly.
+- Fixed the web Dockerfile to preserve workspace-local dependencies during clean image builds.
+- Updated dynamic route segment exports for Next 16’s static config parser while preserving demo/live component selection.
+- Updated the web lint script to invoke ESLint directly, matching Next 16’s removal of the `next lint` command.
+- Migrated the web lint configuration to Next 16’s flat ESLint preset and ignored generated build output explicitly.
+- Scoped the Next 16 lint exceptions to intentional effect-driven loading state and existing reader memoization.
+- Recorded the remaining two moderate upstream PostCSS audit findings in `docs/AUDIT.md`; no unsafe forced downgrade was applied.
+- Added the remaining PostCSS audit follow-up to the local issue tracker before the next migration phase.
+- Added the Phase 2 Next import slice: real paste-text and PDF-upload submission, validation, background extraction polling, explicit progress/error states, and a reader handoff.
+- Stabilized Next import progress polling so each active import uses one bounded refresh loop.
+- Completed frontend migration Phase 2 by matching the compact reader definition card, adding local save behavior, explicit extraction/error states, and Next reader route contract tests; opened Phase 3 for analysis and book-detail HSK charts.
+- Updated the live reachability checks to assert the current roadmap root and simplified library search copy.
+- Completed frontend migration Phase 3 by adding API-backed sentence and page HSK series, responsive Next analysis and book-detail charts, fixed cross-theme HSK colors, explicit loading/empty/error states, and route-contract coverage.
+
+- Added the first versioned Supabase migration for account-owned learner profiles and per-user settings, including ownership RLS, updated-at triggers, and automatic profile creation for new Auth users.
+- Documented the detailed Next.js and standalone frontend consolidation issue locally while GitHub reauthentication is pending.
+- Completed the Phase 1 frontend migration inventory and contract reconciliation for routes, API ownership, endpoint families, and browser storage keys.
+- Marked frontend migration Phase 1 complete and ready for reader/options migration in Phase 2.
+- Added the roadmap to the standalone site at `8200`, including `/roadmap` and the root entry-point redirect.
+- Added the first web/API authentication slice: Supabase sign-up, sign-in, password reset, session restoration, bearer-token propagation, and a FastAPI `/auth/me` validation boundary.
+- Opened issue #43 and added it to the TextPlex Feature Board to track hosted email/password accounts, authenticated learner profiles, cross-device history restoration, user-owned book storage, and migration from the anonymous local profile.
+- Expanded the local issue tracker with a parent theme-store commerce initiative and child work for catalog contracts, checkout, payment webhooks, entitlements, lifecycle handling, security, and sandbox QA.
+- Added discounted topical theme packs to the theme-store plan, including a three-theme minimum, pack-level pricing, and per-theme entitlement grants.
+- Added a Profile theme-shop prototype with a compact featured 2×3 theme grid, an arrow entry tile, and profile-connected live and standalone preview catalogs with live preview and save behavior.
+- Restored the selected character's HSK level as a compact pill in the reader definition card.
+- Cleared API test-client and site upload-test deprecation warnings, locked patched PostCSS/Sharp dependencies with zero production audit findings, and stabilized the Node 20 TypeScript build configuration.
+- Regenerated the npm lockfile without the stale workspace ESLint peer subtree and aligned the web Dockerfile with the clean hoisted workspace install.
+- Pinned the web Supabase client to the Node 20-compatible `2.109.0` release to remove the runtime support warning from the production build.
+
 ## 2026-07-20
 
+- Added the app-wide components inventory with stable route, region, and card IDs, plus agent-facing update rules for new UI surfaces.
+- Made the components inventory workflow an explicit required reference in AGENTS.md for UI changes and agent handoffs.
+- Audited the analysis inventory and difficulty path, cataloged missing preview regions, and opened issue #42 for a canonical text-difficulty and expected-HSK metric contract.
+- Added bidirectional component-inventory and issue-tracker cross-references for the audited analysis surfaces.
+- Captured the proposed character-to-sentence-to-page-to-text HSK aggregation direction for issue #42.
+- Added the issue #42 analysis metric contract, separating extraction progress, expected HSK level, character coverage, and learner comprehension availability across API and preview surfaces.
+- Moved library book status badges such as `Live` into the bottom action row beside each card's controls.
+- Locked the library card dimensions to the current tuned metrics: 82 px artwork, 20 px text padding, and 50 px card height.
+- Simplified the Library to a grid-only view, removed redundant shelf copy, and moved saved card-dimension controls to Profile.
+- Fixed analysis vocabulary distribution rendering so bar segments and labels use every returned HSK bucket and matching percentages.
+- Renamed the analysis chart to HSK Character Level Distribution, aligned level labels above the bar and rounded percentages below it, and applied a green-to-red HSK 1-6 palette.
+- Locked the HSK distribution gradient to fixed HSK 1-6 colors across all active themes.
+- Documented the fixed cross-theme HSK distribution palette and chart alignment rules in the theme guidelines.
+- Added a library hydration skeleton for the first book card and document count, renamed the search section, and centered the TextPlex library header.
+- Increased spacing around the library search count, centered it, and simplified the label to the document total.
+- Removed the redundant standalone character-weighted-average card from text analysis.
+- Simplified text difficulty to a compact HSK score ring with fixed green-to-red HSK range coloring.
+- Split the HSK score ring label into separate `HSK` and numeric rows for cleaner fit.
+- Rounded the displayed HSK ring score to one decimal place.
+- Added theme-aware HSK progression charts: token order on the reader, sentence averages on analysis, and page averages for longer texts.
+- Expanded the app-wide theme system beyond the reader so the shared shell, hero cards, lists, inputs, and demo surfaces now pick up the active language pack palette.
+- Added a visible global theme picker to the Profile page with live preview and profile-backed save behavior.
+- Added the global theme picker and shared palette layer to the standalone site served on port 8200.
+- Scoped shared theme overrides so themed shell colors no longer reduce contrast inside Home and other editorial cards.
+- Made shared cards, search surfaces, goal cards, and bottom navigation adapt their surfaces and text contrast per theme pack.
+- Increased theme-aware muted-text contrast for import metadata, progress labels, search placeholders, and bottom navigation controls.
+- Fixed Jade difficulty-score text and raised Crimson shell text and analysis metadata contrast against dark red backgrounds.
+- Added the reusable theme guidelines covering semantic tokens, all user-facing screens, card behavior, contrast requirements, and future theme-pack QA.
+- Replaced hard-coded blue import controls and progress accents with theme-aware semantic accent tokens.
+- Fixed themed library cards with constrained artwork columns, safe title wrapping, and explicit surface-aware contrast for shell copy, metadata, tags, view toggles, and actions.
+- Added a persistent library artwork-column testing slider with a live pixel readout for tuning mobile card constraints.
+- Added an independent mobile library card text-padding slider with a live pixel readout for tuning the artwork-to-title inset.
+- Added a mobile library card-height slider with a live pixel readout for tuning oversized card artwork and card proportions.
+- Lowered the library card-height tester minimum from `112 px` to `50 px` for tighter layout experiments.
+- Fixed analysis-page theme contrast for hero metadata, sample text, difficulty cards, metrics, distribution labels, and recommendation surfaces.
+- Made analysis, library-detail, and reader skeleton cards and shimmer lines follow the active theme palette instead of hard-coded neutral gray.
+- Added the shared themed roadmap treatment across the live app and standalone preview, preserved its editorial tracker details in the theme guidelines, and added a direct Vocabulary roadmap card to Settings.
+- Added the Classic Consoles theme collection with NES, Famicom, SNES, and Super Famicom palettes, reader-theme support, and a discounted bundle offer in the theme shop.
+- Added a bounded `360 ms` minimum skeleton display window so fast local hydration still produces a visible loading flash before content replaces it.
+- Added an explicit shared `1.35s` shimmer animation for themed skeleton lines and blocks so loading states visibly animate while hydration is pending.
+- Matched the Library route search/count hero background to the themed library shell card surface.
+- Increased skeleton placeholder contrast across themes, with stronger Crimson tones and an inset edge for clearer loading shapes.
+- Matched the analysis hero treatment to library detail by removing its separate themed panel background, border, and shadow.
 - Replaced the Add Content Paste Text sample shortcut with a real paste form that submits article text to `/texts/import`, hydrates the processed reader record, and opens the new book.
 - Added a regression test covering pasted text submission and navigation to the created reader record.
 - Documented the Codex scheduled-task companion for the Sunday repository audit, including worktree isolation and report-only boundaries.
@@ -11,6 +94,7 @@
 - Added a compact mobile reader header with a two-line title limit, tighter controls and navigation, and a single-line session summary to give the reading surface more viewport space.
 - Made the compact reader header an optional persisted Focus mode toggle in the reader settings panel.
 - Added an explicit X close button to the reader options panel.
+- Centered the standalone preview bottom navigation controls vertically and removed the raised import-button offset.
 
 ## 2026-07-20
 

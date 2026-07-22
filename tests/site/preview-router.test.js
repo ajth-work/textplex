@@ -5,6 +5,12 @@ const { test } = require("node:test");
 
 const { createNode, createPagerNode, createSentenceLineNode, loadPreviewData, loadPreviewRouter } = require("./helpers/browser-context");
 
+test("reader definition card includes an HSK metadata pill slot", () => {
+  const markup = fs.readFileSync(path.join(__dirname, "..", "..", "site", "reader-preview.html"), "utf8");
+
+  assert.match(markup, /class="vocab-pinyin"[\s\S]*class="tag vocab-level-pill"/);
+});
+
 test("router helpers resolve preview routes and render icon-button cards", async () => {
   const { window } = loadPreviewRouter();
   await window.TextPlexPreviewRouter.ready;
@@ -36,6 +42,39 @@ test("router helpers resolve preview routes and render icon-button cards", async
   assert.match(gridCard, /action-icon-open/);
   assert.match(listRow, /data-open-library/);
   assert.match(listRow, /data-open-reader/);
+});
+
+test("HSK chart series preserve token, sentence, and page aggregation", async () => {
+  const { window } = loadPreviewRouter();
+  await window.TextPlexPreviewRouter.ready;
+  const router = window.TextPlexPreviewRouter;
+  const sentence = {
+    text: "春眠不觉",
+    tokens: [
+      { surface: "春", proficiency_level: "HSK 1" },
+      { surface: "眠", proficiency_level: "HSK 3" },
+      { surface: "不", proficiency_level: "HSK 2" },
+      { surface: "觉", proficiency_level: "HSK 4" },
+    ],
+  };
+  const pages = [
+    { pageNumber: 1, sentences: [sentence] },
+    { pageNumber: 2, sentences: [{ text: "晓", tokens: [{ surface: "晓", proficiency_level: "HSK 5" }] }] },
+  ];
+
+  assert.equal(router.parseHskChartLevel("HSK 3.5"), 3.5);
+  assert.deepEqual(
+    Array.from(router.buildTokenHskChartSeries(sentence), (point) => point.value),
+    [1, 3, 2, 4],
+  );
+  assert.deepEqual(
+    Array.from(router.buildSentenceHskChartSeries(pages), (point) => point.value),
+    [2.5, 5],
+  );
+  assert.deepEqual(
+    Array.from(router.buildPageHskChartSeries(pages), (point) => point.value),
+    [2.5, 5],
+  );
 });
 
 test("library preview renders the live bookshelf data", async () => {
@@ -70,7 +109,7 @@ test("library preview renders the live bookshelf data", async () => {
   assert.match(shelfNode.innerHTML, /The Little Prince/);
   assert.match(shelfNode.innerHTML, /data-open-library/);
   assert.match(shelfNode.innerHTML, /data-open-reader/);
-  assert.match(countNode.textContent, /documents in the local collection/);
+  assert.match(countNode.textContent, /^\d+ documents$/);
   assert.equal(emptyState.hidden, true);
   assert.equal(searchInput.value, "");
   assert.equal(browser.window.localStorage.getItem("textplex:library-view-mode"), null);
@@ -1079,13 +1118,22 @@ test("import preview shows processor upload progress while a PDF is being import
 
   await browser.window.TextPlexPreviewRouter.ready;
 
-  const pdfFile = browser.window.File
-    ? new browser.window.File(["fake pdf"], "demo-import.pdf", {
-        type: "application/pdf",
-      })
-    : Object.assign(new browser.window.Blob(["fake pdf"], { type: "application/pdf" }), {
-        name: "demo-import.pdf",
-      });
+  class TestFormData {
+    constructor() {
+      this.entries = [];
+    }
+
+    append(...entry) {
+      this.entries.push(entry);
+    }
+  }
+
+  browser.window.FormData = TestFormData;
+  browser.context.FormData = TestFormData;
+
+  const pdfFile = Object.assign(new browser.window.Blob(["fake pdf"], { type: "application/pdf" }), {
+    name: "demo-import.pdf",
+  });
   importPdfInput.files = [pdfFile];
 
   uploadRow.click();

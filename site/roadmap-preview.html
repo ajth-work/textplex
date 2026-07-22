@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TextPlex Roadmap</title>
+    <meta name="description" content="TextPlex language-pack implementation roadmap and vocabulary database tracker." />
+    <link rel="stylesheet" href="./preview-wide.css" />
+    <style>
+      :root {
+        --bg: #f7f4ee;
+        --surface: rgba(255, 255, 255, 0.88);
+        --text: #1f2430;
+        --muted: #70798a;
+        --line: rgba(31, 36, 48, 0.1);
+        --accent: #1f335f;
+        --accent-soft: rgba(31, 51, 95, 0.1);
+        --green: #3f9b68;
+        --shadow: 0 18px 40px rgba(20, 24, 35, 0.08);
+        --shadow-soft: 0 10px 24px rgba(20, 24, 35, 0.06);
+      }
+
+      * { box-sizing: border-box; }
+      html, body { min-height: 100%; }
+      body {
+        margin: 0;
+        color: var(--text);
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top, rgba(255, 255, 255, 0.96), transparent 42%), linear-gradient(180deg, #fbf9f5 0%, #f0ece4 100%);
+      }
+      a { color: inherit; }
+      .app-shell { width: min(calc(100vw - 32px), 1120px); margin: 0 auto; padding: 32px 0 64px; }
+      .card { background: var(--surface); border: 1px solid rgba(255, 255, 255, 0.82); border-radius: 28px; box-shadow: var(--shadow); backdrop-filter: blur(16px); }
+      .route-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+      .brand { color: var(--accent); font-family: Georgia, "Times New Roman", serif; font-size: 28px; font-weight: 800; letter-spacing: -0.04em; text-decoration: none; }
+      .route-links { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+      .route-link { padding: 9px 13px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 800; text-decoration: none; }
+      .route-link:hover, .route-link:focus-visible, .route-link.is-active { color: var(--accent); background: var(--accent-soft); }
+      .route-hero { padding: clamp(24px, 5vw, 52px); }
+      .eyebrow { color: var(--muted); font-size: 12px; font-weight: 900; letter-spacing: 0.24em; text-transform: uppercase; }
+      .hero-topline, .card-topline, .language-topline { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+      h1, h2, h3, p { margin-top: 0; }
+      h1 { max-width: 780px; margin-bottom: 16px; font-size: clamp(34px, 5vw, 66px); line-height: 0.98; letter-spacing: -0.06em; }
+      h2 { margin-bottom: 0; font-size: clamp(21px, 3vw, 30px); letter-spacing: -0.04em; }
+      h3 { margin: 5px 0 0; font-size: 22px; letter-spacing: -0.04em; }
+      .lede { max-width: 720px; margin-bottom: 24px; color: var(--muted); font-size: clamp(16px, 2vw, 20px); line-height: 1.5; }
+      .pill { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; padding: 8px 12px; border-radius: 999px; color: var(--green); background: rgba(63, 155, 104, 0.12); font-size: 12px; font-weight: 900; white-space: nowrap; }
+      .button-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+      .button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 9px 14px; border-radius: 12px; font-size: 13px; font-weight: 800; text-decoration: none; }
+      .button-primary { color: #fff; background: var(--accent); }
+      .button-secondary { color: var(--accent); background: var(--accent-soft); }
+      .metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding-top: 22px; border-top: 1px solid var(--line); }
+      .metric-grid dt, .roadmap-detail dt { color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+      .metric-grid dd { margin: 4px 0 0; font-size: 24px; font-weight: 900; }
+      .feature-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr); gap: 18px; margin-top: 18px; }
+      .feature-card { padding: clamp(22px, 3vw, 34px); }
+      .feature-card > p { color: var(--muted); line-height: 1.6; }
+      .surface-list { display: grid; gap: 10px; margin-top: 22px; }
+      .surface-list-item { padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: rgba(255, 255, 255, 0.48); }
+      .surface-list-item strong { font-size: 14px; }
+      .surface-list-item p { margin: 8px 0 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+      .muted, .small-copy { color: var(--muted); }
+      .small-copy { font-size: 14px; line-height: 1.6; }
+      .tracker-card { margin-top: 18px; }
+      .roadmap-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+      .roadmap-card { padding: 18px; border-radius: 22px; box-shadow: var(--shadow-soft); }
+      .roadmap-card-topline { min-height: 54px; }
+      .roadmap-meter { height: 9px; margin: 18px 0; overflow: hidden; border-radius: 999px; background: rgba(31, 51, 95, 0.1); }
+      .roadmap-meter-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #3f9b68 0%, #5c7fe6 100%); }
+      .roadmap-details { display: grid; gap: 10px; margin: 0; }
+      .roadmap-detail dd { margin: 3px 0 0; color: var(--text); font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+      .roadmap-note { min-height: 42px; margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; line-height: 1.45; }
+      @media (max-width: 720px) {
+        .app-shell { padding-top: 20px; }
+        .route-header { align-items: flex-start; flex-direction: column; }
+        .route-links { justify-content: flex-start; }
+        .feature-grid, .roadmap-grid { grid-template-columns: 1fr; }
+      }
+      @media (max-width: 430px) {
+        .app-shell { width: min(calc(100vw - 24px), 1120px); }
+        .metric-grid { gap: 8px; }
+        .metric-grid dd { font-size: 20px; }
+        .hero-topline, .card-topline { flex-direction: column; }
+      }
+    </style>
+    <link rel="stylesheet" href="./preview-theme.css" />
+    <script src="./preview-theme.js"></script>
+  </head>
+  <body class="roadmap-preview">
+    <main class="app-shell">
+      <header class="route-header" aria-label="TextPlex navigation">
+        <a class="brand" href="./roadmap-preview.html">TextPlex</a>
+        <nav class="route-links" aria-label="Primary">
+          <a class="route-link" href="./home-preview.html">Home</a>
+          <a class="route-link" href="./library-preview.html">Library</a>
+          <a class="route-link" href="./progress-preview.html">Progress</a>
+          <a class="route-link is-active" href="./roadmap-preview.html" aria-current="page">Roadmap</a>
+        </nav>
+      </header>
+
+      <section class="card route-hero" data-inventory-id="roadmap.route-hero">
+        <span class="eyebrow">Roadmap</span>
+        <div class="hero-topline"><h1>Vocabulary database implementation tracker</h1><span class="pill">Preview</span></div>
+        <p class="lede">A visible plan for building non-Romanized language vocabulary packs one language at a time, starting with Japanese.</p>
+        <div class="button-row"><a class="button button-secondary" href="./home-preview.html">Home</a><a class="button button-secondary" href="./library-preview.html">Library</a><a class="button button-secondary" href="./progress-preview.html">Progress</a></div>
+        <dl class="metric-grid" aria-label="Roadmap metrics"><div><dt>Languages</dt><dd>6</dd></div><div><dt>Active build</dt><dd>Japanese</dd></div><div><dt>Queued</dt><dd>4</dd></div></dl>
+      </section>
+
+      <section class="feature-grid">
+        <article class="card feature-card" data-inventory-id="roadmap.implementation-plan-card">
+          <h2>Implementation plan</h2>
+          <div class="surface-list">
+            <article class="surface-list-item" data-inventory-id="roadmap.plan-step"><strong>1. Lock the pack format</strong><p>Keep every language pack in a canonical lexicon.sqlite3 or lexicon.csv layout under resources/lexicon/&lt;language&gt;.</p></article>
+            <article class="surface-list-item" data-inventory-id="roadmap.plan-step"><strong>2. Build the Japanese starter pack</strong><p>Seed Japanese first so the importer, lookup path, and preview surfaces have one non-Chinese reference implementation.</p></article>
+            <article class="surface-list-item" data-inventory-id="roadmap.plan-step"><strong>3. Repeat the same shape for the next languages</strong><p>Use the same ingest and lookup rules for Korean, Russian, Hebrew, and Arabic instead of creating one-off pipelines.</p></article>
+            <article class="surface-list-item" data-inventory-id="roadmap.plan-step"><strong>4. Anchor each pack to a learning benchmark</strong><p>Track against JLPT, TOPIK, TORFL, and domestic literacy goals so vocabulary lists map to real learner expectations.</p></article>
+            <article class="surface-list-item" data-inventory-id="roadmap.plan-step"><strong>5. Keep the tracker visible in the app</strong><p>Publish the status in the preview UI so the roadmap stays visible while the databases are still being assembled.</p></article>
+          </div>
+        </article>
+
+        <article class="card feature-card" data-inventory-id="roadmap.current-focus-card"><h2>Current focus</h2><p>Japanese is the first live target because it forces the importer to handle a new script, a new source-pack path, and exam-aligned vocabulary at the same time.</p><p class="small-copy">The next pass after Japanese should reuse the same pack contract for Korean, Russian, Hebrew, and Arabic instead of creating separate code paths.</p></article>
+      </section>
+
+      <section class="card feature-card tracker-card" data-inventory-id="roadmap.language-tracker-card">
+        <div class="card-topline"><h2>Per-language tracker</h2><span class="pill">Live planning</span></div>
+        <div class="roadmap-grid">
+          <article class="card roadmap-card" data-inventory-id="roadmap.language-card"><div class="language-topline"><div><span class="eyebrow">ZH</span><h3>Chinese</h3></div><span class="pill">Foundation</span></div><div class="roadmap-meter" aria-label="Chinese progress 100 percent"><span class="roadmap-meter-fill" style="width: 100%"></span></div><dl class="roadmap-details"><div class="roadmap-detail"><dt>Pack</dt><dd>Existing canonical Chinese pack</dd></div><div class="roadmap-detail"><dt>Benchmark</dt><dd>HSK and Chinese reading fixtures</dd></div></dl><p class="roadmap-note">Keep the current pack stable while the new language packs come online.</p></article>
+          <article class="card roadmap-card" data-inventory-id="roadmap.language-card"><div class="language-topline"><div><span class="eyebrow">JA</span><h3>Japanese</h3></div><span class="pill">Active build</span></div><div class="roadmap-meter" aria-label="Japanese progress 35 percent"><span class="roadmap-meter-fill" style="width: 35%"></span></div><dl class="roadmap-details"><div class="roadmap-detail"><dt>Pack</dt><dd>resources/lexicon/japanese</dd></div><div class="roadmap-detail"><dt>Benchmark</dt><dd>JLPT, school literacy goals, and public-domain readers</dd></div></dl><p class="roadmap-note">Seed kanji, kana, readings, and high-frequency vocabulary.</p></article>
+          <article class="card roadmap-card" data-inventory-id="roadmap.language-card"><div class="language-topline"><div><span class="eyebrow">KO</span><h3>Korean</h3></div><span class="pill">Queued</span></div><div class="roadmap-meter" aria-label="Korean progress 10 percent"><span class="roadmap-meter-fill" style="width: 10%"></span></div><dl class="roadmap-details"><div class="roadmap-detail"><dt>Pack</dt><dd>resources/lexicon/korean</dd></div><div class="roadmap-detail"><dt>Benchmark</dt><dd>TOPIK and domestic school literacy goals</dd></div></dl><p class="roadmap-note">Define the corpus, starter pack, and first import smoke tests.</p></article>
+          <article class="card roadmap-card" data-inventory-id="roadmap.language-card"><div class="language-topline"><div><span class="eyebrow">RU</span><h3>Russian</h3></div><span class="pill">Queued</span></div><div class="roadmap-meter" aria-label="Russian progress 10 percent"><span class="roadmap-meter-fill" style="width: 10%"></span></div><dl class="roadmap-details"><div class="roadmap-detail"><dt>Pack</dt><dd>resources/lexicon/russian</dd></div><div class="roadmap-detail"><dt>Benchmark</dt><dd>TORFL and domestic school literacy goals</dd></div></dl><p class="roadmap-note">Decide the first public-domain sources and Cyrillic vocabulary coverage.</p></article>
+          <article class="card roadmap-card" data-inventory-id="roadmap.language-card"><div class="language-topline"><div><span class="eyebrow">HE</span><h3>Hebrew</h3></div><span class="pill">Queued</span></div><div class="roadmap-meter" aria-label="Hebrew progress 10 percent"><span class="roadmap-meter-fill" style="width: 10%"></span></div><dl class="roadmap-details"><div class="roadmap-detail"><dt>Pack</dt><dd>resources/lexicon/hebrew</dd></div><div class="roadmap-detail"><dt>Benchmark</dt><dd>Domestic literacy goals and learner-community vocabulary</dd></div></dl><p class="roadmap-note">Set the source-pack shape for right-to-left text and modern reading support.</p></article>
+          <article class="card roadmap-card" data-inventory-id="roadmap.language-card"><div class="language-topline"><div><span class="eyebrow">AR</span><h3>Arabic</h3></div><span class="pill">Queued</span></div><div class="roadmap-meter" aria-label="Arabic progress 10 percent"><span class="roadmap-meter-fill" style="width: 10%"></span></div><dl class="roadmap-details"><div class="roadmap-detail"><dt>Pack</dt><dd>resources/lexicon/arabic</dd></div><div class="roadmap-detail"><dt>Benchmark</dt><dd>Domestic literacy goals and learner-community vocabulary</dd></div></dl><p class="roadmap-note">Define segmentation, diacritics handling, and the first source pack.</p></article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

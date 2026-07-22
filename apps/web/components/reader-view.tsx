@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import {
@@ -54,6 +55,8 @@ const readerTextSizeScales: Record<ReaderTextSizeMode, number> = {
   medium: 1,
   large: 1.1,
 };
+
+const readerVocabularyStoragePrefix = "textplex.readerVocabulary:";
 
 function resolveReaderFont(value: string | null | undefined): ReaderFontMode {
   return value === "serif" || value === "sans" || value === "mixed" ? value : "mixed";
@@ -251,6 +254,80 @@ function buildReaderDisplayTokens(sentence: { tokens?: TokenResult[] } | null | 
   return displayTokens;
 }
 
+const hskLevelColors = ["#006b35", "#1f9d45", "#a7ad12", "#e28a09", "#d84b2a", "#9f1836"];
+
+function parseHskLevel(value: string | number | null | undefined): number | null {
+  const match = String(value ?? "").match(/(?:HSK\s*)?(\d+(?:\.\d+)?)/i);
+  if (!match) {
+    return null;
+  }
+
+  const level = Number(match[1]);
+  return Number.isFinite(level) && level >= 1 && level <= 6 ? level : null;
+}
+
+function ReaderHskChart({ tokens }: { tokens: TokenResult[] }) {
+  const readableTokens = tokens.filter((token) => !isSentencePunctuation(token.surface_form));
+  const points = readableTokens
+    .map((token, index) => ({ index, level: parseHskLevel(token.proficiency_level) }))
+    .filter((point): point is { index: number; level: number } => point.level !== null);
+
+  if (!readableTokens.length || !points.length) {
+    return null;
+  }
+
+  const width = Math.max(360, readableTokens.length * 30 + 32);
+  const height = 190;
+  const plotLeft = 24;
+  const plotRight = width - 16;
+  const plotTop = 18;
+  const plotBottom = 146;
+  const xForIndex = (index: number) => plotLeft + (index / Math.max(readableTokens.length - 1, 1)) * (plotRight - plotLeft);
+  const yForLevel = (level: number) => plotBottom - ((level - 1) / 5) * (plotBottom - plotTop);
+  const chartPoints = points.map((point) => `${xForIndex(point.index)},${yForLevel(point.level)}`).join(" ");
+
+  return (
+    <section className="reader-chart-card" data-inventory-id="reader.sentence-hsk-chart" aria-label="Sentence HSK profile">
+      <div className="reader-chart-header">
+        <div>
+          <span className="eyebrow">Sentence profile</span>
+          <h3>HSK level by token</h3>
+        </div>
+        <span className="small-copy">{readableTokens.length} tokens</span>
+      </div>
+      <div className="reader-chart-scroll" role="img" aria-label="HSK level plotted across the selected sentence">
+        <svg className="reader-hsk-chart" viewBox={`0 0 ${width} ${height}`} width={width} height={height} aria-hidden="true">
+          {[1, 2, 3, 4, 5, 6].map((level) => {
+            const y = yForLevel(level);
+            return (
+              <g key={level}>
+                <line x1={plotLeft} x2={plotRight} y1={y} y2={y} className="reader-chart-gridline" />
+                <text x="0" y={y + 4} className="reader-chart-axis-label">{level}</text>
+              </g>
+            );
+          })}
+          <polyline points={chartPoints} className="reader-chart-line" />
+          {points.map((point) => (
+            <circle
+              key={`${point.index}-${point.level}`}
+              cx={xForIndex(point.index)}
+              cy={yForLevel(point.level)}
+              r="4.5"
+              fill={hskLevelColors[Math.max(0, Math.ceil(point.level) - 1)]}
+              className="reader-chart-point"
+            />
+          ))}
+        </svg>
+      </div>
+      <div className="reader-chart-legend" aria-hidden="true">
+        <span>HSK 1</span>
+        <span>HSK 3</span>
+        <span>HSK 6</span>
+      </div>
+    </section>
+  );
+}
+
 export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber: number }) {
   const [pageData, setPageData] = useState<BookReaderPageResponse | null>(null);
   const [summary, setSummary] = useState<BookExtractionResult | null>(null);
@@ -269,6 +346,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [profileLoading, setProfileLoading] = useState(true);
   const [lexiconResult, setLexiconResult] = useState<LexiconLookupResponse | null>(null);
   const [lexiconLoading, setLexiconLoading] = useState(false);
+  const [selectedTokenSaved, setSelectedTokenSaved] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [extracting, setExtracting] = useState(false);
@@ -425,6 +503,16 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   }, [pageData, selectedToken]);
 
   useEffect(() => {
+    if (!selectedToken) {
+      setSelectedTokenSaved(false);
+      return;
+    }
+
+    const key = `${readerVocabularyStoragePrefix}${bookId}:${selectedToken.lemma ?? selectedToken.surface_form}`;
+    setSelectedTokenSaved(window.localStorage.getItem(key) === "saved");
+  }, [bookId, selectedToken]);
+
+  useEffect(() => {
     let active = true;
 
     async function ensureSession() {
@@ -483,7 +571,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const page = pageData?.extraction?.page ?? null;
   const tokenEntry = resolveEntry(summary, selectedToken);
   const lexiconEntry = lexiconResult?.entries[0] ?? null;
-  const tokenLookupMissing = Boolean(selectedToken && !lexiconLoading && !lexiconEntry && !isSentencePunctuation(selectedToken.surface_form));
   const imageUrl = pageData ? resolveResourceUrl(pageData.image_url) : "";
   const totalPages = pageData?.book.total_pages ?? summary?.page_end ?? null;
   const pageTranslation = page?.page_translation?.trim() || null;
@@ -563,10 +650,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const tokenPinyin = lexiconEntry?.pinyin ?? selectedToken?.romanization ?? null;
   const tokenHsk = lexiconEntry?.hsk_level ?? selectedToken?.proficiency_level ?? null;
   const tokenHskLabel = formatLevelTag(tokenHsk);
-  const tokenRadical = lexiconEntry?.radical ?? null;
-  const tokenStrokeCount = lexiconEntry?.stroke_count ?? null;
-  const showReaderFallback = tokenLookupMissing && readerTokenMode !== "character" && tokenDefinition.trim().length === 0;
   const needsExtraction = (pageData?.book.extracted_page_count ?? 0) <= 0;
+  const extractionInProgress = ["queued", "processing", "running"].includes(pageData?.book.extraction_status ?? "");
   const extractionSource = pageData?.extraction?.text_source ?? null;
   const extractionSourceLabel = extractionSource ? extractionSource.toUpperCase() : "UNAVAILABLE";
   const selectedSentenceIndex = useMemo(() => {
@@ -641,6 +726,23 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     window.localStorage.setItem(readerTextSizeStorageKey, nextSize);
   }
 
+  function handleToggleSelectedTokenSaved() {
+    if (!selectedToken) {
+      return;
+    }
+
+    const key = `${readerVocabularyStoragePrefix}${bookId}:${selectedToken.lemma ?? selectedToken.surface_form}`;
+    setSelectedTokenSaved((saved) => {
+      const nextSaved = !saved;
+      if (nextSaved) {
+        window.localStorage.setItem(key, "saved");
+      } else {
+        window.localStorage.removeItem(key);
+      }
+      return nextSaved;
+    });
+  }
+
   function focusSentence(nextIndex: number) {
     if (!page?.sentences.length) {
       return;
@@ -662,7 +764,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       data-reader-text-size={readerTextSize}
       style={{ "--reader-text-scale": readerTextSizeScales[readerTextSize] } as CSSProperties}
     >
-      <header className="reader-topbar card">
+      <header className="reader-topbar card" data-inventory-id="reader.header">
         <div className="reader-topbar-main">
           <div>
             <span className="eyebrow">Reader</span>
@@ -731,7 +833,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       {showReaderOptions ? (
         <>
           <button type="button" className="reader-options-backdrop" aria-label="Close reader options" onClick={() => setShowReaderOptions(false)} />
-          <section id="reader-options-panel" className="card reader-options-panel" aria-modal="true" role="dialog">
+          <section id="reader-options-panel" className="card reader-options-panel" data-inventory-id="reader.options-dialog" aria-modal="true" role="dialog">
             <div className="card-topline">
               <div>
                 <span className="eyebrow">Reader options</span>
@@ -805,6 +907,10 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   { value: "jade" as ReaderThemeMode, title: readerThemeLabels.jade },
                   { value: "ceramic" as ReaderThemeMode, title: readerThemeLabels.ceramic },
                   { value: "crimson" as ReaderThemeMode, title: readerThemeLabels.crimson },
+                  { value: "nes" as ReaderThemeMode, title: readerThemeLabels.nes },
+                  { value: "famicom" as ReaderThemeMode, title: readerThemeLabels.famicom },
+                  { value: "snes" as ReaderThemeMode, title: readerThemeLabels.snes },
+                  { value: "super-famicom" as ReaderThemeMode, title: readerThemeLabels["super-famicom"] },
                 ]).map((theme) => (
                   <button
                     key={theme.value}
@@ -826,12 +932,20 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       ) : null}
 
       {loading ? <ReaderLoadingSkeleton /> : null}
-      {error ? <div className="card error-card">{error}</div> : null}
+      {error ? (
+        <div className="card error-card" role="alert">
+          <h2>Reader unavailable</h2>
+          <p>{error}</p>
+          <button type="button" className="button button-secondary" onClick={() => setRefreshNonce((value) => value + 1)}>
+            Try again
+          </button>
+        </div>
+      ) : null}
       {extractError ? <div className="card error-card">{extractError}</div> : null}
 
       {pageData && page ? (
         <div className="reader-layout">
-          <article className="card reader-page">
+          <article className="card reader-page" data-inventory-id="reader.page-card">
             <div className="reader-card-header">
               <div>
                 <span className="eyebrow">Reading focus</span>
@@ -848,7 +962,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
             {showPageImage ? (
               <div className="reader-page-image">
-                <img src={imageUrl} alt={`Page ${pageNumber} image`} />
+                <Image
+                  src={imageUrl}
+                  alt={`Page ${pageNumber} image`}
+                  fill
+                  sizes="(max-width: 900px) 100vw, 70vw"
+                  unoptimized
+                />
               </div>
             ) : (
               <div className="page-image-placeholder">
@@ -893,61 +1013,36 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             </div>
 
             {selectedToken ? (
-              <div className="definition-popover" role="status" aria-live="polite">
+              <div className="definition-popover" data-inventory-id="reader.token-inspector" role="status" aria-live="polite">
                 <div className="definition-popover-topline">
-                  <div>
-                    <span className="eyebrow">Lookup</span>
+                  <div className="definition-token-heading">
                     <h3>{tokenLabel}</h3>
+                    <div className="definition-meta">
+                      {tokenPinyin ? <span>{tokenPinyin}</span> : null}
+                      {tokenHskLabel !== "—" ? <span className="pill">{tokenHskLabel}</span> : null}
+                    </div>
                   </div>
-                  <button type="button" className="ghost-link" onClick={() => setSelectedToken(null)}>
-                    Clear
-                  </button>
+                  <div className="definition-actions">
+                    <button
+                      type="button"
+                      className={`definition-save ${selectedTokenSaved ? "is-saved" : ""}`}
+                      onClick={handleToggleSelectedTokenSaved}
+                      aria-pressed={selectedTokenSaved}
+                      aria-label={selectedTokenSaved ? "Remove from vocabulary" : "Save to vocabulary"}
+                      title={selectedTokenSaved ? "Remove from vocabulary" : "Save to vocabulary"}
+                    >
+                      {selectedTokenSaved ? "★" : "☆"}
+                    </button>
+                    <button type="button" className="ghost-link" onClick={() => setSelectedToken(null)}>
+                      Clear
+                    </button>
+                  </div>
                 </div>
                 {lexiconLoading ? (
                   <LoadingSkeleton label="Loading dictionary entry" className="definition-loading" />
                 ) : (
-                  <p className="definition-copy">{tokenDefinition}</p>
+                  <p className="definition-copy">{tokenDefinition || "Definition unavailable."}</p>
                 )}
-                {showReaderFallback ? (
-                  <div className="definition-fallback">
-                    <p className="small-copy">Not in the dictionary yet? Try character mode for smaller pieces.</p>
-                    <button
-                      type="button"
-                      className="button button-secondary button-compact"
-                      onClick={handleToggleReaderTokenMode}
-                      aria-label="Try character mode"
-                    >
-                      Try Char mode
-                    </button>
-                  </div>
-                ) : null}
-                <dl className="definition-grid">
-                  <div>
-                    <dt>Lemma</dt>
-                    <dd>{selectedToken.lemma ?? selectedToken.surface_form}</dd>
-                  </div>
-                  <div>
-                    <dt>Pinyin</dt>
-                    <dd>{tokenPinyin ?? "—"}</dd>
-                  </div>
-                  <div>
-                    <dt>HSK</dt>
-                    <dd>{tokenHskLabel}</dd>
-                  </div>
-                  <div>
-                    <dt>Frequency</dt>
-                    <dd>{tokenEntry?.frequency_in_book ?? 1}</dd>
-                  </div>
-                  <div>
-                    <dt>Radical</dt>
-                    <dd>{tokenRadical ?? "—"}</dd>
-                  </div>
-                  <div>
-                    <dt>Strokes</dt>
-                    <dd>{tokenStrokeCount ?? "—"}</dd>
-                  </div>
-                </dl>
-                {selectedSentence ? <p className="small-copy sentence-preview">{selectedSentence.text}</p> : null}
               </div>
             ) : (
               <div className="definition-popover definition-empty">
@@ -1004,6 +1099,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                 </div>
               ) : null}
             </div>
+            <ReaderHskChart tokens={displayedSentenceTokens} />
           </article>
 
           <aside className="reader-sidebar">
@@ -1091,10 +1187,20 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
           </aside>
         </div>
       ) : pageData ? (
-        <div className="card empty-state">
-          <h2>Page text is not available yet</h2>
-          <p>This page image is ready, but the structured extraction summary has not been generated for it yet.</p>
-          {needsExtraction ? (
+        <div className="card empty-state" role={extractionInProgress ? "status" : undefined} aria-live={extractionInProgress ? "polite" : undefined}>
+          {extractionInProgress ? (
+            <>
+              <h2>Preparing page text</h2>
+              <LoadingSkeleton label="Loading page extraction" />
+              <p>TextPlex is extracting this book in the background. This page will become readable when sentence data is ready.</p>
+            </>
+          ) : (
+            <>
+              <h2>Page text is not available yet</h2>
+              <p>This page image is ready, but structured extraction has not produced readable sentence data for it.</p>
+            </>
+          )}
+          {needsExtraction && !extractionInProgress ? (
             <div className="button-row">
               <button type="button" className="button button-primary" onClick={() => void handleExtractNow()} disabled={extracting || loading}>
                 {extracting ? "Extracting..." : "Extract now"}

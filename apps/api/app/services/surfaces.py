@@ -8,6 +8,7 @@ from app.schemas.books import BookRecord
 from app.schemas.surfaces import (
     ActivityEvent,
     ActivitySurfaceResponse,
+    AnalysisSeriesPoint,
     AnalysisLexicalEntrySummary,
     BookAnalysisSurfaceResponse,
     ImportRecentBook,
@@ -26,7 +27,9 @@ from app.schemas.surfaces import (
 from app.services.book_registry import load_registry
 from app.services.book_extraction import recover_book_extraction_result
 from app.services.learning_profile import ensure_profile_database, get_learning_profile_summary
+from app.services.lexicon import lookup_lexicon_hsk_levels_map
 from app.core.paths import resolve_books_root
+from processor import calculate_book_hsk_metrics, calculate_hsk_series, is_hanzi
 from processor.contracts import BookExtractionResult
 
 
@@ -97,8 +100,33 @@ def get_book_analysis_surface(data_root: Path, book_id: str) -> BookAnalysisSurf
             lexical_entry_count=0,
             token_occurrence_count=0,
             has_extraction=False,
+            extraction_progress_percent=round(book.extracted_page_count / book.total_pages * 100) if book.total_pages else 0,
+            metrics={
+                "metric_status": "pending",
+                "recommendation": "Analysis metrics will appear after extraction completes.",
+            },
+            sentence_hsk_series=[],
+            page_hsk_series=[],
             top_lexical_entries=[],
         )
+
+    characters = {
+        character
+        for page in extraction.pages
+        for sentence in page.sentences
+        for token in sentence.tokens
+        for character in token.surface_form
+        if is_hanzi(character)
+    }
+    character_levels = lookup_lexicon_hsk_levels_map(
+        data_root=data_root,
+        language_code=book.language_code,
+        characters=characters,
+    )
+    metrics = calculate_book_hsk_metrics(extraction, character_levels)
+    hsk_series = calculate_hsk_series(extraction, character_levels)
+    extracted_page_count = len(extraction.pages)
+    extraction_progress_percent = round(extracted_page_count / book.total_pages * 100) if book.total_pages else 0
 
     lexical_entries = sorted(
         extraction.lexical_entries,
@@ -115,6 +143,10 @@ def get_book_analysis_surface(data_root: Path, book_id: str) -> BookAnalysisSurf
         lexical_entry_count=len(extraction.lexical_entries),
         token_occurrence_count=len(extraction.token_occurrences),
         has_extraction=True,
+        extraction_progress_percent=extraction_progress_percent,
+        metrics=metrics,
+        sentence_hsk_series=[AnalysisSeriesPoint.model_validate(point) for point in hsk_series["sentence_series"]],
+        page_hsk_series=[AnalysisSeriesPoint.model_validate(point) for point in hsk_series["page_series"]],
         top_lexical_entries=[
             AnalysisLexicalEntrySummary(
                 lemma=entry.lemma,

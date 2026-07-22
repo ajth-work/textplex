@@ -20,6 +20,35 @@ This is the reusable audit record and operating procedure for TextPlex. The deta
 
 The audit was performed against the checkout as it existed, not a clean commit. Existing user changes were preserved. That is useful for real handoff review, but it means audit findings must identify whether a failure belongs to the baseline, the active change, or the environment.
 
+## 2026-07-21 frontend runtime cleanup audit
+
+- Upgraded the web runtime dependencies to Next `16.2.11` and Supabase `2.109.0`; the Next 16 Docker build passes on Node `20.20.2`.
+- Removed route deoptimization warnings by placing the shell and route content behind `Suspense` boundaries.
+- Removed the reader image lint warning and changed the web lint command to target source directories directly.
+- Fixed clean Docker workspace dependency copying and the Next launcher’s root/workspace module resolution.
+- Replaced the API test extra’s legacy `httpx` dependency with `httpx2`, removing the Starlette test-client deprecation warning.
+- Reworked the site upload test’s browser shim to use a local `Blob` and `FormData` double, removing Node’s experimental `buffer.File` warning without changing production upload behavior.
+- Promoted patched `postcss` `8.5.21` and `sharp` `0.35.3` versions into the root workspace dependency policy; `npm audit --omit=dev` now reports zero production vulnerabilities.
+- Regenerated the npm lockfile from the current manifests, removed the obsolete workspace-local ESLint peer subtree, and made the Dockerfile rely on the hoisted root install instead of assuming a workspace-local `node_modules` directory.
+- Pinned the web Supabase client to `2.109.0`, avoiding the newer Node 22-only release warning while the project’s supported runtime remains Node 20.
+- Stabilized `apps/web/tsconfig.json` for Next 16 so the build no longer rewrites JSX or emits the generated-type include warning.
+- Host verification under Node `18.15.0` still produces engine warnings because the project requires Node 20; use the repository `.nvmrc` or the Node 20 Docker runtime.
+- The clean Node 20 build still reports two non-blocking upstream ESLint deprecation notices from `@humanwhocodes/object-schema` and `@humanwhocodes/config-array`; no application code or production vulnerability is implicated.
+
+## 2026-07-21 Node 24 runtime upgrade audit
+
+- Updated `.nvmrc`, the Next and standalone-site Docker images, CI, Pages, and the weekly audit workflow to Node 24 LTS.
+- This is a runtime-only upgrade; Next, React, Supabase, API contracts, and application behavior were not changed in this step.
+- Node 24 is the supported LTS baseline for production work; Node 20 is now EOL in the Node release schedule.
+- Verification passed: 61 Python tests, 41 Node 24 site/route tests, Node 24 web lint, the Node 24 production Docker build, npm production audit with zero vulnerabilities, and live `8200`/`8201` reachability checks.
+- Node 24’s npm 11 install-script review was handled narrowly by approving only the lockfile-pinned `unrs-resolver@1.12.2` native resolver script; no blanket lifecycle-script allowance was added.
+
+## 2026-07-21 Next stable release verification
+
+- Registry verification reports `next@latest` and `eslint-config-next@latest` as `16.2.11`; the repository was already current and did not move to the `16.3` preview or canary lines.
+- Pinned both web declarations to exact `16.2.11` versions and regenerated the lockfile under Node 24.
+- Verification passed: full Next runner-image build, web lint, 41 Node 24 site/route tests, and npm production audit with zero vulnerabilities.
+
 ## Scope and parameters
 
 Review these surfaces whenever the audit runs:
@@ -64,6 +93,8 @@ python -m pip install -e "apps/api[dev]" -e packages/processor
 ```
 
 Do not commit `.audit-venv`. If the existing project virtualenv is used for speed, record that fact and still run the declared install command.
+
+After the runtime and declared environments are available, run `npm run maintenance:check` for the read-only dependency/runtime drift report. Use `npm run maintenance:repair` only when intentionally repairing the local environment; use `npm run maintenance:update` only for a reviewed in-range dependency update.
 
 ### 3. Run backend checks
 
@@ -169,6 +200,66 @@ Remediation verification then passed:
 - `git diff --check`.
 
 Issues #33–#40 were mapped to fixes and closed after verification.
+
+## 2026-07-20 targeted components and analysis audit
+
+This was a focused audit of the components inventory and the analysis/difficulty path, not a replacement for the full repository audit.
+
+| Parameter | Value |
+| --- | --- |
+| Audit date | 2026-07-20 |
+| Scope | `docs/COMPONENTS_INVENTORY.md`, Home Recent Analyses, Analysis preview, live `/analysis/{book_id}`, API analysis schemas/services, extraction/lexicon contracts, and related site/API tests |
+| Baseline | Branch `codex-textplex-reader-preview-split`, commit `48dd3b2`, dirty worktree; existing changes preserved |
+| Environment | Windows PowerShell; Python 3.11.2; Node 18.15.0; npm 9.5.0; existing `apps/api/.venv` |
+| Checks | `apps/api/.venv/Scripts/python.exe -m pytest -q tests/api/test_product_surfaces.py`; `npm run test:site`; source/contract inspection; `git diff --check` |
+
+### Passed
+
+- Focused product-surface API tests: 2 passed, 1 existing Starlette/httpx deprecation warning.
+- Static site tests: 31 passed.
+- Inventory route coverage: all 13 Next page routes plus the preview-only Vocabulary page are represented.
+- Formatting check: `git diff --check` passed.
+
+### Warnings
+
+- API test emitted the existing Starlette/httpx deprecation warning.
+- Site tests emitted Node's existing experimental `buffer.File` warning.
+- npm emitted an `EPERM` warning while cleaning the user-level npm cache; the site test suite still passed.
+
+### Findings
+
+| Severity | Finding | Evidence |
+| --- | --- | --- |
+| High | The analysis `/100` score has no canonical backend meaning. The live `BookAnalysisSurfaceResponse` has no difficulty, HSK distribution, or estimated-level field. | `apps/api/app/schemas/surfaces.py:18-29`, `apps/api/app/services/surfaces.py:80-128` |
+| High | Live preview records use extraction progress, then `75` or `45`, as the analysis score. This makes the dial a processing/readiness signal while labeling it Overall Difficulty. | `site/preview-data.js:2563-2607` |
+| High | Seed preview records hardcode scores and level labels independently; Chinese records have equal score `78` with HSK 4 and HSK 5 labels. The score is not derived from token or character HSK evidence. | `site/preview-data.js:52-61`, `site/preview-data.js:172-181` |
+| High | The ring is a direct percentage visualization of the ambiguous score, with no clamping, provenance, or metric label beyond `/100`. | `site/preview-router.js:436-440`, `site/preview-router.js:296-312` |
+| Medium | The analysis preview contains vocabulary distribution, average level, unknown words, and comprehension UI regions, but the current hydration path only fills title/meta, ring, level, recommendation, and sample. | `site/analysis-preview.html:655-706`, `site/preview-router.js:406-462` |
+| Medium | The book schema/migration has a `sentences.difficulty_score` field, but the current processor contracts and extraction path do not define or populate a corresponding metric. | `apps/api/app/db/migrations/book/0001_initial.sql:28-36`, `packages/processor/src/processor/contracts.py:43-76` |
+| Medium | The inventory previously omitted the Home Recent Analyses row and the preview Analysis detail cards; those IDs are now recorded. | `docs/COMPONENTS_INVENTORY.md` analysis and standalone preview sections |
+
+### Issue mapping
+
+- GitHub issue [#42](https://github.com/ajth-work/textplex/issues/42): Define text difficulty and expected HSK level analytics. The issue is recorded in `docs/ISSUE_TRACKER.md` and is scoped across calculation, contract, live/preview consumers, and tests.
+- Existing #27 and #31 remain related roadmap work, but neither defines the canonical difficulty/HSK metric contract identified here.
+
+### Limitations and next trigger
+
+- No private books, OCR output, learner data, secrets, or generated databases were inspected.
+- The audit did not choose the final aggregation formula. Issue #42 must decide character-to-word aggregation, occurrence weighting, unknown-level handling, language-specific fallbacks, and the distinction between text difficulty and learner comprehension.
+- Re-run the focused audit after the metric contract and calculation are implemented; require API, processor/calculation, preview, and contract regression coverage before closing #42.
+
+### Follow-up metric direction
+
+The proposed implementation direction is now clearer:
+
+- Character level: resolve a numeric HSK level for each eligible Chinese character, sum the known levels, and divide by the character count represented by the chosen coverage policy.
+- Sentence level: calculate one average HSK value per sentence, preserving a sentence-by-sentence series such as `4.6`, `3.9`, and `4.2`.
+- Page level: aggregate the sentence values for each page, retaining counts and coverage.
+- Text level: expose both the direct character-weighted average and the arithmetic average of sentence-level values; the analysis ring should use the sentence-level average unless the metric review selects otherwise.
+- Presentation: show a value such as `HSK 4.6` or a documented HSK-normalized gauge, not an unlabeled `/100` difficulty score. Keep extraction progress and learner comprehension as separate metrics.
+
+Unknown-character handling, multi-character lexicon precedence, occurrence weighting, HSK 1-6 versus newer HSK bands, and non-Chinese fallbacks remain acceptance decisions for #42.
 
 ### Limitations identified
 

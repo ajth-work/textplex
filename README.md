@@ -49,6 +49,7 @@ docs/
   DATA_MODEL.md
   ISSUE_TRACKER.md
   MVP_BACKLOG.md
+  COMPONENTS_INVENTORY.md
   PROCESSING_CONTRACT.md
 scripts/
   init_local.sh
@@ -57,6 +58,7 @@ scripts/
 ## Recommended stack
 
 - Web: Next.js App Router + TypeScript
+- Runtime: Node.js 24 LTS for local development, Docker, CI, and GitHub Pages checks
 - API: FastAPI + Pydantic
 - Processing: Python
 - Storage: SQLite per processed book, plus one separate user profile SQLite database

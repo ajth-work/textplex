@@ -567,3 +567,43 @@ def lookup_lexicon_entry_map(
         )
 
     return entry_map
+
+
+def lookup_lexicon_hsk_levels_map(
+    *,
+    data_root: Path,
+    language_code: str,
+    characters: Iterable[str],
+) -> dict[str, list[str]]:
+    """Return every character HSK label so analysis can choose numeric evidence."""
+    normalized_language_code = _normalized_language_code(language_code)
+    normalized_characters = sorted({character.strip() for character in characters if isinstance(character, str) and character.strip()})
+    if not normalized_characters:
+        return {}
+
+    try:
+        _ensure_seeded_lexicon(data_root, language_code=normalized_language_code)
+    except FileNotFoundError:
+        return {}
+
+    db_path = ensure_lexicon_database(data_root)
+    placeholders = ", ".join("?" for _ in normalized_characters)
+    with closing(sqlite3.connect(db_path)) as connection:
+        rows = connection.execute(
+            f"""
+            SELECT surface_form, hsk_level
+            FROM lexicon_entries
+            WHERE language_code = ?
+              AND entry_type = 'character'
+              AND surface_form IN ({placeholders})
+              AND hsk_level IS NOT NULL
+              AND hsk_level != ''
+            ORDER BY id ASC
+            """,
+            [normalized_language_code, *normalized_characters],
+        ).fetchall()
+
+    levels: dict[str, list[str]] = {}
+    for surface_form, hsk_level in rows:
+        levels.setdefault(surface_form, []).append(hsk_level)
+    return levels

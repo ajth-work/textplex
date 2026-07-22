@@ -1273,11 +1273,15 @@
       .sort(sortByAnalysisPriority)
       .slice(0, 3)
       .map((record, index) => ({
+        metrics: record.analysis?.metrics ?? previewMetricsFromRecord(record),
         id: record.id,
         title: record.titleCn ?? record.title,
         author: record.authorCn ?? record.author,
         tag: record.analysis?.tag ?? record.contentType ?? "TXT",
-        score: record.analysis?.score ?? 0,
+        score: Number.isFinite(record.analysis?.metrics?.text_expected_level)
+          ? Math.min(100, Math.max(0, (record.analysis.metrics.text_expected_level / 6) * 100))
+          : 0,
+        level: record.analysis?.metrics?.text_expected_level_label ?? previewMetricsFromRecord(record).text_expected_level_label ?? "Unavailable",
         date: record.analysis?.date ?? "",
         ring: record.analysis?.ring ?? "#3f9b68",
         thumbClass: ["one", "two", "three", "four"][index] ?? "one",
@@ -1414,7 +1418,7 @@
     const todayStamp = new Date().toISOString().slice(0, 10);
     const selectedTrackCode = getSelectedTrackCode();
     const settingsEntries = [
-      { key: "theme", value: window.localStorage.getItem("textplex.theme") ?? "paper" },
+      { key: "theme", value: window.localStorage.getItem("textplex.theme") ?? "neutral" },
       { key: "readerMode", value: window.localStorage.getItem(READER_MODE_KEY) ?? "sentence" },
       { key: "ocrProvider", value: getOcrProvider() },
       { key: "processorUrl", value: getProcessorBaseUrl() || "not set" },
@@ -1657,6 +1661,8 @@
       return null;
     }
 
+    const pages = ensureReaderPages(record, 3);
+
     return {
       id: record.id,
       title: record.titleCn ?? record.title,
@@ -1664,6 +1670,7 @@
       meta: record.analysis?.meta ?? "",
       date: record.analysis?.analysisDate ?? "",
       score: record.analysis?.score ?? 0,
+      metrics: record.analysis?.metrics ?? previewMetricsFromRecord(record),
       ring: record.analysis?.ring ?? "#3f9b68",
       analysisState: record.analysis?.analysisState === "waiting" ? "waiting" : "ready",
       level: record.analysis?.level ?? "",
@@ -1676,6 +1683,37 @@
       art: makeArt(record.analysis),
       tag: record.analysis?.tag ?? record.contentType ?? "TXT",
       contentType: record.contentType,
+      languageCode: record.languageCode,
+      pages,
+    };
+  }
+
+  function previewMetricsFromRecord(record) {
+    const levelMatch = String(record.analysis?.level ?? "").match(/(\d+(?:\.\d+)?)/);
+    const level = levelMatch ? Number(levelMatch[1]) : null;
+    const ready = record.languageCode === "zh" && Number.isFinite(level);
+    return {
+      metric_status: ready ? "ready" : "unsupported",
+      assessment_system: ready ? "HSK" : null,
+      text_expected_level: ready ? level : null,
+      text_expected_level_label: ready ? `HSK ${level}` : null,
+      sentence_average_level: ready ? level : null,
+      page_average_level: ready ? level : null,
+      character_weighted_average_level: ready ? level : null,
+      eligible_character_count: 0,
+      known_character_count: 0,
+      unknown_character_count: 0,
+      chinese_word_occurrences: 0,
+      unknown_word_occurrences: 0,
+      partial_word_occurrences: 0,
+      sentence_count_with_level: 0,
+      page_count_with_level: 0,
+      distribution: ready ? [{ label: `HSK ${Math.round(level)}`, character_occurrences: 0, percentage: 100 }] : [],
+      comprehension_status: "not_available",
+      estimated_comprehension_percent: null,
+      recommendation: ready
+        ? "This expected level is based on the preview record's HSK fixture data; comprehension still requires learner data."
+        : "Expected level is not available for this language or record.",
     };
   }
 
@@ -2616,6 +2654,7 @@
           : "Import and extract the book to populate the sentence reader.",
         sample: firstSentence?.translation?.[0] ?? firstSentence?.vocabulary?.exampleCn ?? summary,
         sampleNote: hasExtraction ? "Live API content." : "Preview data only.",
+        metrics: analysis?.metrics ?? null,
         artAccent: coverAccent,
         artTop: hasExtraction ? "#eef1f8" : "#f5efe1",
         artMid: hasExtraction ? "#c8d0e0" : "#d9c8b4",

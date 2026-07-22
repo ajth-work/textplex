@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import { AppShell } from "../components/app-shell";
+import { AuthProvider } from "../components/auth-provider";
 import { ThemeProvider } from "../components/theme-provider";
 
 export const metadata: Metadata = {
@@ -23,17 +25,23 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                   if (theme === "forest") theme = "jade";
                   if (theme === "matrix") theme = "ceramic";
                   document.documentElement.dataset.appTheme = theme;
-                  document.documentElement.style.colorScheme = (theme === "ink" || theme === "black" || theme === "jade" || theme === "crimson") ? "dark" : "light";
+                  document.documentElement.style.colorScheme = (["ink", "black", "jade", "nes", "snes", "super-famicom"].includes(theme)) ? "dark" : "light";
                 } catch (error) {}
               })();
             `,
           }}
         />
         <div className="app-frame">
-          <ThemeProvider>
-            <AppShell />
-            <div className="app-shell-content">{children}</div>
-          </ThemeProvider>
+          <AuthProvider>
+            <ThemeProvider>
+              <Suspense fallback={null}>
+                <AppShell />
+              </Suspense>
+              <div className="app-shell-content">
+                <Suspense fallback={null}>{children}</Suspense>
+              </div>
+            </ThemeProvider>
+          </AuthProvider>
         </div>
       </body>
     </html>

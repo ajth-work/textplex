@@ -5,11 +5,12 @@ import threading
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from app.core.paths import get_data_root, get_repo_root, resolve_books_root
+from app.schemas.auth import AuthMeResponse
 from app.schemas.books import BookExtractionRequest, BookImportRequest, BookPageManifest, BookReaderPageResponse, BookRecord, PageExtractionArtifact, TextImportRequest, TextParseRequest
 from app.schemas.learning import (
     LearningProfileSummary,
@@ -30,6 +31,7 @@ from app.services.book_extraction import (
     recover_book_extraction_result,
 )
 from app.services.book_registry import delete_book_from_path, import_book_from_path, load_registry, save_registry
+from app.services.auth import get_current_user
 from app.services.learning_profile import create_reading_session, get_learning_profile_summary, record_page_read, record_sentence_read
 from app.services.lexicon import import_lexicon_from_source, lookup_lexicon_entry
 from app.services.surfaces import get_activity_surface, get_book_analysis_surface, get_import_surface, get_progress_surface, get_profile_surface, get_study_surface, load_settings_surface, search_surfaces, update_settings_surface
@@ -490,6 +492,11 @@ def get_book_extraction(book_id: str) -> BookExtractionResult:
 @app.get("/learning/profile", response_model=LearningProfileSummary)
 def get_learning_profile() -> LearningProfileSummary:
     return get_learning_profile_summary(app.state.data_root)
+
+
+@app.get("/auth/me", response_model=AuthMeResponse)
+def get_authenticated_user(user: AuthMeResponse = Depends(get_current_user)) -> AuthMeResponse:
+    return user
 
 
 @app.post("/learning/sessions", response_model=ReadingSessionRecord)

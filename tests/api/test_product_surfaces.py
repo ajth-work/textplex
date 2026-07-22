@@ -4,6 +4,8 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.schemas.books import BookRecord
+from app.services.lexicon import ensure_lexicon_database
+from processor.contracts import BookExtractionResult, PageExtractionResult, SentenceResult, TokenResult
 
 
 def test_analysis_search_import_and_settings_surfaces(imported_real_scan: tuple[Path, BookRecord]) -> None:
@@ -24,6 +26,8 @@ def test_analysis_search_import_and_settings_surfaces(imported_real_scan: tuple[
     assert analysis["book_id"] == record.id
     assert analysis["has_extraction"] is True
     assert analysis["sentence_count"] > 0
+    assert analysis["metrics"]["metric_status"] == "unsupported"
+    assert analysis["extraction_progress_percent"] == 100
 
     search_response = client.get("/search", params={"query": record.title})
     assert search_response.status_code == 200
@@ -47,6 +51,63 @@ def test_analysis_search_import_and_settings_surfaces(imported_real_scan: tuple[
     settings_response = client.get("/settings")
     assert settings_response.status_code == 200
     assert {entry["key"] for entry in settings_response.json()["entries"]} >= {"theme", "readerMode"}
+
+
+def test_analysis_surface_exposes_chinese_hsk_metrics(tmp_path: Path) -> None:
+    from app.main import app
+    from app.services.book_registry import import_book_from_path
+
+    data_root = tmp_path / "data"
+    record = import_book_from_path(
+        Path(__file__).resolve().parents[1] / "fixtures" / "books" / "alice-mini",
+        language_code="zh",
+        data_root=data_root / "books",
+    )
+    extraction = BookExtractionResult(
+        book_id=record.id,
+        source_path=record.source_path,
+        page_start=1,
+        page_end=1,
+        language_code="zh",
+        pages=[
+            PageExtractionResult(
+                book_id=record.id,
+                page_number=1,
+                language_code="zh",
+                raw_text="你好。",
+                clean_text="你好。",
+                sentences=[
+                    SentenceResult(
+                        order=1,
+                        text="你好。",
+                        tokens=[TokenResult(order=1, surface_form="你好")],
+                    )
+                ],
+            )
+        ],
+    )
+    extraction_path = data_root / "books" / record.id / "extractions" / "book-extraction.json"
+    extraction_path.parent.mkdir(parents=True, exist_ok=True)
+    extraction_path.write_text(extraction.model_dump_json(), encoding="utf-8")
+
+    lexicon_db = ensure_lexicon_database(data_root)
+    import sqlite3
+
+    with sqlite3.connect(lexicon_db) as connection:
+        connection.executemany(
+            "INSERT INTO lexicon_entries (language_code, entry_type, surface_form, hsk_level) VALUES (?, ?, ?, ?)",
+            [("zh", "character", "你", "HSK 1"), ("zh", "character", "好", "HSK 1")],
+        )
+        connection.commit()
+
+    app.state.data_root = data_root
+    response = TestClient(app).get(f"/analysis/{record.id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["metrics"]["text_expected_level_label"] == "HSK 1"
+    assert payload["metrics"]["character_weighted_average_level"] == 1
+    assert payload["metrics"]["comprehension_status"] == "not_available"
 
 
 def test_progress_study_and_activity_surfaces_record_learning_events(imported_real_scan: tuple[Path, BookRecord]) -> None:

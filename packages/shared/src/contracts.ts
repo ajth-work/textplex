@@ -85,6 +85,13 @@ export interface SentenceResult {
   grammar_patterns: string[];
 }
 
+export interface AuthMeResponse {
+  id: string;
+  email: string | null;
+  role: string;
+  display_name: string | null;
+}
+
 export interface PageExtractionResult {
   book_id: string;
   page_number: number;
@@ -299,6 +306,42 @@ export interface AnalysisLexicalEntrySummary {
   last_page: number | null;
 }
 
+export interface AnalysisDistributionBucket {
+  label: string;
+  character_occurrences: number;
+  percentage: number;
+}
+
+export interface AnalysisSeriesPoint {
+  index: number;
+  label: string;
+  value: number;
+  page_number: number | null;
+  sentence_order: number | null;
+}
+
+export interface AnalysisMetrics {
+  metric_status: "pending" | "ready" | "no_evidence" | "unsupported";
+  assessment_system: string | null;
+  text_expected_level: number | null;
+  text_expected_level_label: string | null;
+  sentence_average_level: number | null;
+  page_average_level: number | null;
+  character_weighted_average_level: number | null;
+  eligible_character_count: number;
+  known_character_count: number;
+  unknown_character_count: number;
+  chinese_word_occurrences: number;
+  unknown_word_occurrences: number;
+  partial_word_occurrences: number;
+  sentence_count_with_level: number;
+  page_count_with_level: number;
+  distribution: AnalysisDistributionBucket[];
+  comprehension_status: "not_available";
+  estimated_comprehension_percent: null;
+  recommendation: string;
+}
+
 export interface BookAnalysisSurfaceResponse {
   book_id: string;
   title: string;
@@ -310,6 +353,10 @@ export interface BookAnalysisSurfaceResponse {
   lexical_entry_count: number;
   token_occurrence_count: number;
   has_extraction: boolean;
+  extraction_progress_percent: number;
+  metrics: AnalysisMetrics;
+  sentence_hsk_series: AnalysisSeriesPoint[];
+  page_hsk_series: AnalysisSeriesPoint[];
   top_lexical_entries: AnalysisLexicalEntrySummary[];
 }
 

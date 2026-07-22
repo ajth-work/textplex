@@ -15,6 +15,42 @@ class AnalysisLexicalEntrySummary(BaseModel):
     last_page: int | None = None
 
 
+class AnalysisDistributionBucket(BaseModel):
+    label: str
+    character_occurrences: int
+    percentage: float
+
+
+class AnalysisSeriesPoint(BaseModel):
+    index: int
+    label: str
+    value: float
+    page_number: int | None = None
+    sentence_order: int | None = None
+
+
+class AnalysisMetrics(BaseModel):
+    metric_status: Literal["pending", "ready", "no_evidence", "unsupported"]
+    assessment_system: str | None = None
+    text_expected_level: float | None = None
+    text_expected_level_label: str | None = None
+    sentence_average_level: float | None = None
+    page_average_level: float | None = None
+    character_weighted_average_level: float | None = None
+    eligible_character_count: int = 0
+    known_character_count: int = 0
+    unknown_character_count: int = 0
+    chinese_word_occurrences: int = 0
+    unknown_word_occurrences: int = 0
+    partial_word_occurrences: int = 0
+    sentence_count_with_level: int = 0
+    page_count_with_level: int = 0
+    distribution: list[AnalysisDistributionBucket] = Field(default_factory=list)
+    comprehension_status: Literal["not_available"] = "not_available"
+    estimated_comprehension_percent: None = None
+    recommendation: str
+
+
 class BookAnalysisSurfaceResponse(BaseModel):
     book_id: str
     title: str
@@ -26,6 +62,10 @@ class BookAnalysisSurfaceResponse(BaseModel):
     lexical_entry_count: int
     token_occurrence_count: int
     has_extraction: bool
+    extraction_progress_percent: int = 0
+    metrics: AnalysisMetrics
+    sentence_hsk_series: list[AnalysisSeriesPoint] = Field(default_factory=list)
+    page_hsk_series: list[AnalysisSeriesPoint] = Field(default_factory=list)
     top_lexical_entries: list[AnalysisLexicalEntrySummary] = Field(default_factory=list)
 
 

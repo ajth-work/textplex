@@ -2,6 +2,8 @@
 
 This repo currently has a lightweight but real local-development baseline for the first TextPlex vertical slice.
 
+Use Node.js 24 LTS for the web workspace and site checks. The repository `.nvmrc`, Docker images, CI, and Pages workflow all target this runtime.
+
 ## What issue 1 establishes
 
 - a root web workspace command path
@@ -31,6 +33,26 @@ powershell -ExecutionPolicy Bypass -File .\scripts\init_local.ps1
 ```
 
 Both scripts create the local data directories and copy `.env.example` to `.env` if needed.
+
+### Supabase authentication
+
+The live web app reads `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from `apps/web/.env.local`. The API reads
+`SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` from the API environment. These
+values identify the Supabase project; never put a Supabase secret/service key in
+browser-exposed variables.
+
+The first account migration is tracked under `supabase/migrations/`. After
+linking the CLI to the hosted project, validate pending schema changes with:
+
+```powershell
+npx supabase db push --dry-run
+```
+
+The account route is available at `/auth`. It supports email/password sign-up,
+sign-in, email confirmation redirects, and password reset requests. The API
+identity check is available at `/auth/me` and validates the bearer token with
+Supabase Auth.
 
 ## Web app
 

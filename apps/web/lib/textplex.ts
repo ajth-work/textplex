@@ -3,10 +3,15 @@ import type {
   BookExtractionTriggerRequest,
   BookExtractionTriggerResponse,
 } from "../../../packages/shared/src";
+import { getSupabaseClient } from "./supabase";
 export type {
   ActivityEvent,
   ActivitySurfaceResponse,
+  AnalysisDistributionBucket,
   AnalysisLexicalEntrySummary,
+  AnalysisMetrics,
+  AnalysisSeriesPoint,
+  AuthMeResponse,
   BookAnalysisSurfaceResponse,
   BookExtractionResult,
   BookExtractionTriggerRequest,
@@ -79,6 +84,7 @@ export async function fetchJson<T>(pathname: string): Promise<T> {
 
   const response = await fetch(joinPath(pathname), {
     cache: "no-store",
+    headers: await authHeaders(),
   });
   if (!response.ok) {
     throw new Error(`Request failed (${response.status}) for ${pathname}`);
@@ -97,9 +103,7 @@ export async function postJson<T>(pathname: string, body: unknown): Promise<T> {
 
   const response = await fetch(joinPath(pathname), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: await authHeaders(true),
     body: JSON.stringify(body),
   });
   if (!response.ok) {
@@ -123,9 +127,7 @@ export async function putJson<T>(pathname: string, body: unknown): Promise<T> {
 
   const response = await fetch(joinPath(pathname), {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: await authHeaders(true),
     body: JSON.stringify(body),
   });
   if (!response.ok) {
@@ -148,12 +150,29 @@ export async function postFormData<T>(pathname: string, body: FormData): Promise
 
   const response = await fetch(joinPath(pathname), {
     method: "POST",
+    headers: await authHeaders(),
     body,
   });
   if (!response.ok) {
     throw new Error(`Request failed (${response.status}) for ${pathname}`);
   }
   return (await response.json()) as T;
+}
+
+async function authHeaders(includeJsonContentType = false): Promise<Headers> {
+  const headers = new Headers();
+  if (includeJsonContentType) {
+    headers.set("Content-Type", "application/json");
+  }
+  const client = getSupabaseClient();
+  if (!client) {
+    return headers;
+  }
+  const { data } = await client.auth.getSession();
+  if (data.session?.access_token) {
+    headers.set("Authorization", `Bearer ${data.session.access_token}`);
+  }
+  return headers;
 }
 
 export function formatDateTime(value: string | null): string {

@@ -86,8 +86,8 @@ async function assertHtmlResponse(response, url) {
 
   const body = await response.text();
   const expectedSnippets = {
-    "/": "Read scanned books as structured language data.",
-    "/library": "Your bookshelf",
+    "/": "Vocabulary database implementation tracker",
+    "/library": "Search titles, authors, tags...",
     "/analysis/demo-book": "Text Analysis",
     "/search": "Texts (1)",
     "/study": "Tap to reveal meaning",

@@ -12,12 +12,14 @@ const routes = {
   search: "./search-preview.html",
   progress: "./progress-preview.html",
   profile: "./profile-preview.html",
+  themeShop: "./theme-shop-preview.html",
   study: "./study-preview.html",
   activity: "./activity-preview.html",
   vocabulary: "./vocabulary-preview.html",
 };
 const uploadTimeoutMs = 20 * 60 * 1000;
 const importSessionKey = "textplex.preview.importSession";
+const skeletonMinVisibleMs = 360;
 
 const toast = createToast();
 
@@ -26,6 +28,8 @@ const ready = boot();
 async function boot() {
   const previewReady = previewData?.ready ?? Promise.resolve();
   const app = document.querySelector(".app");
+  const shouldShowSkeleton = ["analysis-preview.html", "library-detail-preview.html", "library-preview.html", "reader-preview.html"].includes(currentFile);
+  const skeletonStartedAt = Date.now();
   app?.setAttribute("aria-busy", "true");
   bindNavigationButtons();
   bindTextActions();
@@ -47,6 +51,12 @@ async function boot() {
     }
     renderPreviewLoadError(error);
     return;
+  }
+  if (shouldShowSkeleton) {
+    const remainingMs = skeletonMinVisibleMs - (Date.now() - skeletonStartedAt);
+    if (remainingMs > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, remainingMs));
+    }
   }
   if (!importBoundBeforeHydration) {
     bindPageSpecificActions();
@@ -248,6 +258,10 @@ function bindPageSpecificActions() {
     wireProfilePreview();
   }
 
+  if (currentFile === "theme-shop-preview.html") {
+    wireThemeShopPreview();
+  }
+
   if (currentFile === "vocabulary-preview.html") {
     wireVocabularyPreview();
   }
@@ -305,8 +319,8 @@ function wireHomePreview() {
               <span class="chip">${escapeHtml(item.tag)}</span>
             </div>
             <div>
-              <div class="score" style="--pct:${item.score}; --ring:${item.ring}">
-                <span>${item.score}</span>
+              <div class="score" style="--pct:${item.score}; --ring:${item.ring}" aria-label="${escapeHtml(item.level)}">
+                <span>${escapeHtml(item.level)}</span>
               </div>
               <div class="score-meta">${escapeHtml(item.date)}</div>
             </div>
@@ -383,6 +397,160 @@ function wireHomePreview() {
   });
 }
 
+const HSK_CHART_LEVELS = [1, 2, 3, 4, 5, 6];
+
+function parseHskChartLevel(value) {
+  const match = String(value ?? "").match(/(?:HSK\s*)?(\d+(?:\.\d+)?)/i);
+  if (!match) {
+    return null;
+  }
+
+  const level = Number(match[1]);
+  return Number.isFinite(level) && level >= 1 && level <= 6 ? level : null;
+}
+
+function getTokenHskChartLevel(token, sentence) {
+  const directLevel = parseHskChartLevel(
+    token?.proficiency_level ?? token?.proficiencyLevel ?? token?.hsk_level ?? token?.hskLevel,
+  );
+  if (directLevel != null) {
+    return directLevel;
+  }
+
+  const surface = normalizeText(token?.surface_form ?? token?.surface ?? "");
+  const vocabularySurface = normalizeText(sentence?.vocabulary?.surface ?? sentence?.vocabulary?.surface_form ?? "");
+  return surface && vocabularySurface && surface === vocabularySurface
+    ? parseHskChartLevel(sentence?.vocabulary?.tag ?? sentence?.vocabulary?.hsk_level)
+    : null;
+}
+
+function buildTokenHskChartSeries(sentence, mode = "word") {
+  return buildReaderDisplayTokens(sentence, mode).map((token, index) => ({
+    index: index + 1,
+    label: String(token?.surface_form ?? token?.surface ?? index + 1),
+    value: getTokenHskChartLevel(token, sentence),
+  }));
+}
+
+function averageHskChartValues(values) {
+  const numericValues = values.filter((value) => Number.isFinite(value));
+  return numericValues.length
+    ? numericValues.reduce((total, value) => total + value, 0) / numericValues.length
+    : null;
+}
+
+function buildSentenceHskChartSeries(pages) {
+  return (Array.isArray(pages) ? pages : []).flatMap((page, pageIndex) =>
+    (Array.isArray(page?.sentences) ? page.sentences : []).map((sentence, sentenceIndex) => {
+      const tokenSeries = buildTokenHskChartSeries(sentence, "word");
+      return {
+        index: sentenceIndex + 1,
+        pageNumber: Number(page?.pageNumber ?? pageIndex + 1) || pageIndex + 1,
+        label: `S${sentenceIndex + 1}`,
+        value: averageHskChartValues(tokenSeries.map((point) => point.value)),
+      };
+    }),
+  ).map((point, index) => ({ ...point, index: index + 1 }));
+}
+
+function buildPageHskChartSeries(pages) {
+  return (Array.isArray(pages) ? pages : []).map((page, index) => {
+    const sentenceSeries = (Array.isArray(page?.sentences) ? page.sentences : []).map((sentence) =>
+      averageHskChartValues(buildTokenHskChartSeries(sentence, "word").map((point) => point.value)),
+    );
+    return {
+      index: index + 1,
+      label: `P${Number(page?.pageNumber ?? index + 1) || index + 1}`,
+      value: averageHskChartValues(sentenceSeries),
+    };
+  });
+}
+
+function renderHskChart(svg, emptyState, meta, series, options = {}) {
+  if (!svg) {
+    return;
+  }
+
+  const numericPoints = (Array.isArray(series) ? series : []).filter((point) => Number.isFinite(point?.value));
+  const label = options.label ?? "HSK progression";
+  const classPrefix = options.classPrefix ?? "analysis";
+  if (!numericPoints.length) {
+    svg.innerHTML = "";
+    svg.hidden = true;
+    if (emptyState) {
+      emptyState.hidden = false;
+    }
+    if (meta) {
+      meta.textContent = "No level data";
+    }
+    return;
+  }
+
+  const points = Array.isArray(series) ? series : [];
+  const width = Math.max(320, points.length * 14 + 56);
+  const height = 180;
+  const margin = { top: 12, right: 12, bottom: 26, left: 30 };
+  const plotWidth = width - margin.left - margin.right;
+  const plotHeight = height - margin.top - margin.bottom;
+  const xFor = (index) => points.length <= 1
+    ? margin.left + plotWidth / 2
+    : margin.left + (index / (points.length - 1)) * plotWidth;
+  const yFor = (value) => margin.top + ((6 - Math.min(6, Math.max(1, value))) / 5) * plotHeight;
+  const grid = HSK_CHART_LEVELS.map((level) => {
+    const y = yFor(level);
+    return `<line class="${classPrefix}-chart-grid" x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}" />
+      <text class="${classPrefix}-chart-grid-label" x="${margin.left - 7}" y="${y + 3}" text-anchor="end">${level}</text>`;
+  }).join("");
+  const segments = [];
+  let segment = [];
+  points.forEach((point, index) => {
+    if (Number.isFinite(point?.value)) {
+      segment.push(`${xFor(index)},${yFor(point.value)}`);
+    } else if (segment.length) {
+      segments.push(segment);
+      segment = [];
+    }
+  });
+  if (segment.length) {
+    segments.push(segment);
+  }
+  const linePaths = segments
+    .filter((path) => path.length > 1)
+    .map((path) => `<polyline class="${classPrefix}-chart-line" points="${path.join(" ")}" />`)
+    .join("");
+  const pointMarkup = points
+    .map((point, index) => {
+      if (!Number.isFinite(point?.value)) {
+        return "";
+      }
+      const level = Math.min(6, Math.max(1, Math.round(point.value)));
+      const title = `${escapeHtml(point.label ?? `${index + 1}`)}: HSK ${Number(point.value).toFixed(1)}`;
+      return `<circle class="${classPrefix}-chart-point" data-level="${level}" cx="${xFor(index)}" cy="${yFor(point.value)}" r="4"><title>${title}</title></circle>`;
+    })
+    .join("");
+  const labelStep = points.length <= 12 ? 1 : Math.ceil(points.length / 8);
+  const xLabels = points
+    .map((point, index) => {
+      if (index !== 0 && index !== points.length - 1 && index % labelStep !== 0) {
+        return "";
+      }
+      return `<text class="${classPrefix}-chart-x-label" x="${xFor(index)}" y="${height - 7}" text-anchor="middle">${escapeHtml(point.label ?? `${index + 1}`)}</text>`;
+    })
+    .join("");
+
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.setAttribute("aria-label", label);
+  svg.style.minWidth = `${Math.min(width, 1600)}px`;
+  svg.hidden = false;
+  svg.innerHTML = `<g>${grid}<line class="${classPrefix}-chart-axis" x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${width - margin.right}" y2="${margin.top + plotHeight}" />${linePaths}${pointMarkup}${xLabels}</g>`;
+  if (emptyState) {
+    emptyState.hidden = true;
+  }
+  if (meta) {
+    meta.textContent = `${numericPoints.length}/${points.length} points`;
+  }
+}
+
 function wireAnalysisPreview() {
   const profileKey = currentBookId({ requireExplicit: true });
   if (!profileKey) {
@@ -409,14 +577,27 @@ function wireAnalysisPreview() {
   const meta = document.getElementById("analysisMeta");
   const date = document.getElementById("analysisDate");
   const ring = document.getElementById("analysisRing");
-  const score = document.getElementById("analysisScore");
-  const level = document.getElementById("analysisLevel");
-  const levelSub = document.getElementById("analysisLevelSub");
-  const levelNote = document.getElementById("analysisLevelNote");
+  const scorePrefix = document.getElementById("analysisScorePrefix");
+  const scoreValue = document.getElementById("analysisScoreValue");
   const recommendation = document.getElementById("analysisRecommendation");
   const sample = document.getElementById("analysisSample");
   const sampleNote = document.getElementById("analysisSampleNote");
   const heroTag = document.querySelector(".text-meta .tag");
+  const unknownWords = document.getElementById("analysisUnknownWords");
+  const unknownRate = document.getElementById("analysisUnknownRate");
+  const comprehension = document.getElementById("analysisComprehension");
+  const distributionBar = document.getElementById("analysisDistributionBar");
+  const distributionLevels = document.getElementById("analysisDistributionLevels");
+  const distributionPercentages = document.getElementById("analysisDistributionPercentages");
+  const sentenceChart = document.getElementById("analysisSentenceChart");
+  const sentenceChartEmpty = document.getElementById("analysisSentenceChartEmpty");
+  const sentenceChartMeta = document.getElementById("analysisSentenceChartMeta");
+  const pageChart = document.getElementById("analysisPageChart");
+  const pageChartEmpty = document.getElementById("analysisPageChartEmpty");
+  const pageChartMeta = document.getElementById("analysisPageChartMeta");
+  const metrics = profile.metrics ?? {};
+  const expectedLevel = Number(metrics.text_expected_level);
+  const hasExpectedLevel = Number.isFinite(expectedLevel);
 
   if (art) {
     art.style.background = profile.art;
@@ -434,19 +615,26 @@ function wireAnalysisPreview() {
     date.textContent = profile.date;
   }
   if (ring) {
-    ring.style.background = `conic-gradient(${profile.ring} ${profile.score}%, rgba(0, 0, 0, 0.08) 0)`;
+    const gaugePercent = hasExpectedLevel ? Math.min(100, Math.max(0, (expectedLevel / 6) * 100)) : 0;
+    const hskColors = [1, 2, 3, 4, 5, 6].map((levelNumber) => `var(--hsk-level-${levelNumber})`);
+    const ringStops = [];
+    hskColors.forEach((color, index) => {
+      const start = (index / hskColors.length) * 100;
+      const end = Math.min(gaugePercent, ((index + 1) / hskColors.length) * 100);
+      if (end > start) {
+        ringStops.push(`${color} ${start}% ${end}%`);
+      }
+    });
+    if (gaugePercent < 100) {
+      ringStops.push(`rgba(0, 0, 0, 0.08) ${gaugePercent}% 100%`);
+    }
+    ring.style.background = `conic-gradient(${ringStops.join(", ")})`;
   }
-  if (score) {
-    score.textContent = String(profile.score);
+  if (scorePrefix) {
+    scorePrefix.textContent = "HSK";
   }
-  if (level) {
-    level.textContent = profile.level;
-  }
-  if (levelSub) {
-    levelSub.textContent = profile.levelSub;
-  }
-  if (levelNote) {
-    levelNote.textContent = profile.levelNote;
+  if (scoreValue) {
+    scoreValue.textContent = hasExpectedLevel ? expectedLevel.toFixed(1) : "—";
   }
   if (recommendation) {
     recommendation.textContent = profile.recommendation;
@@ -460,6 +648,72 @@ function wireAnalysisPreview() {
   if (sampleNote) {
     sampleNote.textContent = profile.sampleNote;
   }
+  if (unknownWords) {
+    unknownWords.textContent = metrics.unknown_word_occurrences != null
+      ? String(metrics.unknown_word_occurrences)
+      : "Unavailable";
+  }
+  if (unknownRate) {
+    const wordTotal = Number(metrics.chinese_word_occurrences);
+    const unknownTotal = Number(metrics.unknown_word_occurrences);
+    unknownRate.textContent = wordTotal > 0 && Number.isFinite(unknownTotal)
+      ? `${Math.round((unknownTotal / wordTotal) * 100)}% of Chinese word occurrences`
+      : "Coverage data unavailable";
+  }
+  if (comprehension) {
+    comprehension.textContent = metrics.comprehension_status === "not_available" ? "Not available" : "Unavailable";
+  }
+  if (distributionBar) {
+    const buckets = (Array.isArray(metrics.distribution) ? metrics.distribution : [])
+      .map((bucket) => ({
+        label: String(bucket?.label ?? ""),
+        percentage: Number(bucket?.percentage ?? 0),
+      }))
+      .filter((bucket) => bucket.label && Number.isFinite(bucket.percentage) && bucket.percentage > 0);
+    const gridColumns = buckets.map((bucket) => `${bucket.percentage}fr`).join(" ");
+    distributionBar.style.gridTemplateColumns = gridColumns;
+    distributionBar.innerHTML = buckets
+      .map((bucket) => {
+        const levelNumber = Number(bucket.label.match(/\d+/)?.[0] ?? 6);
+        const levelIndex = Number.isFinite(levelNumber) ? Math.min(6, Math.max(1, levelNumber)) : 6;
+        return `<div class="bar-segment" data-level-index="${levelIndex}" title="${escapeHtml(bucket.label)}: ${Math.round(bucket.percentage)}%"></div>`;
+      })
+      .join("");
+    const renderDistributionLabels = (container, content) => {
+      if (container) {
+        container.style.gridTemplateColumns = buckets.length
+        ? `repeat(${buckets.length}, minmax(0, 1fr))`
+        : "none";
+        container.innerHTML = content;
+      }
+    };
+    renderDistributionLabels(
+      distributionLevels,
+      buckets
+        .map((bucket) => `<div class="distribution-label"><span class="distribution-label-level">${escapeHtml(bucket.label)}</span></div>`)
+        .join(""),
+    );
+    renderDistributionLabels(
+      distributionPercentages,
+      buckets
+        .map((bucket) => `<div class="distribution-label"><strong class="distribution-label-percentage">${escapeHtml(`${Math.round(bucket.percentage)}%`)}</strong></div>`)
+      .join(""),
+    );
+  }
+  renderHskChart(
+    sentenceChart,
+    sentenceChartEmpty,
+    sentenceChartMeta,
+    buildSentenceHskChartSeries(profile.pages),
+    { classPrefix: "analysis", label: "HSK average by sentence order" },
+  );
+  renderHskChart(
+    pageChart,
+    pageChartEmpty,
+    pageChartMeta,
+    buildPageHskChartSeries(profile.pages),
+    { classPrefix: "analysis", label: "HSK average by page order" },
+  );
 
   window.sessionStorage.setItem("textplex:analysis-profile", profileKey);
   document.title = `${profile.title} · TextPlex Analysis Preview`;
@@ -558,6 +812,9 @@ function wireReaderPreview() {
   const author = document.querySelector(".poet");
   const pager = document.getElementById("readerPager");
   const sessionPill = document.getElementById("readerSessionPill");
+  const tokenChart = document.getElementById("readerTokenChartSvg");
+  const tokenChartEmpty = document.getElementById("readerTokenChartEmpty");
+  const tokenChartMeta = document.getElementById("readerTokenChartMeta");
   const lines = Array.from(document.querySelectorAll(".annotated-line"));
   const translation = document.querySelector(".translation");
   const vocabChar = document.querySelector(".vocab-char");
@@ -886,6 +1143,13 @@ function wireReaderPreview() {
     activeTokenLookupKey = selectedTokenLookupKey;
     void ensureSelectedTokenLookup(sentence, selectedTokenIndex);
     const selectedTokenState = buildSelectedTokenState(sentence, selectedTokenIndex);
+    renderHskChart(
+      tokenChart,
+      tokenChartEmpty,
+      tokenChartMeta,
+      buildTokenHskChartSeries(sentence, readerTokenMode),
+      { classPrefix: "reader", label: "HSK level by token order" },
+    );
     const reading = previewData?.recordReadingProgress?.(bookId, {
       pageIndex,
       sentenceIndex,
@@ -975,7 +1239,9 @@ function wireReaderPreview() {
         parts[1].hidden = false;
       }
       if (parts[2]) {
-        parts[2].textContent = formatLevelTag(selectedTokenState.tag ?? profile.kindLabel ?? "demo");
+        const levelLabel = formatLevelTag(selectedTokenState.tag ?? profile.kindLabel ?? "demo");
+        parts[2].textContent = levelLabel;
+        parts[2].hidden = !/^HSK\s+\d+(?:\.\d+)?$/i.test(levelLabel);
       }
     }
     if (vocabDefinition) {
@@ -1521,8 +1787,9 @@ function wireLibraryPreview() {
   const emptyState = document.getElementById("libraryEmpty");
   const countLabel = document.getElementById("libraryCount");
   const searchInput = document.getElementById("librarySearch");
-  const modeButtons = Array.from(document.querySelectorAll("[data-library-mode]"));
-  const storageKey = "textplex:library-view-mode";
+  const artWidthStorageKey = "textplex:library-art-constraint";
+  const cardPaddingStorageKey = "textplex:library-card-padding";
+  const cardHeightStorageKey = "textplex:library-card-height";
   const selectedBookId = currentBookId();
   const books = (previewData?.listBooks?.() ?? [])
     .slice()
@@ -1539,9 +1806,20 @@ function wireLibraryPreview() {
     return;
   }
 
-  const initialMode = window.localStorage.getItem(storageKey) === "list" ? "list" : "grid";
-  let mode = initialMode;
+  const readDimension = (key, fallback, min, max) => {
+    const savedValue = Number(window.localStorage.getItem(key));
+    return Number.isFinite(savedValue) ? clamp(savedValue, min, max) : fallback;
+  };
+  const artWidth = readDimension(artWidthStorageKey, 82, 56, 132);
+  const cardTextPadding = readDimension(cardPaddingStorageKey, 20, 0, 40);
+  const cardHeight = readDimension(cardHeightStorageKey, 50, 50, 220);
   const totalBooks = books.length;
+
+  if (typeof shelf.style?.setProperty === "function") {
+    shelf.style.setProperty("--library-art-width", `${artWidth}px`);
+    shelf.style.setProperty("--library-card-text-padding", `${cardTextPadding}px`);
+    shelf.style.setProperty("--library-card-height", `${cardHeight}px`);
+  }
 
   if (searchInput) {
     searchInput.value = "";
@@ -1567,11 +1845,15 @@ function wireLibraryPreview() {
     });
 
     if (countLabel) {
-      countLabel.textContent = `${visible.length} document${visible.length === 1 ? "" : "s"} in the local collection`;
+      countLabel.classList.remove("skeleton-line");
+      if (typeof countLabel.removeAttribute === "function") {
+        countLabel.removeAttribute("aria-label");
+      }
+      countLabel.textContent = `${visible.length} document${visible.length === 1 ? "" : "s"}`;
     }
 
-    shelf.classList.toggle("is-grid", mode === "grid");
-    shelf.classList.toggle("is-list", mode === "list");
+    shelf.classList.add("is-grid");
+    shelf.classList.remove("is-list");
     shelf.innerHTML = visible
       .map((book) => {
         const profile = previewData?.getLibraryProfile?.(book.id);
@@ -1579,9 +1861,7 @@ function wireLibraryPreview() {
           return "";
         }
 
-        return mode === "grid"
-          ? renderLibraryGridCard(profile, selectedBookId)
-          : renderLibraryListRow(profile, selectedBookId);
+        return renderLibraryGridCard(profile, selectedBookId);
       })
       .join("");
 
@@ -1645,24 +1925,11 @@ function wireLibraryPreview() {
       });
     });
 
-    modeButtons.forEach((button) => {
-      button.classList.toggle("is-active", button.getAttribute("data-library-mode") === mode);
-      button.setAttribute("aria-pressed", button.getAttribute("data-library-mode") === mode ? "true" : "false");
-    });
-
     emptyState?.querySelector("[data-reset-library]")?.addEventListener("click", () => {
       previewData?.resetStore?.();
       window.location.reload();
     });
   }
-
-  modeButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      mode = button.getAttribute("data-library-mode") === "list" ? "list" : "grid";
-      window.localStorage.setItem(storageKey, mode);
-      render();
-    });
-  });
 
   searchInput?.addEventListener("input", render);
   render();
@@ -2557,6 +2824,10 @@ function wireProfilePreview() {
   const settingsProcessor = document.getElementById("profileProcessorUrl");
   const activityList = document.getElementById("profileBookActivity");
   const emptyState = document.getElementById("profileActivityEmpty");
+  const globalThemeGrid = document.getElementById("globalThemeGrid");
+  const globalThemeLabel = document.getElementById("globalThemeLabel");
+  const globalThemeMessage = document.getElementById("globalThemeMessage");
+  const globalThemeSave = document.getElementById("globalThemeSave");
 
   if (title) {
     title.textContent = "User profile and reading history";
@@ -2602,8 +2873,54 @@ function wireProfilePreview() {
   }
 
   const settingsMap = new Map(profile.settings.entries.map((entry) => [entry.key, entry.value]));
+  let selectedGlobalTheme = window.TextPlexTheme?.normalize(settingsMap.get("theme")) ?? "neutral";
+  const renderGlobalThemePicker = () => {
+    const themeOptions = window.TextPlexTheme?.options ?? [];
+    if (globalThemeGrid) {
+      globalThemeGrid.innerHTML = themeOptions.slice(0, 6)
+        .map(
+          (option) => `
+            <button class="global-theme-option ${option.value === selectedGlobalTheme ? "is-selected" : ""}" type="button" data-global-theme-choice="${option.value}" role="radio" aria-checked="${option.value === selectedGlobalTheme}">
+              <span class="global-theme-swatch" data-theme="${option.value}" aria-hidden="true"></span>
+              <span class="global-theme-option-copy"><strong>${escapeHtml(option.title)}</strong><span>${escapeHtml(option.description)}</span></span>
+            </button>
+          `,
+        )
+        .join("");
+    }
+    if (globalThemeLabel) {
+      globalThemeLabel.textContent = window.TextPlexTheme?.labels?.[selectedGlobalTheme] ?? selectedGlobalTheme;
+    }
+    if (globalThemeMessage) {
+      globalThemeMessage.textContent = `Previewing ${window.TextPlexTheme?.labels?.[selectedGlobalTheme] ?? selectedGlobalTheme}. Save it as the profile default.`;
+    }
+  };
+
+  renderGlobalThemePicker();
+  globalThemeGrid?.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target.closest("[data-global-theme-choice]") : null;
+    const nextTheme = target?.getAttribute("data-global-theme-choice");
+    if (!nextTheme) {
+      return;
+    }
+    selectedGlobalTheme = window.TextPlexTheme?.normalize(nextTheme) ?? "neutral";
+    window.TextPlexTheme?.apply(selectedGlobalTheme);
+    renderGlobalThemePicker();
+  });
+  globalThemeSave?.addEventListener("click", () => {
+    const savedTheme = window.TextPlexTheme?.save(selectedGlobalTheme) ?? selectedGlobalTheme;
+    if (settingsTheme) {
+      settingsTheme.textContent = window.TextPlexTheme?.labels?.[savedTheme] ?? savedTheme;
+    }
+    if (globalThemeMessage) {
+      globalThemeMessage.textContent = `${window.TextPlexTheme?.labels?.[savedTheme] ?? savedTheme} is now the global profile theme.`;
+    }
+    if (globalThemeSave) {
+      globalThemeSave.textContent = "Global theme saved";
+    }
+  });
   if (settingsTheme) {
-    settingsTheme.textContent = settingsMap.get("theme") ?? "paper";
+    settingsTheme.textContent = window.TextPlexTheme?.labels?.[selectedGlobalTheme] ?? selectedGlobalTheme;
   }
   if (settingsReaderMode) {
     settingsReaderMode.textContent = settingsMap.get("readerMode") ?? "sentence";
@@ -2614,6 +2931,72 @@ function wireProfilePreview() {
   if (settingsProcessor) {
     settingsProcessor.textContent = settingsMap.get("processorUrl") ?? "not set";
   }
+
+  const libraryDimensionControls = [
+    {
+      input: document.getElementById("profileLibraryArtWidth"),
+      output: document.getElementById("profileLibraryArtWidthValue"),
+      key: "textplex:library-art-constraint",
+      fallback: 82,
+      min: 56,
+      max: 132,
+    },
+    {
+      input: document.getElementById("profileLibraryCardPadding"),
+      output: document.getElementById("profileLibraryCardPaddingValue"),
+      key: "textplex:library-card-padding",
+      fallback: 20,
+      min: 0,
+      max: 40,
+    },
+    {
+      input: document.getElementById("profileLibraryCardHeight"),
+      output: document.getElementById("profileLibraryCardHeightValue"),
+      key: "textplex:library-card-height",
+      fallback: 50,
+      min: 50,
+      max: 220,
+    },
+  ];
+  const libraryDimensionsSave = document.getElementById("profileLibraryDimensionsSave");
+  const libraryDimensionsMessage = document.getElementById("profileLibraryDimensionsMessage");
+  const readLibraryDimension = (control) => {
+    const savedValue = Number(window.localStorage.getItem(control.key));
+    return Number.isFinite(savedValue) ? clamp(savedValue, control.min, control.max) : control.fallback;
+  };
+  const syncLibraryDimensionControl = (control, value) => {
+    if (control.input) {
+      control.input.value = String(value);
+      control.input.setAttribute("aria-valuetext", `${value} pixels`);
+    }
+    if (control.output) {
+      control.output.textContent = `${value} px`;
+    }
+  };
+
+  libraryDimensionControls.forEach((control) => {
+    syncLibraryDimensionControl(control, readLibraryDimension(control));
+    control.input?.addEventListener("input", () => {
+      syncLibraryDimensionControl(control, clamp(Number(control.input.value), control.min, control.max));
+      if (libraryDimensionsMessage) {
+        libraryDimensionsMessage.textContent = "Unsaved changes. Save to update the Library.";
+      }
+      if (libraryDimensionsSave) {
+        libraryDimensionsSave.textContent = "Save card dimensions";
+      }
+    });
+  });
+  libraryDimensionsSave?.addEventListener("click", () => {
+    libraryDimensionControls.forEach((control) => {
+      const value = clamp(Number(control.input?.value), control.min, control.max);
+      window.localStorage.setItem(control.key, String(value));
+      syncLibraryDimensionControl(control, value);
+    });
+    if (libraryDimensionsMessage) {
+      libraryDimensionsMessage.textContent = "Card dimensions saved for the Library.";
+    }
+    libraryDimensionsSave.textContent = "Card dimensions saved";
+  });
 
   if (activityList) {
     activityList.innerHTML = profile.books
@@ -2656,6 +3039,101 @@ function wireProfilePreview() {
       const href = button.getAttribute("data-href");
       navigateTo(href || routes.reader);
     });
+  });
+}
+
+function wireThemeShopPreview() {
+  const grid = document.getElementById("themeShopGrid");
+  const label = document.getElementById("themeShopLabel");
+  const description = document.getElementById("themeShopDescription");
+  const message = document.getElementById("themeShopMessage");
+  const save = document.getElementById("themeShopSave");
+  const bundleGrid = document.getElementById("themeShopBundleGrid");
+  const themeOptions = window.TextPlexTheme?.options ?? [];
+  const themeBundles = window.TextPlexTheme?.bundles ?? [];
+  let selectedTheme = window.TextPlexTheme?.current?.() ?? "neutral";
+  const formatPrice = (price) => `$${Number(price).toFixed(2)}`;
+
+  const render = () => {
+    const selectedOption = themeOptions.find((option) => option.value === selectedTheme) ?? themeOptions[0];
+    if (grid) {
+      grid.innerHTML = themeOptions
+        .map(
+          (option) => `
+            <button class="theme-shop-option ${option.value === selectedTheme ? "is-selected" : ""}" type="button" data-theme-shop-choice="${option.value}" role="radio" aria-checked="${option.value === selectedTheme}">
+              <span class="global-theme-swatch" data-theme="${option.value}" aria-hidden="true"></span>
+              <span class="theme-shop-option-copy"><strong>${escapeHtml(option.title)}</strong><span>${escapeHtml(option.description)}</span><span>${formatPrice(option.price)}</span></span>
+            </button>
+          `,
+        )
+        .join("");
+    }
+    if (bundleGrid) {
+      bundleGrid.innerHTML = themeBundles
+        .map((bundle) => {
+          const individualTotal = bundle.themeValues.length * 1.99;
+          const savings = individualTotal - bundle.bundlePrice;
+          const bundleThemes = bundle.themeValues
+            .map((value) => themeOptions.find((option) => option.value === value)?.title ?? value)
+            .map((title) => `<span>${escapeHtml(title)}</span>`)
+            .join("");
+          return `
+            <article class="theme-bundle-card" data-inventory-id="theme-shop.bundle-card">
+              <div class="card-topline"><div><span class="eyebrow">Collection offer</span><h3>${escapeHtml(bundle.title)}</h3></div><span class="pill">Save ${formatPrice(savings)}</span></div>
+              <p>${escapeHtml(bundle.description)}</p>
+              <div class="theme-bundle-themes">${bundleThemes}</div>
+              <div class="theme-bundle-price-row"><strong>${formatPrice(bundle.bundlePrice)}</strong><span>${formatPrice(individualTotal)} individually</span></div>
+              <button class="button button-secondary" type="button" data-theme-shop-bundle-preview="${escapeHtml(bundle.id)}">Preview collection</button>
+            </article>
+          `;
+        })
+        .join("");
+    }
+    if (label) {
+      label.textContent = selectedOption?.title ?? selectedTheme;
+    }
+    if (description) {
+      description.textContent = selectedOption?.description ?? "Choose a theme to preview the suite.";
+    }
+  };
+
+  render();
+  grid?.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target.closest("[data-theme-shop-choice]") : null;
+    const nextTheme = target?.getAttribute("data-theme-shop-choice");
+    if (!nextTheme) {
+      return;
+    }
+    selectedTheme = window.TextPlexTheme?.normalize(nextTheme) ?? "neutral";
+    window.TextPlexTheme?.apply(selectedTheme);
+    render();
+    if (message) {
+      message.textContent = `Previewing ${window.TextPlexTheme?.labels?.[selectedTheme] ?? selectedTheme}. Save it to your profile.`;
+    }
+  });
+  bundleGrid?.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target.closest("[data-theme-shop-bundle-preview]") : null;
+    const bundleId = target?.getAttribute("data-theme-shop-bundle-preview");
+    const bundle = themeBundles.find((item) => item.id === bundleId);
+    const firstTheme = bundle?.themeValues?.[0];
+    if (!firstTheme) {
+      return;
+    }
+    selectedTheme = window.TextPlexTheme?.normalize(firstTheme) ?? "neutral";
+    window.TextPlexTheme?.apply(selectedTheme);
+    render();
+    if (message) {
+      message.textContent = `Previewing the ${bundle.title} collection from ${window.TextPlexTheme?.labels?.[selectedTheme] ?? selectedTheme}.`;
+    }
+  });
+  save?.addEventListener("click", () => {
+    const savedTheme = window.TextPlexTheme?.save(selectedTheme) ?? selectedTheme;
+    if (message) {
+      message.textContent = `${window.TextPlexTheme?.labels?.[savedTheme] ?? savedTheme} is now your global profile theme.`;
+    }
+    if (save) {
+      save.textContent = "Theme saved";
+    }
   });
 }
 
@@ -3124,6 +3602,9 @@ function resolveBackTarget() {
   if (currentFile === "profile-preview.html") {
     return routes.home;
   }
+  if (currentFile === "theme-shop-preview.html") {
+    return routes.profile;
+  }
   if (currentFile === "search-preview.html" || currentFile === "progress-preview.html" || currentFile === "study-preview.html" || currentFile === "activity-preview.html" || currentFile === "vocabulary-preview.html") {
     return routes.home;
   }
@@ -3142,7 +3623,6 @@ function renderLibraryGridCard(profile, selectedBookId) {
             <h3>${escapeHtml(profile.title)}</h3>
             <p class="library-author">${escapeHtml(profile.author)}</p>
           </div>
-          <span class="library-tag">${escapeHtml(profile.profileLabel || profile.contentType || "TXT")}</span>
         </div>
         <p class="library-summary">${escapeHtml(profile.summary)}</p>
         <div class="library-meta">
@@ -3151,12 +3631,15 @@ function renderLibraryGridCard(profile, selectedBookId) {
           <span>${escapeHtml(profile.estRead)}</span>
         </div>
         <div class="library-actions">
-          <button class="button button-secondary action-icon action-icon-info" type="button" data-open-library data-book-id="${escapeHtml(profile.id)}" data-href="${escapeHtml(profile.libraryHref)}" aria-label="Open book info" title="Info">
-            ${infoIcon()}
-          </button>
-          <button class="button button-primary action-icon action-icon-open" type="button" data-open-reader data-book-id="${escapeHtml(profile.id)}" data-href="${escapeHtml(profile.readerHref)}" aria-label="Open book" title="Open">
-            ${bookIcon()}
-          </button>
+          <span class="library-tag library-status">${escapeHtml(profile.profileLabel || profile.contentType || "TXT")}</span>
+          <div class="library-action-buttons">
+            <button class="button button-secondary action-icon action-icon-info" type="button" data-open-library data-book-id="${escapeHtml(profile.id)}" data-href="${escapeHtml(profile.libraryHref)}" aria-label="Open book info" title="Info">
+              ${infoIcon()}
+            </button>
+            <button class="button button-primary action-icon action-icon-open" type="button" data-open-reader data-book-id="${escapeHtml(profile.id)}" data-href="${escapeHtml(profile.readerHref)}" aria-label="Open book" title="Open">
+              ${bookIcon()}
+            </button>
+          </div>
         </div>
       </div>
     </article>
@@ -3179,13 +3662,16 @@ function renderLibraryListRow(profile, selectedBookId) {
           <span>${escapeHtml(profile.estRead)}</span>
         </div>
       </div>
-      <div class="library-row-actions">
-        <button class="button button-secondary action-icon action-icon-info" type="button" data-open-library data-book-id="${escapeHtml(profile.id)}" data-href="${escapeHtml(profile.libraryHref)}" aria-label="Open book info" title="Info">
-          ${infoIcon()}
-        </button>
-        <button class="button button-primary action-icon action-icon-open" type="button" data-open-reader data-book-id="${escapeHtml(profile.id)}" data-href="${escapeHtml(profile.readerHref)}" aria-label="Open book" title="Open">
-          ${bookIcon()}
-        </button>
+        <div class="library-row-actions">
+        <span class="library-tag library-status">${escapeHtml(profile.profileLabel || profile.contentType || "TXT")}</span>
+        <div class="library-action-buttons">
+          <button class="button button-secondary action-icon action-icon-info" type="button" data-open-library data-book-id="${escapeHtml(profile.id)}" data-href="${escapeHtml(profile.libraryHref)}" aria-label="Open book info" title="Info">
+            ${infoIcon()}
+          </button>
+          <button class="button button-primary action-icon action-icon-open" type="button" data-open-reader data-book-id="${escapeHtml(profile.id)}" data-href="${escapeHtml(profile.readerHref)}" aria-label="Open book" title="Open">
+            ${bookIcon()}
+          </button>
+        </div>
       </div>
     </article>
   `;
@@ -3240,6 +3726,7 @@ function routeForCurrentFile() {
   if (currentFile === "search-preview.html") return routes.search;
   if (currentFile === "progress-preview.html") return routes.progress;
   if (currentFile === "profile-preview.html") return routes.profile;
+  if (currentFile === "theme-shop-preview.html") return routes.themeShop;
   if (currentFile === "study-preview.html") return routes.study;
   if (currentFile === "activity-preview.html") return routes.activity;
   if (currentFile === "vocabulary-preview.html") return routes.vocabulary;
@@ -3740,4 +4227,8 @@ window.TextPlexPreviewRouter = {
   wireImportPreview,
   wireProfilePreview,
   wireVocabularyPreview,
+  parseHskChartLevel,
+  buildTokenHskChartSeries,
+  buildSentenceHskChartSeries,
+  buildPageHskChartSeries,
 };

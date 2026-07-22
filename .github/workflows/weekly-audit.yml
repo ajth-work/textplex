@@ -47,11 +47,17 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
 
       - name: Install Node dependencies
         run: npm ci
+
+      - name: Report dependency and runtime drift
+        run: npm run maintenance:check
+
+      - name: Run maintenance smoke test
+        run: npm run test:maintenance
 
       - name: Run static site tests
         run: npm run test:site

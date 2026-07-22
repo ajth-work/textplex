@@ -1,15 +1,19 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { RoutePage } from "./route-page";
 import {
   fetchJson,
   formatDateTime,
+  postFormData,
+  postJson,
   putJson,
   type ActivitySurfaceResponse,
   type BookAnalysisSurfaceResponse,
+  type BookRecord,
   type ImportSurfaceResponse,
   type ProgressSurfaceResponse,
   type ProfileSurfaceResponse,
@@ -21,13 +25,17 @@ import {
 import {
   appThemeLabels,
   appThemeOptions,
+  INDIVIDUAL_THEME_PRICE,
   persistAppTheme,
   readStoredAppTheme,
   resolveAppTheme,
   resolveAppThemeFromSettings,
+  themeBundles,
   type AppTheme,
 } from "../lib/theme";
 import { LoadingSkeleton } from "./loading-skeleton";
+import { GlobalThemePicker } from "./global-theme-picker";
+import { HskSeriesChart } from "./hsk-series-chart";
 
 export function ActivitySurfaceView() {
   const [data, setData] = useState<ActivitySurfaceResponse | null>(null);
@@ -121,7 +129,8 @@ export function AnalysisSurfaceView({ bookId }: { bookId: string }) {
         { href: data ? `/reader/${bookId}/1` : "/library", label: "Reader" },
       ]}
       metrics={[
-        { label: "Pages", value: data ? `${data.extracted_page_count}/${data.total_pages}` : "Loading" },
+        { label: "Extraction", value: data ? `${data.extraction_progress_percent}%` : "Loading" },
+        { label: "Expected level", value: data?.metrics.text_expected_level_label ?? "Unavailable" },
         { label: "Lexical entries", value: data ? String(data.lexical_entry_count) : "Loading" },
         { label: "Tokens", value: data ? String(data.token_occurrence_count) : "Loading" },
       ]}
@@ -129,30 +138,56 @@ export function AnalysisSurfaceView({ bookId }: { bookId: string }) {
       {error ? <section className="card feature-card">{error}</section> : null}
       {!data && !error ? <LoadingSkeleton label="Loading analysis" /> : null}
       {data ? (
-        <section className="feature-grid">
-          <article className="card feature-card">
-            <h2>Top lexical entries</h2>
-            <div className="surface-list">
-              {data.top_lexical_entries.map((entry) => (
-                <div key={entry.lemma} className="surface-list-item">
-                  <div className="card-topline">
-                    <strong>{entry.display_form}</strong>
-                    <span className="muted">{entry.frequency_in_book}x</span>
+        <>
+          <section className="feature-grid">
+            <article className="card feature-card">
+              <h2>Top lexical entries</h2>
+              <div className="surface-list">
+                {data.top_lexical_entries.map((entry) => (
+                  <div key={entry.lemma} className="surface-list-item">
+                    <div className="card-topline">
+                      <strong>{entry.display_form}</strong>
+                      <span className="muted">{entry.frequency_in_book}x</span>
+                    </div>
+                    <p className="small-copy">
+                      First seen {entry.first_page ?? "?"} - Last seen {entry.last_page ?? "?"}
+                    </p>
                   </div>
-                  <p className="small-copy">
-                    First seen {entry.first_page ?? "?"} - Last seen {entry.last_page ?? "?"}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </article>
-          <article className="card feature-card">
-            <h2>Summary</h2>
-            <p>Book: {data.book_id}</p>
-            <p>Language: {data.language_code}</p>
-            <p>Status: {data.has_extraction ? "Extraction available" : "No extraction yet"}</p>
-          </article>
-        </section>
+                ))}
+              </div>
+            </article>
+            <article className="card feature-card" data-inventory-id="analysis.summary-card">
+              <h2>Difficulty and coverage</h2>
+              <p>Book: {data.book_id}</p>
+              <p>Language: {data.language_code}</p>
+              <p>Status: {data.has_extraction ? "Extraction available" : "No extraction yet"}</p>
+              <p>Sentence average: {data.metrics.text_expected_level_label ?? "Not available"}</p>
+              <p>Character-weighted average: {data.metrics.character_weighted_average_level ?? "Not available"}</p>
+              <p>
+                Character evidence: {data.metrics.known_character_count}/{data.metrics.eligible_character_count} known
+                {data.metrics.unknown_character_count ? `; ${data.metrics.unknown_character_count} unknown` : ""}
+              </p>
+              <p>Comprehension: Not available from book text alone.</p>
+              <p className="small-copy">{data.metrics.recommendation}</p>
+            </article>
+          </section>
+          <section className="feature-grid" aria-label="HSK progression charts">
+            <HskSeriesChart
+              inventoryId="analysis.sentence-hsk-chart"
+              title="HSK average by sentence"
+              description="One point for each extracted sentence with known HSK character evidence."
+              points={data.sentence_hsk_series}
+              emptyMessage={data.has_extraction ? "No sentence-level HSK evidence is available." : "Sentence chart will appear after extraction completes."}
+            />
+            <HskSeriesChart
+              inventoryId="analysis.page-hsk-chart"
+              title="HSK average by page"
+              description="One point for each extracted page with sentence-level HSK evidence."
+              points={data.page_hsk_series}
+              emptyMessage={data.has_extraction ? "No page-level HSK evidence is available." : "Page chart will appear after extraction completes."}
+            />
+          </section>
+        </>
       ) : null}
     </RoutePage>
   );
@@ -161,6 +196,17 @@ export function AnalysisSurfaceView({ bookId }: { bookId: string }) {
 export function ImportSurfaceView() {
   const [data, setData] = useState<ImportSurfaceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"paste" | "upload">("paste");
+  const [title, setTitle] = useState("");
+  const [author, setAuthor] = useState("");
+  const [languageCode, setLanguageCode] = useState("zh");
+  const [text, setText] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [activeBook, setActiveBook] = useState<BookRecord | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -179,6 +225,94 @@ export function ImportSurfaceView() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    const activeBookId = activeBook?.id;
+    if (!activeBookId || activeBook.extraction_status === "complete" || activeBook.status === "extracted") {
+      return;
+    }
+
+    let active = true;
+    const refresh = async () => {
+      try {
+        const book = await fetchJson<BookRecord>(`/books/${activeBookId}`);
+        if (active) {
+          setActiveBook(book);
+          if (book.extraction_status === "complete" || book.status === "extracted") {
+            setActionMessage("Import complete. The reader is ready.");
+          }
+        }
+      } catch (err) {
+        if (active) {
+          setActionError(err instanceof Error ? err.message : "Unable to refresh import progress.");
+        }
+      }
+    };
+
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 1500);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [activeBook?.id, activeBook?.extraction_status, activeBook?.status]);
+
+  const handleImport = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setActionError(null);
+    setActionMessage(null);
+    setSubmitting(true);
+
+    try {
+      let book: BookRecord;
+      if (mode === "paste") {
+        if (!text.trim()) {
+          throw new Error("Paste or type text before processing it.");
+        }
+        book = await postJson<BookRecord>("/texts/import", {
+          text: text.trim(),
+          language_code: languageCode,
+          title: title.trim() || null,
+          author: author.trim() || null,
+        });
+      } else {
+        if (!file) {
+          throw new Error("Choose a PDF before uploading it.");
+        }
+        if (!file.name.toLowerCase().endsWith(".pdf")) {
+          throw new Error("TextPlex currently accepts PDF uploads only.");
+        }
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("language_code", languageCode);
+        if (title.trim()) formData.append("title", title.trim());
+        if (author.trim()) formData.append("author", author.trim());
+        book = await postFormData<BookRecord>("/books/upload", formData);
+      }
+
+      setActiveBook(book);
+      setActionMessage(
+        book.extraction_status === "complete" || book.status === "extracted"
+          ? "Import complete. The reader is ready."
+          : "Upload received. TextPlex is extracting the book in the background.",
+      );
+      setText("");
+      setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      const refreshed = await fetchJson<ImportSurfaceResponse>("/import");
+      setData(refreshed);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Unable to import this content.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const extractionTotal = activeBook?.extraction_total_pages ?? 0;
+  const extractionProcessed = activeBook?.extraction_pages_processed ?? 0;
+  const extractionPercent = extractionTotal > 0
+    ? Math.min(100, Math.round((extractionProcessed / extractionTotal) * 100))
+    : activeBook?.extraction_status === "complete" || activeBook?.status === "extracted" ? 100 : 0;
 
   return (
     <RoutePage
@@ -199,22 +333,93 @@ export function ImportSurfaceView() {
       {error ? <section className="card feature-card">{error}</section> : null}
       {!data && !error ? <LoadingSkeleton label="Loading import details" /> : null}
       {data ? (
-        <section className="card feature-card">
-          <h2>Recent books</h2>
-          <div className="surface-list">
-            {data.recent_books.map((book) => (
-              <article key={book.book_id} className="surface-list-item">
-                <div className="card-topline">
-                  <strong>{book.title}</strong>
-                  <span className="muted">{book.status.replaceAll("_", " ")}</span>
-                </div>
-                <p className="small-copy">
-                  {book.language_code.toUpperCase()} - Imported {formatDateTime(book.processed_at ?? book.created_at)}
-                </p>
-              </article>
-            ))}
-          </div>
-        </section>
+        <>
+          <section className="card feature-card import-form-card">
+            <div className="card-topline">
+              <h2>Add content</h2>
+              <span className="pill">{mode === "paste" ? "Paste" : "PDF"}</span>
+            </div>
+            <div className="button-row" aria-label="Import method">
+              <button className={`button ${mode === "paste" ? "button-primary" : "button-secondary"}`} type="button" onClick={() => setMode("paste")}>
+                Paste text
+              </button>
+              <button className={`button ${mode === "upload" ? "button-primary" : "button-secondary"}`} type="button" onClick={() => setMode("upload")}>
+                Upload PDF
+              </button>
+            </div>
+            <form className="surface-form" onSubmit={handleImport}>
+              <div className="import-form-grid">
+                <label>
+                  Title
+                  <input className="text-input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Optional title" />
+                </label>
+                <label>
+                  Author or source
+                  <input className="text-input" value={author} onChange={(event) => setAuthor(event.target.value)} placeholder="Optional author" />
+                </label>
+                <label>
+                  Language
+                  <input className="text-input" value={languageCode} onChange={(event) => setLanguageCode(event.target.value)} maxLength={12} required />
+                </label>
+              </div>
+              {mode === "paste" ? (
+                <label>
+                  Article text
+                  <textarea className="text-input import-textarea" value={text} onChange={(event) => setText(event.target.value)} placeholder="Paste an article or passage here..." required />
+                </label>
+              ) : (
+                <label>
+                  PDF file
+                  <input ref={fileInputRef} className="text-input" type="file" accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} required />
+                </label>
+              )}
+              {actionError ? <p className="form-error" role="alert">{actionError}</p> : null}
+              {actionMessage ? <p className="form-message" role="status">{actionMessage}</p> : null}
+              <button className="button button-primary" type="submit" disabled={submitting}>
+                {submitting ? "Processing..." : mode === "paste" ? "Process text" : "Upload and process"}
+              </button>
+            </form>
+          </section>
+
+          {activeBook ? (
+            <section className="card feature-card import-progress-card" aria-live="polite">
+              <div className="card-topline">
+                <h2>{activeBook.title}</h2>
+                <span className="pill">{activeBook.status.replaceAll("_", " ")}</span>
+              </div>
+              <p>{actionMessage ?? "Preparing import status..."}</p>
+              <div className="import-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={extractionPercent}>
+                <span style={{ width: `${extractionPercent}%` }} />
+              </div>
+              <p className="small-copy">
+                {extractionTotal > 0 ? `${extractionProcessed} of ${extractionTotal} pages processed.` : activeBook.extraction_status === "complete" ? "Text is ready to read." : "Waiting for extraction progress..."}
+              </p>
+              {activeBook.extraction_status === "complete" || activeBook.status === "extracted" ? (
+                <Link className="button button-secondary" href={`/reader/${activeBook.id}/1`}>Open reader</Link>
+              ) : null}
+            </section>
+          ) : null}
+
+          <section className="card feature-card">
+            <div className="card-topline">
+              <h2>Recent books</h2>
+              <Link className="text-link" href="/library">Library</Link>
+            </div>
+            <div className="surface-list">
+              {data.recent_books.map((book) => (
+                <article key={book.book_id} className="surface-list-item">
+                  <div className="card-topline">
+                    <Link href={`/books/${book.book_id}`}><strong>{book.title}</strong></Link>
+                    <span className="muted">{book.status.replaceAll("_", " ")}</span>
+                  </div>
+                  <p className="small-copy">
+                    {book.language_code.toUpperCase()} - Imported {formatDateTime(book.processed_at ?? book.created_at)}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </section>
+        </>
       ) : null}
     </RoutePage>
   );
@@ -374,6 +579,10 @@ export function ProfileSurfaceView() {
               <p>{selectedTrack.next_step}</p>
             </article>
           ) : null}
+          <GlobalThemePicker
+            initialTheme={resolveAppTheme(settingsMap.get("theme"))}
+            entries={data.settings.entries}
+          />
           <article className="card feature-card">
             <h2>Preferences</h2>
             <div className="surface-list">
@@ -414,6 +623,154 @@ export function ProfileSurfaceView() {
               )}
             </div>
           </article>
+        </section>
+      ) : null}
+    </RoutePage>
+  );
+}
+
+export function ThemeShopSurfaceView() {
+  const [data, setData] = useState<SettingsSurfaceResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [theme, setTheme] = useState<AppTheme>(() => readStoredAppTheme() ?? "neutral");
+
+  useEffect(() => {
+    let active = true;
+    void fetchJson<SettingsSurfaceResponse>("/settings")
+      .then((result) => {
+        if (active) {
+          setData(result);
+          setTheme(resolveAppThemeFromSettings(result.entries));
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          setError(err instanceof Error ? err.message : "Unable to load the theme shop.");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function selectTheme(nextTheme: AppTheme) {
+    setTheme(nextTheme);
+    setSaved(false);
+    setError(null);
+    persistAppTheme(nextTheme);
+  }
+
+  async function saveTheme() {
+    setSaving(true);
+    setSaved(false);
+    setError(null);
+
+    try {
+      const nextEntries = [
+        ...(data?.entries ?? []).filter((entry) => entry.key !== "theme"),
+        { key: "theme", value: theme },
+      ];
+      const result = await putJson<SettingsSurfaceResponse>("/settings", {
+        entries: nextEntries,
+      } satisfies SettingsUpdateRequest);
+      setData(result);
+      persistAppTheme(theme);
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save the theme.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const selectedOption = appThemeOptions.find((option) => option.value === theme) ?? appThemeOptions[0];
+  const formatPrice = (price: number) => `$${price.toFixed(2)}`;
+
+  return (
+    <RoutePage
+      eyebrow="Theme shop"
+      title="Find a reading atmosphere that fits"
+      description="Browse the complete visual collection for TextPlex. Pick a theme to preview it across the app, then save it to your learner profile."
+      badge={`${appThemeOptions.length} themes`}
+      links={[
+        { href: "/profile", label: "Back to Profile" },
+        { href: "/settings", label: "Settings" },
+      ]}
+      metrics={[
+        { label: "Collection", value: `${appThemeOptions.length} packs` },
+        { label: "Selected", value: appThemeLabels[theme] },
+        { label: "Storage", value: "Profile-backed" },
+      ]}
+    >
+      {error ? <section className="card feature-card">{error}</section> : null}
+      {!data && !error ? <LoadingSkeleton label="Loading theme shop" /> : null}
+      {data ? (
+        <section className="card feature-card theme-shop-card">
+          <div className="card-topline">
+            <div>
+              <span className="eyebrow">Your current preview</span>
+              <h2>{selectedOption.title}</h2>
+            </div>
+            <span className="pill">Live preview</span>
+          </div>
+          <p className="global-theme-intro">{selectedOption.description}</p>
+          <div className="theme-bundle-grid" aria-label="Theme bundles">
+            {themeBundles.map((bundle) => {
+              const individualTotal = bundle.themeValues.length * INDIVIDUAL_THEME_PRICE;
+              const savings = individualTotal - bundle.bundlePrice;
+              return (
+                <article key={bundle.id} className="theme-bundle-card" data-inventory-id="theme-shop.bundle-card">
+                  <div className="card-topline">
+                    <div>
+                      <span className="eyebrow">Collection offer</span>
+                      <h3>{bundle.title}</h3>
+                    </div>
+                    <span className="pill">Save {formatPrice(savings)}</span>
+                  </div>
+                  <p>{bundle.description}</p>
+                  <div className="theme-bundle-themes">
+                    {bundle.themeValues.map((value) => <span key={value}>{appThemeLabels[value]}</span>)}
+                  </div>
+                  <div className="theme-bundle-price-row">
+                    <strong>{formatPrice(bundle.bundlePrice)}</strong>
+                    <span>{formatPrice(individualTotal)} individually</span>
+                  </div>
+                  <button className="button button-secondary" type="button" onClick={() => selectTheme(bundle.themeValues[0])}>
+                    Preview collection
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+          <div className="theme-shop-grid" role="radiogroup" aria-label="All global app themes">
+            {appThemeOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`global-theme-option theme-shop-option ${theme === option.value ? "is-selected" : ""}`}
+                onClick={() => selectTheme(option.value)}
+                role="radio"
+                aria-checked={theme === option.value}
+              >
+                <span className="global-theme-swatch" data-theme={option.value} aria-hidden="true" />
+                <span className="global-theme-option-copy">
+                  <strong>{option.title}</strong>
+                  <span>{option.description}</span>
+                  <span>{formatPrice(option.price)}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="global-theme-footer">
+            <p className="small-copy">
+              Previewing <strong>{selectedOption.title}</strong>. The preview applies immediately on this device.
+            </p>
+            <button className="button button-primary" type="button" onClick={() => void saveTheme()} disabled={saving}>
+              {saving ? "Saving theme..." : saved ? "Theme saved" : "Save to profile"}
+            </button>
+          </div>
         </section>
       ) : null}
     </RoutePage>
@@ -611,6 +968,17 @@ export function SettingsSurfaceView() {
         </div> : null}
         {data ? <p className="small-copy">Stored settings: {data.entries.length}</p> : null}
       </section>
+      <Link className="card feature-card settings-roadmap-card" href="/roadmap" data-inventory-id="settings.roadmap-card">
+        <div className="card-topline">
+          <div>
+            <span className="eyebrow">Planning</span>
+            <h2>Vocabulary roadmap</h2>
+          </div>
+          <span className="pill">Open</span>
+        </div>
+        <p>Review the language-pack implementation plan, active build, and queued vocabulary tracks.</p>
+        <span className="button button-secondary">Open roadmap</span>
+      </Link>
     </RoutePage>
   );
 }

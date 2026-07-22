@@ -6,10 +6,11 @@
     "dev": "node scripts/next-no-lockfile-patch.js dev",
     "build": "node scripts/next-no-lockfile-patch.js build",
     "start": "node scripts/next-no-lockfile-patch.js start",
-    "lint": "node scripts/next-no-lockfile-patch.js lint"
+    "lint": "eslint app components lib --max-warnings=0"
   },
   "dependencies": {
-    "next": "13.5.11",
+    "@supabase/supabase-js": "2.109.0",
+    "next": "16.2.11",
     "react": "18.2.0",
     "react-dom": "18.2.0"
   },
@@ -17,8 +18,8 @@
     "@types/node": "18.19.36",
     "@types/react": "18.2.66",
     "@types/react-dom": "18.2.22",
-    "eslint": "^8.57.0",
-    "eslint-config-next": "^13.5.11",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.2.11",
     "typescript": "5.4.5"
   }
 }
