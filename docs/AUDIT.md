@@ -55,6 +55,64 @@ The audit was performed against the checkout as it existed, not a clean commit. 
 - Verification passed: Node 24 Next Docker build, canonical route reachability on `3000`, legacy route reachability on `8200`, API health, and a CORS preflight from `http://127.0.0.1:3000`.
 - Remaining evidence: import-to-reader-to-progress in Next, the explicit legacy navigation link, final component-inventory cross-reference, and the full maintenance repair cycle.
 
+## 2026-07-22 Phase 5 migration audit
+
+| Parameter | Value |
+| --- | --- |
+| Audit date | 2026-07-22 |
+| Scope | Frontend migration Phases 1-5, current Next/API/legacy topology, Phase 5 ownership and entitlement boundary, maintenance routine, and migration documentation |
+| Baseline | Branch `codex-textplex-reader-preview-split`, commit `71ceae4`, with 14 pre-existing dirty paths preserved |
+| Environment | Windows PowerShell; host Node `18.15.0`/npm `9.5.0`; Python `3.11.2`; API virtualenv; Node `24-bookworm-slim` Docker build |
+| Live services | Next `3000`, API `8201`, standalone legacy `8200`; existing services were checked without restarting them |
+
+### Passed
+
+- API/processor suite: `65 passed, 2 skipped`.
+- Static site suite: `34 passed`.
+- Maintenance, Phase 3, Phase 4, Phase 5, and reader contract suites passed.
+- Web lint passed with `--max-warnings=0`; `git diff --check` passed.
+- Node 24 Docker production build passed for Next `16.2.11`.
+- Production `npm audit --omit=dev` passed inside the built Node 24 image with `0 vulnerabilities`.
+- Live checks returned `200` for Next `/profile`, API `/health`, legacy `/legacy/index.html`, and `/themes/catalog`.
+- API auth boundary returned `401` for unauthenticated `/profile/migration`; CORS allowed the documented Next origin.
+
+### Warnings and limitations
+
+- The host shell is Node `18.15.0`, below the repository’s Node 24 baseline; the direct host web build was correctly rejected by Next. The required build evidence came from the Node 24 container.
+- `npm run maintenance:check` could not obtain npm audit and Python-outdated data from the host environment; the production npm audit was rerun successfully in the Node 24 image. A disposable clean Python environment was not created during this audit.
+- npm emitted repeated `EPERM` warnings while cleaning the user-level cache log directory. Tests and lint still passed; this is an environment permissions issue, not an application failure.
+- Hosted Supabase, authenticated multi-user, payment-provider, webhook, backup/restore, and deployment-owned smoke tests were not run against external production services. These are Phase 6 or Phase 7 exit requirements.
+- Phase 5 intentionally leaves hosted learner-event replication and commerce fulfillment incomplete. This is recorded as planned Phase 6 scope, not a hidden Phase 5 pass.
+
+### Findings and issue mappings
+
+| Severity | Finding | Mapping |
+| --- | --- | --- |
+| Medium | Cross-device learner history is not yet durable in a hosted event store; Phase 5 partitions local SQLite by authenticated subject but does not replicate learner events. | #44 / Phase 6 |
+| Medium | Theme catalog and entitlement validation exist, but checkout, signed payment webhooks, refunds, disputes, and entitlement revocation are not implemented. | #44 / Phase 6 |
+| Medium | Production cutover evidence is local/container-based; clean-clone deployment, observability, backups, restore drills, and final legacy retirement remain unverified. | #45 / Phase 7 |
+| Low | Local audit reproducibility is limited by host Node 18 and the existing virtualenv/cache permissions. | Maintenance/audit follow-up |
+
+### Result
+
+Phase 5 implementation evidence is green for its stated scope. The migration is not complete overall: Phase 6 and Phase 7 remain planned and are now represented by GitHub issues #44 and #45, the local tracker, and their phase documents. Re-run this audit after Phase 6, then perform the final Phase 7 audit from a clean environment and deployment-owned services before closing the migration parent.
+
+## 2026-07-22 Phase 6 sync-slice verification
+
+- Added account-scoped local `learning_event_outbox` and `learning_event_receipts` tables, plus the Supabase `learning_events` contract with authenticated RLS select/insert policies.
+- Added idempotent upload and remote hydration through authenticated `POST /learning/sync`; the reader invokes it only when an active Supabase session exists and continues locally when sync is unavailable.
+- Verification passed: 67 API tests with 2 skips, Ruff, 34 static site tests, maintenance and migration/reader contract suites, web lint, Node 24 Docker build, `git diff --check`, and restarted live `3000`/`8201`/`8200` route checks.
+- Unauthenticated live `/learning/sync` returned `401` as required.
+- Remaining Phase 6 scope is explicit: client retry/conflict UX, private book/page ownership, and hosted commerce fulfillment. No external Supabase or payment-provider environment was used for this local verification.
+
+## 2026-07-22 Phase 6 exit verification
+
+- Added account ownership to imported books, filtered registry listings, and guarded book, page, image, extraction, analysis, archive, restore, delete, and learning-event routes. Legacy seed records without an owner remain public by design.
+- Added durable local sync retry state, exponential retry metadata, conflict counting for malformed remote events, and reader status copy that never replaces usable local progress.
+- Added a provider-neutral sandbox commerce lifecycle with catalog-owned pricing, per-user idempotency keys, HMAC-signed webhooks, duplicate-event protection, refund revocation, local entitlement reads, and Supabase commerce/RLS schema scaffolding.
+- Verification passed: Phase 6 focused API boundaries `4 passed`, repository-wide API/processor suite `71 passed, 2 skipped`, Ruff, 34 site tests, web lint, and `git diff --check`. The local host build remains blocked by Node `18.15.0`; the supported Node 24 container build is the required production-build evidence.
+- External Supabase, payment-provider, deployment, backup/restore, and clean-clone checks remain Phase 7 evidence. Real payment activation is intentionally not claimed by this phase.
+
 ## Scope and parameters
 
 Review these surfaces whenever the audit runs:

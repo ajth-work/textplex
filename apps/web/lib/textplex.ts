@@ -2,6 +2,10 @@ import { getDemoFetchResponse, getDemoPostResponse } from "./demo-data";
 import type {
   BookExtractionTriggerRequest,
   BookExtractionTriggerResponse,
+  LearningSyncResponse,
+  ThemeCheckoutRequest,
+  ThemeCheckoutResponse,
+  ThemeEntitlementResponse,
 } from "../../../packages/shared/src";
 import { getSupabaseClient } from "./supabase";
 export type {
@@ -30,6 +34,7 @@ export type {
   BookRecord,
   BoundingBox,
   LearningProfileSummary,
+  LearningSyncResponse,
   ImportRecentBook,
   ImportSurfaceResponse,
   LexicalEntryResult,
@@ -60,6 +65,9 @@ export type {
   SentenceResult,
   TokenOccurrenceResult,
   TokenResult,
+  ThemeCheckoutRequest,
+  ThemeCheckoutResponse,
+  ThemeEntitlementResponse,
 } from "../../../packages/shared/src";
 
 export const apiBaseUrl = process.env.NEXT_PUBLIC_TEXTPLEX_API_URL ?? "/api";
@@ -167,6 +175,31 @@ export async function postFormData<T>(pathname: string, body: FormData): Promise
     throw new Error(`Request failed (${response.status}) for ${pathname}`);
   }
   return (await response.json()) as T;
+}
+
+export async function syncLearningEvents(): Promise<LearningSyncResponse | null> {
+  if (isDemoMode) {
+    return null;
+  }
+  const client = getSupabaseClient();
+  if (!client) {
+    return null;
+  }
+  const { data } = await client.auth.getSession();
+  if (!data.session) {
+    return null;
+  }
+  return postJson<LearningSyncResponse>("/learning/sync", {});
+}
+
+export async function createThemeCheckout(
+  request: ThemeCheckoutRequest,
+): Promise<ThemeCheckoutResponse> {
+  return postJson<ThemeCheckoutResponse>("/themes/checkout", request);
+}
+
+export async function fetchThemeEntitlements(): Promise<ThemeEntitlementResponse> {
+  return fetchJson<ThemeEntitlementResponse>("/themes/entitlements");
 }
 
 async function authHeaders(includeJsonContentType = false): Promise<Headers> {

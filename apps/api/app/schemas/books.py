@@ -63,6 +63,7 @@ class BookPageManifest(BaseModel):
 
 class BookRecord(BaseModel):
     id: str
+    owner_id: str | None = None
     title: str
     author: str | None = None
     language_code: str

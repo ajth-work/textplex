@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import hashlib
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -178,6 +179,32 @@ def _connect(data_root: Path, owner_id: str | None = None) -> sqlite3.Connection
     return connection
 
 
+def _queue_learning_event(
+    connection: sqlite3.Connection,
+    *,
+    event_id: str,
+    event_type: str,
+    book_id: str,
+    occurred_at: str,
+    payload: dict[str, object],
+) -> None:
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO learning_event_outbox (
+            event_id, idempotency_key, event_type, book_id, occurred_at, payload
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (event_id, event_id, event_type, book_id, occurred_at, json.dumps(payload, ensure_ascii=False, sort_keys=True)),
+    )
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO learning_event_receipts (event_id, received_at)
+        VALUES (?, ?)
+        """,
+        (event_id, occurred_at),
+    )
+
+
 def _page_read_from_row(row: sqlite3.Row) -> PageReadRecord:
     return PageReadRecord(
         id=row["id"],
@@ -327,6 +354,20 @@ def create_reading_session(
             """,
             (session_id, payload.book_id, started_at),
         )
+        _queue_learning_event(
+            connection,
+            event_id=f"reading-session:{session_id}",
+            event_type="reading_session",
+            book_id=payload.book_id,
+            occurred_at=started_at,
+            payload={
+                "session_id": session_id,
+                "book_id": payload.book_id,
+                "started_at": started_at,
+                "ended_at": None,
+                "active_seconds": 0,
+            },
+        )
         connection.commit()
     return ReadingSessionRecord(
         id=session_id,
@@ -396,6 +437,24 @@ def record_page_read(
         ).fetchone()
         if row is None:
             raise RuntimeError("Failed to record page read.")
+        _queue_learning_event(
+            connection,
+            event_id=f"page-read:{uuid4().hex}",
+            event_type="page_read",
+            book_id=payload.book_id,
+            occurred_at=row["completed_at"],
+            payload={
+                "session_id": row["session_id"],
+                "book_id": row["book_id"],
+                "page_number": row["page_number"],
+                "active_seconds": row["active_seconds"],
+                "estimated_seconds": row["estimated_seconds"],
+                "completion_ratio": row["completion_ratio"],
+                "counted_as_read": bool(row["counted_as_read"]),
+                "completed_at": row["completed_at"],
+            },
+        )
+        connection.commit()
     return _page_read_from_row(row)
 
 
@@ -554,6 +613,27 @@ def record_sentence_read(
         ).fetchone()
         if row is None:
             raise RuntimeError("Failed to record sentence read.")
+        _queue_learning_event(
+            connection,
+            event_id=f"sentence-read:{uuid4().hex}",
+            event_type="sentence_read",
+            book_id=payload.book_id,
+            occurred_at=row["completed_at"],
+            payload={
+                "session_id": row["session_id"],
+                "book_id": row["book_id"],
+                "page_number": row["page_number"],
+                "sentence_order": row["sentence_order"],
+                "sentence_text": row["sentence_text"],
+                "token_count": row["token_count"],
+                "character_count": row["character_count"],
+                "active_seconds": row["active_seconds"],
+                "completed_at": row["completed_at"],
+                "language_code": language_code,
+                "tokens": [token.model_dump() for token in payload.tokens],
+            },
+        )
+        connection.commit()
 
     return _sentence_read_from_row(row)
 

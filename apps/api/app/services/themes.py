@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from urllib.parse import quote
+from pathlib import Path
 
 from fastapi import HTTPException
 
@@ -10,7 +11,6 @@ from app.services.auth import (
     AuthenticatedUserContext,
     _supabase_publishable_key,
     _supabase_rest_request,
-    _supabase_url,
     supabase_is_configured,
 )
 
@@ -59,21 +59,37 @@ def _server_catalog() -> tuple[list[dict[str, object]], list[dict[str, object]]]
     return themes, bundles
 
 
-def _owned_theme_ids(context: AuthenticatedUserContext | None) -> set[str]:
+def _owned_theme_ids(
+    context: AuthenticatedUserContext | None,
+    *,
+    data_root: Path | None = None,
+) -> set[str]:
     if context is None:
         return set()
+    owned_ids: set[str] = set()
+    if data_root is not None:
+        from app.services.commerce import get_local_owned_theme_ids
+
+        owned_ids.update(get_local_owned_theme_ids(data_root, context.user.id))
+    if not supabase_is_configured():
+        return owned_ids
     payload = _supabase_rest_request(
         f"theme_entitlements?select=theme_id&user_id=eq.{quote(context.user.id, safe='')}",
         context.access_token,
     )
     if not isinstance(payload, list):
         raise HTTPException(status_code=502, detail="Supabase returned invalid theme entitlements.")
-    return {str(row["theme_id"]) for row in payload if isinstance(row, dict) and isinstance(row.get("theme_id"), str)}
+    owned_ids.update(str(row["theme_id"]) for row in payload if isinstance(row, dict) and isinstance(row.get("theme_id"), str))
+    return owned_ids
 
 
-def get_theme_catalog(context: AuthenticatedUserContext | None = None) -> ThemeCatalogResponse:
+def get_theme_catalog(
+    context: AuthenticatedUserContext | None = None,
+    *,
+    data_root: Path | None = None,
+) -> ThemeCatalogResponse:
     themes, bundles = _server_catalog()
-    owned_ids = _owned_theme_ids(context)
+    owned_ids = _owned_theme_ids(context, data_root=data_root)
     catalog_items = [
         ThemeCatalogItem(
             id=str(theme["id"]),
@@ -106,11 +122,13 @@ def get_theme_catalog(context: AuthenticatedUserContext | None = None) -> ThemeC
 def validate_theme_settings(
     payload: SettingsUpdateRequest,
     context: AuthenticatedUserContext,
+    *,
+    data_root: Path | None = None,
 ) -> None:
     requested = next((entry.value for entry in payload.entries if entry.key.strip() == "theme"), None)
     if requested is None:
         return
-    catalog = get_theme_catalog(context)
+    catalog = get_theme_catalog(context, data_root=data_root)
     selected = next((theme for theme in catalog.themes if theme.id == requested), None)
     if selected is None:
         raise HTTPException(status_code=400, detail="The requested theme is not in the server catalog.")

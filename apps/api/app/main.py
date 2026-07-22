@@ -5,7 +5,7 @@ import threading
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
@@ -14,6 +14,7 @@ from app.schemas.auth import AuthMeResponse, HostedProfileSurfaceResponse, Hoste
 from app.schemas.books import BookExtractionRequest, BookImportRequest, BookPageManifest, BookReaderPageResponse, BookRecord, PageExtractionArtifact, TextImportRequest, TextParseRequest
 from app.schemas.learning import (
     LearningProfileSummary,
+    LearningSyncResponse,
     PageReadCreateRequest,
     PageReadRecord,
     ReadingSessionCreateRequest,
@@ -31,10 +32,12 @@ from app.services.book_extraction import (
     recover_book_extraction_result,
 )
 from app.schemas.migration import ProfileMigrationRequest, ProfileMigrationResponse
-from app.schemas.themes import ThemeCatalogResponse
+from app.schemas.themes import ThemeCatalogResponse, ThemeCheckoutRequest, ThemeCheckoutResponse, ThemeEntitlementResponse
 from app.services.book_registry import delete_book_from_path, import_book_from_path, load_registry, save_registry
 from app.services.auth import AuthenticatedUserContext, get_authenticated_user_context, get_current_user, get_hosted_profile, get_hosted_settings, get_optional_user_context, get_public_user_context, update_hosted_profile, update_hosted_settings
 from app.services.learning_profile import create_reading_session, get_learning_profile_summary, record_page_read, record_sentence_read
+from app.services.learning_sync import sync_learning_events
+from app.services.commerce import apply_sandbox_event, create_checkout_session, get_entitlements, verify_sandbox_signature
 from app.services.lexicon import import_lexicon_from_source, lookup_lexicon_entry
 from app.services.profile_migration import apply_profile_migration, preview_profile_migration
 from app.services.themes import get_theme_catalog, validate_theme_settings
@@ -105,12 +108,26 @@ def _load_book_registry() -> dict[str, BookRecord]:
     return load_registry(_registry_path())
 
 
-def _book_exists(book_id: str) -> BookRecord:
+def _book_exists(
+    book_id: str,
+    context: AuthenticatedUserContext | None = None,
+) -> BookRecord:
     registry = _load_book_registry()
     try:
-        return registry[book_id]
+        book = registry[book_id]
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Book not found: {book_id}") from exc
+    if context and book.owner_id and book.owner_id != context.user.id:
+        raise HTTPException(status_code=404, detail="Book not found.")
+    return book
+
+
+def _visible_books(context: AuthenticatedUserContext | None) -> list[BookRecord]:
+    return [
+        book
+        for book in _load_book_registry().values()
+        if book.owner_id is None or (context and book.owner_id == context.user.id)
+    ]
 
 
 def _utc_now() -> str:
@@ -242,7 +259,10 @@ def parse_text(payload: TextParseRequest) -> PageExtractionArtifact:
 
 
 @app.post("/texts/import", response_model=BookRecord)
-def import_text(payload: TextImportRequest) -> BookRecord:
+def import_text(
+    payload: TextImportRequest,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> BookRecord:
     try:
         return import_text_into_book(
             text=payload.text,
@@ -250,33 +270,39 @@ def import_text(payload: TextImportRequest) -> BookRecord:
             title=payload.title,
             author=payload.author,
             data_root=_books_root(),
+            owner_id=context.user.id if context else None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/books", response_model=list[BookRecord])
-def list_books() -> list[BookRecord]:
-    registry = _load_book_registry()
+def list_books(
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> list[BookRecord]:
     return sorted(
-        (book for book in registry.values() if book.archived_at is None),
+        (book for book in _visible_books(context) if book.archived_at is None),
         key=lambda record: record.processed_at or record.created_at,
         reverse=True,
     )
 
 
 @app.get("/books/archived", response_model=list[BookRecord])
-def list_archived_books() -> list[BookRecord]:
-    registry = _load_book_registry()
+def list_archived_books(
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> list[BookRecord]:
     return sorted(
-        (book for book in registry.values() if book.archived_at is not None),
+        (book for book in _visible_books(context) if book.archived_at is not None),
         key=lambda record: record.archived_at or record.processed_at or record.created_at,
         reverse=True,
     )
 
 
 @app.post("/books/import", response_model=BookRecord)
-def import_book(payload: BookImportRequest) -> BookRecord:
+def import_book(
+    payload: BookImportRequest,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> BookRecord:
     try:
         source_path = _validate_import_source(
             payload.source_path,
@@ -292,6 +318,7 @@ def import_book(payload: BookImportRequest) -> BookRecord:
             page_start=payload.page_start,
             page_count=payload.page_count,
             data_root=_books_root(),
+            owner_id=context.user.id if context else None,
         )
         return _extract_and_persist_book(
             book,
@@ -313,6 +340,7 @@ async def upload_book(
     page_start: int = Form(default=1),
     page_count: int | None = Form(default=None),
     ocr_provider: str | None = Form(default=None),
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
 ) -> BookRecord:
     filename = Path(file.filename or "uploaded.pdf").name
     if Path(filename).suffix.lower() != ".pdf":
@@ -343,6 +371,7 @@ async def upload_book(
             page_start=page_start,
             page_count=page_count,
             data_root=_books_root(),
+            owner_id=context.user.id if context else None,
         )
         _start_background_extraction(book, page_start=page_start, page_count=page_count)
         succeeded = True
@@ -358,16 +387,19 @@ async def upload_book(
 
 
 @app.get("/books/{book_id}", response_model=BookRecord)
-def get_book(book_id: str) -> BookRecord:
-    registry = _load_book_registry()
-    try:
-        return registry[book_id]
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=f"Book not found: {book_id}") from exc
+def get_book(
+    book_id: str,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> BookRecord:
+    return _book_exists(book_id, context)
 
 
 @app.get("/books/{book_id}/pages", response_model=BookPageManifest)
-def get_book_pages(book_id: str) -> BookPageManifest:
+def get_book_pages(
+    book_id: str,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> BookPageManifest:
+    _book_exists(book_id, context)
     pages_path = _books_root() / book_id / "pages" / "manifest.json"
     if not pages_path.exists():
         raise HTTPException(status_code=404, detail=f"Page manifest not found for book: {book_id}")
@@ -375,12 +407,12 @@ def get_book_pages(book_id: str) -> BookPageManifest:
 
 
 @app.get("/books/{book_id}/pages/{page_number}", response_model=BookReaderPageResponse)
-def get_book_page(book_id: str, page_number: int) -> BookReaderPageResponse:
-    registry = _load_book_registry()
-    try:
-        book = registry[book_id]
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=f"Book not found: {book_id}") from exc
+def get_book_page(
+    book_id: str,
+    page_number: int,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> BookReaderPageResponse:
+    book = _book_exists(book_id, context)
 
     pages_path = _books_root() / book_id / "pages" / "manifest.json"
     if not pages_path.exists():
@@ -398,12 +430,12 @@ def get_book_page(book_id: str, page_number: int) -> BookReaderPageResponse:
 
 
 @app.get("/books/{book_id}/pages/{page_number}/image")
-def get_book_page_image(book_id: str, page_number: int) -> FileResponse:
-    registry = _load_book_registry()
-    try:
-        book = registry[book_id]
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=f"Book not found: {book_id}") from exc
+def get_book_page_image(
+    book_id: str,
+    page_number: int,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> FileResponse:
+    book = _book_exists(book_id, context)
 
     pages_root = Path(book.pages_path) if book.pages_path else _books_root() / book_id / "pages"
     image_path = pages_root / f"page-{page_number:04d}.png"
@@ -413,26 +445,33 @@ def get_book_page_image(book_id: str, page_number: int) -> FileResponse:
 
 
 @app.delete("/books/{book_id}")
-def delete_book(book_id: str) -> dict[str, str]:
-    registry = _load_book_registry()
-    if book_id not in registry:
-        raise HTTPException(status_code=404, detail=f"Book not found: {book_id}")
+def delete_book(
+    book_id: str,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> dict[str, str]:
+    _book_exists(book_id, context)
 
     delete_book_from_path(book_id, _books_root())
     return {"status": "deleted", "book_id": book_id}
 
 
 @app.post("/books/{book_id}/archive", response_model=BookRecord)
-def archive_book(book_id: str) -> BookRecord:
-    book = _book_exists(book_id)
+def archive_book(
+    book_id: str,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> BookRecord:
+    book = _book_exists(book_id, context)
     book.archived_at = book.archived_at or book.processed_at or book.created_at
     book.status = "archived"
     return _persist_book(book)
 
 
 @app.post("/books/{book_id}/restore", response_model=BookRecord)
-def restore_book(book_id: str) -> BookRecord:
-    book = _book_exists(book_id)
+def restore_book(
+    book_id: str,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> BookRecord:
+    book = _book_exists(book_id, context)
     book.archived_at = None
     if book.extraction_status == "complete":
         book.status = "extracted"
@@ -444,13 +483,14 @@ def restore_book(book_id: str) -> BookRecord:
 
 
 @app.post("/books/{book_id}/extract")
-def extract_book(book_id: str, payload: BookExtractionRequest) -> dict[str, str]:
+def extract_book(
+    book_id: str,
+    payload: BookExtractionRequest,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> dict[str, str]:
     registry_path = _registry_path()
     registry = _load_book_registry()
-    try:
-        book = registry[book_id]
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=f"Book not found: {book_id}") from exc
+    book = _book_exists(book_id, context)
 
     try:
         if payload.ocr_provider:
@@ -481,7 +521,11 @@ def extract_book(book_id: str, payload: BookExtractionRequest) -> dict[str, str]
 
 
 @app.get("/books/{book_id}/extractions", response_model=BookExtractionResult)
-def get_book_extraction(book_id: str) -> BookExtractionResult:
+def get_book_extraction(
+    book_id: str,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> BookExtractionResult:
+    _book_exists(book_id, context)
     extraction_path = _books_root() / book_id / "extractions" / "book-extraction.json"
     if not extraction_path.exists():
         raise HTTPException(status_code=404, detail=f"Extraction not found for book: {book_id}")
@@ -510,7 +554,7 @@ def open_learning_session(
     payload: ReadingSessionCreateRequest,
     context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
 ) -> ReadingSessionRecord:
-    _book_exists(payload.book_id)
+    _book_exists(payload.book_id, context)
     return create_reading_session(app.state.data_root, payload, owner_id=context.user.id if context else None)
 
 
@@ -519,7 +563,7 @@ def create_page_read(
     payload: PageReadCreateRequest,
     context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
 ) -> PageReadRecord:
-    _book_exists(payload.book_id)
+    _book_exists(payload.book_id, context)
     try:
         return record_page_read(app.state.data_root, payload, owner_id=context.user.id if context else None)
     except KeyError as exc:
@@ -531,11 +575,18 @@ def create_sentence_read(
     payload: SentenceReadCreateRequest,
     context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
 ) -> SentenceReadRecord:
-    _book_exists(payload.book_id)
+    _book_exists(payload.book_id, context)
     try:
         return record_sentence_read(app.state.data_root, payload, owner_id=context.user.id if context else None)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/learning/sync", response_model=LearningSyncResponse)
+def synchronize_learning_events(
+    context: AuthenticatedUserContext = Depends(get_authenticated_user_context),
+) -> LearningSyncResponse:
+    return sync_learning_events(app.state.data_root, context)
 
 
 @app.post("/lexicon/import", response_model=LexiconImportSummary)
@@ -568,8 +619,12 @@ def lookup_lexicon(language_code: str, term: str) -> LexiconLookupResponse:
 
 
 @app.get("/analysis/{book_id}", response_model=BookAnalysisSurfaceResponse)
-def get_analysis_surface(book_id: str) -> BookAnalysisSurfaceResponse:
+def get_analysis_surface(
+    book_id: str,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> BookAnalysisSurfaceResponse:
     try:
+        _book_exists(book_id, context)
         return get_book_analysis_surface(app.state.data_root, book_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -642,7 +697,37 @@ def post_profile_migration(
 def themes_catalog(
     context: AuthenticatedUserContext | None = Depends(get_public_user_context),
 ) -> ThemeCatalogResponse:
-    return get_theme_catalog(context)
+    return get_theme_catalog(context, data_root=app.state.data_root)
+
+
+@app.post("/themes/checkout", response_model=ThemeCheckoutResponse)
+def themes_checkout(
+    payload: ThemeCheckoutRequest,
+    context: AuthenticatedUserContext = Depends(get_authenticated_user_context),
+) -> ThemeCheckoutResponse:
+    return create_checkout_session(app.state.data_root, context.user.id, payload)
+
+
+@app.post("/themes/webhooks/sandbox", response_model=ThemeCheckoutResponse)
+async def themes_sandbox_webhook(
+    request: Request,
+) -> ThemeCheckoutResponse:
+    raw_body = await request.body()
+    verify_sandbox_signature(raw_body, request.headers.get("X-TextPlex-Sandbox-Signature"))
+    try:
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise ValueError("Webhook payload must be an object.")
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid sandbox webhook JSON.") from None
+    return apply_sandbox_event(app.state.data_root, payload)
+
+
+@app.get("/themes/entitlements", response_model=ThemeEntitlementResponse)
+def themes_entitlements(
+    context: AuthenticatedUserContext = Depends(get_authenticated_user_context),
+) -> ThemeEntitlementResponse:
+    return get_entitlements(app.state.data_root, context.user.id)
 
 
 @app.get("/activity", response_model=ActivitySurfaceResponse)
@@ -678,7 +763,7 @@ def put_settings_surface(
     context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
 ) -> SettingsSurfaceResponse:
     if context:
-        validate_theme_settings(payload, context)
+        validate_theme_settings(payload, context, data_root=app.state.data_root)
         hosted_entries = update_hosted_settings(
             context,
             [{"key": entry.key, "value": entry.value} for entry in payload.entries],

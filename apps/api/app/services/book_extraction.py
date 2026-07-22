@@ -324,6 +324,7 @@ def import_text_into_book(
     title: str | None = None,
     author: str | None = None,
     data_root: Path | None = None,
+    owner_id: str | None = None,
 ) -> BookRecord:
     books_root = data_root or get_books_root()
     uploads_root = books_root.parent / "uploads"
@@ -344,6 +345,7 @@ def import_text_into_book(
         title=title,
         author=author,
         data_root=books_root,
+        owner_id=owner_id,
     )
     extraction_path, extracted_page_count = extract_book_text(
         book=book,

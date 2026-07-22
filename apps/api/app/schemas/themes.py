@@ -28,3 +28,25 @@ class ThemeCatalogResponse(BaseModel):
     mode: Literal["local", "hosted"]
     themes: list[ThemeCatalogItem] = Field(default_factory=list)
     bundles: list[ThemeBundleCatalogItem] = Field(default_factory=list)
+
+
+class ThemeCheckoutRequest(BaseModel):
+    product_type: Literal["theme", "bundle"]
+    product_id: str = Field(min_length=1)
+    idempotency_key: str = Field(min_length=8, max_length=200)
+
+
+class ThemeCheckoutResponse(BaseModel):
+    session_id: str
+    status: Literal["created", "paid", "refunded"]
+    payment_status: Literal["pending", "succeeded", "refunded"]
+    product_type: Literal["theme", "bundle"]
+    product_id: str
+    theme_ids: list[str] = Field(default_factory=list)
+    amount_cents: int = Field(ge=0)
+    currency: str = "USD"
+
+
+class ThemeEntitlementResponse(BaseModel):
+    theme_ids: list[str] = Field(default_factory=list)
+    source: Literal["local", "hosted"]

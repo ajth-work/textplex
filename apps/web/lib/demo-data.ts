@@ -399,6 +399,7 @@ function buildSummary(pages: PageExtractionResult[]): BookExtractionResult {
 
 export const demoBookRecord: BookRecord = {
   id: DEMO_BOOK_ID,
+  owner_id: null,
   title: "三体",
   author: "刘慈欣",
   language_code: "zh",

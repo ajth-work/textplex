@@ -1,5 +1,6 @@
 export interface BookRecord {
   id: string;
+  owner_id: string | null;
   title: string;
   author: string | null;
   language_code: string;
@@ -197,6 +198,40 @@ export interface SentenceReadRecord {
   character_count: number;
   active_seconds: number;
   completed_at: string;
+}
+
+export interface LearningSyncResponse {
+  status: "synced" | "pending";
+  uploaded_event_count: number;
+  hydrated_event_count: number;
+  remote_event_count: number;
+  pending_event_count: number;
+  last_synced_at: string | null;
+  retry_after_seconds: number;
+  conflict_count: number;
+  last_error: string | null;
+}
+
+export interface ThemeCheckoutRequest {
+  product_type: "theme" | "bundle";
+  product_id: string;
+  idempotency_key: string;
+}
+
+export interface ThemeCheckoutResponse {
+  session_id: string;
+  status: "created" | "paid" | "refunded";
+  payment_status: "pending" | "succeeded" | "refunded";
+  product_type: "theme" | "bundle";
+  product_id: string;
+  theme_ids: string[];
+  amount_cents: number;
+  currency: string;
+}
+
+export interface ThemeEntitlementResponse {
+  theme_ids: string[];
+  source: "local" | "hosted";
 }
 
 export interface LearningProfileSummary {

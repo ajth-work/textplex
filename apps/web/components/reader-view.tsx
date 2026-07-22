@@ -9,6 +9,7 @@ import {
   formatElapsed,
   postJson,
   resolveResourceUrl,
+  syncLearningEvents,
   triggerBookExtraction,
   isDemoMode,
   type BookExtractionResult,
@@ -353,6 +354,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [extractError, setExtractError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [sentenceActiveSeconds, setSentenceActiveSeconds] = useState(0);
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "synced" | "pending" | "error">("idle");
   const sessionIdRef = useRef<string | null>(null);
   const activeSecondsRef = useRef(0);
   const sentenceActiveSecondsRef = useRef(0);
@@ -514,6 +516,44 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
   useEffect(() => {
     let active = true;
+    let retryTimer: number | null = null;
+    let attempts = 0;
+
+    async function syncWithRetry() {
+      if (active) {
+        setSyncStatus("syncing");
+      }
+      try {
+        const result = await syncLearningEvents();
+        if (!active) {
+          return;
+        }
+        if (!result) {
+          setSyncStatus("idle");
+          return;
+        }
+        if (result.status === "synced") {
+          setSyncStatus("synced");
+          return;
+        }
+        setSyncStatus("pending");
+        if (attempts < 3) {
+          attempts += 1;
+          retryTimer = window.setTimeout(syncWithRetry, Math.max(1000, result.retry_after_seconds * 1000));
+        }
+      } catch {
+        if (!active) {
+          return;
+        }
+        setSyncStatus("error");
+        if (attempts < 3) {
+          attempts += 1;
+          retryTimer = window.setTimeout(syncWithRetry, Math.min(30000, 2 ** attempts * 1000));
+        }
+      }
+    }
+
+    void syncWithRetry();
 
     async function ensureSession() {
       const storageKey = `textplex-reading-session:${bookId}`;
@@ -546,6 +586,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
     return () => {
       active = false;
+      if (retryTimer !== null) {
+        window.clearTimeout(retryTimer);
+      }
     };
   }, [bookId]);
 
@@ -1167,6 +1210,14 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
               <p className="small-copy">
                 {sessionReady ? "A local reading session is active for this book." : "Opening a book starts a session automatically."}
               </p>
+              {syncStatus !== "idle" ? (
+                <p className="small-copy" role="status" aria-live="polite">
+                  {syncStatus === "syncing" ? "Syncing learner progress..." : null}
+                  {syncStatus === "synced" ? "Learner progress synced." : null}
+                  {syncStatus === "pending" ? "Sync pending; local progress is safe and will retry." : null}
+                  {syncStatus === "error" ? "Sync unavailable; local progress is safe." : null}
+                </p>
+              ) : null}
             </section>
 
             <section className="card inspector-card">

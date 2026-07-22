@@ -183,6 +183,18 @@ def _supabase_rest_get(path: str, token: str) -> Any:
     return _supabase_rest_request(path, token)
 
 
+def supabase_rest_request(
+    path: str,
+    token: str,
+    *,
+    method: str = "GET",
+    payload: Any = None,
+    prefer: str | None = None,
+) -> Any:
+    """Use the authenticated user's RLS-scoped Supabase REST connection."""
+    return _supabase_rest_request(path, token, method=method, payload=payload, prefer=prefer)
+
+
 def get_hosted_profile(context: AuthenticatedUserContext) -> HostedProfileSurfaceResponse:
     user_id = quote(context.user.id, safe="")
     profile_payload = _supabase_rest_get(

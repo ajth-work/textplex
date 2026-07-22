@@ -72,7 +72,9 @@ Remote issue state and kanban status are now synchronized for #10, #11, #18, #19
 2. Migrate reader, reader options, import, and processor progress flows. Complete; see `docs/FRONTEND_MIGRATION_PHASE_2.md`.
 3. Migrate analysis, charts, book-detail analytics, and resolved loading/error states. Complete; see `docs/FRONTEND_MIGRATION_PHASE_3.md`.
 4. Make Next.js the canonical Docker/browser entry point and explicitly scope the standalone shell. Complete; see `docs/FRONTEND_MIGRATION_PHASE_4.md`.
-5. Reconcile hosted authentication, profile settings, learner-state migration, and production theme entitlements. In progress; see `docs/FRONTEND_MIGRATION_PHASE_5.md`.
+5. Reconcile hosted authentication, profile settings, learner-state migration, and production theme entitlements. Complete; see `docs/FRONTEND_MIGRATION_PHASE_5.md`.
+6. Complete hosted learner-state synchronization and theme-store fulfillment. Planned; see #44 and `docs/FRONTEND_MIGRATION_PHASE_6.md`.
+7. Harden production operations, complete the canonical cutover, and retire the standalone dependency. Planned; see #45 and `docs/FRONTEND_MIGRATION_PHASE_7.md`.
 
 **Acceptance criteria:**
 
@@ -105,22 +107,24 @@ These local IDs are the planned child issues for the `Add theme store and commer
 | ID | Status | Scope | Acceptance direction |
 | --- | --- | --- | --- |
 | `theme-store.provider-decision` | Planned | Select the payment provider and integration mode; start with hosted checkout to keep card data out of TextPlex servers. | Provider, tax/refund assumptions, test-mode plan, and PCI responsibility are documented. |
-| `theme-store.catalog-contract` | Planned | Define theme IDs, metadata, preview assets, availability, product/price references, archive behavior, and topical pack membership. | The client sends a theme or pack ID/SKU; the server owns price, availability, included-theme membership, and entitlement decisions. |
-| `theme-store.pack-pricing` | Planned | Add topical theme packs containing at least three aligned themes, with a discounted pack price compared with buying each theme separately. Initial example: three `$1.99` themes for `$4.99` as a pack. | A pack has a stable catalog ID, title, theme list, description, price, discount display, and a server-side rule that grants each included theme after purchase. |
+| `theme-store.catalog-contract` | Complete | Theme IDs, metadata, preview availability, product prices, and pack membership are server-defined in the local and Supabase catalogs. | The client sends a theme or pack ID; the server owns price, availability, included-theme membership, and entitlement decisions. |
+| `theme-store.pack-pricing` | Complete | Added the `classic-consoles` four-theme pack with catalog-owned discounted pricing and per-theme grants. | A pack has a stable catalog ID, theme list, description, price, and server-side included-theme fulfillment. |
 | `theme-store.shop-ui` | Prototype complete | Expand the current theme-shop prototype into catalog, detail, loading, empty, error, accessibility, and responsive states across Next and standalone preview surfaces. | Inventory IDs remain mapped and the shop never exposes payment secrets or trusts client prices. |
-| `theme-store.account-entitlements` | Planned | Add the server-side customer/account and entitlement model, keeping the local learner profile as a cache rather than the authority for paid ownership. | A customer can retrieve owned themes, and revoked access is reflected locally. |
-| `theme-store.checkout-session` | Planned | Add a backend checkout-session endpoint that validates the selected theme or pack and creates a hosted checkout session. | Secrets remain server-side, amounts come from the catalog/provider, pack purchases cannot be double-counted as individual purchases, and retries use idempotency keys. |
-| `theme-store.payment-webhook` | Planned | Add signed webhook verification, duplicate-event protection, fulfillment state, and asynchronous processing. | Successful payment grants the entitlement exactly once even when events retry or arrive out of order. |
-| `theme-store.lifecycle` | Planned | Handle refunds, disputes, cancellations, failed payments, and entitlement revocation. | Payment state and entitlement state can be reconciled and audited without trusting browser redirects. |
-| `theme-store.entitlement-sync` | Planned | Sync server-owned entitlements into the local-first app with authenticated reads and safe offline caching. | Paid themes work offline after sync but cannot be permanently unlocked by local storage alone. |
+| `theme-store.account-entitlements` | Complete | Added account-scoped local grants plus Supabase entitlement/RLS schema and authenticated entitlement reads. | Revoked access is reflected locally and local storage cannot grant ownership by itself. |
+| `theme-store.checkout-session` | Complete | Added sandbox checkout-session creation with catalog-owned prices and per-account idempotency keys. | Pack purchases cannot be double-counted and retries return the existing session. |
+| `theme-store.payment-webhook` | Complete | Added HMAC-signed sandbox webhook verification, duplicate-event protection, and exactly-once grant fulfillment. | Replayed successful events do not duplicate grants. |
+| `theme-store.lifecycle` | Complete | Added sandbox refund handling and session-scoped entitlement revocation. | Payment and entitlement state remain auditable without trusting browser redirects. Provider disputes and live operations remain Phase 7. |
+| `theme-store.entitlement-sync` | Complete | Added authenticated entitlement reads and shared client contracts for local-first synchronization. | Paid themes can be used after entitlement sync without treating browser state as authority. |
 | `theme-store.security-operations` | Planned | Add HTTPS, webhook reachability, secret management, exact CORS/CSP rules, rate limits, structured logs, and alerting. | Payment boundaries are covered by security and deployment checks before live mode. |
-| `theme-store.sandbox-qa` | Planned | Build provider test fixtures, webhook replay tests, failure-path coverage, and production-readiness checks. | Test-mode purchases, retries, refunds, and missing webhook deliveries are repeatable in CI or a disposable environment. |
+| `theme-store.sandbox-qa` | Complete | Added disposable sandbox checkout, signed webhook, replay, refund, and entitlement tests. | Test-mode purchases, retries, refunds, and invalid signatures are repeatable in the API suite. |
 
 ## Done
 
 | Item | Issue | Notes |
 | --- | --- | --- |
 | Frontend migration Phase 5: hosted identity and learner state | Phase 5 | Complete. Authenticated profile/settings reads and writes, account-scoped learner storage, non-destructive local-profile migration, server-authoritative theme catalog/entitlement validation, UI states, and focused ownership tests are implemented. Checkout and hosted learner-event replication remain future work. See `docs/FRONTEND_MIGRATION_PHASE_5.md`. |
+| Frontend migration Phase 6: hosted learner state and commerce fulfillment | #44 | Complete. Added account-scoped event outbox/receipts, RLS-protected sync and remote hydration, client retry/conflict reporting, private book/page ownership, provider-neutral sandbox checkout, signed webhook replay protection, refund revocation, and local entitlement synchronization. Real payment-provider activation remains a Phase 7 gate. See `docs/FRONTEND_MIGRATION_PHASE_6.md`. |
+| Frontend migration Phase 7: production hardening and final cutover | #45 | Planned. Prove clean deployment, security, observability, backup/restore, rollback, canonical Next operation, and legacy retirement. See `docs/FRONTEND_MIGRATION_PHASE_7.md`. |
 | Fix reader endpoint regressions in archive, import, and lexicon parsing | #33 | Fixed pasted-text extraction counts, isolated mutable API fixtures, and verified lexicon-backed parsing with declared dependencies installed. |
 | Restore site reachability contract for the homepage preview | #34 | Added the homepage contract text, clean preview route mappings, and live route checks. |
 | Fix sentence tokenization for Latin text to drop terminal punctuation | #35 | Latin token output now excludes punctuation-only matches while preserving sentence text. |

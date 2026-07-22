@@ -34,6 +34,11 @@
 
 ## 2026-07-22
 
+- Phase 6: completed the hosted learner-state and sandbox commerce boundaries with retry/conflict reporting, private book/page ownership, idempotent checkout, signed webhook replay protection, refund revocation, entitlement sync, RLS schema scaffolding, and focused regression coverage. Real payment-provider activation remains Phase 7 work.
+- Phase 6: started hosted learner-state synchronization with a local event outbox, Supabase RLS event storage, idempotent upload, remote hydration, authenticated sync API, reader trigger, and focused tests. Commerce fulfillment, private book ownership, and offline retry UX remain open.
+- Migration: documented planned Phase 6 for hosted learner-state synchronization and theme-store fulfillment, and Phase 7 for production hardening, canonical cutover, and legacy retirement; added GitHub issues #44 and #45.
+- Audit: verified 65 API tests, 34 site tests, migration/web contract suites, lint, Node 24 production build, live `3000`/`8201`/`8200` routes, CORS, auth boundary rejection, and zero production npm vulnerabilities; recorded host-runtime and clean-environment limitations in `docs/AUDIT.md`.
+- Removed personal drive references from the TextPlex Codex skill, helper launch scripts, and optional upload fixture test by switching the repo tools to repo-relative paths and environment-based local fixtures.
 - Phase 5: completed the hosted identity boundary with account-scoped learner storage, authenticated profile/settings updates, non-destructive local-profile migration, server-authoritative theme catalog/entitlement validation, and explicit hosted/local UI states. Checkout and hosted learner-event replication remain deferred.
 - Added `docs/TECHNOLOGY_STACK.md` as the versioned source of truth for the TextPlex runtimes, frameworks, dependencies, infrastructure, external services, and upgrade procedure.
 - Phase 5: added the authenticated read-only `/profile/hosted` API contract, Supabase ownership-filtered profile/settings hydration, shared response types, profile-surface account state, inventory coverage, and focused API/web tests. Local learner metrics and mutations remain unchanged pending the ownership migration work.

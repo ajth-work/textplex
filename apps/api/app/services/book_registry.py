@@ -167,6 +167,7 @@ def import_book_from_path(
     page_start: int = 1,
     page_count: int | None = None,
     data_root: Path | None = None,
+    owner_id: str | None = None,
 ) -> BookRecord:
     resolved_source_path = Path(source_path).expanduser().resolve()
     if not resolved_source_path.exists():
@@ -206,6 +207,7 @@ def import_book_from_path(
 
     record = BookRecord(
         id=book_id,
+        owner_id=owner_id,
         title=_safe_text(title, _safe_text(source_title, resolved_source_path.stem)),
         author=_optional_text(author) or _optional_text(source_author),
         language_code=language_code,
