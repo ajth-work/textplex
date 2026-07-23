@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { RoutePage } from "./route-page";
@@ -10,6 +11,15 @@ import {
   demoLibraryBooks,
   demoLearningProfileSummary,
 } from "../lib/demo-data";
+import {
+  appThemeLabels,
+  appThemeOptions,
+  persistAppTheme,
+  readStoredAppTheme,
+  resolveAppTheme,
+  type AppTheme,
+} from "../lib/theme";
+import { legacySurfaceUrl } from "../lib/textplex";
 import type {
   BookAnalysisSurfaceResponse,
   ImportSurfaceResponse,
@@ -19,6 +29,7 @@ import type {
   SettingsSurfaceResponse,
   StudySurfaceResponse,
 } from "../lib/textplex";
+import { GlobalThemePicker } from "./global-theme-picker";
 
 export function MockActivitySurfaceView() {
   return (
@@ -70,6 +81,35 @@ export function MockAnalysisSurfaceView({ bookId }: { bookId: string }) {
     lexical_entry_count: summary.lexical_entries.length,
     token_occurrence_count: summary.token_occurrences.length,
     has_extraction: true,
+    extraction_progress_percent: 100,
+    metrics: {
+      metric_status: "ready",
+      assessment_system: "HSK",
+      text_expected_level: 4.2,
+      text_expected_level_label: "HSK 4.2",
+      sentence_average_level: 4.2,
+      page_average_level: 4.1,
+      character_weighted_average_level: 4.0,
+      eligible_character_count: 232,
+      known_character_count: 198,
+      unknown_character_count: 34,
+      chinese_word_occurrences: 145,
+      unknown_word_occurrences: 18,
+      partial_word_occurrences: 21,
+      sentence_count_with_level: 8,
+      page_count_with_level: summary.pages.length,
+      distribution: [
+        { label: "HSK 1", character_occurrences: 32, percentage: 16.2 },
+        { label: "HSK 2", character_occurrences: 48, percentage: 24.2 },
+        { label: "HSK 3", character_occurrences: 63, percentage: 31.8 },
+        { label: "HSK 4", character_occurrences: 55, percentage: 27.8 },
+      ],
+      comprehension_status: "not_available",
+      estimated_comprehension_percent: null,
+      recommendation: "This expected level is derived from HSK character evidence; comprehension still requires learner data.",
+    },
+    sentence_hsk_series: [],
+    page_hsk_series: [],
     top_lexical_entries: summary.lexical_entries.slice(0, 10),
   } satisfies BookAnalysisSurfaceResponse;
 
@@ -237,6 +277,7 @@ export function MockProgressSurfaceView() {
 }
 
 export function MockProfileSurfaceView() {
+  const currentTheme = readStoredAppTheme() ?? "neutral";
   const data = {
     profile: demoLearningProfileSummary,
     books: demoLibraryBooks.map((book, index) => ({
@@ -248,7 +289,7 @@ export function MockProfileSurfaceView() {
     })),
     settings: {
       entries: [
-        { key: "theme", value: "night" },
+        { key: "theme", value: currentTheme },
         { key: "readerMode", value: "sentence" },
         { key: "ocrProvider", value: "openai" },
       ],
@@ -271,9 +312,23 @@ export function MockProfileSurfaceView() {
         { label: "Sentence reads", value: String(data.profile.sentence_reads) },
       ]}
     >
+      <p className="small-copy profile-legacy-link" data-inventory-id="profile.legacy-link">
+        <a href={legacySurfaceUrl}>legacy</a>
+      </p>
+      <section className="card feature-card" data-inventory-id="profile.hosted-account-card">
+        <h2>Hosted account</h2>
+        <p>demo.reader@example.com</p>
+        <p className="small-copy">zh · hsk · HSK 3</p>
+        <p className="small-copy">Hosted settings: {data.settings.entries.length}</p>
+      </section>
+      <section className="card feature-card" data-inventory-id="profile.migration-card">
+        <h2>Local profile migration</h2>
+        <p className="small-copy">Demo migration preview: local sample data is ready for a non-destructive account merge.</p>
+        <button className="button button-secondary" type="button" disabled>Demo preview only</button>
+      </section>
       <section className="feature-grid">
-        <article className="card feature-card">
-          <h2>Learning summary</h2>
+          <article className="card feature-card">
+            <h2>Learning summary</h2>
           <p>Unique words: {data.profile.unique_words_seen}</p>
           <p>Unique characters: {data.profile.unique_characters_seen}</p>
           <p>Today&apos;s sentence reads: {data.profile.today_sentence_reads}</p>
@@ -291,8 +346,9 @@ export function MockProfileSurfaceView() {
             <p>{(data.profile.learning_tracks.find((track) => track.code === data.profile.selected_track_code) ?? data.profile.learning_tracks[0]).subtitle}</p>
             <p>{(data.profile.learning_tracks.find((track) => track.code === data.profile.selected_track_code) ?? data.profile.learning_tracks[0]).next_step}</p>
           </article>
-        ) : null}
-        <article className="card feature-card">
+          ) : null}
+          <GlobalThemePicker initialTheme={currentTheme} entries={data.settings.entries} />
+          <article className="card feature-card">
           <h2>Preferences</h2>
           <div className="surface-list">
             {data.settings.entries.map((entry) => (
@@ -444,16 +500,18 @@ export function MockSearchSurfaceView() {
 }
 
 export function MockSettingsSurfaceView() {
+  const initialTheme = readStoredAppTheme() ?? "neutral";
   const [data, setData] = useState<SettingsSurfaceResponse>({
     entries: [
-      { key: "theme", value: "night" },
+      { key: "theme", value: initialTheme },
       { key: "readerMode", value: "sentence" },
     ],
   });
-  const [theme, setTheme] = useState("night");
+  const [theme, setTheme] = useState<AppTheme>(initialTheme);
   const [readerMode, setReaderMode] = useState("sentence");
 
   function saveSettings() {
+    persistAppTheme(theme);
     setData({
       entries: [
         { key: "theme", value: theme },
@@ -474,7 +532,7 @@ export function MockSettingsSurfaceView() {
       ]}
       metrics={[
         { label: "Profile", value: "Local first" },
-        { label: "Theme", value: theme },
+        { label: "Theme", value: appThemeLabels[theme] },
         { label: "Reader mode", value: readerMode },
       ]}
     >
@@ -482,12 +540,13 @@ export function MockSettingsSurfaceView() {
         <h2>Preferences</h2>
         <div className="surface-form">
           <label>
-            Theme
-            <select className="text-input" value={theme} onChange={(event) => setTheme(event.target.value)}>
-              <option value="day">Day</option>
-              <option value="night">Night</option>
-              <option value="sepia">Sepia</option>
-              <option value="forest">Forest</option>
+            App theme
+            <select className="text-input" value={theme} onChange={(event) => setTheme(resolveAppTheme(event.target.value))}>
+              {appThemeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.title}
+                </option>
+              ))}
             </select>
           </label>
           <label>
@@ -504,6 +563,17 @@ export function MockSettingsSurfaceView() {
         </div>
         <p className="small-copy">Stored settings: {data.entries.length}</p>
       </section>
+      <Link className="card feature-card settings-roadmap-card" href="/roadmap" data-inventory-id="settings.roadmap-card">
+        <div className="card-topline">
+          <div>
+            <span className="eyebrow">Planning</span>
+            <h2>Vocabulary roadmap</h2>
+          </div>
+          <span className="pill">Open</span>
+        </div>
+        <p>Review the language-pack implementation plan, active build, and queued vocabulary tracks.</p>
+        <span className="button button-secondary">Open roadmap</span>
+      </Link>
     </RoutePage>
   );
 }

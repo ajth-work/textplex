@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from processor import normalize_text, split_sentences
+from processor import normalize_text
 
 
 def is_text_fixture_source(source_path: Path) -> bool:
@@ -66,20 +66,17 @@ def write_text_fixture_source(
     author: str | None = None,
 ) -> Path:
     clean_text = normalize_text(text)
-    sentences = split_sentences(clean_text)
-    if not sentences:
+    if not clean_text:
         raise ValueError("TextPlex text import requires non-empty text.")
 
     source_path.mkdir(parents=True, exist_ok=True)
     pages_dir = source_path / "pages"
     pages_dir.mkdir(parents=True, exist_ok=True)
 
-    page_paths: list[str] = []
-    for index, sentence in enumerate(sentences, start=1):
-        page_filename = f"{index:03d}.txt"
-        page_path = pages_dir / page_filename
-        page_path.write_text(sentence, encoding="utf-8")
-        page_paths.append(f"pages/{page_filename}")
+    page_filename = "001.txt"
+    page_path = pages_dir / page_filename
+    page_path.write_text(clean_text, encoding="utf-8")
+    page_paths = [f"pages/{page_filename}"]
 
     manifest = {
         "fixture_id": source_path.name,

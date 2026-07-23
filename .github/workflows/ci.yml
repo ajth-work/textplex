@@ -53,7 +53,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
 
       - name: Install Node dependencies
@@ -61,6 +61,11 @@ jobs:
 
       - name: Run static site tests
         run: npm run test:site
+
+      - name: Run maintenance and backup/restore tests
+        run: |
+          npm run test:maintenance
+          node --test tests/maintenance/data-backup.test.mjs
 
       - name: Start preview reachability server
         working-directory: site
@@ -85,3 +90,41 @@ jobs:
         env:
           CI: "1"
         run: npm run lint:web
+
+  container-smoke:
+    name: Clean container deployment smoke
+    needs: [python, web]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create disposable configuration
+        run: cp .env.example .env
+
+      - name: Build the canonical and compatibility images
+        run: docker compose --profile legacy build api web site
+
+      - name: Start the stack and verify owned routes
+        run: |
+          set -euo pipefail
+          trap 'docker compose --profile legacy down --volumes' EXIT
+          docker compose --profile legacy up -d api web site
+          sleep 10
+          for url in \
+            http://127.0.0.1:3000/profile \
+            http://127.0.0.1:8201/health \
+            http://127.0.0.1:8201/ready \
+            http://127.0.0.1:8200/legacy/index.html; do
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --retry 20 \
+              --retry-all-errors \
+              --retry-connrefused \
+              --retry-delay 2 \
+              --connect-timeout 2 \
+              --max-time 10 \
+              "$url" > /dev/null
+          done

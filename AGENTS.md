@@ -15,6 +15,21 @@ TextPlex is a local-first language-learning system built from a web reader, an A
 - `data/user/` stores learner-profile data; keep only placeholders in Git.
 - `tests/` is reserved for API and processor coverage.
 
+Default implementation work targets the Next.js app in `apps/web/` on port `3000`. Treat the standalone site on `8200` as a legacy reference shell only; do not change its source unless the task explicitly asks for GitHub Pages or legacy-compatibility work.
+
+## App-wide UI inventory workflow
+
+[`docs/COMPONENTS_INVENTORY.md`](docs/COMPONENTS_INVENTORY.md) is the canonical framework reference for the app's pages, regions, cards, panels, lists, and repeated item types. Agents making UI changes must:
+
+1. Read the relevant inventory section before editing a page or component.
+2. Use the existing stable inventory IDs in the implementation note, issue, QA report, or handoff.
+3. Add or revise an inventory entry in the same change when a route or user-visible UI region/card is added, removed, renamed, or moved.
+4. Keep live Next surfaces and their demo/preview counterparts mapped to the same IDs unless their layouts genuinely differ.
+5. Link the affected inventory IDs to the owning tracker item in the inventory cross-reference and tracker note.
+6. Mention the affected inventory IDs in the final change summary.
+
+For a new card, assign a route-scoped ID such as `library.import-progress-card`, record its source path and purpose, and do not reuse a retired ID for a different purpose.
+
 ## Build, Test, and Development Commands
 
 Install the web workspace dependencies from the repo root:
@@ -59,7 +74,16 @@ cd apps/web
 npm run build
 ```
 
-After code changes that affect the running API or site shell, reboot both services before QA so the live preview reflects the current code.
+After code changes that affect the running API or the Next app, reboot both services before QA so the live preview reflects the current code.
+
+For dependency and environment maintenance, use `docs/UPDATE_REPAIR_CYCLE.md` and the root `maintenance:check`, `maintenance:repair`, and `maintenance:update` scripts. Run the read-only report before dependency work; use update mode only deliberately, review its lockfile diff, and do not treat a failed verification cycle as complete.
+
+### Next build lock and warning hygiene
+
+- If `npm run build:web` hangs or reports an `apps/web/.next/trace` access error, inspect `netstat -ano | Select-String ':3000'` and stop only the repo's Next process on port `3000`. Do not stop Docker's legacy `8200` shell or `8201` API processes.
+- If npm reports `EPERM` while scanning `%LOCALAPPDATA%\npm-cache\_logs`, use a writable session cache before running checks: `$env:npm_config_cache = "$env:TEMP\textplex-npm-cache"`.
+- Keep `npm run lint:web` warning-free. Use `next/image` for reader images and do not suppress the rule globally.
+- Use Node 24 LTS for local, Docker, CI, and Pages work; older Node 18/20 runtimes are unsupported. Supabase Realtime may still emit a third-party dynamic-dependency warning, and root client components using `useSearchParams` must remain behind route-level `Suspense` boundaries.
 
 ## Coding Style & Naming Conventions
 
@@ -97,6 +121,7 @@ The reusable audit procedure and current audit record are in [`docs/AUDIT.md`](d
 - Use declared dependency installation in a disposable environment for clean audits. Treat stale virtualenv passes or skipped required fixtures as insufficient evidence.
 - Run live checks on audit-owned ports and processes. Do not infer route reachability from a static file fetch or reuse an unknown service already bound to the port.
 - Record warnings and known limitations separately from passes. A local workflow review is not a substitute for a successful CI run.
+- The Sunday workflow in `.github/workflows/weekly-audit.yml` is automated evidence, not a replacement for human review of new security boundaries, configuration, warnings, or sensitive-data handling.
 
 ### Python test isolation and dependencies
 

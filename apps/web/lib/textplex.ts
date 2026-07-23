@@ -2,11 +2,29 @@ import { getDemoFetchResponse, getDemoPostResponse } from "./demo-data";
 import type {
   BookExtractionTriggerRequest,
   BookExtractionTriggerResponse,
+  LearningSyncResponse,
+  ThemeCheckoutRequest,
+  ThemeCheckoutResponse,
+  ThemeEntitlementResponse,
 } from "../../../packages/shared/src";
+import { getSupabaseClient } from "./supabase";
 export type {
   ActivityEvent,
   ActivitySurfaceResponse,
+  AnalysisDistributionBucket,
   AnalysisLexicalEntrySummary,
+  AnalysisMetrics,
+  AnalysisSeriesPoint,
+  AuthMeResponse,
+  HostedProfileRecord,
+  HostedProfileSurfaceResponse,
+  HostedProfileUpdateRequest,
+  ProfileMigrationRequest,
+  ProfileMigrationResponse,
+  ThemeBundleCatalogItem,
+  ThemeCatalogItem,
+  ThemeCatalogResponse,
+  HostedSettingEntry,
   BookAnalysisSurfaceResponse,
   BookExtractionResult,
   BookExtractionTriggerRequest,
@@ -16,6 +34,7 @@ export type {
   BookRecord,
   BoundingBox,
   LearningProfileSummary,
+  LearningSyncResponse,
   ImportRecentBook,
   ImportSurfaceResponse,
   LexicalEntryResult,
@@ -46,10 +65,14 @@ export type {
   SentenceResult,
   TokenOccurrenceResult,
   TokenResult,
+  ThemeCheckoutRequest,
+  ThemeCheckoutResponse,
+  ThemeEntitlementResponse,
 } from "../../../packages/shared/src";
 
 export const apiBaseUrl = process.env.NEXT_PUBLIC_TEXTPLEX_API_URL ?? "/api";
 export const isDemoMode = process.env.NEXT_PUBLIC_TEXTPLEX_DEMO_MODE === "true";
+export const legacySurfaceUrl = process.env.NEXT_PUBLIC_TEXTPLEX_LEGACY_URL ?? "http://127.0.0.1:8200/legacy/index.html";
 
 export function resolveResourceUrl(pathname: string): string {
   if (
@@ -79,6 +102,7 @@ export async function fetchJson<T>(pathname: string): Promise<T> {
 
   const response = await fetch(joinPath(pathname), {
     cache: "no-store",
+    headers: await authHeaders(),
   });
   if (!response.ok) {
     throw new Error(`Request failed (${response.status}) for ${pathname}`);
@@ -97,9 +121,7 @@ export async function postJson<T>(pathname: string, body: unknown): Promise<T> {
 
   const response = await fetch(joinPath(pathname), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: await authHeaders(true),
     body: JSON.stringify(body),
   });
   if (!response.ok) {
@@ -123,9 +145,7 @@ export async function putJson<T>(pathname: string, body: unknown): Promise<T> {
 
   const response = await fetch(joinPath(pathname), {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: await authHeaders(true),
     body: JSON.stringify(body),
   });
   if (!response.ok) {
@@ -148,12 +168,54 @@ export async function postFormData<T>(pathname: string, body: FormData): Promise
 
   const response = await fetch(joinPath(pathname), {
     method: "POST",
+    headers: await authHeaders(),
     body,
   });
   if (!response.ok) {
     throw new Error(`Request failed (${response.status}) for ${pathname}`);
   }
   return (await response.json()) as T;
+}
+
+export async function syncLearningEvents(): Promise<LearningSyncResponse | null> {
+  if (isDemoMode) {
+    return null;
+  }
+  const client = getSupabaseClient();
+  if (!client) {
+    return null;
+  }
+  const { data } = await client.auth.getSession();
+  if (!data.session) {
+    return null;
+  }
+  return postJson<LearningSyncResponse>("/learning/sync", {});
+}
+
+export async function createThemeCheckout(
+  request: ThemeCheckoutRequest,
+): Promise<ThemeCheckoutResponse> {
+  return postJson<ThemeCheckoutResponse>("/themes/checkout", request);
+}
+
+export async function fetchThemeEntitlements(): Promise<ThemeEntitlementResponse> {
+  return fetchJson<ThemeEntitlementResponse>("/themes/entitlements");
+}
+
+async function authHeaders(includeJsonContentType = false): Promise<Headers> {
+  const headers = new Headers();
+  if (includeJsonContentType) {
+    headers.set("Content-Type", "application/json");
+  }
+  const client = getSupabaseClient();
+  if (!client) {
+    return headers;
+  }
+  const { data } = await client.auth.getSession();
+  if (data.session?.access_token) {
+    headers.set("Authorization", `Bearer ${data.session.access_token}`);
+  }
+  return headers;
 }
 
 export function formatDateTime(value: string | null): string {

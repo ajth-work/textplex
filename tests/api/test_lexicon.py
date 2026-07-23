@@ -93,3 +93,37 @@ def test_import_and_lookup_lexicon_from_csv_assets(tmp_path: Path) -> None:
     assert lookup.query == "三体"
     assert lookup.entries[0].definition == "The Three-Body Problem"
     assert lookup.entries[0].entry_type == "word"
+
+
+def test_import_and_lookup_lexicon_from_korean_pack(tmp_path: Path) -> None:
+    source_root = Path(__file__).resolve().parents[2] / "resources" / "lexicon" / "korean"
+    data_root = tmp_path / "data"
+
+    summary = import_lexicon_from_source(source_root, data_root=data_root, language_code="ko", replace_existing=True)
+
+    assert summary.vocabulary_rows == 200
+    assert summary.character_rows == 0
+    assert summary.imported_rows == 200
+
+    lookup = lookup_lexicon_entry(data_root=data_root, language_code="ko", term="가게")
+    assert lookup.query == "가게"
+    assert lookup.language_code == "ko"
+    assert lookup.entries[0].definition == "A place where products are displayed and sold on a small scale."
+    assert lookup.entries[0].pinyin == "가ː게"
+
+
+def test_import_and_lookup_lexicon_from_russian_pack(tmp_path: Path) -> None:
+    source_root = Path(__file__).resolve().parents[2] / "resources" / "lexicon" / "russian"
+    data_root = tmp_path / "data"
+
+    summary = import_lexicon_from_source(source_root, data_root=data_root, language_code="ru", replace_existing=True)
+
+    assert summary.vocabulary_rows == 12
+    assert summary.character_rows == 0
+    assert summary.imported_rows == 12
+
+    lookup = lookup_lexicon_entry(data_root=data_root, language_code="ru", term="привет")
+    assert lookup.query == "привет"
+    assert lookup.language_code == "ru"
+    assert lookup.entries[0].definition == "hello"
+    assert lookup.entries[0].pinyin == "privet"

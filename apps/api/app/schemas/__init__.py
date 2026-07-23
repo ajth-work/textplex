@@ -7,6 +7,7 @@ from .books import (
     PageRecord,
     TextImportRequest,
 )
+from .auth import AuthMeResponse
 from .learning import (
     LearningProfileSummary,
     PageReadCreateRequest,
@@ -34,6 +35,7 @@ from .surfaces import (
 )
 
 __all__ = [
+    "AuthMeResponse",
     "BookExtractionRequest",
     "BookImportRequest",
     "BookPageManifest",

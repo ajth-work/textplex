@@ -142,8 +142,8 @@ def test_import_text_endpoint_creates_reader_ready_book(tmp_path: Path) -> None:
     assert record["author"] == "Local sample"
     assert record["status"] == "extracted"
     assert record["extraction_status"] == "complete"
-    assert record["total_pages"] == 2
-    assert record["extracted_page_count"] == 2
+    assert record["total_pages"] == 1
+    assert record["extracted_page_count"] == 1
 
     page_response = client.get(f"/books/{record['id']}/pages/1")
     assert page_response.status_code == 200
@@ -151,14 +151,8 @@ def test_import_text_endpoint_creates_reader_ready_book(tmp_path: Path) -> None:
     assert page["book"]["id"] == record["id"]
     assert page["page"]["page_number"] == 1
     assert page["extraction"]["page"]["page_number"] == 1
-    assert len(page["extraction"]["page"]["sentences"]) == 1
+    assert len(page["extraction"]["page"]["sentences"]) == 2
     assert len(page["extraction"]["page"]["sentences"][0]["tokens"]) > 0
-
-    second_page_response = client.get(f"/books/{record['id']}/pages/2")
-    assert second_page_response.status_code == 200
-    second_page = second_page_response.json()
-    assert second_page["page"]["page_number"] == 2
-    assert len(second_page["extraction"]["page"]["sentences"]) == 1
 
 
 def test_parse_text_endpoint_uses_imported_lexicon_pinyin(tmp_path: Path) -> None:

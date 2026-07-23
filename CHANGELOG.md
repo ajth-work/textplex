@@ -1,11 +1,168 @@
 # Changelog
 
-## 2026-07-19
+## 2026-07-23
+
+- Hardened the clean container smoke job so owned-route checks retry until the Next app, API, and legacy shell finish starting instead of failing on a startup reset.
+- Tightened the smoke retry further by using curl's retry flags plus a short startup delay to absorb transient container resets during the route probe.
+
+## 2026-07-21
+
+- Phase 4: wired the canonical Next import-to-reader-progress path to the existing API vertical slice and added a configurable `legacy` profile link with inventory coverage.
+- Maintenance: made the web lint command invoke ESLint through Node so the required check works with the Windows workspace install.
+- Maintenance: included the web ESLint config in the production image so the Node 24 container can run its lint gate directly.
+- Upgraded the supported runtime baseline from Node 20 to Node 24 LTS across local versioning, Docker, CI, GitHub Pages, and weekly audit workflows.
+- Added a controlled update and repair cycle with read-only drift reporting, explicit in-range npm updates, lockfile repair, dependency reinstall, verification gates, and weekly audit integration.
+- Started frontend migration Phase 4: documented the canonical Next.js deployment target on `3000`, API boundary on `8201`, and explicit standalone/GitHub Pages compatibility boundary on `8200`.
+- Reconciled the frontend migration tracker so completed Phase 3 work is separated from the Phase 4 deployment and legacy cutover work.
+- Implemented the Phase 4 deployment-boundary slice: Compose now runs Next on `3000`, keeps the API on `8201`, scopes the static shell behind the `legacy` profile, and verifies canonical and legacy route reachability.
+- Verified Next.js and `eslint-config-next` are already at the latest stable `16.2.11` release, then pinned both declarations exactly to prevent pre-Phase 4 version drift.
+- Added a narrowly pinned npm 11 install-script approval for `unrs-resolver@1.12.2` so Node 24 builds remain explicit without allowing arbitrary dependency scripts.
+- Began frontend migration Phase 2 in the Next reader with HSK token visualization, definition metadata, stable inventory markers, and removal of stale character-mode fallback copy. Added `docs/FRONTEND_MIGRATION_PHASE_2.md` and synchronized the issue tracker.
+- Cleared the Next reader image lint warning, documented the port `3000` build-lock cleanup, and documented the writable npm-cache workaround for restricted local cache logs.
+- Added the Node 20 project version marker and route-level `Suspense` boundaries to address local runtime and App Router deoptimization warnings before the next migration phase.
+- Upgraded Next.js to `16.2.11`, Supabase to `2.109.0`, and fixed the Next workspace launcher so clean Node 20 Docker builds resolve the root-installed dependency correctly.
+- Fixed the web Dockerfile to preserve workspace-local dependencies during clean image builds.
+- Updated dynamic route segment exports for Next 16’s static config parser while preserving demo/live component selection.
+- Updated the web lint script to invoke ESLint directly, matching Next 16’s removal of the `next lint` command.
+- Migrated the web lint configuration to Next 16’s flat ESLint preset and ignored generated build output explicitly.
+- Scoped the Next 16 lint exceptions to intentional effect-driven loading state and existing reader memoization.
+- Recorded the remaining two moderate upstream PostCSS audit findings in `docs/AUDIT.md`; no unsafe forced downgrade was applied.
+- Added the remaining PostCSS audit follow-up to the local issue tracker before the next migration phase.
+- Added the Phase 2 Next import slice: real paste-text and PDF-upload submission, validation, background extraction polling, explicit progress/error states, and a reader handoff.
+- Stabilized Next import progress polling so each active import uses one bounded refresh loop.
+- Completed frontend migration Phase 2 by matching the compact reader definition card, adding local save behavior, explicit extraction/error states, and Next reader route contract tests; opened Phase 3 for analysis and book-detail HSK charts.
+- Updated the live reachability checks to assert the current roadmap root and simplified library search copy.
+- Completed frontend migration Phase 3 by adding API-backed sentence and page HSK series, responsive Next analysis and book-detail charts, fixed cross-theme HSK colors, explicit loading/empty/error states, and route-contract coverage.
+
+- Added the first versioned Supabase migration for account-owned learner profiles and per-user settings, including ownership RLS, updated-at triggers, and automatic profile creation for new Auth users.
+- Documented the detailed Next.js and standalone frontend consolidation issue locally while GitHub reauthentication is pending.
+
+## 2026-07-23
+
+- Maintenance: removed the copyrighted three-body PDF test dependency, replaced the extraction tests with a synthetic in-memory PDF fixture, and aligned the import endpoint test with the configured import roots.
+- Maintenance: corrected the import test to use a Linux-safe fixture path so CI no longer trips the import-root validator on Windows-style separators.
+- Documentation: added a structured non-Romanized test-sample library with three 10-sentence passages per current target language and linked it from the starter corpus note.
+- Maintenance: rebuilt the Korean starter pack from the downloaded KRDICT JSON export chunks, tightened the Korean ranking for learner-friendly entries, and updated the Korean lexicon import test to match the export-driven seed.
+- Maintenance: added Russian lexicon acquisition notes, a starter pack, a CSV pack builder, and regression coverage so Russian can follow the Korean sourced-pack workflow.
+- Maintenance: added a Korean KRDICT export parser and pack builder, plus regression coverage for XML/JSON-style acquisition and TOPIK-prioritized sorting.
+- Maintenance: added the Korean lexicon starter pack, Korean processing notes, and a Korean lexicon import/lookup regression test so the active build has a concrete source pack slot.
+- Maintenance: switched the implementation tracker and standalone roadmap preview to Korean as the active build, reordered the non-Romanized implementation sequence, and updated the roadmap inventory note.
+- Migration: prototyped a denser analysis lexical-entry grid with pronunciation, definition, HSK badge, and clearer page-based exposure context, then updated the tracker and inventory notes for issue #42.
+- Maintenance: trimmed the roadmap hero into a compact implementation tracker, moved the preview badge into the top-right corner, and removed the redundant Home, Library, and Progress links plus the long intro copy.
+
+## 2026-07-22
+
+- Maintenance: converted the top shell action row on narrow screens into a 4-column grid so Back, Book, Reader, and Analysis stay compact in one row.
+- Maintenance: replaced the primary app navigation's wrapped flex layout with a responsive grid so the route list stays compact instead of consuming so much vertical space on mobile.
+- Migration: reshaped the reader page into a single-sentence surface with stacked pinyin token chips, moved the page image and HSK chart into the collapsed tools drawer, and switched the reader default theme back to jade for the dark 8200-style shell.
+- Migration: collapsed the Next reader's utility sidebar into a compact tools drawer and shifted the main reading surface toward the standalone 8200 pager/session layout with tighter typography and spacing.
+- Migration: trimmed the Next reader header toward the standalone preview pattern by keeping the title/author block, adding bookmark and overflow icons, and removing the extra utility buttons from the main action row.
+- Maintenance: pinned the web Turbopack root to the repo workspace root so the Next build stops inheriting the stray parent lockfile path.
+- Maintenance: made `test:site` Windows-safe by adding a small Node runner that discovers the site test files before invoking `node --test`.
+- Migration: began canonical Next home parity by replacing the generic home scaffold with the compact 8200-style home shell, live book/profile hydration, bottom navigation, and skeleton/error states.
+- Phase 7: opened production hardening with API readiness checks, Next security headers, environment-driven Compose CORS, and an operations runbook covering deploy, rollback, backup/restore, and incidents.
+- Documentation: added a completed frontend migration report that summarizes all seven phases, their outcomes, and the remaining Phase 7 cutover work.
+- Maintenance: switched the Docker web stack to use the same-origin `/api` client path and the container-side API origin so the Next home surface on `3000` can fetch books and profile data reliably from the browser.
+- Migration: ported the standalone `8200` library shelf layout into the canonical Next `/library` route with live search, document counts, skeleton loading, and book detail/reader actions.
+- Migration: hid the shared Next app shell and bottom navigation on `/library` so the canonical library route renders with the standalone preview-style surface.
+- Migration: added the standalone-style `TextPlex` library header and tuned the library card info/read controls to better match the `8200` preview shell.
+- Phase 7: added structured API request logs, bounded mutation rate limiting, production configuration readiness validation, disposable backup/restore tooling, and CI container smoke coverage.
+- Phase 7: fixed the production web image so Next security configuration is loaded at runtime; live canonical headers now omit the `X-Powered-By` fingerprint.
+- Phase 7: added regression coverage for the API mutation limiter and documented the final local verification results and deployment-owned gates.
+- Phase 7: hardened disposable backup restores against path traversal and ignored generated backup artifacts by default.
+- Phase 6: completed the hosted learner-state and sandbox commerce boundaries with retry/conflict reporting, private book/page ownership, idempotent checkout, signed webhook replay protection, refund revocation, entitlement sync, RLS schema scaffolding, and focused regression coverage. Real payment-provider activation remains Phase 7 work.
+- Phase 6: started hosted learner-state synchronization with a local event outbox, Supabase RLS event storage, idempotent upload, remote hydration, authenticated sync API, reader trigger, and focused tests. Commerce fulfillment, private book ownership, and offline retry UX remain open.
+- Migration: documented planned Phase 6 for hosted learner-state synchronization and theme-store fulfillment, and Phase 7 for production hardening, canonical cutover, and legacy retirement; added GitHub issues #44 and #45.
+- Audit: verified 65 API tests, 34 site tests, migration/web contract suites, lint, Node 24 production build, live `3000`/`8201`/`8200` routes, CORS, auth boundary rejection, and zero production npm vulnerabilities; recorded host-runtime and clean-environment limitations in `docs/AUDIT.md`.
+- Removed personal drive references from the TextPlex Codex skill, helper launch scripts, and optional upload fixture test by switching the repo tools to repo-relative paths and environment-based local fixtures.
+- Phase 5: completed the hosted identity boundary with account-scoped learner storage, authenticated profile/settings updates, non-destructive local-profile migration, server-authoritative theme catalog/entitlement validation, and explicit hosted/local UI states. Checkout and hosted learner-event replication remain deferred.
+- Added `docs/TECHNOLOGY_STACK.md` as the versioned source of truth for the TextPlex runtimes, frameworks, dependencies, infrastructure, external services, and upgrade procedure.
+- Phase 5: added the authenticated read-only `/profile/hosted` API contract, Supabase ownership-filtered profile/settings hydration, shared response types, profile-surface account state, inventory coverage, and focused API/web tests. Local learner metrics and mutations remain unchanged pending the ownership migration work.
+
+- Completed the Phase 4 exit review and opened Phase 5 for hosted identity, user-owned learner state, local-profile migration, and server-authoritative theme entitlements.
+- Added the Phase 5 baseline contract test for Supabase Auth session handling and profile/settings ownership RLS.
+- Completed the Phase 1 frontend migration inventory and contract reconciliation for routes, API ownership, endpoint families, and browser storage keys.
+- Marked frontend migration Phase 1 complete and ready for reader/options migration in Phase 2.
+- Added the roadmap to the standalone site at `8200`, including `/roadmap` and the root entry-point redirect.
+- Added the first web/API authentication slice: Supabase sign-up, sign-in, password reset, session restoration, bearer-token propagation, and a FastAPI `/auth/me` validation boundary.
+- Opened issue #43 and added it to the TextPlex Feature Board to track hosted email/password accounts, authenticated learner profiles, cross-device history restoration, user-owned book storage, and migration from the anonymous local profile.
+- Expanded the local issue tracker with a parent theme-store commerce initiative and child work for catalog contracts, checkout, payment webhooks, entitlements, lifecycle handling, security, and sandbox QA.
+- Added discounted topical theme packs to the theme-store plan, including a three-theme minimum, pack-level pricing, and per-theme entitlement grants.
+- Added a Profile theme-shop prototype with a compact featured 2×3 theme grid, an arrow entry tile, and profile-connected live and standalone preview catalogs with live preview and save behavior.
+- Restored the selected character's HSK level as a compact pill in the reader definition card.
+- Cleared API test-client and site upload-test deprecation warnings, locked patched PostCSS/Sharp dependencies with zero production audit findings, and stabilized the Node 20 TypeScript build configuration.
+- Regenerated the npm lockfile without the stale workspace ESLint peer subtree and aligned the web Dockerfile with the clean hoisted workspace install.
+- Pinned the web Supabase client to the Node 20-compatible `2.109.0` release to remove the runtime support warning from the production build.
+
+## 2026-07-20
+
+- Added the app-wide components inventory with stable route, region, and card IDs, plus agent-facing update rules for new UI surfaces.
+- Made the components inventory workflow an explicit required reference in AGENTS.md for UI changes and agent handoffs.
+- Audited the analysis inventory and difficulty path, cataloged missing preview regions, and opened issue #42 for a canonical text-difficulty and expected-HSK metric contract.
+- Added bidirectional component-inventory and issue-tracker cross-references for the audited analysis surfaces.
+- Captured the proposed character-to-sentence-to-page-to-text HSK aggregation direction for issue #42.
+- Added the issue #42 analysis metric contract, separating extraction progress, expected HSK level, character coverage, and learner comprehension availability across API and preview surfaces.
+- Moved library book status badges such as `Live` into the bottom action row beside each card's controls.
+- Locked the library card dimensions to the current tuned metrics: 82 px artwork, 20 px text padding, and 50 px card height.
+- Simplified the Library to a grid-only view, removed redundant shelf copy, and moved saved card-dimension controls to Profile.
+- Fixed analysis vocabulary distribution rendering so bar segments and labels use every returned HSK bucket and matching percentages.
+- Renamed the analysis chart to HSK Character Level Distribution, aligned level labels above the bar and rounded percentages below it, and applied a green-to-red HSK 1-6 palette.
+- Locked the HSK distribution gradient to fixed HSK 1-6 colors across all active themes.
+- Documented the fixed cross-theme HSK distribution palette and chart alignment rules in the theme guidelines.
+- Added a library hydration skeleton for the first book card and document count, renamed the search section, and centered the TextPlex library header.
+- Increased spacing around the library search count, centered it, and simplified the label to the document total.
+- Removed the redundant standalone character-weighted-average card from text analysis.
+- Simplified text difficulty to a compact HSK score ring with fixed green-to-red HSK range coloring.
+- Split the HSK score ring label into separate `HSK` and numeric rows for cleaner fit.
+- Rounded the displayed HSK ring score to one decimal place.
+- Added theme-aware HSK progression charts: token order on the reader, sentence averages on analysis, and page averages for longer texts.
+- Expanded the app-wide theme system beyond the reader so the shared shell, hero cards, lists, inputs, and demo surfaces now pick up the active language pack palette.
+- Added a visible global theme picker to the Profile page with live preview and profile-backed save behavior.
+- Added the global theme picker and shared palette layer to the standalone site served on port 8200.
+- Scoped shared theme overrides so themed shell colors no longer reduce contrast inside Home and other editorial cards.
+- Made shared cards, search surfaces, goal cards, and bottom navigation adapt their surfaces and text contrast per theme pack.
+- Increased theme-aware muted-text contrast for import metadata, progress labels, search placeholders, and bottom navigation controls.
+- Fixed Jade difficulty-score text and raised Crimson shell text and analysis metadata contrast against dark red backgrounds.
+- Added the reusable theme guidelines covering semantic tokens, all user-facing screens, card behavior, contrast requirements, and future theme-pack QA.
+- Replaced hard-coded blue import controls and progress accents with theme-aware semantic accent tokens.
+- Fixed themed library cards with constrained artwork columns, safe title wrapping, and explicit surface-aware contrast for shell copy, metadata, tags, view toggles, and actions.
+- Added a persistent library artwork-column testing slider with a live pixel readout for tuning mobile card constraints.
+- Added an independent mobile library card text-padding slider with a live pixel readout for tuning the artwork-to-title inset.
+- Added a mobile library card-height slider with a live pixel readout for tuning oversized card artwork and card proportions.
+- Lowered the library card-height tester minimum from `112 px` to `50 px` for tighter layout experiments.
+- Fixed analysis-page theme contrast for hero metadata, sample text, difficulty cards, metrics, distribution labels, and recommendation surfaces.
+- Made analysis, library-detail, and reader skeleton cards and shimmer lines follow the active theme palette instead of hard-coded neutral gray.
+- Added the shared themed roadmap treatment across the live app and standalone preview, preserved its editorial tracker details in the theme guidelines, and added a direct Vocabulary roadmap card to Settings.
+- Added the Classic Consoles theme collection with NES, Famicom, SNES, and Super Famicom palettes, reader-theme support, and a discounted bundle offer in the theme shop.
+
+## 2026-07-22
+
+- Migration: resolved dynamic Next route params defensively so book, analysis, and reader pages keep their `bookId` and `pageNumber` values during the 3000 app cutover.
+- Moved the Next app's ambient theme gradients from the centered `.app-frame` to the full viewport so mobile Home no longer shows an unthemed strip at the screen edge.
+- Fixed Home canvas text contrast for recent analysis metadata and section links in saturated themes such as Crimson Gold.
+- Added a bounded `360 ms` minimum skeleton display window so fast local hydration still produces a visible loading flash before content replaces it.
+- Added an explicit shared `1.35s` shimmer animation for themed skeleton lines and blocks so loading states visibly animate while hydration is pending.
+- Matched the Library route search/count hero background to the themed library shell card surface.
+- Increased skeleton placeholder contrast across themes, with stronger Crimson tones and an inset edge for clearer loading shapes.
+- Matched the analysis hero treatment to library detail by removing its separate themed panel background, border, and shadow.
+- Replaced the Add Content Paste Text sample shortcut with a real paste form that submits article text to `/texts/import`, hydrates the processed reader record, and opens the new book.
+- Added a regression test covering pasted text submission and navigation to the created reader record.
+- Documented the Codex scheduled-task companion for the Sunday repository audit, including worktree isolation and report-only boundaries.
+- Added page-by-page reader hydration progress and a visible retry/error state so imported readers do not remain indefinitely on “Preparing”.
+- Modeled pasted text as one logical reader page containing parsed sentences, and grouped older pasted records the same way so sentence counts are not presented as physical pages.
+- Published the first hydrated sentence immediately in the reader, continued sentence hydration in the background, and preserved reader markup while processing so loaded content replaces skeletons instead of leaving the page blank.
+- Added a compact mobile reader header with a two-line title limit, tighter controls and navigation, and a single-line session summary to give the reading surface more viewport space.
+- Made the compact reader header an optional persisted Focus mode toggle in the reader settings panel.
+- Added an explicit X close button to the reader options panel.
+- Centered the standalone preview bottom navigation controls vertically and removed the raised import-button offset.
+
+## 2026-07-20
 
 - Added GitHub Actions CI for Python tests/Ruff, static site tests, web builds, and non-interactive lint; Pages artifact creation now runs the static site suite first. Added the pinned Next.js ESLint configuration required by the lint job and made private local upload fixtures skip cleanly on hosted runners.
 - Added audit guardrails to AGENTS.md for verification gates, test isolation, dependency bootstrapping, API security boundaries, configuration coverage, and issue-tracker discipline.
 - Completed audit issues #33-#40: fixed extraction/token regressions, isolated backend tests, hardened import/upload boundaries, honored configurable storage roots, restored preview route reachability, and added CI-safe web validation.
 - Added `docs/AUDIT.md` as the reusable audit record and procedure, including parameters, limitations from the 2026-07-19 audit, evidence requirements, cadence, and rules for improving future audits.
+- Added a Sunday GitHub Actions workflow that runs the full automated audit with fresh Python/Node dependencies, API health, live preview routes, tests, build, lint, and formatting checks.
 - Filed audit follow-up issues #36-#40 for API boundaries, upload limits, configurable storage, backend test bootstrap, and CI/deployment validation; added verification notes to #33 and #35 and mirrored the tracker state locally.
 - Replaced reader loading fallbacks with skeleton states, delayed preview rendering until live hydration completes, and removed fabricated reader sentences for books awaiting extraction.
 - Added matching skeleton treatment to live web surface loading states and updated reader fallback coverage.
@@ -16,6 +173,11 @@
 - Added a library-detail skeleton gate so seeded book details do not flash before the clicked book record loads.
 - Removed literal Spring Dawn content from reader, analysis, and library-detail shells; record routes now require an explicit book ID and show a missing/loading state instead of silently selecting seeded data.
 - Updated the reader-options regression test to inspect the legacy reader where its archive menu now lives instead of the redirect entry point.
+- Reconciled the local issue tracker with issue acceptance criteria: #10, #11, #18, and #19 are implemented; #9, #12, and #20 remain open with their current gaps documented.
+- Closed GitHub issues #10, #11, #18, and #19 with verification comments and synchronized #19 to the Done column on the TextPlex Feature Board.
+- Completed the import-to-reader-to-profile learning projection by materializing sentence exposures into the user exposure ledger and vocabulary progress, adding an end-to-end import/read/profile test, and resetting reader page timers between pages.
+- Marked issue #19 complete after import, reader, profile, progress, and study verification passed.
+- Made the web build and lint runner resolve workspace-local Next dependencies consistently.
 
 All notable changes to TextPlex are recorded here.
 

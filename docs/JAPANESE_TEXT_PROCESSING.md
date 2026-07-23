@@ -1,6 +1,6 @@
 # Japanese Text Processing Notes
 
-This document captures the current Japanese-specific considerations for TextPlex. It is meant to be the first-wave companion to the shared non-Romanized template.
+This document captures the current Japanese-specific considerations for TextPlex. It is meant to be the follow-up companion to the shared non-Romanized template.
 
 ## Scope
 
@@ -115,4 +115,4 @@ Useful regression coverage for Japanese should live alongside the processor and 
 
 ## Starter Corpus
 
-Use the starter public-domain corpus in [Non-Romanized Language Test Corpus](./NON_ROMANIZED_LANGUAGE_TEST_CORPUS.md) when validating Japanese. Start with `坊っちゃん`, then use `こころ` to stress longer prose and dialogue density.
+Use the starter public-domain corpus in [Non-Romanized Language Test Corpus](./NON_ROMANIZED_LANGUAGE_TEST_CORPUS.md) when validating Japanese. Start after the Korean-specific corpus, then use `坊っちゃん` and `こころ` to stress longer prose and dialogue density.

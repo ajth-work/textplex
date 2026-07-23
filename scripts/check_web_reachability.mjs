@@ -1,8 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
 
 const defaultSiteUrls = [
-  "http://127.0.0.1:8200",
-  "http://192.168.192.231:8200",
+  "http://127.0.0.1:3000",
 ];
 
 const defaultApiHealthUrls = [
@@ -85,9 +84,9 @@ async function assertHtmlResponse(response, url) {
   }
 
   const body = await response.text();
-  const expectedSnippets = {
-    "/": "Read scanned books as structured language data.",
-    "/library": "Your bookshelf",
+  const legacyExpectedSnippets = {
+    "/": "Vocabulary database implementation tracker",
+    "/library": "Search titles, authors, tags...",
     "/analysis/demo-book": "Text Analysis",
     "/search": "Texts (1)",
     "/study": "Tap to reveal meaning",
@@ -96,6 +95,12 @@ async function assertHtmlResponse(response, url) {
     "/import": "Add Content",
     "/settings": "Profile and app preferences",
   };
+  const canonicalExpectedSnippets = {
+    "/": "Read scanned books as structured language data.",
+    "/library": "Books ready to read",
+    "/analysis/demo-book": "Text analysis summary",
+  };
+  const expectedSnippets = new URL(url).port === "8200" ? legacyExpectedSnippets : canonicalExpectedSnippets;
   const path = new URL(url).pathname;
   const expectedSnippet = expectedSnippets[path];
   if (expectedSnippet && !body.includes(expectedSnippet)) {

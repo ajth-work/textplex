@@ -22,7 +22,8 @@ const MIME_TYPES = {
 };
 
 const ROUTE_FILES = {
-  "/": "index.html",
+  "/": "roadmap-preview.html",
+  "/roadmap": "roadmap-preview.html",
   "/library": "library-preview.html",
   "/search": "search-preview.html",
   "/study": "study-preview.html",

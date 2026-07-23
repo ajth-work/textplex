@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+import pytest
 
 from app.main import app
 from app.schemas.books import BookRecord
@@ -23,16 +24,21 @@ def test_import_book_from_path_registers_alice_mini_fixture(imported_real_scan: 
     assert (data_root / "books" / record.id / "pages" / "manifest.json").exists()
 
 
-def test_import_book_endpoint_registers_alice_mini_fixture(imported_real_scan: tuple[Path, BookRecord]) -> None:
+def test_import_book_endpoint_registers_alice_mini_fixture(
+    imported_real_scan: tuple[Path, BookRecord],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     data_root, _record = imported_real_scan
+    fixture_root = Path(__file__).resolve().parents[1] / "fixtures" / "books"
 
     app.state.data_root = data_root
+    monkeypatch.setenv("TEXTPLEX_IMPORT_ROOTS", str(fixture_root.resolve()))
     client = TestClient(app)
 
     response = client.post(
         "/books/import",
         json={
-            "source_path": r"tests\fixtures\books\alice-mini",
+            "source_path": str(fixture_root / "alice-mini"),
             "language_code": "en",
             "page_start": 1,
             "page_count": 4,

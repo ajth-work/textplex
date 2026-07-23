@@ -2,6 +2,10 @@
 
 This repo currently has a lightweight but real local-development baseline for the first TextPlex vertical slice.
 
+Use Node.js 24 LTS for the web workspace and site checks. The repository `.nvmrc`, Docker images, CI, and Pages workflow all target this runtime.
+
+Active feature work and QA should target the Next app on `3000`. Use `8200` only when comparing against or validating the legacy compatibility shell.
+
 ## What issue 1 establishes
 
 - a root web workspace command path
@@ -32,6 +36,30 @@ powershell -ExecutionPolicy Bypass -File .\scripts\init_local.ps1
 
 Both scripts create the local data directories and copy `.env.example` to `.env` if needed.
 
+### Supabase authentication
+
+The live web app reads `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from `apps/web/.env.local`. The API reads
+`SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` from the API environment. These
+values identify the Supabase project; never put a Supabase secret/service key in
+browser-exposed variables.
+
+The canonical profile page exposes a `legacy` compatibility link. Set
+`TEXTPLEX_LEGACY_URL` when the standalone shell is hosted somewhere other than
+`http://127.0.0.1:8200/legacy/index.html`.
+
+The first account migration is tracked under `supabase/migrations/`. After
+linking the CLI to the hosted project, validate pending schema changes with:
+
+```powershell
+npx supabase db push --dry-run
+```
+
+The account route is available at `/auth`. It supports email/password sign-up,
+sign-in, email confirmation redirects, and password reset requests. The API
+identity check is available at `/auth/me` and validates the bearer token with
+Supabase Auth.
+
 ## Web app
 
 Install and run from the repo root:
@@ -49,34 +77,39 @@ npm run build:web
 
 From the library page, the `Upload PDF` button lets you send a local PDF directly into TextPlex through the browser.
 
-Smoke-check the live reader and the API rewrite after the server is running:
+Smoke-check the canonical Next reader and API after the stack is running:
 
 ```powershell
 npm run check:web
 ```
 
-By default the smoke test checks both `http://127.0.0.1:8200` and the current ZeroTier address `http://192.168.192.231:8200`. If your ZeroTier IP changes, override it with:
+By default the smoke test checks `http://127.0.0.1:3000` and `http://127.0.0.1:8201/health`. To compare against the legacy shell, override the web URL:
 
 ```powershell
-$env:TEXTPLEX_WEB_BASE_URLS="http://127.0.0.1:8200,http://YOUR-ZEROTIER-IP:8200"
+$env:TEXTPLEX_WEB_BASE_URLS="http://127.0.0.1:8200"
 npm run check:web
 ```
 
 ### Canonical local stack
 
-Run the browser-facing site shell and processor API together:
+Run the canonical Next browser app and processor API together:
 
 ```powershell
-docker compose up --build site api
+docker compose up --build
 ```
 
 Then inspect:
 
-- `http://127.0.0.1:8200/`
+- `http://127.0.0.1:3000/`
 - `http://127.0.0.1:8201/health`
-- `http://192.168.192.231:8200/` from another device on the LAN
 
-The legacy Docker Next.js app is not part of the default preview stack.
+The standalone shell remains available through the explicit `legacy` profile for comparison and rollback checks:
+
+```powershell
+docker compose --profile legacy up --build site api
+```
+
+Open `http://127.0.0.1:8200/` only when testing the GitHub Pages/legacy compatibility surface.
 
 ## API
 

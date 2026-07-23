@@ -2,9 +2,9 @@ import { ReaderView } from "../../../../components/reader-view";
 import { DEMO_BOOK_ID, getDemoPageNumbers } from "../../../../lib/demo-data";
 import { isDemoMode } from "../../../../lib/textplex";
 
-export const dynamic = isDemoMode ? "force-static" : "force-dynamic";
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
-export const dynamicParams = !isDemoMode;
+export const dynamicParams = true;
 
 export function generateStaticParams(): Array<{ bookId: string; pageNumber: string }> {
   return isDemoMode
@@ -15,10 +15,10 @@ export function generateStaticParams(): Array<{ bookId: string; pageNumber: stri
     : [];
 }
 
-export default function ReaderPage({
-  params,
-}: {
-  params: { bookId: string; pageNumber: string };
-}) {
-  return <ReaderView bookId={params.bookId} pageNumber={Number(params.pageNumber)} />;
+export default async function ReaderPage(
+  props: Promise<{ params: { bookId: string; pageNumber: string } }> | { params: { bookId: string; pageNumber: string } },
+) {
+  const { params } = await props;
+  const resolvedParams = await params;
+  return <ReaderView bookId={resolvedParams.bookId} pageNumber={Number(resolvedParams.pageNumber)} />;
 }

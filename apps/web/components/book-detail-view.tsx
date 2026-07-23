@@ -9,16 +9,21 @@ import {
   isDemoMode,
   triggerBookExtraction,
   type BookExtractionResult,
+  type BookAnalysisSurfaceResponse,
   type BookPageManifest,
   type BookReaderPageResponse,
   type BookRecord,
 } from "../lib/textplex";
 import { LoadingSkeleton } from "./loading-skeleton";
+import { HskSeriesChart } from "./hsk-series-chart";
 
 export function BookDetailView({ bookId }: { bookId: string }) {
   const [book, setBook] = useState<BookRecord | null>(null);
   const [manifest, setManifest] = useState<BookPageManifest | null>(null);
   const [summary, setSummary] = useState<BookExtractionResult | null>(null);
+  const [analysis, setAnalysis] = useState<BookAnalysisSurfaceResponse | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(true);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [firstPageExtractionSource, setFirstPageExtractionSource] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +34,9 @@ export function BookDetailView({ bookId }: { bookId: string }) {
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setAnalysisLoading(true);
+    setAnalysis(null);
+    setAnalysisError(null);
     setFirstPageExtractionSource(null);
 
     async function loadBook() {
@@ -53,6 +61,21 @@ export function BookDetailView({ bookId }: { bookId: string }) {
           }
         }
         try {
+          const analysisResult = await fetchJson<BookAnalysisSurfaceResponse>(`/analysis/${bookId}`);
+          if (active) {
+            setAnalysis(analysisResult);
+          }
+        } catch {
+          if (active) {
+            setAnalysis(null);
+            setAnalysisError("Unable to load book HSK analysis.");
+          }
+        } finally {
+          if (active) {
+            setAnalysisLoading(false);
+          }
+        }
+        try {
           const summaryResult = await fetchJson<BookExtractionResult>(`/books/${bookId}/extractions`);
           if (active) {
             setSummary(summaryResult);
@@ -67,6 +90,7 @@ export function BookDetailView({ bookId }: { bookId: string }) {
           return;
         }
         setError(err instanceof Error ? err.message : "Unable to load book.");
+        setAnalysisLoading(false);
       } finally {
         if (active) {
           setLoading(false);
@@ -216,6 +240,18 @@ export function BookDetailView({ bookId }: { bookId: string }) {
             ))}
           </div>
         </section>
+      ) : null}
+
+      {analysisLoading ? <LoadingSkeleton label="Loading book HSK analysis" /> : null}
+      {analysisError ? <div className="card error-card" role="alert">{analysisError}</div> : null}
+      {!analysisLoading && analysis ? (
+        <HskSeriesChart
+          inventoryId="book-detail.page-hsk-chart"
+          title="HSK average by page"
+          description="Page-level averages show how difficulty changes through the book."
+          points={analysis.page_hsk_series}
+          emptyMessage={analysis.has_extraction ? "No page-level HSK evidence is available." : "Page chart will appear after extraction completes."}
+        />
       ) : null}
     </section>
   );

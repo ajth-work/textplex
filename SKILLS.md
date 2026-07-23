@@ -4,7 +4,7 @@ This file mirrors the local `textplex` skill. Use it for repeatable TextPlex wor
 
 Suggested install target:
 
-`C:\Users\Andrew-John\.codex\skills\textplex\SKILL.md`
+`%CODEX_HOME%\skills\textplex\SKILL.md`
 
 Use this file to recreate or update that local skill when working from a new machine or Codex environment.
 
@@ -24,14 +24,15 @@ Use this skill for repeatable TextPlex workflows and implementation habits. For 
 
 ## Canonical Surfaces
 
-- Repo path: `C:\Users\Andrew-John\Documents\TextPlex`
-- Product vision blueprint: `Z:\My Comics\_Fixing Corruption\TextPlex_Product_Vision_and_System_Blueprint.pdf`
+- Repo path: this repository checkout
+- Product vision blueprint: optional local PDF outside the repo, if you keep one for product-direction context
 - Core docs:
   - `README.md`
   - `docs/ARCHITECTURE.md`
   - `docs/DATA_MODEL.md`
   - `docs/PROCESSING_CONTRACT.md`
   - `docs/MVP_BACKLOG.md`
+  - `docs/COMPONENTS_INVENTORY.md`
 
 Use the local TextPlex repo as the primary operating space. Treat the blueprint PDF as product-direction context, and treat the repo docs as the implementation source of truth unless the user says otherwise.
 
@@ -44,6 +45,8 @@ Use the local TextPlex repo as the primary operating space. Treat the blueprint 
 5. Run the smallest meaningful verification for the area changed.
 6. Build the web app before shipping reader/dashboard UI changes when feasible.
 7. Do not treat placeholder scaffolding as product-complete behavior; wire contracts deliberately.
+8. For UI changes, use and update the stable IDs in `docs/COMPONENTS_INVENTORY.md`.
+9. For dependency work, use `docs/UPDATE_REPAIR_CYCLE.md`: report drift first, update deliberately, and verify the repaired environment before handoff.
 
 ## When This Skill Fits
 

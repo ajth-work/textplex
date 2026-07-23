@@ -8,6 +8,7 @@ from app.schemas.books import BookRecord
 from app.schemas.surfaces import (
     ActivityEvent,
     ActivitySurfaceResponse,
+    AnalysisSeriesPoint,
     AnalysisLexicalEntrySummary,
     BookAnalysisSurfaceResponse,
     ImportRecentBook,
@@ -26,7 +27,9 @@ from app.schemas.surfaces import (
 from app.services.book_registry import load_registry
 from app.services.book_extraction import recover_book_extraction_result
 from app.services.learning_profile import ensure_profile_database, get_learning_profile_summary
+from app.services.lexicon import lookup_lexicon_hsk_levels_map
 from app.core.paths import resolve_books_root
+from processor import calculate_book_hsk_metrics, calculate_hsk_series, is_hanzi
 from processor.contracts import BookExtractionResult
 
 
@@ -97,8 +100,33 @@ def get_book_analysis_surface(data_root: Path, book_id: str) -> BookAnalysisSurf
             lexical_entry_count=0,
             token_occurrence_count=0,
             has_extraction=False,
+            extraction_progress_percent=round(book.extracted_page_count / book.total_pages * 100) if book.total_pages else 0,
+            metrics={
+                "metric_status": "pending",
+                "recommendation": "Analysis metrics will appear after extraction completes.",
+            },
+            sentence_hsk_series=[],
+            page_hsk_series=[],
             top_lexical_entries=[],
         )
+
+    characters = {
+        character
+        for page in extraction.pages
+        for sentence in page.sentences
+        for token in sentence.tokens
+        for character in token.surface_form
+        if is_hanzi(character)
+    }
+    character_levels = lookup_lexicon_hsk_levels_map(
+        data_root=data_root,
+        language_code=book.language_code,
+        characters=characters,
+    )
+    metrics = calculate_book_hsk_metrics(extraction, character_levels)
+    hsk_series = calculate_hsk_series(extraction, character_levels)
+    extracted_page_count = len(extraction.pages)
+    extraction_progress_percent = round(extracted_page_count / book.total_pages * 100) if book.total_pages else 0
 
     lexical_entries = sorted(
         extraction.lexical_entries,
@@ -115,6 +143,10 @@ def get_book_analysis_surface(data_root: Path, book_id: str) -> BookAnalysisSurf
         lexical_entry_count=len(extraction.lexical_entries),
         token_occurrence_count=len(extraction.token_occurrences),
         has_extraction=True,
+        extraction_progress_percent=extraction_progress_percent,
+        metrics=metrics,
+        sentence_hsk_series=[AnalysisSeriesPoint.model_validate(point) for point in hsk_series["sentence_series"]],
+        page_hsk_series=[AnalysisSeriesPoint.model_validate(point) for point in hsk_series["page_series"]],
         top_lexical_entries=[
             AnalysisLexicalEntrySummary(
                 lemma=entry.lemma,
@@ -194,9 +226,15 @@ def search_surfaces(data_root: Path, query: str, *, limit: int = 20) -> SearchSu
     return SearchSurfaceResponse(query=query, result_count=len(limited_results), results=limited_results)
 
 
-def get_study_surface(data_root: Path, *, language_code: str | None = None, limit: int = 50) -> StudySurfaceResponse:
+def get_study_surface(
+    data_root: Path,
+    *,
+    language_code: str | None = None,
+    limit: int = 50,
+    owner_id: str | None = None,
+) -> StudySurfaceResponse:
     limit = max(0, limit)
-    db_path = ensure_profile_database(data_root)
+    db_path = ensure_profile_database(data_root, owner_id)
     with sqlite3.connect(db_path) as connection:
         connection.row_factory = sqlite3.Row
         rows = connection.execute(
@@ -241,11 +279,11 @@ def get_study_surface(data_root: Path, *, language_code: str | None = None, limi
     return StudySurfaceResponse(queue_size=len(items), queued_items=items)
 
 
-def get_progress_surface(data_root: Path) -> ProgressSurfaceResponse:
-    profile = get_learning_profile_summary(data_root)
+def get_progress_surface(data_root: Path, *, owner_id: str | None = None) -> ProgressSurfaceResponse:
+    profile = get_learning_profile_summary(data_root, owner_id=owner_id)
     registry = load_registry(_books_root(data_root) / "registry.json")
     title_map = _book_title_map(registry)
-    db_path = ensure_profile_database(data_root)
+    db_path = ensure_profile_database(data_root, owner_id)
     aggregate: dict[str, ProgressBookSummary] = {}
 
     with sqlite3.connect(db_path) as connection:
@@ -294,9 +332,9 @@ def get_progress_surface(data_root: Path) -> ProgressSurfaceResponse:
     return ProgressSurfaceResponse(profile=profile, books=books)
 
 
-def get_profile_surface(data_root: Path) -> ProfileSurfaceResponse:
-    progress = get_progress_surface(data_root)
-    settings = load_settings_surface(data_root)
+def get_profile_surface(data_root: Path, *, owner_id: str | None = None) -> ProfileSurfaceResponse:
+    progress = get_progress_surface(data_root, owner_id=owner_id)
+    settings = load_settings_surface(data_root, owner_id=owner_id)
     return ProfileSurfaceResponse(
         profile=progress.profile,
         books=progress.books,
@@ -304,11 +342,16 @@ def get_profile_surface(data_root: Path) -> ProfileSurfaceResponse:
     )
 
 
-def get_activity_surface(data_root: Path, *, limit: int = 50) -> ActivitySurfaceResponse:
+def get_activity_surface(
+    data_root: Path,
+    *,
+    limit: int = 50,
+    owner_id: str | None = None,
+) -> ActivitySurfaceResponse:
     limit = max(0, limit)
     registry = load_registry(_books_root(data_root) / "registry.json")
     title_map = _book_title_map(registry)
-    db_path = ensure_profile_database(data_root)
+    db_path = ensure_profile_database(data_root, owner_id)
     events: list[ActivityEvent] = []
 
     with sqlite3.connect(db_path) as connection:
@@ -432,16 +475,21 @@ def get_import_surface(data_root: Path, *, default_language: str = "zh") -> Impo
     )
 
 
-def load_settings_surface(data_root: Path) -> SettingsSurfaceResponse:
-    db_path = ensure_profile_database(data_root)
+def load_settings_surface(data_root: Path, *, owner_id: str | None = None) -> SettingsSurfaceResponse:
+    db_path = ensure_profile_database(data_root, owner_id)
     with sqlite3.connect(db_path) as connection:
         connection.row_factory = sqlite3.Row
         rows = connection.execute("SELECT key, value FROM settings ORDER BY key ASC").fetchall()
     return SettingsSurfaceResponse(entries=[SettingEntry(key=row["key"], value=row["value"]) for row in rows])
 
 
-def update_settings_surface(data_root: Path, payload: SettingsUpdateRequest) -> SettingsSurfaceResponse:
-    db_path = ensure_profile_database(data_root)
+def update_settings_surface(
+    data_root: Path,
+    payload: SettingsUpdateRequest,
+    *,
+    owner_id: str | None = None,
+) -> SettingsSurfaceResponse:
+    db_path = ensure_profile_database(data_root, owner_id)
     with sqlite3.connect(db_path) as connection:
         connection.row_factory = sqlite3.Row
         for entry in payload.entries:
@@ -459,4 +507,4 @@ def update_settings_surface(data_root: Path, payload: SettingsUpdateRequest) -> 
                 (key, entry.value, _utc_now()),
             )
         connection.commit()
-    return load_settings_surface(data_root)
+    return load_settings_surface(data_root, owner_id=owner_id)

@@ -42,6 +42,7 @@
       }
 
       .topbar {
+        position: relative;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -50,12 +51,15 @@
       }
 
       .brand {
+        position: absolute;
+        left: 50%;
         margin: 0;
         font-family: Georgia, "Times New Roman", serif;
         font-size: 34px;
         line-height: 1;
         letter-spacing: -0.04em;
         color: var(--accent);
+        transform: translateX(-50%);
       }
 
       .eyebrow {
@@ -123,7 +127,7 @@
       .controls {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
-        gap: 10px;
+        gap: 18px;
         align-items: center;
         margin-top: 14px;
       }
@@ -225,6 +229,72 @@
         color: var(--muted);
         font-size: 13px;
         font-weight: 700;
+        text-align: center;
+      }
+
+      .skeleton-line,
+      .skeleton-block {
+        background: linear-gradient(90deg, rgba(31, 36, 48, 0.08), rgba(31, 36, 48, 0.16), rgba(31, 36, 48, 0.08));
+        background-size: 200% 100%;
+        animation: library-skeleton-shimmer 1.4s ease-in-out infinite;
+      }
+
+      .skeleton-line {
+        width: min(180px, 100%);
+        height: 14px;
+        border-radius: 999px;
+      }
+
+      .library-skeleton-card {
+        display: grid;
+        grid-template-columns: var(--library-art-width, 82px) minmax(0, 1fr);
+        min-height: var(--library-card-height, 50px);
+        border: 1px solid rgba(31, 36, 48, 0.07);
+        border-radius: 22px;
+        overflow: hidden;
+        background: var(--surface-strong);
+        box-shadow: var(--shadow-soft);
+      }
+
+      .library-skeleton-art {
+        min-height: 100%;
+      }
+
+      .library-skeleton-body {
+        display: grid;
+        align-content: center;
+        gap: 9px;
+        padding: 14px var(--library-card-text-padding, 20px);
+      }
+
+      .library-skeleton-body .skeleton-block:nth-child(1) {
+        width: 42%;
+        height: 9px;
+        border-radius: 999px;
+      }
+
+      .library-skeleton-body .skeleton-block:nth-child(2) {
+        width: 78%;
+        height: 18px;
+        border-radius: 6px;
+      }
+
+      .library-skeleton-body .skeleton-block:nth-child(3) {
+        width: 34%;
+        height: 10px;
+        border-radius: 999px;
+      }
+
+      @keyframes library-skeleton-shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .skeleton-line,
+        .skeleton-block {
+          animation: none;
+        }
       }
 
       .library-shelf {
@@ -255,11 +325,6 @@
         display: grid;
         gap: 0;
         cursor: pointer;
-      }
-
-      .library-card.is-selected,
-      .library-row.is-selected {
-        outline: 2px solid rgba(63, 155, 104, 0.3);
       }
 
       .library-art {
@@ -340,9 +405,19 @@
 
       .library-actions {
         display: flex;
-        justify-content: flex-end;
+        align-items: center;
+        justify-content: space-between;
         gap: 8px;
         margin-top: 12px;
+      }
+
+      .library-action-buttons {
+        display: flex;
+        gap: 8px;
+      }
+
+      .library-status {
+        flex: 0 0 auto;
       }
 
       .button {
@@ -401,8 +476,8 @@
 
       .library-row-actions {
         display: flex;
-        justify-content: flex-end;
-        align-items: start;
+        justify-content: space-between;
+        align-items: center;
         gap: 8px;
       }
 
@@ -490,7 +565,9 @@
 
         .library-actions {
           grid-column: 1 / -1;
-          grid-template-columns: 1fr 1fr;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
           margin-top: 0;
         }
 
@@ -505,34 +582,24 @@
 
         .library-row-actions {
           grid-column: 1 / -1;
-          justify-content: flex-end;
+          justify-content: space-between;
         }
       }
     </style>
+    <link rel="stylesheet" href="./preview-theme.css" />
+    <script src="./preview-theme.js"></script>
   </head>
   <body>
     <main class="app">
       <header class="topbar">
         <button class="icon-btn" type="button" aria-label="Back">←</button>
-        <div style="text-align:right">
-          <p class="eyebrow">TextPlex</p>
-          <span class="badge">Library</span>
-        </div>
+        <div class="brand">TextPlex</div>
       </header>
 
-      <section class="hero">
+      <section class="hero library-hero">
         <div class="hero-head">
           <div>
-            <p class="eyebrow">Collection</p>
-            <h1 class="hero-title">Your bookshelf, not another analysis page.</h1>
-            <p class="hero-copy">
-              Browse imported books, demo samples, articles, and synthetic texts in one place.
-              Use grid for visual scanning or list for compact inspection.
-            </p>
-          </div>
-          <div class="segmented" role="tablist" aria-label="Library view mode">
-            <button type="button" data-library-mode="grid" aria-pressed="true">Grid</button>
-            <button type="button" data-library-mode="list" aria-pressed="false">List</button>
+            <p class="eyebrow">Search</p>
           </div>
         </div>
 
@@ -541,24 +608,26 @@
             <span aria-hidden="true">⌕</span>
             <input id="librarySearch" type="search" placeholder="Search titles, authors, tags..." autocomplete="off" autocapitalize="off" spellcheck="false" />
           </label>
-          <div class="count" id="libraryCount">0 documents in the local collection</div>
+          <div class="count skeleton-line" id="libraryCount" aria-label="Loading document count"></div>
         </div>
-      </section>
 
-      <div class="library-note" style="margin: 0 0 14px; padding: 12px 14px;">
-        Use grid to scan the bookshelf visually. Use list for a denser text-first layout.
-      </div>
+      </section>
 
       <section class="library-shell">
         <div class="library-shell-head">
-          <div>
-            <p class="eyebrow">Library</p>
-            <h2 class="section-title">Open a record, inspect it, or jump straight into reading.</h2>
-            <p class="section-sub">The icons open the record or jump directly to reading.</p>
-          </div>
+          <p class="eyebrow">Library</p>
         </div>
 
-        <div id="libraryShelf" class="library-shelf is-grid" aria-live="polite"></div>
+        <div id="libraryShelf" class="library-shelf is-grid" aria-live="polite">
+          <article class="library-skeleton-card" aria-label="Loading library book" role="status">
+            <div class="library-skeleton-art skeleton-block"></div>
+            <div class="library-skeleton-body">
+              <div class="skeleton-block"></div>
+              <div class="skeleton-block"></div>
+              <div class="skeleton-block"></div>
+            </div>
+          </article>
+        </div>
         <p id="libraryEmpty" class="empty-state" hidden>No visible library items match this search.</p>
       </section>
 

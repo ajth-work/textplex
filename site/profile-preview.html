@@ -347,6 +347,60 @@
         overflow-wrap: anywhere;
       }
 
+      .dimension-settings {
+        display: grid;
+        gap: 10px;
+      }
+
+      .dimension-setting {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px 12px;
+        align-items: center;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--surface-strong);
+      }
+
+      .dimension-setting label {
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      .dimension-setting output {
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .dimension-setting input {
+        grid-column: 1 / -1;
+        width: 100%;
+        accent-color: var(--accent);
+        cursor: ew-resize;
+      }
+
+      .dimension-settings-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      .dimension-settings-footer .small-copy {
+        margin: 0;
+      }
+
+      @media (max-width: 420px) {
+        .dimension-settings-footer {
+          align-items: stretch;
+          flex-direction: column;
+        }
+      }
+
       .profile-book-head {
         display: flex;
         justify-content: space-between;
@@ -409,6 +463,8 @@
         .grid-2 { grid-template-columns: 1fr; }
       }
     </style>
+    <link rel="stylesheet" href="./preview-theme.css" />
+    <script src="./preview-theme.js"></script>
   </head>
   <body>
     <main class="app">
@@ -484,6 +540,30 @@
       <section class="surface section">
         <div class="section-head">
           <div>
+            <p class="eyebrow">Appearance</p>
+            <h2>Global theme</h2>
+          </div>
+          <span class="pill" id="globalThemeLabel">Neutral</span>
+        </div>
+        <p class="small-copy">Choose the visual language for Home, Library, Insights, Profile, Reader, and the rest of TextPlex. Reader controls remain separate.</p>
+        <div class="global-theme-browse">
+          <div id="globalThemeGrid" class="global-theme-grid" role="radiogroup" aria-label="Featured global app themes"></div>
+          <a class="global-theme-shop-link" href="./theme-shop-preview.html">
+            <span class="eyebrow">Explore</span>
+            <strong>Theme shop</strong>
+            <span class="global-theme-shop-arrow" aria-hidden="true">→</span>
+            <span class="small-copy">See every visual pack</span>
+          </a>
+        </div>
+        <div class="global-theme-footer">
+          <p id="globalThemeMessage" class="small-copy">Select a palette to preview it across the suite.</p>
+          <button id="globalThemeSave" class="button button-primary" type="button">Save global theme</button>
+        </div>
+      </section>
+
+      <section class="surface section">
+        <div class="section-head">
+          <div>
             <p class="eyebrow">Exposure</p>
             <h2>Reading breakdown</h2>
           </div>
@@ -533,6 +613,49 @@
           <div class="setting-row"><span class="setting-label">Reader mode</span><strong id="profileReaderMode" class="setting-value">sentence</strong></div>
           <div class="setting-row"><span class="setting-label">OCR provider</span><strong id="profileOcrProvider" class="setting-value">local</strong></div>
           <div class="setting-row"><span class="setting-label">Processor URL</span><strong id="profileProcessorUrl" class="setting-value">not set</strong></div>
+        </div>
+      </section>
+
+      <section class="surface section" data-inventory-id="settings.roadmap-card">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Planning</p>
+            <h2>Vocabulary roadmap</h2>
+          </div>
+          <span class="pill">Open</span>
+        </div>
+        <p class="small-copy">Review the language-pack implementation plan, active build, and queued vocabulary tracks.</p>
+        <a class="button button-primary" href="./roadmap-preview.html">Open roadmap</a>
+      </section>
+
+      <section class="surface section">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Library</p>
+            <h2>Card dimensions</h2>
+          </div>
+          <span class="pill">Local</span>
+        </div>
+        <div class="dimension-settings" aria-label="Library card dimensions">
+          <div class="dimension-setting">
+            <label for="profileLibraryArtWidth">Artwork column</label>
+            <output id="profileLibraryArtWidthValue" for="profileLibraryArtWidth">82 px</output>
+            <input id="profileLibraryArtWidth" type="range" min="56" max="132" step="2" value="82" />
+          </div>
+          <div class="dimension-setting">
+            <label for="profileLibraryCardPadding">Card text padding</label>
+            <output id="profileLibraryCardPaddingValue" for="profileLibraryCardPadding">20 px</output>
+            <input id="profileLibraryCardPadding" type="range" min="0" max="40" step="2" value="20" />
+          </div>
+          <div class="dimension-setting">
+            <label for="profileLibraryCardHeight">Card height</label>
+            <output id="profileLibraryCardHeightValue" for="profileLibraryCardHeight">50 px</output>
+            <input id="profileLibraryCardHeight" type="range" min="50" max="220" step="4" value="50" />
+          </div>
+        </div>
+        <div class="dimension-settings-footer">
+          <p id="profileLibraryDimensionsMessage" class="small-copy">Changes apply to the Library after saving.</p>
+          <button id="profileLibraryDimensionsSave" class="button button-primary" type="button">Save card dimensions</button>
         </div>
       </section>
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
+import hashlib
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -142,16 +144,20 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def get_profile_db_path(data_root: Path) -> Path:
-    return resolve_user_data_root(data_root) / "profile.sqlite3"
+def get_profile_db_path(data_root: Path, owner_id: str | None = None) -> Path:
+    user_root = resolve_user_data_root(data_root)
+    if not owner_id:
+        return user_root / "profile.sqlite3"
+    owner_key = hashlib.sha256(owner_id.encode("utf-8")).hexdigest()[:32]
+    return user_root / "accounts" / owner_key / "profile.sqlite3"
 
 
 def _migration_root() -> Path:
     return Path(__file__).resolve().parents[1] / "db" / "migrations" / "user"
 
 
-def ensure_profile_database(data_root: Path) -> Path:
-    db_path = get_profile_db_path(data_root)
+def ensure_profile_database(data_root: Path, owner_id: str | None = None) -> Path:
+    db_path = get_profile_db_path(data_root, owner_id)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     migration_root = _migration_root()
@@ -165,12 +171,38 @@ def ensure_profile_database(data_root: Path) -> Path:
     return db_path
 
 
-def _connect(data_root: Path) -> sqlite3.Connection:
-    db_path = ensure_profile_database(data_root)
+def _connect(data_root: Path, owner_id: str | None = None) -> sqlite3.Connection:
+    db_path = ensure_profile_database(data_root, owner_id)
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
+
+
+def _queue_learning_event(
+    connection: sqlite3.Connection,
+    *,
+    event_id: str,
+    event_type: str,
+    book_id: str,
+    occurred_at: str,
+    payload: dict[str, object],
+) -> None:
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO learning_event_outbox (
+            event_id, idempotency_key, event_type, book_id, occurred_at, payload
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (event_id, event_id, event_type, book_id, occurred_at, json.dumps(payload, ensure_ascii=False, sort_keys=True)),
+    )
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO learning_event_receipts (event_id, received_at)
+        VALUES (?, ?)
+        """,
+        (event_id, occurred_at),
+    )
 
 
 def _page_read_from_row(row: sqlite3.Row) -> PageReadRecord:
@@ -202,16 +234,139 @@ def _sentence_read_from_row(row: sqlite3.Row) -> SentenceReadRecord:
     )
 
 
-def create_reading_session(data_root: Path, payload: ReadingSessionCreateRequest) -> ReadingSessionRecord:
+def _refresh_vocabulary_progress(connection: sqlite3.Connection, language_code: str, lemma: str) -> None:
+    exposure_summary = connection.execute(
+        """
+        SELECT
+            COUNT(*) AS raw_exposures,
+            COALESCE(SUM(weight), 0) AS weighted_exposure,
+            COUNT(DISTINCT book_id || ':' || page_number) AS unique_pages,
+            COUNT(DISTINCT book_id) AS unique_books,
+            MIN(occurred_at) AS first_seen_at,
+            MAX(occurred_at) AS last_seen_at
+        FROM exposure_ledger
+        WHERE language_code = ? AND lemma = ?
+        """,
+        (language_code, lemma),
+    ).fetchone()
+    if exposure_summary is None or int(exposure_summary["raw_exposures"] or 0) <= 0:
+        return
+
+    existing = connection.execute(
+        "SELECT manual_override FROM vocabulary_progress WHERE language_code = ? AND lemma = ?",
+        (language_code, lemma),
+    ).fetchone()
+    manual_override = existing["manual_override"] if existing is not None else None
+    raw_exposures = int(exposure_summary["raw_exposures"] or 0)
+    weighted_exposure = float(exposure_summary["weighted_exposure"] or 0.0)
+    state = str(manual_override) if manual_override else (
+        "review" if raw_exposures >= 5 else "learning" if raw_exposures >= 2 else "new"
+    )
+    confidence_score = min(1.0, round(weighted_exposure / 10.0, 3))
+
+    connection.execute(
+        """
+        INSERT INTO vocabulary_progress (
+            language_code,
+            lemma,
+            raw_exposures,
+            weighted_exposure,
+            unique_pages,
+            unique_books,
+            help_requests,
+            first_seen_at,
+            last_seen_at,
+            state,
+            confidence_score,
+            manual_override
+        )
+        VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
+        ON CONFLICT(language_code, lemma) DO UPDATE SET
+            raw_exposures = excluded.raw_exposures,
+            weighted_exposure = excluded.weighted_exposure,
+            unique_pages = excluded.unique_pages,
+            unique_books = excluded.unique_books,
+            first_seen_at = excluded.first_seen_at,
+            last_seen_at = excluded.last_seen_at,
+            state = excluded.state,
+            confidence_score = excluded.confidence_score,
+            manual_override = excluded.manual_override
+        """,
+        (
+            language_code,
+            lemma,
+            raw_exposures,
+            weighted_exposure,
+            int(exposure_summary["unique_pages"] or 0),
+            int(exposure_summary["unique_books"] or 0),
+            exposure_summary["first_seen_at"],
+            exposure_summary["last_seen_at"],
+            state,
+            confidence_score,
+            manual_override,
+        ),
+    )
+
+
+def _record_exposure(
+    connection: sqlite3.Connection,
+    *,
+    language_code: str,
+    lemma: str,
+    book_id: str,
+    page_number: int,
+    exposure_type: str,
+    weight: float,
+    occurred_at: str,
+) -> None:
+    cursor = connection.execute(
+        """
+        INSERT OR IGNORE INTO exposure_ledger (
+            language_code,
+            lemma,
+            book_id,
+            page_number,
+            exposure_type,
+            weight,
+            occurred_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (language_code, lemma, book_id, page_number, exposure_type, weight, occurred_at),
+    )
+    if cursor.rowcount:
+        _refresh_vocabulary_progress(connection, language_code, lemma)
+
+
+def create_reading_session(
+    data_root: Path,
+    payload: ReadingSessionCreateRequest,
+    *,
+    owner_id: str | None = None,
+) -> ReadingSessionRecord:
     started_at = payload.started_at or _utc_now()
     session_id = f"session-{uuid4().hex}"
-    with _connect(data_root) as connection:
+    with _connect(data_root, owner_id) as connection:
         connection.execute(
             """
             INSERT INTO reading_sessions (id, book_id, started_at, ended_at, active_seconds)
             VALUES (?, ?, ?, NULL, 0)
             """,
             (session_id, payload.book_id, started_at),
+        )
+        _queue_learning_event(
+            connection,
+            event_id=f"reading-session:{session_id}",
+            event_type="reading_session",
+            book_id=payload.book_id,
+            occurred_at=started_at,
+            payload={
+                "session_id": session_id,
+                "book_id": payload.book_id,
+                "started_at": started_at,
+                "ended_at": None,
+                "active_seconds": 0,
+            },
         )
         connection.commit()
     return ReadingSessionRecord(
@@ -223,13 +378,18 @@ def create_reading_session(data_root: Path, payload: ReadingSessionCreateRequest
     )
 
 
-def record_page_read(data_root: Path, payload: PageReadCreateRequest) -> PageReadRecord:
+def record_page_read(
+    data_root: Path,
+    payload: PageReadCreateRequest,
+    *,
+    owner_id: str | None = None,
+) -> PageReadRecord:
     completed_at = _utc_now()
     estimated_seconds = max(payload.active_seconds, 30)
     completion_ratio = 0.0 if estimated_seconds <= 0 else min(payload.active_seconds / estimated_seconds, 1.0)
     counted_as_read = int(payload.active_seconds >= 15 or completion_ratio >= 0.75)
 
-    with _connect(data_root) as connection:
+    with _connect(data_root, owner_id) as connection:
         session_row = connection.execute(
             "SELECT id FROM reading_sessions WHERE id = ? AND book_id = ?",
             (payload.session_id, payload.book_id),
@@ -277,13 +437,41 @@ def record_page_read(data_root: Path, payload: PageReadCreateRequest) -> PageRea
         ).fetchone()
         if row is None:
             raise RuntimeError("Failed to record page read.")
+        _queue_learning_event(
+            connection,
+            event_id=f"page-read:{uuid4().hex}",
+            event_type="page_read",
+            book_id=payload.book_id,
+            occurred_at=row["completed_at"],
+            payload={
+                "session_id": row["session_id"],
+                "book_id": row["book_id"],
+                "page_number": row["page_number"],
+                "active_seconds": row["active_seconds"],
+                "estimated_seconds": row["estimated_seconds"],
+                "completion_ratio": row["completion_ratio"],
+                "counted_as_read": bool(row["counted_as_read"]),
+                "completed_at": row["completed_at"],
+            },
+        )
+        connection.commit()
     return _page_read_from_row(row)
 
 
-def record_sentence_read(data_root: Path, payload: SentenceReadCreateRequest) -> SentenceReadRecord:
+def record_sentence_read(
+    data_root: Path,
+    payload: SentenceReadCreateRequest,
+    *,
+    owner_id: str | None = None,
+) -> SentenceReadRecord:
     completed_at = payload.completed_at or _utc_now()
+    registry = load_registry(resolve_books_root(data_root) / "registry.json")
+    book = registry.get(payload.book_id)
+    if book is None:
+        raise KeyError(f"Book not found: {payload.book_id}")
+    language_code = str(getattr(book, "language_code", None) or "local")
 
-    with _connect(data_root) as connection:
+    with _connect(data_root, owner_id) as connection:
         session_row = connection.execute(
             "SELECT id FROM reading_sessions WHERE id = ? AND book_id = ?",
             (payload.session_id, payload.book_id),
@@ -358,6 +546,16 @@ def record_sentence_read(data_root: Path, payload: SentenceReadCreateRequest) ->
                 ),
             )
             token_count += 1
+            _record_exposure(
+                connection,
+                language_code=language_code,
+                lemma=normalized_form,
+                book_id=payload.book_id,
+                page_number=payload.page_number,
+                exposure_type="word_read" if token_kind == "word" else "character_read",
+                weight=1.0 if token_kind == "word" else 0.5,
+                occurred_at=completed_at,
+            )
 
             if token_kind == "word" and any("\u4e00" <= character <= "\u9fff" for character in surface_form):
                 for character in surface_form:
@@ -393,6 +591,16 @@ def record_sentence_read(data_root: Path, payload: SentenceReadCreateRequest) ->
                         ),
                     )
                     character_count += 1
+                    _record_exposure(
+                        connection,
+                        language_code=language_code,
+                        lemma=character,
+                        book_id=payload.book_id,
+                        page_number=payload.page_number,
+                        exposure_type="character_read",
+                        weight=0.5,
+                        occurred_at=completed_at,
+                    )
 
         connection.commit()
         row = connection.execute(
@@ -405,12 +613,37 @@ def record_sentence_read(data_root: Path, payload: SentenceReadCreateRequest) ->
         ).fetchone()
         if row is None:
             raise RuntimeError("Failed to record sentence read.")
+        _queue_learning_event(
+            connection,
+            event_id=f"sentence-read:{uuid4().hex}",
+            event_type="sentence_read",
+            book_id=payload.book_id,
+            occurred_at=row["completed_at"],
+            payload={
+                "session_id": row["session_id"],
+                "book_id": row["book_id"],
+                "page_number": row["page_number"],
+                "sentence_order": row["sentence_order"],
+                "sentence_text": row["sentence_text"],
+                "token_count": row["token_count"],
+                "character_count": row["character_count"],
+                "active_seconds": row["active_seconds"],
+                "completed_at": row["completed_at"],
+                "language_code": language_code,
+                "tokens": [token.model_dump() for token in payload.tokens],
+            },
+        )
+        connection.commit()
 
     return _sentence_read_from_row(row)
 
 
-def get_learning_profile_summary(data_root: Path) -> LearningProfileSummary:
-    db_path = ensure_profile_database(data_root)
+def get_learning_profile_summary(
+    data_root: Path,
+    *,
+    owner_id: str | None = None,
+) -> LearningProfileSummary:
+    db_path = ensure_profile_database(data_root, owner_id)
     registry = load_registry(resolve_books_root(data_root) / "registry.json")
     track_stats: dict[str, dict[str, object]] = {}
 

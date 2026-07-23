@@ -8,6 +8,33 @@
   width: min(calc(100vw - 32px), 1240px) !important;
 }
 
+/* Keep the primary controls on one vertical centerline across preview pages. */
+.bottom-nav,
+.nav {
+  align-items: center !important;
+}
+
+.bottom-nav {
+  padding: 12px 14px !important;
+}
+
+.nav {
+  padding: 10px !important;
+}
+
+.bottom-nav .nav-item,
+.nav .nav-item {
+  align-self: center;
+  align-content: center;
+}
+
+.bottom-nav .nav-center,
+.nav .nav-center {
+  align-self: center;
+  margin-top: 0 !important;
+  transform: none !important;
+}
+
 @media (min-width: 900px) {
   .app {
     padding-left: 24px !important;

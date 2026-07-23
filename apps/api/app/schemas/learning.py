@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -68,6 +68,27 @@ class SentenceReadRecord(BaseModel):
     character_count: int
     active_seconds: int
     completed_at: str
+
+
+class LearningSyncResponse(BaseModel):
+    status: Literal["synced", "pending"]
+    uploaded_event_count: int = Field(ge=0)
+    hydrated_event_count: int = Field(ge=0)
+    remote_event_count: int = Field(ge=0)
+    pending_event_count: int = Field(ge=0)
+    last_synced_at: str | None = None
+    retry_after_seconds: int = Field(default=0, ge=0)
+    conflict_count: int = Field(default=0, ge=0)
+    last_error: str | None = None
+
+
+class LearningEventPayload(BaseModel):
+    event_id: str = Field(min_length=1)
+    idempotency_key: str = Field(min_length=1)
+    event_type: Literal["reading_session", "page_read", "sentence_read"]
+    book_id: str = Field(min_length=1)
+    occurred_at: str
+    payload: dict[str, Any] = Field(default_factory=dict)
 
 
 class LearningTrackJourneyStep(BaseModel):

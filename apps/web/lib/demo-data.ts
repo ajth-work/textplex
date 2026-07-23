@@ -399,6 +399,7 @@ function buildSummary(pages: PageExtractionResult[]): BookExtractionResult {
 
 export const demoBookRecord: BookRecord = {
   id: DEMO_BOOK_ID,
+  owner_id: null,
   title: "三体",
   author: "刘慈欣",
   language_code: "zh",
@@ -659,6 +660,35 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
       lexical_entry_count: demoSummary.lexical_entries.length,
       token_occurrence_count: demoSummary.token_occurrences.length,
       has_extraction: true,
+      extraction_progress_percent: 100,
+      metrics: {
+        metric_status: "ready",
+        assessment_system: "HSK",
+        text_expected_level: 4.2,
+        text_expected_level_label: "HSK 4.2",
+        sentence_average_level: 4.2,
+        page_average_level: 4.1,
+        character_weighted_average_level: 4,
+        eligible_character_count: 232,
+        known_character_count: 198,
+        unknown_character_count: 34,
+        chinese_word_occurrences: 145,
+        unknown_word_occurrences: 18,
+        partial_word_occurrences: 21,
+        sentence_count_with_level: 8,
+        page_count_with_level: demoSummary.pages.length,
+        distribution: [
+          { label: "HSK 1", character_occurrences: 32, percentage: 16.2 },
+          { label: "HSK 2", character_occurrences: 48, percentage: 24.2 },
+          { label: "HSK 3", character_occurrences: 63, percentage: 31.8 },
+          { label: "HSK 4", character_occurrences: 55, percentage: 27.8 },
+        ],
+        comprehension_status: "not_available",
+        estimated_comprehension_percent: null,
+        recommendation: "This expected level is derived from HSK character evidence; comprehension still requires learner data.",
+      },
+      sentence_hsk_series: [],
+      page_hsk_series: [],
       top_lexical_entries: demoSummary.lexical_entries.slice(0, 10),
     } satisfies BookAnalysisSurfaceResponse;
   }
@@ -744,7 +774,7 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
       })),
       settings: {
         entries: [
-          { key: "theme", value: "night" },
+          { key: "theme", value: "neutral" },
           { key: "readerMode", value: "sentence" },
           { key: "ocrProvider", value: "openai" },
         ],
@@ -755,7 +785,7 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
   if (route === "/settings") {
     return {
       entries: [
-        { key: "theme", value: "night" },
+        { key: "theme", value: "neutral" },
         { key: "readerMode", value: "sentence" },
       ],
     } satisfies SettingsSurfaceResponse;

@@ -105,3 +105,74 @@ def test_learning_profile_records_sentence_read_and_exposures(imported_real_scan
     assert summary["sentence_reads"] == 1
     assert summary["token_exposures"] >= 3
     assert summary["word_exposures"] >= 3
+    assert summary["vocabulary_progress_rows"] >= 3
+
+    study_response = client.get("/study")
+    assert study_response.status_code == 200
+    assert study_response.json()["queue_size"] >= 3
+
+
+def test_import_to_reader_to_profile_vertical_slice(tmp_path: Path) -> None:
+    app.state.data_root = tmp_path
+    client = TestClient(app)
+
+    import_response = client.post(
+        "/texts/import",
+        json={
+            "title": "Vertical Slice Sample",
+            "author": "Local import",
+            "language_code": "en",
+            "text": "Hello world. Read books.",
+        },
+    )
+    assert import_response.status_code == 200
+    book = import_response.json()
+
+    reader_response = client.get(f"/books/{book['id']}/pages/1")
+    assert reader_response.status_code == 200
+    reader_page = reader_response.json()
+    assert reader_page["book"]["id"] == book["id"]
+    assert reader_page["extraction"] is not None
+
+    sentence = reader_page["extraction"]["page"]["sentences"][0]
+    session_response = client.post("/learning/sessions", json={"book_id": book["id"]})
+    assert session_response.status_code == 200
+    session_id = session_response.json()["id"]
+
+    sentence_response = client.post(
+        "/learning/sentence-reads",
+        json={
+            "session_id": session_id,
+            "book_id": book["id"],
+            "page_number": 1,
+            "sentence_order": sentence["order"],
+            "sentence_text": sentence["text"],
+            "token_count": len(sentence["tokens"]),
+            "character_count": len(sentence["text"]),
+            "active_seconds": 20,
+            "tokens": [
+                {
+                    "surface_form": token["surface_form"],
+                    "lemma": token.get("lemma") or token["surface_form"],
+                    "token_kind": "word",
+                }
+                for token in sentence["tokens"]
+            ],
+        },
+    )
+    assert sentence_response.status_code == 200
+
+    profile_response = client.get("/learning/profile")
+    assert profile_response.status_code == 200
+    profile = profile_response.json()
+    assert profile["reading_sessions"] == 1
+    assert profile["sentence_reads"] == 1
+    assert profile["vocabulary_progress_rows"] > 0
+
+    progress_response = client.get("/progress")
+    assert progress_response.status_code == 200
+    assert any(item["book_id"] == book["id"] for item in progress_response.json()["books"])
+
+    study_response = client.get("/study")
+    assert study_response.status_code == 200
+    assert study_response.json()["queue_size"] > 0

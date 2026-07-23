@@ -1,5 +1,6 @@
 export interface BookRecord {
   id: string;
+  owner_id: string | null;
   title: string;
   author: string | null;
   language_code: string;
@@ -83,6 +84,13 @@ export interface SentenceResult {
   translation?: string | null;
   tokens: TokenResult[];
   grammar_patterns: string[];
+}
+
+export interface AuthMeResponse {
+  id: string;
+  email: string | null;
+  role: string;
+  display_name: string | null;
 }
 
 export interface PageExtractionResult {
@@ -192,6 +200,40 @@ export interface SentenceReadRecord {
   completed_at: string;
 }
 
+export interface LearningSyncResponse {
+  status: "synced" | "pending";
+  uploaded_event_count: number;
+  hydrated_event_count: number;
+  remote_event_count: number;
+  pending_event_count: number;
+  last_synced_at: string | null;
+  retry_after_seconds: number;
+  conflict_count: number;
+  last_error: string | null;
+}
+
+export interface ThemeCheckoutRequest {
+  product_type: "theme" | "bundle";
+  product_id: string;
+  idempotency_key: string;
+}
+
+export interface ThemeCheckoutResponse {
+  session_id: string;
+  status: "created" | "paid" | "refunded";
+  payment_status: "pending" | "succeeded" | "refunded";
+  product_type: "theme" | "bundle";
+  product_id: string;
+  theme_ids: string[];
+  amount_cents: number;
+  currency: string;
+}
+
+export interface ThemeEntitlementResponse {
+  theme_ids: string[];
+  source: "local" | "hosted";
+}
+
 export interface LearningProfileSummary {
   database_path: string;
   reading_sessions: number;
@@ -299,6 +341,42 @@ export interface AnalysisLexicalEntrySummary {
   last_page: number | null;
 }
 
+export interface AnalysisDistributionBucket {
+  label: string;
+  character_occurrences: number;
+  percentage: number;
+}
+
+export interface AnalysisSeriesPoint {
+  index: number;
+  label: string;
+  value: number;
+  page_number: number | null;
+  sentence_order: number | null;
+}
+
+export interface AnalysisMetrics {
+  metric_status: "pending" | "ready" | "no_evidence" | "unsupported";
+  assessment_system: string | null;
+  text_expected_level: number | null;
+  text_expected_level_label: string | null;
+  sentence_average_level: number | null;
+  page_average_level: number | null;
+  character_weighted_average_level: number | null;
+  eligible_character_count: number;
+  known_character_count: number;
+  unknown_character_count: number;
+  chinese_word_occurrences: number;
+  unknown_word_occurrences: number;
+  partial_word_occurrences: number;
+  sentence_count_with_level: number;
+  page_count_with_level: number;
+  distribution: AnalysisDistributionBucket[];
+  comprehension_status: "not_available";
+  estimated_comprehension_percent: null;
+  recommendation: string;
+}
+
 export interface BookAnalysisSurfaceResponse {
   book_id: string;
   title: string;
@@ -310,6 +388,10 @@ export interface BookAnalysisSurfaceResponse {
   lexical_entry_count: number;
   token_occurrence_count: number;
   has_extraction: boolean;
+  extraction_progress_percent: number;
+  metrics: AnalysisMetrics;
+  sentence_hsk_series: AnalysisSeriesPoint[];
+  page_hsk_series: AnalysisSeriesPoint[];
   top_lexical_entries: AnalysisLexicalEntrySummary[];
 }
 
@@ -368,6 +450,72 @@ export interface ProfileSurfaceResponse {
   profile: LearningProfileSummary;
   books: ProgressBookSummary[];
   settings: SettingsSurfaceResponse;
+}
+
+export interface HostedProfileRecord {
+  id: string;
+  display_name: string | null;
+  target_language: string;
+  learning_track: string;
+  proficiency_level: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HostedSettingEntry extends SettingEntry {
+  updated_at: string;
+}
+
+export interface HostedProfileSurfaceResponse {
+  user: AuthMeResponse;
+  profile: HostedProfileRecord;
+  settings: HostedSettingEntry[];
+}
+
+export interface HostedProfileUpdateRequest {
+  display_name?: string | null;
+  target_language?: string;
+  learning_track?: string;
+  proficiency_level?: string | null;
+}
+
+export interface ProfileMigrationRequest {
+  conflict_policy: "merge_non_destructive";
+}
+
+export interface ProfileMigrationResponse {
+  status: "ready" | "empty" | "already_migrated" | "completed";
+  conflict_policy: "merge_non_destructive";
+  source_fingerprint: string;
+  source_counts: Record<string, number>;
+  target_counts: Record<string, number>;
+  imported_rows: Record<string, number>;
+  message: string;
+}
+
+export interface ThemeCatalogItem {
+  id: string;
+  title: string;
+  description: string;
+  price_cents: number;
+  is_free: boolean;
+  is_owned: boolean;
+  preview_available: boolean;
+}
+
+export interface ThemeBundleCatalogItem {
+  id: string;
+  title: string;
+  description: string;
+  theme_ids: string[];
+  price_cents: number;
+  is_owned: boolean;
+}
+
+export interface ThemeCatalogResponse {
+  mode: "local" | "hosted";
+  themes: ThemeCatalogItem[];
+  bundles: ThemeBundleCatalogItem[];
 }
 
 export interface ActivityEvent {

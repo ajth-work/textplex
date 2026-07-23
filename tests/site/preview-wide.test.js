@@ -12,6 +12,7 @@ const previewFiles = [
   "library-preview.html",
   "profile-preview.html",
   "progress-preview.html",
+  "roadmap-preview.html",
   "reader-preview.html",
   "search-preview.html",
   "study-preview.html",

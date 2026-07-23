@@ -1,0 +1,339 @@
+<div id="extra-color-palettes" class="viz-root" role="img" aria-label="Three language-themed color palettes: matrix green, China-inspired crimson and gold, and Japan-inspired vermilion and indigo.">
+  <style>
+    #extra-color-palettes {
+      --surface: var(--background);
+      --ink: var(--foreground);
+      --muted: var(--muted-foreground);
+      --border: var(--border);
+      --accent: var(--accent);
+      --accent-ink: var(--accent-foreground);
+      box-sizing: border-box;
+      width: 100%;
+      padding: 18px;
+      color: var(--ink);
+      background: transparent;
+      font-family: inherit;
+    }
+
+    #extra-color-palettes * {
+      box-sizing: border-box;
+    }
+
+    #extra-color-palettes .wrap {
+      width: 100%;
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      align-items: stretch;
+    }
+
+    #extra-color-palettes .panel {
+      border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+      border-radius: 24px;
+      background: color-mix(in srgb, var(--card) 94%, transparent);
+      padding: 16px;
+      min-width: 0;
+      box-shadow: 0 16px 30px rgba(0, 0, 0, 0.06);
+    }
+
+    #extra-color-palettes .head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    #extra-color-palettes .title {
+      display: grid;
+      gap: 4px;
+    }
+
+    #extra-color-palettes h2 {
+      margin: 0;
+      font: 500 clamp(1.05rem, 1rem + 0.4vw, 1.35rem) / 1.1 inherit;
+      letter-spacing: -0.02em;
+    }
+
+    #extra-color-palettes .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.35;
+    }
+
+    #extra-color-palettes .chip {
+      align-self: start;
+      border-radius: 999px;
+      padding: 7px 10px;
+      background: var(--accent);
+      color: var(--accent-ink);
+      font-size: 0.78rem;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    #extra-color-palettes .hero {
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+      margin-bottom: 10px;
+      background: var(--card);
+    }
+
+    #extra-color-palettes .hero-strip {
+      min-height: 56px;
+      display: flex;
+    }
+
+    #extra-color-palettes .hero-band {
+      flex: 1 1 0;
+      min-height: 56px;
+    }
+
+    #extra-color-palettes .hero-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+      background: color-mix(in srgb, var(--card) 92%, transparent);
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    #extra-color-palettes .swatches {
+      display: grid;
+      gap: 10px;
+    }
+
+    #extra-color-palettes .swatch {
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+      background: var(--card);
+    }
+
+    #extra-color-palettes .tone {
+      min-height: 92px;
+      display: grid;
+      gap: 12px;
+      padding: 12px;
+      letter-spacing: 0.01em;
+    }
+
+    #extra-color-palettes .tone-top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 0.8rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #extra-color-palettes .tone-name {
+      font-weight: 500;
+    }
+
+    #extra-color-palettes .tone-hex {
+      opacity: 0.9;
+    }
+
+    #extra-color-palettes .ramp {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    #extra-color-palettes .ramp span {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      min-height: 28px;
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+    }
+
+    #extra-color-palettes .note {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.4;
+    }
+
+    #extra-color-palettes .footer {
+      margin-top: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    #extra-color-palettes .legend {
+      border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+      border-radius: 999px;
+      padding: 7px 10px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      background: color-mix(in srgb, var(--card) 92%, transparent);
+    }
+
+    @media (max-width: 920px) {
+      #extra-color-palettes .wrap {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+
+  <div class="wrap">
+    <section class="panel" data-theme="matrix" data-label="Matrix Green" data-subtitle="Deep terminal black to electric glyph green." data-chip="ambient neon" data-note="Best for system-dark, futuristic, or live-session accents." data-palette='[{"hex":"#06130a","name":"base"},{"hex":"#0a2512","name":"shadow"},{"hex":"#0f3a1b","name":"depth"},{"hex":"#19a34a","name":"glow"},{"hex":"#a8f0bc","name":"signal"}]'>
+      <div class="head">
+        <div class="title">
+          <h2>Matrix Green</h2>
+          <p class="subtitle">Deep terminal black to electric glyph green.</p>
+        </div>
+        <div class="chip">ambient neon</div>
+      </div>
+      <div class="hero" aria-hidden="true">
+        <div class="hero-strip"></div>
+        <div class="hero-meta">
+          <span>palette spectrum</span>
+          <span>5 colors</span>
+        </div>
+      </div>
+      <div class="swatches matrix" aria-hidden="true" data-swatch-host></div>
+      <div class="note">Best for system-dark, futuristic, or live-session accents.</div>
+    </section>
+
+    <section class="panel" data-theme="china" data-label="China-Inspired" data-subtitle="Imperial crimson, lacquer red, and gold warmth." data-chip="language theme" data-note="Feels ceremonial and premium without turning into flag branding." data-palette='[{"hex":"#4c0f12","name":"ink"},{"hex":"#8f141a","name":"seal"},{"hex":"#d11d27","name":"core"},{"hex":"#f3c443","name":"gold"},{"hex":"#1d6b4f","name":"jade"}]'>
+      <div class="head">
+        <div class="title">
+          <h2>China-Inspired</h2>
+          <p class="subtitle">Imperial crimson, lacquer red, and gold warmth.</p>
+        </div>
+        <div class="chip">language theme</div>
+      </div>
+      <div class="hero" aria-hidden="true">
+        <div class="hero-strip"></div>
+        <div class="hero-meta">
+          <span>palette spectrum</span>
+          <span>5 colors</span>
+        </div>
+      </div>
+      <div class="swatches china" aria-hidden="true" data-swatch-host></div>
+      <div class="note">Feels ceremonial and premium without turning into flag branding.</div>
+    </section>
+
+    <section class="panel" data-theme="japan" data-label="Japanese-Inspired" data-subtitle="Vermilion, indigo, rice-paper light, and night ink." data-chip="calm contrast" data-note="Works well for a reading UI that needs soft hierarchy and restraint." data-palette='[{"hex":"#1a213a","name":"ink"},{"hex":"#c82b2b","name":"vermilion"},{"hex":"#f2643b","name":"warm red"},{"hex":"#faf1e7","name":"paper"},{"hex":"#5668b1","name":"indigo"}]'>
+      <div class="head">
+        <div class="title">
+          <h2>Japanese-Inspired</h2>
+          <p class="subtitle">Vermilion, indigo, rice-paper light, and night ink.</p>
+        </div>
+        <div class="chip">calm contrast</div>
+      </div>
+      <div class="hero" aria-hidden="true">
+        <div class="hero-strip"></div>
+        <div class="hero-meta">
+          <span>palette spectrum</span>
+          <span>5 colors</span>
+        </div>
+      </div>
+      <div class="swatches japan" aria-hidden="true" data-swatch-host></div>
+      <div class="note">Works well for a reading UI that needs soft hierarchy and restraint.</div>
+    </section>
+  </div>
+
+  <div class="footer" aria-label="Palette tags">
+    <span class="legend">Language-region palette packs</span>
+    <span class="legend">Keep reading surfaces neutral</span>
+    <span class="legend">Use accents sparingly</span>
+  </div>
+
+  <script>
+    (function () {
+      const root = document.getElementById('extra-color-palettes');
+      if (!root) return;
+
+      const toRgb = (hex) => {
+        const normalized = hex.replace('#', '').trim();
+        const value = normalized.length === 3
+          ? normalized.split('').map((c) => c + c).join('')
+          : normalized;
+        const num = Number.parseInt(value, 16);
+        return {
+          r: (num >> 16) & 255,
+          g: (num >> 8) & 255,
+          b: num & 255,
+        };
+      };
+
+      const toHex = ({ r, g, b }) =>
+        '#' + [r, g, b].map((channel) => channel.toString(16).padStart(2, '0')).join('');
+
+      const mix = (hexA, hexB, amount) => {
+        const a = toRgb(hexA);
+        const b = toRgb(hexB);
+        const m = (start, end) => Math.round(start + (end - start) * amount);
+        return toHex({
+          r: m(a.r, b.r),
+          g: m(a.g, b.g),
+          b: m(a.b, b.b),
+        });
+      };
+
+      const contrastText = (hex) => {
+        const { r, g, b } = toRgb(hex);
+        const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+        return luminance > 0.62 ? '#1c1f29' : '#f7f6f1';
+      };
+
+      const panelPalette = root.querySelectorAll('[data-palette]');
+      panelPalette.forEach((panel) => {
+        const palette = JSON.parse(panel.dataset.palette || '[]');
+        const host = panel.querySelector('[data-swatch-host]');
+        const strip = panel.querySelector('.hero-strip');
+        const note = panel.dataset.note;
+
+        if (strip) {
+          strip.innerHTML = palette
+            .map((entry) => `<div class="hero-band" style="background:${entry.hex}"></div>`)
+            .join('');
+        }
+
+        if (!host) return;
+
+        host.innerHTML = palette.map((entry) => {
+          const shade = mix(entry.hex, '#000000', 0.22);
+          const tint = mix(entry.hex, '#ffffff', 0.22);
+          const soft = mix(entry.hex, '#ffffff', 0.48);
+          const text = contrastText(entry.hex);
+          const text2 = contrastText(tint);
+          return `
+            <div class="swatch">
+              <div class="tone" style="background:${entry.hex};color:${text};">
+                <div class="tone-top">
+                  <span class="tone-name">${entry.name}</span>
+                  <span class="tone-hex">${entry.hex}</span>
+                </div>
+                <div class="ramp">
+                  <span style="background:${shade};color:${contrastText(shade)}">shade</span>
+                  <span style="background:${entry.hex};color:${text}">base</span>
+                  <span style="background:${tint};color:${text2}">tint</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        if (note) {
+          const noteNode = panel.querySelector('.note');
+          if (noteNode) noteNode.textContent = note;
+        }
+      });
+    })();
+  </script>
+</div>

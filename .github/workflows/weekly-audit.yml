@@ -1,0 +1,98 @@
+name: Weekly Audit
+
+on:
+  schedule:
+    # Sundays at 13:00 UTC: 9:00 AM during Eastern daylight time and 8:00 AM during standard time.
+    - cron: "0 13 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weekly-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Full repository audit
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NODE_PATH: ${{ github.workspace }}/apps/web/node_modules
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            apps/api/pyproject.toml
+            packages/processor/pyproject.toml
+
+      - name: Install API and processor dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e "apps/api[dev]" -e packages/processor
+
+      - name: Run Python tests
+        run: python -m pytest -q
+
+      - name: Run Ruff
+        run: python -m ruff check apps/api packages/processor tests
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Report dependency and runtime drift
+        run: npm run maintenance:check
+
+      - name: Run maintenance smoke test
+        run: npm run test:maintenance
+
+      - name: Run static site tests
+        run: npm run test:site
+
+      - name: Start API for live health checks
+        working-directory: apps/api
+        run: |
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8201 > /tmp/textplex-api.log 2>&1 &
+          echo $! > /tmp/textplex-api.pid
+
+      - name: Start preview server
+        working-directory: site
+        run: |
+          node server.mjs > /tmp/textplex-site.log 2>&1 &
+          echo $! > /tmp/textplex-site.pid
+
+      - name: Check live preview routes and API health
+        env:
+          TEXTPLEX_WEB_BASE_URLS: http://127.0.0.1:8200
+          TEXTPLEX_API_HEALTH_URLS: http://127.0.0.1:8201/ready
+        run: npm run test:web
+
+      - name: Stop live audit services
+        if: always()
+        run: |
+          if test -f /tmp/textplex-site.pid; then kill "$(cat /tmp/textplex-site.pid)" || true; fi
+          if test -f /tmp/textplex-api.pid; then kill "$(cat /tmp/textplex-api.pid)" || true; fi
+
+      - name: Build web app
+        run: npm run build:web
+
+      - name: Run web lint non-interactively
+        env:
+          CI: "1"
+        run: npm run lint:web
+
+      - name: Check diff formatting
+        run: git diff --check

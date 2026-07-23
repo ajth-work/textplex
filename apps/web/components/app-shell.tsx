@@ -5,6 +5,7 @@ import { usePathname, useParams, useSearchParams, useRouter } from "next/navigat
 import { useEffect, useMemo, useState } from "react";
 
 import { isDemoMode } from "../lib/textplex";
+import { useAuth } from "./auth-provider";
 
 const LAST_BOOK_KEY = "textplex:last-book-id";
 const LAST_PAGE_KEY = "textplex:last-page-number";
@@ -63,6 +64,7 @@ export function AppShell() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [storedContext, setStoredContext] = useState<NavigationContext>(() => readStoredContext());
+  const { configured, loading: authLoading, user, signOut } = useAuth();
 
   const routeContext = useMemo(
     () => parseRouteContext(pathname, params as Record<string, string | string[] | undefined>, searchParams),
@@ -106,6 +108,10 @@ export function AppShell() {
     router.push("/library");
   }
 
+  if (pathname === "/" || pathname === "/library") {
+    return null;
+  }
+
   return (
     <>
       <header className="app-shell-bar card">
@@ -133,6 +139,15 @@ export function AppShell() {
           <Link className="button button-secondary shell-button" href={analysisHref}>
             Analysis
           </Link>
+          {!isDemoMode && !authLoading && user ? (
+            <button className="button button-secondary shell-button" type="button" onClick={() => void signOut()}>
+              Sign out
+            </button>
+          ) : !isDemoMode && configured ? (
+            <Link className="button button-secondary shell-button" href="/auth">
+              Sign in
+            </Link>
+          ) : null}
         </div>
       </header>
 

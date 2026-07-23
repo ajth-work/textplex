@@ -1,20 +1,18 @@
 $ErrorActionPreference = 'Stop'
 
-$root = 'C:\Users\Andrew-John\Documents\TextPlex'
-$web = Join-Path $root 'apps\web'
-$node = 'T:\OpenAI Programming\node.exe'
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$npm = (Get-Command npm.cmd -ErrorAction Stop).Source
 $log = Join-Path $root 'web-dev.log'
 $err = Join-Path $root 'web-dev.err'
 
 $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-$startInfo.FileName = $node
-$startInfo.Arguments = '.\node_modules\next\dist\bin\next dev --hostname 0.0.0.0 --port 3000'
-$startInfo.WorkingDirectory = $web
+$startInfo.FileName = $npm
+$startInfo.Arguments = 'run dev:web'
+$startInfo.WorkingDirectory = $root
 $startInfo.UseShellExecute = $false
 $startInfo.CreateNoWindow = $true
 $startInfo.RedirectStandardOutput = $true
 $startInfo.RedirectStandardError = $true
-$null = $startInfo.EnvironmentVariables['NEXT_IGNORE_INCORRECT_LOCKFILE']
 $startInfo.EnvironmentVariables['NEXT_IGNORE_INCORRECT_LOCKFILE'] = '1'
 
 $process = [System.Diagnostics.Process]::Start($startInfo)
