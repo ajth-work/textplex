@@ -34,6 +34,7 @@
 
 ## 2026-07-23
 
+- Maintenance: removed the copyrighted three-body PDF test dependency, replaced the extraction tests with a synthetic in-memory PDF fixture, and aligned the import endpoint test with the configured import roots.
 - Documentation: added a structured non-Romanized test-sample library with three 10-sentence passages per current target language and linked it from the starter corpus note.
 - Maintenance: rebuilt the Korean starter pack from the downloaded KRDICT JSON export chunks, tightened the Korean ranking for learner-friendly entries, and updated the Korean lexicon import test to match the export-driven seed.
 - Maintenance: added Russian lexicon acquisition notes, a starter pack, a CSV pack builder, and regression coverage so Russian can follow the Korean sourced-pack workflow.

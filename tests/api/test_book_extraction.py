@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import fitz
 from fastapi.testclient import TestClient
 import pytest
 
@@ -10,6 +11,24 @@ from app.services.book_registry import import_book_from_path
 from app.services import book_extraction as book_extraction_service
 from app.services.ocr import OcrPageResult
 from processor.contracts import BookExtractionResult
+
+
+def build_safe_sample_pdf(tmp_path: Path, *, page_count: int) -> Path:
+    pdf_path = tmp_path / f"safe-sample-{page_count}.pdf"
+    document = fitz.open()
+    sample_pages = [
+        "第一页：这是一个安全的测试页。",
+        "第二页：我们只需要稳定的中文文本用于提取。",
+        "第三页：内容不依赖任何受版权保护的原文。",
+        "第四页：用来验证分页和缓存刷新。",
+    ]
+    for index in range(page_count):
+        page = document.new_page(width=595, height=842)
+        page.insert_text((72, 96), sample_pages[index % len(sample_pages)], fontsize=18)
+        page.insert_text((72, 140), f"测试页 {index + 1}", fontsize=12)
+    document.save(pdf_path)
+    document.close()
+    return pdf_path
 
 
 def test_extract_book_text_persists_structured_page_artifacts(imported_real_scan: tuple[Path, BookRecord]) -> None:
@@ -76,7 +95,7 @@ def test_extract_book_endpoint_is_idempotent_for_same_sample(imported_real_scan:
 
 
 def test_extract_book_text_records_openai_ocr_metadata(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    source_pdf = Path(__file__).resolve().parents[1] / "fixtures" / "books" / "three-body-mini" / "three-body-mini-slice.pdf"
+    source_pdf = build_safe_sample_pdf(tmp_path, page_count=4)
     data_root = tmp_path
     record = import_book_from_path(
         source_pdf,
@@ -238,7 +257,7 @@ def test_load_page_artifact_recovers_jsonish_transcription(tmp_path: Path) -> No
 
 
 def test_extract_book_text_uses_book_level_ocr_provider(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    source_pdf = Path(__file__).resolve().parents[1] / "fixtures" / "books" / "three-body-mini" / "three-body-mini-slice.pdf"
+    source_pdf = build_safe_sample_pdf(tmp_path, page_count=1)
     data_root = tmp_path
     record = import_book_from_path(
         source_pdf,
@@ -290,7 +309,7 @@ def test_extract_book_text_uses_book_level_ocr_provider(monkeypatch: pytest.Monk
 
 
 def test_force_extraction_refreshes_cached_artifacts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    source_pdf = Path(__file__).resolve().parents[1] / "fixtures" / "books" / "three-body-mini" / "three-body-mini-slice.pdf"
+    source_pdf = build_safe_sample_pdf(tmp_path, page_count=1)
     data_root = tmp_path
     record = import_book_from_path(
         source_pdf,
@@ -416,7 +435,7 @@ def test_load_book_extraction_recovers_jsonish_transcription(tmp_path: Path) -> 
 
 
 def test_get_book_extraction_route_recovers_jsonish_transcription(tmp_path: Path) -> None:
-    source_pdf = Path(__file__).resolve().parents[1] / "fixtures" / "books" / "three-body-mini" / "three-body-mini-slice.pdf"
+    source_pdf = build_safe_sample_pdf(tmp_path, page_count=1)
     data_root = tmp_path
     record = import_book_from_path(
         source_pdf,
