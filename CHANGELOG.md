@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-07-23
+
+- Hardened the clean container smoke job so owned-route checks retry until the Next app, API, and legacy shell finish starting instead of failing on a startup reset.
+
 ## 2026-07-21
 
 - Phase 4: wired the canonical Next import-to-reader-progress path to the existing API vertical slice and added a configurable `legacy` profile link with inventory coverage.
