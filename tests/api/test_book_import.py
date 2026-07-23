@@ -38,7 +38,7 @@ def test_import_book_endpoint_registers_alice_mini_fixture(
     response = client.post(
         "/books/import",
         json={
-            "source_path": r"tests\fixtures\books\alice-mini",
+            "source_path": str(fixture_root / "alice-mini"),
             "language_code": "en",
             "page_start": 1,
             "page_count": 4,
