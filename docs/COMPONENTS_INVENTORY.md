@@ -2,7 +2,9 @@
 
 This is the canonical map of the user-visible surfaces in `apps/web`. It gives pages and regions stable names that can be used in product notes, issues, design reviews, QA, and agent prompts.
 
-Inventory status: reviewed against the Next app and standalone preview aliases on 2026-07-21. Phase 1 migration decisions are recorded in `docs/FRONTEND_MIGRATION_PHASE_1.md`.
+Inventory status: reviewed against the Next app and standalone preview aliases on 2026-07-22. Phase 1 migration decisions are recorded in `docs/FRONTEND_MIGRATION_PHASE_1.md`.
+
+Unless a task explicitly calls for legacy or GitHub Pages compatibility work, implement UI changes in the Next app on `3000` and treat the standalone `8200` shell as a reference surface only.
 
 ## Naming rules
 
@@ -34,7 +36,7 @@ Inventory status: reviewed against the Next app and standalone preview aliases o
 
 | Page ID | Path | Primary source |
 | --- | --- | --- |
-| `home` | `/` | `apps/web/app/page.tsx` |
+| `home` | `/` | `apps/web/components/home-surface.tsx` |
 | `library` | `/library` | `apps/web/components/library-view.tsx` |
 | `book-detail` | `/books/:bookId` | `apps/web/components/book-detail-view.tsx` |
 | `reader` | `/reader/:bookId/:pageNumber` | `apps/web/components/reader-view.tsx` |
@@ -51,19 +53,22 @@ Inventory status: reviewed against the Next app and standalone preview aliases o
 
 ### `home` — `/`
 
-Source: `apps/web/app/page.tsx` (`HomePage`)
+Source: `apps/web/components/home-surface.tsx` (`HomeSurface`)
 
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
-| `home.hero` | region | Home hero | Product promise, mode status, explanatory copy, and entry actions. |
-| `home.actions` | region | Home actions | Open library, analysis, progress, study, and roadmap links. |
-| `home.feature-grid` | region | Feature overview | Overview grid for the main reading and learning surfaces. |
-| `home.library-card` | card | Library | Explains the imported-book surface. |
-| `home.book-detail-card` | card | Book detail | Explains the book metadata and extraction surface. |
-| `home.reader-card` | card | Reader | Explains page reading and token interaction. |
-| `home.analysis-card` | card | Analysis | Explains difficulty and vocabulary analysis. |
-| `home.study-card` | card | Study | Explains due-item review. |
-| `home.progress-card` | card | Progress | Explains exposure-driven progress. |
+| `home.page` | page | Home | Compact Next home surface that mirrors the standalone 8200 preview shell. |
+| `home.header` | region | Home header | Centered brand header and notification action. |
+| `home.search` | region | Search | Search field for texts, authors, and topics. |
+| `home.continue-reading` | region | Continue reading | Section showing the active book to resume. |
+| `home.continue-reading-card` | card | Continue reading card | Open-book card with art, metadata, and progress. |
+| `home.recent-analyses` | region | Recent analyses | Section listing the latest analyzed books. |
+| `home.recent-analysis-row` | region | Recent analysis row | One analysis row with art, metadata, and score. |
+| `home.goals` | region | Goals | Reading goal and exposure summary section. |
+| `home.weekly-goal` | card | Weekly reading goal | Weekly page-reading progress ring. |
+| `home.exposure-goal` | card | Reading exposure | Sentence-read exposure summary card. |
+| `home.empty-state` | card | Empty state | First-text call to action when no books are available. |
+| `home.error-state` | card | Error state | Error message shown when the home data request fails. |
 
 ### `library` — `/library`
 
@@ -71,13 +76,17 @@ Source: `apps/web/components/library-view.tsx` (`LibraryView`)
 
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
-| `library.page-hero` | region | Library hero | Intro copy, demo status, upload entry point, and library count. |
-| `library.upload-controls` | region | Upload controls | PDF upload button, hidden file input, status, and upload messaging. |
-| `library.book-count` | region | Imported book count | Hero metadata showing the current registry count. |
-| `library.book-grid` | region | Book grid | Collection layout for imported books. |
-| `library.book-card` | card | Book card | Language, status, title, author, page metrics, timestamp, and open action for one book. |
-| `library.empty-state` | card | No books imported | Guidance shown when the library is empty. |
-| `library.error-state` | card | Library error | Book loading or upload error message. |
+| `library.page-header` | region | Library title bar | Centered TextPlex title with back navigation at the top of the library route. |
+| `library.search-hero` | region | Search hero | Search field and document count header for the library shelf. |
+| `library.search` | region | Library search | Search input used to filter library items. |
+| `library.document-count` | region | Document count | Visible count of matching books in the shelf. |
+| `library.shelf` | region | Library shelf | Book collection grid, loading card, and empty state. |
+| `library.skeleton-card` | card | Loading book | Skeleton card shown while the library loads. |
+| `library.book-card` | card | Book card | Language, format, title, subtitle, status, metrics, and info/read actions for one book. |
+| `library.book-info-button` | button | Info action | Opens the book detail route from a library card. |
+| `library.book-open-button` | button | Read action | Opens the reader route from a library card. |
+| `library.empty-state` | card | Empty library | Guidance shown when no books are available or match the search. |
+| `library.error-state` | card | Library error | Book loading error message. |
 
 ### `book-detail` — `/books/:bookId`
 
@@ -102,14 +111,15 @@ Source: `apps/web/components/reader-view.tsx` (`ReaderView`)
 | `reader.header` | region | Reader header | Book/page identity, compact controls, page navigation, and reading-session summary. |
 | `reader.options-dialog` | region | Reader options | Font, text size, reading theme, token mode, and focus-mode controls. |
 | `reader.page-card` | card | Reader page | Page image/reflowed text reading surface and sentence content. |
+| `reader.navigation-card` | region | Reader pager | Compact previous/next sentence controls and page/sentence position pill. |
 | `reader.sentence` | region | Reader sentence | One readable sentence with sentence-level timing and interaction state. |
 | `reader.token` | region | Reader token | Clickable word/character unit with lookup and exposure behavior. |
 | `reader.token-inspector` | card | Token inspector | Selected token, pronunciation, level, definitions, and action state. |
 | `reader.sentence-hsk-chart` | card | Sentence HSK chart | HSK level plotted across the readable tokens in the selected sentence. |
-| `reader.book-frequency-card` | card | Book frequency | Selected token frequency in the current book. |
-| `reader.dictionary-card` | card | Dictionary wiring | Dictionary/lexical-entry lookup status and source details. |
-| `reader.reading-profile-card` | card | Reading profile | Learner exposure and progress details for the selected token. |
-| `reader.navigation-card` | card | Reader navigation | Previous/next page and related navigation controls. |
+| `reader.tools-card` | card | Reader tools | Collapsed utility drawer for sentence chart, page image control, book frequency, dictionary wiring, reading profile, and page navigation. |
+| `reader.book-frequency-card` | card | Book frequency | Nested book-wide frequency panel inside the collapsed reader tools drawer. |
+| `reader.dictionary-card` | card | Dictionary wiring | Nested dictionary/lexical-entry lookup status and source details inside the collapsed reader tools drawer. |
+| `reader.reading-profile-card` | card | Reading profile | Nested learner exposure and progress details inside the collapsed reader tools drawer. |
 | `reader.unavailable-state` | card | Reader unavailable | Missing page or unavailable extraction state. |
 
 ### `analysis` — `/analysis/:bookId`
@@ -119,7 +129,7 @@ Live source: `apps/web/components/surface-views.tsx` (`AnalysisSurfaceView`); de
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
 | `analysis.route-hero` | region | Analysis hero | Shared route hero with analysis-specific title, links, and page/token metrics. |
-| `analysis.lexical-entries-card` | card | Top lexical entries | Highest-frequency lexical entries with first/last page context. |
+| `analysis.lexical-entries-card` | card | Top lexical entries | Compact lexical grid with pronunciation, meaning, HSK badge, and page exposure context. |
 | `analysis.summary-card` | card | Analysis summary | Book, language, and extraction availability summary. |
 | `analysis.sentence-hsk-chart` | card | Sentence HSK chart | Ordered sentence-level HSK averages across the extracted text. |
 | `analysis.page-hsk-chart` | card | Page HSK chart | Ordered page-level HSK averages across the extracted text. |
@@ -255,10 +265,10 @@ Source: `apps/web/app/roadmap/page.tsx` (`RoadmapPage`)
 
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
-| `roadmap.route-hero` | region | Roadmap hero | Language-pack tracker title, links, and status metrics. |
+| `roadmap.route-hero` | region | Roadmap hero | Language-pack tracker title, preview badge, and status metrics. |
 | `roadmap.implementation-plan-card` | card | Implementation plan | Ordered language-pack implementation steps. |
 | `roadmap.plan-step` | region | Plan step | One implementation step with status and description. |
-| `roadmap.current-focus-card` | card | Current focus | Explanation of the active Japanese language-pack work. |
+| `roadmap.current-focus-card` | card | Current focus | Explanation of the active Korean language-pack work. |
 | `roadmap.language-tracker-card` | card | Per-language tracker | Container for language-pack progress cards. |
 | `roadmap.language-card` | card | Language track | One language’s status, progress meter, pack, benchmark, and next step. |
 
@@ -325,7 +335,8 @@ Use this section to move from a component ID to the issue that owns its pending 
 | `analysis.*`, `reader.*` analytics regions | [#31](https://github.com/ajth-work/textplex/issues/31) | Broader reader-detail analytics work; #42 owns the difficulty/HSK metric contract. |
 | `progress.*`, `study.*`, `preview.vocabulary.*` | [#27](https://github.com/ajth-work/textplex/issues/27) | Multi-path insights dashboard and assessment-family progression. |
 | `profile.theme-picker`, `profile.theme-shop-entry`, `theme-shop.*` | Add theme store and commerce entitlements (Local pending) | Prototype theme browsing, bundle offers, live preview, and profile-backed save behavior; the parent initiative owns future catalog, checkout, fulfillment, and entitlement work. |
-| `reader.header`, `reader.options-dialog`, `reader.page-card`, `reader.token-inspector`, `reader.sentence-hsk-chart` | Consolidate standalone preview features into the Next.js app (Local pending) | Phase 2 reader parity slice; Next now owns the reader metadata and selected-sentence HSK visualization while standalone remains the compatibility reference. |
+| `home.page`, `home.header`, `home.search`, `home.continue-reading`, `home.continue-reading-card`, `home.recent-analyses`, `home.recent-analysis-row`, `home.goals`, `home.weekly-goal`, `home.exposure-goal`, `home.empty-state`, `home.error-state`, `library.page-header`, `library.search-hero`, `library.search`, `library.document-count`, `library.shelf`, `library.skeleton-card`, `library.book-card`, `library.book-info-button`, `library.book-open-button`, `library.empty-state`, `library.error-state`, `shell.primary-nav` | Frontend migration Phase 7 (In progress) | Canonical Next home and library parity slices now mirror the compact standalone 8200 shell with live book/profile hydration, the standalone-style TextPlex library title, library search/count/shelf behavior, continue-reading/recent-analysis/goal cards, and skeleton/error states. |
+| `reader.header`, `reader.options-dialog`, `reader.page-card`, `reader.navigation-card`, `reader.tools-card`, `reader.token-inspector`, `reader.sentence-hsk-chart` | Consolidate standalone preview features into the Next.js app (Local pending) | Phase 2 reader parity slice; Next now owns the reader metadata, compact pager, collapsed utility drawer, and selected-sentence HSK visualization while standalone remains the compatibility reference. |
 | `import.form`, `import.progress-card`, `import.recent-books-card`, `import.book-item` | Consolidate standalone preview features into the Next.js app (Local pending) | Phase 2 import slice; Next now submits pasted text and PDF uploads to the API and tracks background extraction. |
 | `analysis.difficulty-card`, `analysis.vocabulary-distribution-card`, `analysis.summary-card`, `analysis.sentence-hsk-chart`, `analysis.page-hsk-chart`, `book-detail.extraction-snapshot-card`, `book-detail.page-hsk-chart`, `reader.sentence-hsk-chart` | Frontend migration Phase 3 (Local complete) | API-backed sentence/page/book HSK analytics now render in Next analysis and book-detail routes with compatibility previews retained. |
 | `settings.roadmap-card` | Untracked | Settings discovery entry for the existing Roadmap route; create a dedicated tracker item if roadmap navigation becomes a larger product initiative. |

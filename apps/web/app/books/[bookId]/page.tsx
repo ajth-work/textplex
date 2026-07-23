@@ -10,6 +10,8 @@ export function generateStaticParams(): Array<{ bookId: string }> {
   return isDemoMode ? [{ bookId: DEMO_BOOK_ID }] : [];
 }
 
-export default function BookDetailPage({ params }: { params: { bookId: string } }) {
-  return <BookDetailView bookId={params.bookId} />;
+export default async function BookDetailPage(props: Promise<{ params: { bookId: string } }> | { params: { bookId: string } }) {
+  const { params } = await props;
+  const resolvedParams = await params;
+  return <BookDetailView bookId={resolvedParams.bookId} />;
 }

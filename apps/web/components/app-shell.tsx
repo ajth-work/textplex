@@ -108,6 +108,10 @@ export function AppShell() {
     router.push("/library");
   }
 
+  if (pathname === "/" || pathname === "/library") {
+    return null;
+  }
+
   return (
     <>
       <header className="app-shell-bar card">

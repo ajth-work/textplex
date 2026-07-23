@@ -77,7 +77,7 @@ jobs:
       - name: Check live preview routes and API health
         env:
           TEXTPLEX_WEB_BASE_URLS: http://127.0.0.1:8200
-          TEXTPLEX_API_HEALTH_URLS: http://127.0.0.1:8201/health
+          TEXTPLEX_API_HEALTH_URLS: http://127.0.0.1:8201/ready
         run: npm run test:web
 
       - name: Stop live audit services

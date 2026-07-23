@@ -1,15 +1,18 @@
 from pathlib import Path
+import json
+import logging
 import os
 import shutil
 import threading
+import time
 from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
-from app.core.paths import get_data_root, get_repo_root, resolve_books_root
+from app.core.paths import get_data_root, get_repo_root, resolve_books_root, resolve_user_data_root
 from app.schemas.auth import AuthMeResponse, HostedProfileSurfaceResponse, HostedProfileUpdateRequest
 from app.schemas.books import BookExtractionRequest, BookImportRequest, BookPageManifest, BookReaderPageResponse, BookRecord, PageExtractionArtifact, TextImportRequest, TextParseRequest
 from app.schemas.learning import (
@@ -34,7 +37,7 @@ from app.services.book_extraction import (
 from app.schemas.migration import ProfileMigrationRequest, ProfileMigrationResponse
 from app.schemas.themes import ThemeCatalogResponse, ThemeCheckoutRequest, ThemeCheckoutResponse, ThemeEntitlementResponse
 from app.services.book_registry import delete_book_from_path, import_book_from_path, load_registry, save_registry
-from app.services.auth import AuthenticatedUserContext, get_authenticated_user_context, get_current_user, get_hosted_profile, get_hosted_settings, get_optional_user_context, get_public_user_context, update_hosted_profile, update_hosted_settings
+from app.services.auth import AuthenticatedUserContext, get_authenticated_user_context, get_current_user, get_hosted_profile, get_hosted_settings, get_optional_user_context, get_public_user_context, supabase_is_configured, update_hosted_profile, update_hosted_settings
 from app.services.learning_profile import create_reading_session, get_learning_profile_summary, record_page_read, record_sentence_read
 from app.services.learning_sync import sync_learning_events
 from app.services.commerce import apply_sandbox_event, create_checkout_session, get_entitlements, verify_sandbox_signature
@@ -47,6 +50,7 @@ from processor.contracts import BookExtractionResult
 
 app = FastAPI(title="TextPlex API", version="0.1.0")
 app.state.data_root = get_data_root()
+logger = logging.getLogger("textplex.api")
 cors_origins = [
     origin.strip()
     for origin in os.getenv(
@@ -66,6 +70,57 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+_rate_limit_lock = threading.Lock()
+_rate_limit_buckets: dict[str, tuple[float, int]] = {}
+
+
+def _rate_limit_per_minute() -> int:
+    raw_value = os.getenv("TEXTPLEX_RATE_LIMIT_PER_MINUTE", "300").strip()
+    try:
+        return max(1, int(raw_value))
+    except ValueError:
+        return 300
+
+
+def _rate_limit_allowed(key: str, now: float) -> bool:
+    window_start, count = _rate_limit_buckets.get(key, (now, 0))
+    if now - window_start >= 60:
+        window_start, count = now, 0
+    count += 1
+    _rate_limit_buckets[key] = (window_start, count)
+    if len(_rate_limit_buckets) > 5000:
+        cutoff = now - 60
+        for bucket_key, (bucket_start, _) in list(_rate_limit_buckets.items()):
+            if bucket_start < cutoff:
+                _rate_limit_buckets.pop(bucket_key, None)
+    return count <= _rate_limit_per_minute()
+
+
+@app.middleware("http")
+async def request_observability(request: Request, call_next):
+    started_at = time.perf_counter()
+    request_id = uuid4().hex
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and request.url.path not in {"/health", "/ready"}:
+        client_host = request.client.host if request.client else "unknown"
+        with _rate_limit_lock:
+            allowed = _rate_limit_allowed(f"{client_host}:{request.method}:{request.url.path}", time.monotonic())
+        if not allowed:
+            logger.warning(json.dumps({"event": "rate_limited", "request_id": request_id, "method": request.method, "path": request.url.path}))
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Request rate limit exceeded."},
+                headers={"Retry-After": "60", "X-Request-ID": request_id},
+            )
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception(json.dumps({"event": "request_error", "request_id": request_id, "method": request.method, "path": request.url.path}))
+        raise
+    duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+    response.headers["X-Request-ID"] = request_id
+    logger.info(json.dumps({"event": "request", "request_id": request_id, "method": request.method, "path": request.url.path, "status": response.status_code, "duration_ms": duration_ms}))
+    return response
 
 DEFAULT_MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
@@ -246,6 +301,40 @@ def _persist_book(book: BookRecord) -> BookRecord:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+def _storage_ready(path: Path) -> bool:
+    try:
+        return path.exists() and path.is_dir() and os.access(path, os.R_OK | os.W_OK)
+    except OSError:
+        return False
+
+
+def _production_configuration_ready() -> bool:
+    if os.getenv("APP_ENV", "development").strip().lower() != "production":
+        return True
+    configured_origins = [origin.strip().lower() for origin in os.getenv("TEXTPLEX_CORS_ORIGINS", "").split(",") if origin.strip()]
+    has_insecure_origin = any(
+        origin.startswith("http://localhost")
+        or origin.startswith("http://127.")
+        or origin.startswith("http://192.168.")
+        for origin in configured_origins
+    )
+    return bool(configured_origins) and not has_insecure_origin and supabase_is_configured()
+
+
+@app.get("/ready")
+def readiness() -> JSONResponse:
+    checks = {
+        "books_storage": _storage_ready(_books_root()),
+        "user_storage": _storage_ready(resolve_user_data_root(app.state.data_root)),
+        "configuration": _production_configuration_ready(),
+    }
+    ready = all(checks.values())
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={"status": "ready" if ready else "not_ready", "checks": checks},
+    )
 
 
 @app.post("/texts/parse", response_model=PageExtractionArtifact)

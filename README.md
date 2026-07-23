@@ -51,6 +51,7 @@ docs/
   MVP_BACKLOG.md
   COMPONENTS_INVENTORY.md
   PROCESSING_CONTRACT.md
+  TECHNOLOGY_STACK.md
 scripts/
   init_local.sh
 ```

@@ -1,0 +1,14 @@
+surface_form,entry_type,pinyin,tone,definition,radical,stroke_count,hsk_level,frequency_rank,note
+привет,word,privet,,hello,,,TRKI A1,1,Starter seed; source=Gramota/RNC/TRKI
+спасибо,word,spasibo,,thank you,,,TRKI A1,2,Starter seed; source=Gramota/RNC/TRKI
+да,word,da,,yes,,,TRKI A1,3,Starter seed; source=Gramota/RNC/TRKI
+нет,word,net,,no,,,TRKI A1,4,Starter seed; source=Gramota/RNC/TRKI
+дом,word,dom,,house,,,TRKI A1,5,Starter seed; source=Gramota/RNC/TRKI
+книга,word,kniga,,book,,,TRKI A1,6,Starter seed; source=Gramota/RNC/TRKI
+вода,word,voda,,water,,,TRKI A1,7,Starter seed; source=Gramota/RNC/TRKI
+человек,word,chelovek,,person,,,TRKI A1,8,Starter seed; source=Gramota/RNC/TRKI
+идти,word,idti,,to go,,,TRKI A1,9,Starter seed; source=Gramota/RNC/TRKI
+видеть,word,videt,,to see,,,TRKI A2,10,Starter seed; source=Gramota/RNC/TRKI
+время,word,vremya,,time,,,TRKI A2,11,Starter seed; source=Gramota/RNC/TRKI
+хорошо,word,khorosho,,good; well,,,TRKI A1,12,Starter seed; source=Gramota/RNC/TRKI
+

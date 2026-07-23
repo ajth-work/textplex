@@ -15,6 +15,8 @@ TextPlex is a local-first language-learning system built from a web reader, an A
 - `data/user/` stores learner-profile data; keep only placeholders in Git.
 - `tests/` is reserved for API and processor coverage.
 
+Default implementation work targets the Next.js app in `apps/web/` on port `3000`. Treat the standalone site on `8200` as a legacy reference shell only; do not change its source unless the task explicitly asks for GitHub Pages or legacy-compatibility work.
+
 ## App-wide UI inventory workflow
 
 [`docs/COMPONENTS_INVENTORY.md`](docs/COMPONENTS_INVENTORY.md) is the canonical framework reference for the app's pages, regions, cards, panels, lists, and repeated item types. Agents making UI changes must:
@@ -72,13 +74,13 @@ cd apps/web
 npm run build
 ```
 
-After code changes that affect the running API or site shell, reboot both services before QA so the live preview reflects the current code.
+After code changes that affect the running API or the Next app, reboot both services before QA so the live preview reflects the current code.
 
 For dependency and environment maintenance, use `docs/UPDATE_REPAIR_CYCLE.md` and the root `maintenance:check`, `maintenance:repair`, and `maintenance:update` scripts. Run the read-only report before dependency work; use update mode only deliberately, review its lockfile diff, and do not treat a failed verification cycle as complete.
 
 ### Next build lock and warning hygiene
 
-- If `npm run build:web` hangs or reports an `apps/web/.next/trace` access error, inspect `netstat -ano | Select-String ':3000'` and stop only the repo's Next process on port `3000`. Do not stop Docker's `8200` site or `8201` API processes.
+- If `npm run build:web` hangs or reports an `apps/web/.next/trace` access error, inspect `netstat -ano | Select-String ':3000'` and stop only the repo's Next process on port `3000`. Do not stop Docker's legacy `8200` shell or `8201` API processes.
 - If npm reports `EPERM` while scanning `%LOCALAPPDATA%\npm-cache\_logs`, use a writable session cache before running checks: `$env:npm_config_cache = "$env:TEMP\textplex-npm-cache"`.
 - Keep `npm run lint:web` warning-free. Use `next/image` for reader images and do not suppress the rule globally.
 - Use Node 24 LTS for local, Docker, CI, and Pages work; older Node 18/20 runtimes are unsupported. Supabase Realtime may still emit a third-party dynamic-dependency warning, and root client components using `useSearchParams` must remain behind route-level `Suspense` boundaries.

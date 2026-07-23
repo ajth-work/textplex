@@ -19,7 +19,7 @@ The global theme is selected from Profile under Appearance > Global theme. Reade
 
 ## Theme Contract
 
-Every visible component must consume semantic theme roles rather than raw colors. The role names below are the contract for both the Next app and the standalone preview site.
+Every visible component must consume semantic theme roles rather than raw colors. The role names below are the contract for the active Next app; the standalone preview site should only be updated when a task explicitly calls for legacy-shell or GitHub Pages parity.
 
 | Role | Use | Requirements |
 | --- | --- | --- |
@@ -235,6 +235,8 @@ Minimum visual QA sizes:
 Test at least Neutral, Jade, Crimson Gold, and one dark neutral pack before shipping any theme-system change. Jade and Crimson are the highest-risk packs because saturated canvases expose inherited legacy colors quickly.
 
 ## Implementation Guidance
+
+The canonical implementation target is the Next app. Update the standalone preview only when a task explicitly asks for legacy-shell parity.
 
 The current implementations are split between:
 

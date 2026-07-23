@@ -24,6 +24,7 @@ import {
   type ProgressSurfaceResponse,
   type ProfileSurfaceResponse,
   type SearchSurfaceResponse,
+  type LexiconLookupResponse,
   type SettingsSurfaceResponse,
   type SettingsUpdateRequest,
   type StudySurfaceResponse,
@@ -43,6 +44,12 @@ import {
 import { LoadingSkeleton } from "./loading-skeleton";
 import { GlobalThemePicker } from "./global-theme-picker";
 import { HskSeriesChart } from "./hsk-series-chart";
+
+type LexicalEntryDetail = {
+  pinyin: string | null;
+  definition: string | null;
+  hskLevel: string | null;
+};
 
 export function ActivitySurfaceView() {
   const [data, setData] = useState<ActivitySurfaceResponse | null>(null);
@@ -106,6 +113,8 @@ export function ActivitySurfaceView() {
 export function AnalysisSurfaceView({ bookId }: { bookId: string }) {
   const [data, setData] = useState<BookAnalysisSurfaceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lexicalEntryDetails, setLexicalEntryDetails] = useState<Record<string, LexicalEntryDetail>>({});
+  const [lexicalEntryLoading, setLexicalEntryLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -124,6 +133,54 @@ export function AnalysisSurfaceView({ bookId }: { bookId: string }) {
       active = false;
     };
   }, [bookId]);
+
+  useEffect(() => {
+    if (!data?.top_lexical_entries.length) {
+      setLexicalEntryDetails({});
+      setLexicalEntryLoading(false);
+      return;
+    }
+
+    let active = true;
+    setLexicalEntryLoading(true);
+    setLexicalEntryDetails({});
+
+    void Promise.allSettled(
+      data.top_lexical_entries.map(async (entry) => {
+        const response = await fetchJson<LexiconLookupResponse>(
+          `/lexicon/lookup?language_code=${encodeURIComponent(data.language_code)}&term=${encodeURIComponent(entry.lemma)}`,
+        );
+        const match = response.entries.find((candidate) => candidate.surface_form === entry.lemma || candidate.surface_form === entry.display_form) ?? response.entries[0] ?? null;
+        return {
+          lemma: entry.lemma,
+          detail: match
+            ? {
+                pinyin: match.pinyin ?? null,
+                definition: match.definition ?? null,
+                hskLevel: match.hsk_level ?? null,
+              }
+            : null,
+        };
+      }),
+    ).then((results) => {
+      if (!active) {
+        return;
+      }
+
+      const nextDetails: Record<string, LexicalEntryDetail> = {};
+      results.forEach((result) => {
+        if (result.status === "fulfilled" && result.value.detail) {
+          nextDetails[result.value.lemma] = result.value.detail;
+        }
+      });
+      setLexicalEntryDetails(nextDetails);
+      setLexicalEntryLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [data?.language_code, data?.top_lexical_entries]);
 
   return (
     <RoutePage
@@ -144,22 +201,44 @@ export function AnalysisSurfaceView({ bookId }: { bookId: string }) {
     >
       {error ? <section className="card feature-card">{error}</section> : null}
       {!data && !error ? <LoadingSkeleton label="Loading analysis" /> : null}
-      {data ? (
+          {data ? (
         <>
           <section className="feature-grid">
-            <article className="card feature-card">
+            <article className="card feature-card" data-inventory-id="analysis.lexical-entries-card">
               <h2>Top lexical entries</h2>
-              <div className="surface-list">
+              <p className="small-copy">Compact lexical cards show the form, pronunciation, meaning, HSK band, and page exposure context.</p>
+              <div className="analysis-lexical-grid">
                 {data.top_lexical_entries.map((entry) => (
-                  <div key={entry.lemma} className="surface-list-item">
-                    <div className="card-topline">
-                      <strong>{entry.display_form}</strong>
-                      <span className="muted">{entry.frequency_in_book}x</span>
+                  <article key={entry.lemma} className="analysis-lexical-card">
+                    <div className="analysis-lexical-card-topline">
+                      <div className="analysis-lexical-headline">
+                        <strong>{entry.display_form}</strong>
+                        <span className="analysis-lexical-pronunciation">
+                          {lexicalEntryDetails[entry.lemma]?.pinyin ? `(${lexicalEntryDetails[entry.lemma]?.pinyin})` : lexicalEntryLoading ? " " : ""}
+                        </span>
+                      </div>
+                      <span className="analysis-lexical-frequency">{entry.frequency_in_book}x</span>
                     </div>
-                    <p className="small-copy">
-                      First seen {entry.first_page ?? "?"} - Last seen {entry.last_page ?? "?"}
+                    <p className="analysis-lexical-definition">
+                      {lexicalEntryDetails[entry.lemma]?.definition ?? (lexicalEntryLoading ? "Loading meaning…" : "Meaning unavailable.")}
                     </p>
-                  </div>
+                    <div className="analysis-lexical-meta-row">
+                      {lexicalEntryDetails[entry.lemma]?.hskLevel ? (
+                        <span className="pill analysis-lexical-hsk-pill">
+                          HSK {lexicalEntryDetails[entry.lemma]?.hskLevel}
+                        </span>
+                      ) : null}
+                      <span className="analysis-lexical-meta-chip">
+                        First page <strong>{entry.first_page ?? "—"}</strong>
+                      </span>
+                      <span className="analysis-lexical-meta-chip">
+                        Last page <strong>{entry.last_page && entry.last_page !== entry.first_page ? entry.last_page : "—"}</strong>
+                      </span>
+                      <span className="analysis-lexical-meta-chip">
+                        Pages <strong>{entry.first_page && entry.last_page ? Math.max(1, entry.last_page - entry.first_page + 1) : 1}</strong>
+                      </span>
+                    </div>
+                  </article>
                 ))}
               </div>
             </article>

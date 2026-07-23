@@ -9,8 +9,8 @@ Use this as a planning aid for learner progression in TextPlex, not as a substit
 | Language | Official benchmark | Public vocabulary requirement? | How to use it in TextPlex |
 |---|---|---|---|
 | Chinese | HSK | Yes for HSK 1-6; 150 / 300 / 600 / 1,200 / 2,500 / 5,000+ words are published on the official HSK materials. | Best language for direct level-to-vocabulary progression. |
-| Japanese | JLPT | No public official word-count ladder found in the official materials reviewed. JLPT measures language knowledge, including vocabulary and grammar. | Use JLPT bands as reading difficulty tiers, then derive internal vocab bands from corpus coverage. |
 | Korean | TOPIK | No public official word-count ladder found in the official materials reviewed. TOPIK is proficiency-based. | Use TOPIK I/II and level descriptors as progression anchors, not word counts. |
+| Japanese | JLPT | No public official word-count ladder found in the official materials reviewed. JLPT measures language knowledge, including vocabulary and grammar. | Use JLPT bands as reading difficulty tiers, then derive internal vocab bands from corpus coverage. |
 | Russian | TRKI / Pushkin Institute certification | No public official word-count ladder found in the official materials reviewed. | Use A1-C2 certification levels and test section difficulty for staging. |
 | Hebrew | YAEL | No public official word-count ladder found in the official materials reviewed. YAEL tests vocabulary, grammar, syntax, reading, and writing. | Use YAEL as a placement-style benchmark, but not as a vocabulary quota system. |
 | Arabic | ACTFL OPI / AAPPL in Arabic | No public official vocabulary ladder is published in the official materials reviewed. | Use ACTFL proficiency bands for speaking/reading/writing milestones. |
@@ -102,7 +102,7 @@ What that means for TextPlex:
 If we want the app to feel aligned with real learner goals, the best approach is:
 
 1. Use Chinese HSK as the only explicit public vocabulary ladder.
-2. Use JLPT, TOPIK, TRKI, YAEL, and ACTFL as proficiency anchors.
+2. Use TOPIK, JLPT, TRKI, YAEL, and ACTFL as proficiency anchors.
 3. Derive internal vocabulary bands from corpus coverage and reader behavior for the languages that do not publish a stable word-count ladder.
 
 That gives us a clean app model:

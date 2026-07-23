@@ -113,6 +113,23 @@ Phase 5 implementation evidence is green for its stated scope. The migration is 
 - Verification passed: Phase 6 focused API boundaries `4 passed`, repository-wide API/processor suite `71 passed, 2 skipped`, Ruff, 34 site tests, web lint, and `git diff --check`. The local host build remains blocked by Node `18.15.0`; the supported Node 24 container build is the required production-build evidence.
 - External Supabase, payment-provider, deployment, backup/restore, and clean-clone checks remain Phase 7 evidence. Real payment activation is intentionally not claimed by this phase.
 
+## 2026-07-22 Phase 7 opening-slice verification
+
+- Added `/ready` with book and user storage checks, returning `503` when required storage is unavailable instead of treating liveness as readiness.
+- Added Next security headers, disabled the framework fingerprint, and made Compose `APP_ENV`, CORS origins, and CORS regex environment-driven rather than fixed to development values.
+- Added `docs/OPERATIONS_RUNBOOK.md` covering deployment, rollback, readiness, backup/restore evidence, and incident handling.
+- Verification passed: readiness API tests, Ruff, 34 site tests, web lint, Node 24 Docker builds, `git diff --check`, and live `3000`, `8201/health`, `8201/ready`, and `8200` checks. Live Next headers included CSP and `X-Content-Type-Options: nosniff`.
+- Phase 7 remains in progress. Deployment-owned smoke tests, clean-clone evidence, real backup/restore and rollback drills, monitoring/alerting, HTTPS/auth callback verification, and legacy retirement remain open.
+
+## 2026-07-22 Phase 7 hardening slice verification
+
+- Added JSON request telemetry with request IDs, bounded mutation rate limiting, production configuration validation in readiness, and a tar/SHA-256 disposable data backup/restore tool.
+- Added CI container smoke coverage for the canonical Next/API services and the explicitly profiled legacy surface, plus maintenance and backup/restore test execution.
+- Fixed the production web image to copy `next.config.js` into the runtime layer; live verification now confirms the framework fingerprint is absent while CSP and `nosniff` remain present.
+- Hardened backup restore path validation and excluded generated archives from version control by default.
+- Final local verification passed: 74 API tests with 2 skips, Ruff, 34 site tests, maintenance tests, web lint, `git diff --check`, Docker web build, Compose validation, and live canonical/API/legacy route checks.
+- Remaining evidence is deployment-owned: clean-clone execution in CI, production ingress HTTPS/rate limits, external auth callback verification, monitoring/alerting, named backup/restore and rollback drills, and the legacy deprecation/cutover decision.
+
 ## Scope and parameters
 
 Review these surfaces whenever the audit runs:

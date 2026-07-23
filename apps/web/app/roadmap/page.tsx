@@ -21,16 +21,16 @@ const implementationPlan: PlanStep[] = [
     description: "Keep every language pack in a canonical lexicon.sqlite3 or lexicon.csv layout under resources/lexicon/<language>.",
   },
   {
-    title: "Build the Japanese starter pack",
-    description: "Seed Japanese first so the importer, lookup path, and preview surfaces have one non-Chinese reference implementation.",
+    title: "Build the Korean starter pack",
+    description: "Seed Korean first so the importer, lookup path, and preview surfaces have one non-Chinese reference implementation.",
   },
   {
     title: "Repeat the same shape for the next languages",
-    description: "Use the same ingest and lookup rules for Korean, Russian, Hebrew, and Arabic instead of creating one-off pipelines.",
+    description: "Use the same ingest and lookup rules for Japanese, Russian, Hebrew, and Arabic instead of creating one-off pipelines.",
   },
   {
     title: "Anchor each pack to a learning benchmark",
-    description: "Track against JLPT, TOPIK, TORFL, and domestic literacy goals so the vocab lists map to real learner expectations.",
+    description: "Track against TOPIK, JLPT, TORFL, and domestic literacy goals so the vocab lists map to real learner expectations.",
   },
   {
     title: "Keep the tracker visible in the app",
@@ -49,21 +49,21 @@ const languageTracker: LanguageTrack[] = [
     next: "Keep the current pack stable while the new language packs come online.",
   },
   {
-    code: "ja",
-    language: "Japanese",
-    status: "Active build",
-    progress: 35,
-    pack: "resources/lexicon/japanese",
-    benchmark: "JLPT, school literacy goals, and public-domain readers",
-    next: "Seed kanji, kana, readings, and high-frequency vocabulary.",
-  },
-  {
     code: "ko",
     language: "Korean",
+    status: "Active build",
+    progress: 35,
+    pack: "resources/lexicon/korean",
+    benchmark: "TOPIK, school literacy goals, and public-domain readers",
+    next: "Seed Hangul, syllable blocks, readings, and high-frequency vocabulary.",
+  },
+  {
+    code: "ja",
+    language: "Japanese",
     status: "Queued",
     progress: 10,
-    pack: "resources/lexicon/korean",
-    benchmark: "TOPIK and domestic school literacy goals",
+    pack: "resources/lexicon/japanese",
+    benchmark: "JLPT and domestic school literacy goals",
     next: "Define the corpus, the starter pack, and the first import smoke tests.",
   },
   {
@@ -99,17 +99,13 @@ export default function RoadmapPage() {
   return (
     <RoutePage
       eyebrow="Roadmap"
-      title="Vocabulary database implementation tracker"
-      description="A visible plan for building non-Romanized language vocab packs one language at a time, starting with Japanese."
+      title="Implementation tracker"
+      description=""
       badge="Preview"
-      links={[
-        { href: "/", label: "Home" },
-        { href: "/library", label: "Library" },
-        { href: "/progress", label: "Progress" },
-      ]}
+      className="roadmap-hero"
       metrics={[
         { label: "Languages", value: String(languageTracker.length) },
-        { label: "Active build", value: "Japanese" },
+        { label: "Active build", value: "Korean" },
         { label: "Queued", value: "4" },
       ]}
     >
@@ -134,11 +130,11 @@ export default function RoadmapPage() {
         <article className="card feature-card">
           <h2>Current focus</h2>
           <p>
-            Japanese is the first live target because it forces the importer to handle a new script, a new source-pack
-            path, and exam-aligned vocabulary at the same time.
+            Korean is the first live target because it forces the importer to handle Hangul, a new source-pack path,
+            and TOPIK-aligned vocabulary at the same time.
           </p>
           <p className="small-copy">
-            The next pass after Japanese should reuse the same pack contract for Korean, Russian, Hebrew, and Arabic
+            The next pass after Korean should reuse the same pack contract for Japanese, Russian, Hebrew, and Arabic
             instead of creating separate code paths.
           </p>
         </article>

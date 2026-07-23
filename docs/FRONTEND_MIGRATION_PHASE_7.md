@@ -1,12 +1,24 @@
 # Frontend Migration Phase 7
 
-Status: Planned
+Status: In progress
 Parent: Frontend consolidation issue
 Depends on: [Phase 6](FRONTEND_MIGRATION_PHASE_6.md)
 
 ## Scope
 
 Phase 7 is the final production-readiness and cutover phase. It turns the verified Next/API topology into the supported deployment, proves recovery and security boundaries, and retires the standalone shell as a product dependency while preserving a controlled rollback path.
+
+## Current Slice
+
+- [x] Add API readiness checks for book and user storage.
+- [x] Add Next security headers and disable framework fingerprinting.
+- [x] Make Compose environment and CORS configuration overridable instead of hardcoded to development values.
+- [x] Document deploy, rollback, backup/restore, readiness, and incident procedures.
+- [x] Add structured API request logs, bounded mutation rate limiting, production configuration readiness checks, and disposable backup/restore verification.
+- [x] Add CI container smoke coverage for canonical and compatibility routes.
+- [ ] Run clean-clone and deployment-owned verification.
+- [ ] Complete production backup/restore and rollback drills.
+- [ ] Set the legacy deprecation window and complete final cutover audit.
 
 ## Workstreams
 

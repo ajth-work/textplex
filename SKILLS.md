@@ -4,7 +4,7 @@ This file mirrors the local `textplex` skill. Use it for repeatable TextPlex wor
 
 Suggested install target:
 
-`C:\Users\Andrew-John\.codex\skills\textplex\SKILL.md`
+`%CODEX_HOME%\skills\textplex\SKILL.md`
 
 Use this file to recreate or update that local skill when working from a new machine or Codex environment.
 
@@ -24,8 +24,8 @@ Use this skill for repeatable TextPlex workflows and implementation habits. For 
 
 ## Canonical Surfaces
 
-- Repo path: `C:\Users\Andrew-John\Documents\TextPlex`
-- Product vision blueprint: `Z:\My Comics\_Fixing Corruption\TextPlex_Product_Vision_and_System_Blueprint.pdf`
+- Repo path: this repository checkout
+- Product vision blueprint: optional local PDF outside the repo, if you keep one for product-direction context
 - Core docs:
   - `README.md`
   - `docs/ARCHITECTURE.md`

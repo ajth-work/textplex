@@ -24,5 +24,7 @@ For non-Chinese languages, those fields can be used as the closest compatible re
 ## Current Layout
 
 - `chinese-character-recognition/` is the bundled Chinese source pack already used by the app.
-- `japanese/` is the first non-Chinese source pack slot.
+- `korean/` is the first non-Chinese source pack slot.
+- `russian/` is the next non-Romanized source pack slot being brought to the same starter-pack state.
+- `japanese/` follows as the next first-wave source pack slot.
 - future language packs should follow the same pattern.

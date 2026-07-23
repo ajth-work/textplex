@@ -19,6 +19,7 @@ interface RoutePageProps {
   badge?: string;
   links?: RouteLink[];
   metrics?: Metric[];
+  className?: string;
   children?: ReactNode;
 }
 
@@ -29,17 +30,18 @@ export function RoutePage({
   badge,
   links = [],
   metrics = [],
+  className,
   children,
 }: RoutePageProps) {
   return (
     <main className="app-shell">
-      <section className="home-hero card">
+      <section className={`home-hero card${className ? ` ${className}` : ""}`}>
         <span className="eyebrow">{eyebrow}</span>
         <div className="card-topline">
           <h1>{title}</h1>
           {badge ? <span className="pill">{badge}</span> : null}
         </div>
-        <p className="lede">{description}</p>
+        {description.trim().length > 0 ? <p className="lede">{description}</p> : null}
         {links.length > 0 ? (
           <div className="button-row">
             {links.map((link) => (

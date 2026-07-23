@@ -4,6 +4,8 @@ This repo currently has a lightweight but real local-development baseline for th
 
 Use Node.js 24 LTS for the web workspace and site checks. The repository `.nvmrc`, Docker images, CI, and Pages workflow all target this runtime.
 
+Active feature work and QA should target the Next app on `3000`. Use `8200` only when comparing against or validating the legacy compatibility shell.
+
 ## What issue 1 establishes
 
 - a root web workspace command path
@@ -81,7 +83,7 @@ Smoke-check the canonical Next reader and API after the stack is running:
 npm run check:web
 ```
 
-By default the smoke test checks `http://127.0.0.1:3000` and `http://127.0.0.1:8201/health`. To check the legacy shell instead, override the web URL:
+By default the smoke test checks `http://127.0.0.1:3000` and `http://127.0.0.1:8201/health`. To compare against the legacy shell, override the web URL:
 
 ```powershell
 $env:TEXTPLEX_WEB_BASE_URLS="http://127.0.0.1:8200"
@@ -101,7 +103,7 @@ Then inspect:
 - `http://127.0.0.1:3000/`
 - `http://127.0.0.1:8201/health`
 
-The standalone shell remains available through the explicit `legacy` profile:
+The standalone shell remains available through the explicit `legacy` profile for comparison and rollback checks:
 
 ```powershell
 docker compose --profile legacy up --build site api

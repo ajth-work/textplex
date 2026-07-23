@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import time
 
@@ -8,20 +9,26 @@ from app.main import app
 from app.schemas.books import BookRecord
 
 
-SOURCE_PDF = Path(
-    r"Z:\FastFoto\Personal\Finished Book Scans\Chinese Books\Three-Body Problem (ZH) (ClearScan).pdf"
-)
+
+def _get_source_pdf() -> Path | None:
+    source_pdf = os.environ.get("TEXTPLEX_TEST_UPLOAD_PDF")
+    if not source_pdf:
+        return None
+    return Path(source_pdf).expanduser()
 
 
 def test_upload_book_endpoint_registers_uploaded_pdf(tmp_path_factory) -> None:
-    if not SOURCE_PDF.exists():
-        pytest.skip(f"Optional local upload fixture is unavailable: {SOURCE_PDF}")
+    source_pdf = _get_source_pdf()
+    if source_pdf is None:
+        pytest.skip("Set TEXTPLEX_TEST_UPLOAD_PDF to run the optional local upload fixture test.")
+    if not source_pdf.exists():
+        pytest.skip(f"Optional local upload fixture is unavailable: {source_pdf}")
 
     data_root = tmp_path_factory.mktemp("textplex-upload-books")
     app.state.data_root = data_root
     client = TestClient(app)
 
-    with SOURCE_PDF.open("rb") as file_handle:
+    with source_pdf.open("rb") as file_handle:
         response = client.post(
             "/books/upload",
             data={
@@ -63,8 +70,11 @@ def test_upload_book_endpoint_registers_uploaded_pdf(tmp_path_factory) -> None:
 
 
 def test_upload_book_endpoint_defaults_to_openai_provider_from_env(monkeypatch, tmp_path_factory) -> None:
-    if not SOURCE_PDF.exists():
-        pytest.skip(f"Optional local upload fixture is unavailable: {SOURCE_PDF}")
+    source_pdf = _get_source_pdf()
+    if source_pdf is None:
+        pytest.skip("Set TEXTPLEX_TEST_UPLOAD_PDF to run the optional local upload fixture test.")
+    if not source_pdf.exists():
+        pytest.skip(f"Optional local upload fixture is unavailable: {source_pdf}")
 
     data_root = tmp_path_factory.mktemp("textplex-upload-books-openai-default")
     app.state.data_root = data_root
@@ -74,7 +84,7 @@ def test_upload_book_endpoint_defaults_to_openai_provider_from_env(monkeypatch, 
 
     client = TestClient(app)
 
-    with SOURCE_PDF.open("rb") as file_handle:
+    with source_pdf.open("rb") as file_handle:
         response = client.post(
             "/books/upload",
             data={

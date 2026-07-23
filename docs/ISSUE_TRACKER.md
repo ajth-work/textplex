@@ -2,7 +2,7 @@
 
 This file mirrors the current GitHub issue board state that is visible from this workspace. Keep it updated when a board item changes. If GitHub write access is unavailable, mark the item here as `Local pending` until the remote board can be updated.
 
-Last updated: 2026-07-22
+Last updated: 2026-07-23
 
 Remote issue state and kanban status are now synchronized for #10, #11, #18, #19, and #43. Issue #19 was added to the TextPlex Feature Board and placed in Done after the Project scope was granted. Issue #43 tracks the move from the anonymous local profile to hosted, authenticated, cross-device learner accounts. GitHub issue creation is currently Local pending because the available GitHub credentials require reauthentication.
 
@@ -17,7 +17,9 @@ Remote issue state and kanban status are now synchronized for #10, #11, #18, #19
 
 | Item | Issue | Notes |
 | --- | --- | --- |
-| Define text difficulty and expected HSK level analytics | #42 | Audit finding: separate the preview `/100` score from extraction progress; derive character, sentence, page, and text HSK summaries from explicit lexicon-backed rules. Proposed ring value: average of sentence-level HSK values across the text. Inventory IDs: `preview.home.recent-analysis-row`, `analysis.difficulty-card`, `analysis.estimated-level-card`, `analysis.vocabulary-distribution-card`, `analysis.estimated-comprehension-card`, and related Analysis cards. |
+| Add Korean lexicon sourcing and starter pack | Local pending | Korean is now the active build. Starter notes, source-pack slot, KRDICT export builder, CSV seed, and lookup coverage are in progress locally. |
+| Add Russian lexicon sourcing and starter pack | Local pending | Russian is now being brought to the same starter-pack state. Source notes, source-pack slot, Russian export builder, CSV seed, and lookup coverage are in progress locally. |
+| Define text difficulty and expected HSK level analytics | #42 | Audit finding: separate the preview `/100` score from extraction progress; derive character, sentence, page, and text HSK summaries from explicit lexicon-backed rules. Current prototype revision is compacting `analysis.lexical-entries-card` into a richer grid with pronunciation, meaning, HSK, and page exposure context. Proposed ring value: average of sentence-level HSK values across the text. Inventory IDs: `preview.home.recent-analysis-row`, `analysis.difficulty-card`, `analysis.estimated-level-card`, `analysis.vocabulary-distribution-card`, `analysis.estimated-comprehension-card`, and related Analysis cards. |
 | Add cross-device accounts and authenticated learner profiles | #43 | Add Supabase Auth email/password accounts, Postgres-backed user-scoped learner data, private book/page storage, protected FastAPI routes, and local-profile migration. |
 | Add multi-path insights dashboard | #27 | Support HSK, JLPT, TOPIK, and other assessment families. |
 | Add tiered package catalog and access UI | #26 | Browse and open AI-generated reading packages by tier. |
@@ -115,7 +117,7 @@ These local IDs are the planned child issues for the `Add theme store and commer
 | `theme-store.payment-webhook` | Complete | Added HMAC-signed sandbox webhook verification, duplicate-event protection, and exactly-once grant fulfillment. | Replayed successful events do not duplicate grants. |
 | `theme-store.lifecycle` | Complete | Added sandbox refund handling and session-scoped entitlement revocation. | Payment and entitlement state remain auditable without trusting browser redirects. Provider disputes and live operations remain Phase 7. |
 | `theme-store.entitlement-sync` | Complete | Added authenticated entitlement reads and shared client contracts for local-first synchronization. | Paid themes can be used after entitlement sync without treating browser state as authority. |
-| `theme-store.security-operations` | Planned | Add HTTPS, webhook reachability, secret management, exact CORS/CSP rules, rate limits, structured logs, and alerting. | Payment boundaries are covered by security and deployment checks before live mode. |
+| `theme-store.security-operations` | In progress | Phase 7 now has overridable CORS configuration, CSP/security headers, readiness checks, structured JSON request logs, bounded in-process mutation limits, and an operations runbook. Distributed ingress limits, HTTPS, and alerting remain deployment-owned work. | Payment boundaries are covered by security and deployment checks before live mode. |
 | `theme-store.sandbox-qa` | Complete | Added disposable sandbox checkout, signed webhook, replay, refund, and entitlement tests. | Test-mode purchases, retries, refunds, and invalid signatures are repeatable in the API suite. |
 
 ## Done
@@ -124,7 +126,7 @@ These local IDs are the planned child issues for the `Add theme store and commer
 | --- | --- | --- |
 | Frontend migration Phase 5: hosted identity and learner state | Phase 5 | Complete. Authenticated profile/settings reads and writes, account-scoped learner storage, non-destructive local-profile migration, server-authoritative theme catalog/entitlement validation, UI states, and focused ownership tests are implemented. Checkout and hosted learner-event replication remain future work. See `docs/FRONTEND_MIGRATION_PHASE_5.md`. |
 | Frontend migration Phase 6: hosted learner state and commerce fulfillment | #44 | Complete. Added account-scoped event outbox/receipts, RLS-protected sync and remote hydration, client retry/conflict reporting, private book/page ownership, provider-neutral sandbox checkout, signed webhook replay protection, refund revocation, and local entitlement synchronization. Real payment-provider activation remains a Phase 7 gate. See `docs/FRONTEND_MIGRATION_PHASE_6.md`. |
-| Frontend migration Phase 7: production hardening and final cutover | #45 | Planned. Prove clean deployment, security, observability, backup/restore, rollback, canonical Next operation, and legacy retirement. See `docs/FRONTEND_MIGRATION_PHASE_7.md`. |
+| Frontend migration Phase 7: production hardening and final cutover | #45 | In progress. Added readiness, security headers, environment-driven CORS, structured request logs, bounded mutation limits, disposable backup/restore tooling, CI container smoke coverage, the operations/rollback runbook, and the canonical Next home/library parity slices that mirror the standalone 8200 shell. Production-owned recovery drills, monitoring, HTTPS/auth callback verification, and legacy retirement remain. See `docs/FRONTEND_MIGRATION_PHASE_7.md`. |
 | Fix reader endpoint regressions in archive, import, and lexicon parsing | #33 | Fixed pasted-text extraction counts, isolated mutable API fixtures, and verified lexicon-backed parsing with declared dependencies installed. |
 | Restore site reachability contract for the homepage preview | #34 | Added the homepage contract text, clean preview route mappings, and live route checks. |
 | Fix sentence tokenization for Latin text to drop terminal punctuation | #35 | Latin token output now excludes punctuation-only matches while preserving sentence text. |

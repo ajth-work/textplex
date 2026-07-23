@@ -32,8 +32,37 @@
 - Added the first versioned Supabase migration for account-owned learner profiles and per-user settings, including ownership RLS, updated-at triggers, and automatic profile creation for new Auth users.
 - Documented the detailed Next.js and standalone frontend consolidation issue locally while GitHub reauthentication is pending.
 
+## 2026-07-23
+
+- Documentation: added a structured non-Romanized test-sample library with three 10-sentence passages per current target language and linked it from the starter corpus note.
+- Maintenance: rebuilt the Korean starter pack from the downloaded KRDICT JSON export chunks, tightened the Korean ranking for learner-friendly entries, and updated the Korean lexicon import test to match the export-driven seed.
+- Maintenance: added Russian lexicon acquisition notes, a starter pack, a CSV pack builder, and regression coverage so Russian can follow the Korean sourced-pack workflow.
+- Maintenance: added a Korean KRDICT export parser and pack builder, plus regression coverage for XML/JSON-style acquisition and TOPIK-prioritized sorting.
+- Maintenance: added the Korean lexicon starter pack, Korean processing notes, and a Korean lexicon import/lookup regression test so the active build has a concrete source pack slot.
+- Maintenance: switched the implementation tracker and standalone roadmap preview to Korean as the active build, reordered the non-Romanized implementation sequence, and updated the roadmap inventory note.
+- Migration: prototyped a denser analysis lexical-entry grid with pronunciation, definition, HSK badge, and clearer page-based exposure context, then updated the tracker and inventory notes for issue #42.
+- Maintenance: trimmed the roadmap hero into a compact implementation tracker, moved the preview badge into the top-right corner, and removed the redundant Home, Library, and Progress links plus the long intro copy.
+
 ## 2026-07-22
 
+- Maintenance: converted the top shell action row on narrow screens into a 4-column grid so Back, Book, Reader, and Analysis stay compact in one row.
+- Maintenance: replaced the primary app navigation's wrapped flex layout with a responsive grid so the route list stays compact instead of consuming so much vertical space on mobile.
+- Migration: reshaped the reader page into a single-sentence surface with stacked pinyin token chips, moved the page image and HSK chart into the collapsed tools drawer, and switched the reader default theme back to jade for the dark 8200-style shell.
+- Migration: collapsed the Next reader's utility sidebar into a compact tools drawer and shifted the main reading surface toward the standalone 8200 pager/session layout with tighter typography and spacing.
+- Migration: trimmed the Next reader header toward the standalone preview pattern by keeping the title/author block, adding bookmark and overflow icons, and removing the extra utility buttons from the main action row.
+- Maintenance: pinned the web Turbopack root to the repo workspace root so the Next build stops inheriting the stray parent lockfile path.
+- Maintenance: made `test:site` Windows-safe by adding a small Node runner that discovers the site test files before invoking `node --test`.
+- Migration: began canonical Next home parity by replacing the generic home scaffold with the compact 8200-style home shell, live book/profile hydration, bottom navigation, and skeleton/error states.
+- Phase 7: opened production hardening with API readiness checks, Next security headers, environment-driven Compose CORS, and an operations runbook covering deploy, rollback, backup/restore, and incidents.
+- Documentation: added a completed frontend migration report that summarizes all seven phases, their outcomes, and the remaining Phase 7 cutover work.
+- Maintenance: switched the Docker web stack to use the same-origin `/api` client path and the container-side API origin so the Next home surface on `3000` can fetch books and profile data reliably from the browser.
+- Migration: ported the standalone `8200` library shelf layout into the canonical Next `/library` route with live search, document counts, skeleton loading, and book detail/reader actions.
+- Migration: hid the shared Next app shell and bottom navigation on `/library` so the canonical library route renders with the standalone preview-style surface.
+- Migration: added the standalone-style `TextPlex` library header and tuned the library card info/read controls to better match the `8200` preview shell.
+- Phase 7: added structured API request logs, bounded mutation rate limiting, production configuration readiness validation, disposable backup/restore tooling, and CI container smoke coverage.
+- Phase 7: fixed the production web image so Next security configuration is loaded at runtime; live canonical headers now omit the `X-Powered-By` fingerprint.
+- Phase 7: added regression coverage for the API mutation limiter and documented the final local verification results and deployment-owned gates.
+- Phase 7: hardened disposable backup restores against path traversal and ignored generated backup artifacts by default.
 - Phase 6: completed the hosted learner-state and sandbox commerce boundaries with retry/conflict reporting, private book/page ownership, idempotent checkout, signed webhook replay protection, refund revocation, entitlement sync, RLS schema scaffolding, and focused regression coverage. Real payment-provider activation remains Phase 7 work.
 - Phase 6: started hosted learner-state synchronization with a local event outbox, Supabase RLS event storage, idempotent upload, remote hydration, authenticated sync API, reader trigger, and focused tests. Commerce fulfillment, private book ownership, and offline retry UX remain open.
 - Migration: documented planned Phase 6 for hosted learner-state synchronization and theme-store fulfillment, and Phase 7 for production hardening, canonical cutover, and legacy retirement; added GitHub issues #44 and #45.
@@ -98,6 +127,12 @@
 - Made analysis, library-detail, and reader skeleton cards and shimmer lines follow the active theme palette instead of hard-coded neutral gray.
 - Added the shared themed roadmap treatment across the live app and standalone preview, preserved its editorial tracker details in the theme guidelines, and added a direct Vocabulary roadmap card to Settings.
 - Added the Classic Consoles theme collection with NES, Famicom, SNES, and Super Famicom palettes, reader-theme support, and a discounted bundle offer in the theme shop.
+
+## 2026-07-22
+
+- Migration: resolved dynamic Next route params defensively so book, analysis, and reader pages keep their `bookId` and `pageNumber` values during the 3000 app cutover.
+- Moved the Next app's ambient theme gradients from the centered `.app-frame` to the full viewport so mobile Home no longer shows an unthemed strip at the screen edge.
+- Fixed Home canvas text contrast for recent analysis metadata and section links in saturated themes such as Crimson Gold.
 - Added a bounded `360 ms` minimum skeleton display window so fast local hydration still produces a visible loading flash before content replaces it.
 - Added an explicit shared `1.35s` shimmer animation for themed skeleton lines and blocks so loading states visibly animate while hydration is pending.
 - Matched the Library route search/count hero background to the themed library shell card surface.

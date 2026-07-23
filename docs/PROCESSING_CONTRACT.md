@@ -76,6 +76,8 @@ For a starter public-domain corpus to use when testing those languages, see [Non
 
 For the first-wave Japanese-specific processing note, see [Japanese Text Processing Notes](./JAPANESE_TEXT_PROCESSING.md).
 
+For Russian-specific Cyrillic normalization, lemma lookup, and TRKI-aware lexicon behavior, see [Russian Text Processing Notes](./RUSSIAN_TEXT_PROCESSING.md).
+
 ## Idempotency
 
 A page processing key should include:

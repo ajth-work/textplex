@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$root = 'C:\Users\Andrew-John\Documents\TextPlex'
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $python = Join-Path $root 'apps\api\.venv\Scripts\python.exe'
 $script = Join-Path $root 'scripts\wake_helper.py'
 $log = Join-Path $root 'wake-helper.log'

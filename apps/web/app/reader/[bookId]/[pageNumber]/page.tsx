@@ -15,10 +15,10 @@ export function generateStaticParams(): Array<{ bookId: string; pageNumber: stri
     : [];
 }
 
-export default function ReaderPage({
-  params,
-}: {
-  params: { bookId: string; pageNumber: string };
-}) {
-  return <ReaderView bookId={params.bookId} pageNumber={Number(params.pageNumber)} />;
+export default async function ReaderPage(
+  props: Promise<{ params: { bookId: string; pageNumber: string } }> | { params: { bookId: string; pageNumber: string } },
+) {
+  const { params } = await props;
+  const resolvedParams = await params;
+  return <ReaderView bookId={resolvedParams.bookId} pageNumber={Number(resolvedParams.pageNumber)} />;
 }

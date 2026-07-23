@@ -13,13 +13,18 @@ const stylesSource = read("apps", "web", "app", "globals.css");
 
 test("Next analysis route remains dynamic and selects the live surface outside demo mode", () => {
   assert.match(analysisRouteSource, /export const dynamic = "force-dynamic"/);
-  assert.match(analysisRouteSource, /<AnalysisSurfaceView bookId=\{params\.bookId\} \/>/);
-  assert.match(analysisRouteSource, /<MockAnalysisSurfaceView bookId=\{params\.bookId\} \/>/);
+  assert.match(analysisRouteSource, /<MockAnalysisSurfaceView bookId=\{resolvedParams\.bookId\} \/>/);
+  assert.match(analysisRouteSource, /<AnalysisSurfaceView bookId=\{resolvedParams\.bookId\} \/>/);
 });
 
 test("analysis surface covers loading, error, empty, and sentence/page HSK series states", () => {
   assert.match(analysisSource, /LoadingSkeleton label="Loading analysis"/);
   assert.match(analysisSource, /Unable to load analysis/);
+  assert.match(analysisSource, /analysis\.lexical-entries-card/);
+  assert.match(analysisSource, /\/lexicon\/lookup\?/);
+  assert.match(analysisSource, /analysis-lexical-grid/);
+  assert.match(analysisSource, /First page/);
+  assert.match(analysisSource, /Last page/);
   assert.match(analysisSource, /analysis\.sentence-hsk-chart/);
   assert.match(analysisSource, /analysis\.page-hsk-chart/);
   assert.match(analysisSource, /Sentence chart will appear after extraction completes/);
@@ -35,9 +40,12 @@ test("book detail loads analysis independently and exposes page-chart loading an
   assert.match(bookDetailSource, /setAnalysis\(null\)/);
 });
 
-test("HSK chart has a responsive scroll surface, fixed six-level palette, and accessible point labels", () => {
+test("HSK chart has a responsive fit-to-width surface, fixed six-level palette, and quarter-axis labels", () => {
   assert.match(chartSource, /role="status"/);
-  assert.match(stylesSource, /\.hsk-series-scroll\s*\{[\s\S]*?overflow-x: auto/);
+  assert.match(stylesSource, /\.hsk-series-frame\s*\{[\s\S]*?overflow: hidden/);
+  assert.match(chartSource, /preserveAspectRatio="none"/);
+  assert.match(chartSource, /buildSmoothPath/);
+  assert.match(chartSource, /hsk-series-x-axis/);
   assert.match(chartSource, /#006b2e/);
   assert.match(chartSource, /#8f1239/);
   assert.match(chartSource, /<title>/);

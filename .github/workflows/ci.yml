@@ -62,6 +62,11 @@ jobs:
       - name: Run static site tests
         run: npm run test:site
 
+      - name: Run maintenance and backup/restore tests
+        run: |
+          npm run test:maintenance
+          node --test tests/maintenance/data-backup.test.mjs
+
       - name: Start preview reachability server
         working-directory: site
         run: |
@@ -85,3 +90,30 @@ jobs:
         env:
           CI: "1"
         run: npm run lint:web
+
+  container-smoke:
+    name: Clean container deployment smoke
+    needs: [python, web]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create disposable configuration
+        run: cp .env.example .env
+
+      - name: Build the canonical and compatibility images
+        run: docker compose --profile legacy build api web site
+
+      - name: Start the stack and verify owned routes
+        run: |
+          set -euo pipefail
+          trap 'docker compose --profile legacy down --volumes' EXIT
+          docker compose --profile legacy up -d api web site
+          for url in \
+            http://127.0.0.1:3000/profile \
+            http://127.0.0.1:8201/health \
+            http://127.0.0.1:8201/ready \
+            http://127.0.0.1:8200/legacy/index.html; do
+            curl --fail --silent --show-error "$url" > /dev/null
+          done

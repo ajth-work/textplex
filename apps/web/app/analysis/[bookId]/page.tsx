@@ -11,6 +11,12 @@ export function generateStaticParams(): Array<{ bookId: string }> {
   return isDemoMode ? [{ bookId: DEMO_BOOK_ID }] : [];
 }
 
-export default function AnalysisPage({ params }: { params: { bookId: string } }) {
-  return isDemoMode ? <MockAnalysisSurfaceView bookId={params.bookId} /> : <AnalysisSurfaceView bookId={params.bookId} />;
+export default async function AnalysisPage(props: Promise<{ params: { bookId: string } }> | { params: { bookId: string } }) {
+  const { params } = await props;
+  const resolvedParams = await params;
+  return isDemoMode ? (
+    <MockAnalysisSurfaceView bookId={resolvedParams.bookId} />
+  ) : (
+    <AnalysisSurfaceView bookId={resolvedParams.bookId} />
+  );
 }

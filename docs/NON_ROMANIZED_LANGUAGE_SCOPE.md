@@ -27,7 +27,7 @@ Public learner data is usually rank-based, not an absolute global learner count.
 - Learner demand proxy: very high. Duolingo ranked Japanese as the 4th most popular language studied globally in 2025.
 - Content signal: extremely strong. Manga, light novels, and literary fiction provide a deep reading corpus.
 - Notable work signal: `ONE PIECE` reached 6 billion copies in worldwide cumulative circulation in 2026.
-- Why it comes first: the combination of strong learner demand, enormous content availability, and clear reading motivation makes Japanese the strongest first non-Romanized target for TextPlex.
+- Why it comes next: the combination of strong learner demand, enormous content availability, and clear reading motivation makes Japanese the best follow-up after Korean.
 - Implementation note: start from [Japanese Text Processing Notes](./JAPANESE_TEXT_PROCESSING.md) and the starter corpus in [Non-Romanized Language Test Corpus](./NON_ROMANIZED_LANGUAGE_TEST_CORPUS.md).
 
 #### Korean
@@ -53,6 +53,7 @@ Public learner data is usually rank-based, not an absolute global learner count.
 - Notable work signal: Eksmo states that Liya Arden’s `Mara and Morok` trilogy has sold over 1 million copies.
 - Why it is second wave: the reading corpus is good, but the learner-demand signal is not as strong as Japanese, Korean, or Chinese.
 
+- Implementation note: start from [Russian Text Processing Notes](./RUSSIAN_TEXT_PROCESSING.md) and the starter pack in [Russian Lexicon Pack](../resources/lexicon/russian/README.md).
 #### Hebrew
 
 - Learner demand proxy: smaller and more specialized, but with a dedicated audience.
@@ -72,8 +73,8 @@ Public learner data is usually rank-based, not an absolute global learner count.
 
 If the goal is to expand TextPlex in the most productive order, use this sequence:
 
-1. Japanese
-2. Korean
+1. Korean
+2. Japanese
 3. Chinese
 4. Russian
 5. Hebrew
@@ -107,7 +108,9 @@ Each new language should start from the shared non-Romanized template and then a
 
 Reference template: [Non-Romanized Language Processing Template](./NON_ROMANIZED_LANGUAGE_PROCESSING_TEMPLATE.md)
 
-Japanese-specific starting point: [Japanese Text Processing Notes](./JAPANESE_TEXT_PROCESSING.md)
+Korean-specific starting point: use the active implementation tracker and the shared non-Romanized template.
+
+Russian-specific starting point: use the starter pack, the new Russian processing note, and the shared non-Romanized template.
 
 ## Source Notes
 
