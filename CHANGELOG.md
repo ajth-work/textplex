@@ -3,6 +3,7 @@
 ## 2026-07-23
 
 - Hardened the clean container smoke job so owned-route checks retry until the Next app, API, and legacy shell finish starting instead of failing on a startup reset.
+- Tightened the smoke retry further by using curl's retry flags plus a short startup delay to absorb transient container resets during the route probe.
 
 ## 2026-07-21
 

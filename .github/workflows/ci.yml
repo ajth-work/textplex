@@ -110,21 +110,21 @@ jobs:
           set -euo pipefail
           trap 'docker compose --profile legacy down --volumes' EXIT
           docker compose --profile legacy up -d api web site
-          wait_for_url() {
-            local url="$1"
-            for _ in $(seq 1 30); do
-              if curl --fail --silent --show-error "$url" > /dev/null; then
-                return 0
-              fi
-              sleep 2
-            done
-            echo "Timed out waiting for $url" >&2
-            return 1
-          }
+          sleep 10
           for url in \
             http://127.0.0.1:3000/profile \
             http://127.0.0.1:8201/health \
             http://127.0.0.1:8201/ready \
             http://127.0.0.1:8200/legacy/index.html; do
-            wait_for_url "$url"
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --retry 20 \
+              --retry-all-errors \
+              --retry-connrefused \
+              --retry-delay 2 \
+              --connect-timeout 2 \
+              --max-time 10 \
+              "$url" > /dev/null
           done
