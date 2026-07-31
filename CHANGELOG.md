@@ -2,6 +2,7 @@
 
 ## 2026-07-31
 
+- Fixed the Docker Compose smoke job so it no longer fails when `GOOGLE_APPLICATION_CREDENTIALS` is unset in the disposable CI `.env` file.
 - Fixed the API and processor Ruff regressions that were breaking GitHub Actions, including export sorting, exception narrowing, and legacy lexicon row handling; verified with `ruff check` and `pytest`.
 - Added a Latin-script roadmap lane for French, Spanish, Italian, German, Yoruba, and related languages so they stay planned together before any individual starter packs are built.
 - Added Yoruba to the import dropdown, library language filter, and study language labels so the Latin-script lane shows a real language name instead of a generic code, and added a matching Yoruba starter-pack note to the issue tracker.

@@ -46,4 +46,4 @@ services:
       - "8201:8000"
     volumes:
       - ./data:/workspace/data
-      - ${GOOGLE_APPLICATION_CREDENTIALS}:/run/secrets/textplex-google-translate-sa.json:ro
+      - ${GOOGLE_APPLICATION_CREDENTIALS:-./.secrets/textplex-google-translate-sa.json}:/run/secrets/textplex-google-translate-sa.json:ro
