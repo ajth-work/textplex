@@ -14,10 +14,13 @@ from app.core.paths import get_books_root
 from app.schemas.books import BookRecord, PageExtractionArtifact
 from app.services.book_registry import import_book_from_path, load_registry, save_registry
 from app.services.book_sources import is_text_fixture_source, load_text_fixture_pages, write_text_fixture_source
+from app.services.google_translate import is_google_translate_configured, romanize_texts, translate_text
+from app.services.hebrew_transliteration import transliterate_hebrew_text
+from app.services.google_translate_usage import record_google_translate_usage
 from app.services.lexicon import lookup_lexicon_entry_map, lookup_lexicon_pinyin_map
 from app.services.ocr import get_text_source_signature, resolve_page_ocr
 from processor import build_book_extraction_result, build_page_extraction_result, stitch_page_sentence_carryover
-from processor.contracts import BookExtractionResult, PageExtractionResult
+from processor.contracts import BookExtractionResult, PageExtractionResult, SentenceResult
 
 FIXTURE_TEXT_SOURCE = "fixture"
 FIXTURE_TEXT_SIGNATURE = "fixture-text-v1"
@@ -43,6 +46,15 @@ def _book_artifact_path(book_id: str, data_root: Path) -> Path:
 
 def _lexicon_root(data_root: Path) -> Path:
     return data_root.parent if data_root.name == "books" else data_root
+
+
+def _language_root(language_code: str) -> str:
+    return (language_code or "").strip().lower().split("-", 1)[0]
+
+
+def _is_punctuation_surface(surface_form: str) -> bool:
+    text = surface_form.strip()
+    return bool(text) and len(text) == 1 and not text.isalnum()
 
 
 def _load_page_artifact(path: Path, *, data_root: Path | None = None) -> PageExtractionArtifact | None:
@@ -79,6 +91,13 @@ def _string_list(values: object) -> list[str]:
 
 
 def _page_translation(values: object) -> str | None:
+    if isinstance(values, str):
+        text = values.strip()
+        return text or None
+    return None
+
+
+def _page_translation_source(values: object) -> str | None:
     if isinstance(values, str):
         text = values.strip()
         return text or None
@@ -187,9 +206,11 @@ def _recover_page_result(page: PageExtractionResult, *, data_root: Path | None =
         if not transcription:
             return page
         page_translation = _json_string_fragment(raw_text, "page_translation") or _json_string_fragment(raw_text, "translation")
+        page_translation_source = _json_string_fragment(raw_text, "page_translation_source") or _json_string_fragment(raw_text, "translation_source")
         page_ends_with_sentence_terminator = _json_bool_fragment(raw_text, "page_ends_with_sentence_terminator")
         sentence_texts = _string_list(_json_list_fragment(raw_text, "sentence_texts")) or _string_list(_json_list_fragment(raw_text, "sentences"))
         sentence_translations = _string_list(_json_list_fragment(raw_text, "sentence_translations")) or _string_list(_json_list_fragment(raw_text, "translations"))
+        sentence_translation_sources = _string_list(_json_list_fragment(raw_text, "sentence_translation_sources")) or _string_list(_json_list_fragment(raw_text, "translation_sources"))
         token_hints = _json_list_fragment(raw_text, "token_hints")
         source_payload = None
     else:
@@ -213,6 +234,12 @@ def _recover_page_result(page: PageExtractionResult, *, data_root: Path | None =
         sentence_texts = _string_list(source_payload.get("sentence_texts")) or _string_list(source_payload.get("sentences"))
         sentence_translations = _string_list(source_payload.get("sentence_translations")) or _string_list(source_payload.get("translations"))
         page_translation = _page_translation(source_payload.get("page_translation")) or _page_translation(source_payload.get("translation"))
+        page_translation_source = _page_translation_source(source_payload.get("page_translation_source")) or _page_translation_source(
+            source_payload.get("translation_source")
+        )
+        sentence_translation_sources = _string_list(source_payload.get("sentence_translation_sources")) or _string_list(
+            source_payload.get("translation_sources")
+        )
         page_ends_with_sentence_terminator = _page_terminator_flag(
             source_payload.get("page_ends_with_sentence_terminator")
         )
@@ -230,7 +257,9 @@ def _recover_page_result(page: PageExtractionResult, *, data_root: Path | None =
         source_page_sha256=page.source_page_sha256,
         sentence_texts=sentence_texts or None,
         sentence_translations=sentence_translations or None,
+        sentence_translation_sources=sentence_translation_sources or None,
         page_translation=page_translation,
+        page_translation_source=page_translation_source,
         page_ends_with_sentence_terminator=page_ends_with_sentence_terminator,
         token_hints=token_hints,
     )
@@ -323,6 +352,7 @@ def import_text_into_book(
     language_code: str,
     title: str | None = None,
     author: str | None = None,
+    translation_mode: str = "off",
     data_root: Path | None = None,
     owner_id: str | None = None,
 ) -> BookRecord:
@@ -365,6 +395,8 @@ def import_text_into_book(
     book.extraction_updated_at = _utc_now()
     book.extraction_path = str(extraction_path)
     book.status = "extracted"
+    if translation_mode == "preload":
+        preload_book_sentence_translations(book=book, page_start=1, page_count=extracted_page_count or None, data_root=books_root)
     _persist_book_record(book, data_root=books_root)
     return book
 
@@ -394,7 +426,8 @@ def _page_image_hash(page_image_path: Path) -> str:
 
 
 def _enrich_page_lexicon_metadata(page_result: PageExtractionResult, *, data_root: Path) -> PageExtractionResult:
-    if page_result.language_code.lower() != "zh":
+    language_code = page_result.language_code.lower()
+    if _language_root(language_code) not in {"zh", "ja", "ko", "ru", "he", "ar"}:
         return page_result
 
     surface_forms = {
@@ -403,17 +436,70 @@ def _enrich_page_lexicon_metadata(page_result: PageExtractionResult, *, data_roo
         for token in sentence.tokens
         if token.surface_form
     }
-    lexicon_entries = lookup_lexicon_entry_map(
-        data_root=data_root,
-        language_code=page_result.language_code,
-        terms=surface_forms,
-    )
-    pinyin_map = lookup_lexicon_pinyin_map(
-        data_root=data_root,
-        language_code=page_result.language_code,
-        terms=surface_forms,
-    )
+    try:
+        lexicon_entries = lookup_lexicon_entry_map(
+            data_root=data_root,
+            language_code=page_result.language_code,
+            terms=surface_forms,
+        )
+    except FileNotFoundError:
+        lexicon_entries = {}
+    try:
+        pinyin_map = lookup_lexicon_pinyin_map(
+            data_root=data_root,
+            language_code=page_result.language_code,
+            terms=surface_forms,
+        )
+    except FileNotFoundError:
+        pinyin_map = {}
     if not pinyin_map and not lexicon_entries:
+        pinyin_map = {}
+
+    google_romanization_map: dict[str, str] = {}
+    if is_google_translate_configured():
+        missing_pronunciations = []
+        for sentence in page_result.sentences:
+            for token in sentence.tokens:
+                if _is_punctuation_surface(token.surface_form):
+                    continue
+                if token.romanization or token.pronunciation or not any(ord(character) > 127 for character in token.surface_form):
+                    continue
+                missing_pronunciations.append(token.surface_form)
+
+        unique_missing_pronunciations = list(dict.fromkeys(missing_pronunciations))
+        if unique_missing_pronunciations:
+            romanized_terms = romanize_texts(unique_missing_pronunciations, source_language_code=page_result.language_code)
+            google_romanization_map = {
+                term: romanized
+                for term, romanized in zip(unique_missing_pronunciations, romanized_terms, strict=False)
+                if romanized
+            }
+            if google_romanization_map:
+                record_google_translate_usage(
+                    data_root=data_root,
+                    characters=sum(len(term) for term in google_romanization_map),
+                )
+
+    hebrew_romanization_map: dict[str, str] = {}
+    if _language_root(language_code) == "he":
+        missing_pronunciations = []
+        for sentence in page_result.sentences:
+            for token in sentence.tokens:
+                if _is_punctuation_surface(token.surface_form):
+                    continue
+                if token.romanization or token.pronunciation or not any(ord(character) > 127 for character in token.surface_form):
+                    continue
+                missing_pronunciations.append(token.surface_form)
+
+        unique_missing_pronunciations = list(dict.fromkeys(missing_pronunciations))
+        if unique_missing_pronunciations:
+            hebrew_romanization_map = {
+                term: romanized
+                for term in unique_missing_pronunciations
+                if (romanized := transliterate_hebrew_text(term))
+            }
+
+    if not pinyin_map and not lexicon_entries and not google_romanization_map and not hebrew_romanization_map:
         return page_result
 
     sentences = []
@@ -421,7 +507,14 @@ def _enrich_page_lexicon_metadata(page_result: PageExtractionResult, *, data_roo
         tokens = []
         for token in sentence.tokens:
             exact_entry = lexicon_entries.get(token.surface_form)
-            romanization = token.romanization or (exact_entry.pinyin if exact_entry else None) or pinyin_map.get(token.surface_form)
+            romanization = (
+                token.romanization
+                or token.pronunciation
+                or (exact_entry.pinyin if exact_entry else None)
+                or pinyin_map.get(token.surface_form)
+                or google_romanization_map.get(token.surface_form)
+                or hebrew_romanization_map.get(token.surface_form)
+            )
             definition_short = token.definition_short or (exact_entry.definition if exact_entry else None)
             proficiency_level = token.proficiency_level or (exact_entry.hsk_level if exact_entry else None)
             proficiency_system = token.proficiency_system or ("HSK" if exact_entry and exact_entry.hsk_level else None)
@@ -429,6 +522,7 @@ def _enrich_page_lexicon_metadata(page_result: PageExtractionResult, *, data_roo
                 token.model_copy(
                     update={
                         "romanization": romanization,
+                        "pronunciation": romanization if romanization and not token.pronunciation else token.pronunciation,
                         "definition_short": definition_short,
                         "proficiency_level": proficiency_level,
                         "proficiency_system": proficiency_system,
@@ -438,6 +532,117 @@ def _enrich_page_lexicon_metadata(page_result: PageExtractionResult, *, data_roo
         sentences.append(sentence.model_copy(update={"tokens": tokens}))
 
     return page_result.model_copy(update={"sentences": sentences})
+
+
+def _translate_text_with_google(*, source_text: str, source_language_code: str, data_root: Path) -> str | None:
+    translated_text = translate_text(source_text, source_language_code=source_language_code)
+    if not translated_text:
+        return None
+
+    record_google_translate_usage(data_root=data_root, characters=len(source_text))
+    return translated_text
+
+
+def preload_page_sentence_translations(page_result: PageExtractionResult, *, data_root: Path) -> PageExtractionResult:
+    if not is_google_translate_configured():
+        return page_result
+
+    sentences: list[SentenceResult] = []
+    updated = False
+    for sentence in page_result.sentences:
+        if sentence.translation:
+            sentences.append(sentence)
+            continue
+
+        translated = _translate_text_with_google(
+            source_text=sentence.text,
+            source_language_code=page_result.language_code,
+            data_root=data_root,
+        )
+        if not translated:
+            sentences.append(sentence)
+            continue
+
+        sentences.append(
+            sentence.model_copy(
+                update={
+                    "translation": translated,
+                    "translation_source": "google_translate_live",
+                }
+            )
+        )
+        updated = True
+
+    if not updated:
+        return page_result
+    return page_result.model_copy(update={"sentences": sentences})
+
+
+def translate_page_sentence(
+    page_result: PageExtractionResult,
+    *,
+    sentence_order: int,
+    data_root: Path,
+) -> tuple[PageExtractionResult, SentenceResult | None, str]:
+    existing_sentence = next((sentence for sentence in page_result.sentences if sentence.order == sentence_order), None)
+    if existing_sentence is None:
+        return page_result, None, "missing"
+
+    if existing_sentence.translation:
+        if existing_sentence.translation_source == "google_translate_live":
+            return page_result, existing_sentence, "google_translate_cache"
+        if existing_sentence.translation_source:
+            return page_result, existing_sentence, existing_sentence.translation_source
+        return page_result, existing_sentence, "page_artifact"
+
+    if not is_google_translate_configured():
+        return page_result, existing_sentence, "unavailable"
+
+    translated = _translate_text_with_google(
+        source_text=existing_sentence.text,
+        source_language_code=page_result.language_code,
+        data_root=data_root,
+    )
+    if not translated:
+        return page_result, existing_sentence, "unavailable"
+
+    updated_sentence = existing_sentence.model_copy(
+        update={
+            "translation": translated,
+            "translation_source": "google_translate_live",
+        }
+    )
+    sentences = [updated_sentence if sentence.order == sentence_order else sentence for sentence in page_result.sentences]
+    updated_page = page_result.model_copy(update={"sentences": sentences})
+    return updated_page, updated_sentence, "google_translate_live"
+
+
+def preload_book_sentence_translations(
+    *,
+    book: BookRecord,
+    page_start: int = 1,
+    page_count: int | None = None,
+    data_root: Path | None = None,
+) -> int:
+    data_root = data_root or get_books_root()
+    start_page = max(1, page_start)
+    end_page = book.total_pages if page_count is None else min(book.total_pages, start_page + page_count - 1)
+    updated_pages = 0
+
+    for page_number in range(start_page, end_page + 1):
+        artifact = load_page_artifact(book_id=book.id, page_number=page_number, data_root=data_root)
+        if artifact is None:
+            continue
+
+        translated_page = preload_page_sentence_translations(artifact.page, data_root=data_root)
+        if translated_page is artifact.page:
+            continue
+
+        artifact = artifact.model_copy(update={"page": translated_page})
+        _save_page_artifact(_page_artifact_path(book.id, page_number, data_root), artifact)
+        updated_pages += 1
+
+    return updated_pages
 
 
 def _update_extraction_progress(

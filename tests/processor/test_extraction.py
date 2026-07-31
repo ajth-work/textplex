@@ -33,12 +33,17 @@ def test_build_page_extraction_result_applies_translations_to_sentences() -> Non
         raw_text="\u8fd9\u662f\u7b2c\u4e00\u53e5\u3002\u8fd9\u662f\u7b2c\u4e8c\u53e5\u3002",
         sentence_texts=["\u8fd9\u662f\u7b2c\u4e00\u53e5\u3002", "\u8fd9\u662f\u7b2c\u4e8c\u53e5\u3002"],
         sentence_translations=["This is the first sentence.", "This is the second sentence."],
+        sentence_translation_sources=["google_translate_live", "google_translate_cache"],
         page_translation="This is page one.",
+        page_translation_source="google_translate_live",
     )
 
     assert result.page_translation == "This is page one."
+    assert result.page_translation_source == "google_translate_live"
     assert result.sentences[0].translation == "This is the first sentence."
+    assert result.sentences[0].translation_source == "google_translate_live"
     assert result.sentences[1].translation == "This is the second sentence."
+    assert result.sentences[1].translation_source == "google_translate_cache"
 
 
 def test_stitch_page_sentence_carryover_moves_open_sentence_to_previous_page(monkeypatch) -> None:
@@ -102,6 +107,36 @@ def test_tokenize_sentence_uses_chinese_segmenter_when_available(monkeypatch) ->
     tokens = tokenize_sentence("\u79d1\u5b66\u8fb9\u754c", "zh")
 
     assert [token.surface_form for token in tokens] == ["\u79d1\u5b66", "\u8fb9\u754c"]
+
+
+def test_tokenize_sentence_keeps_korean_words_together() -> None:
+    tokens = tokenize_sentence("\uc544\uce68\uc5d0 \uac00\uac8c\uc5d0 \uac14\uc5b4\uc694.", "ko")
+
+    assert [token.surface_form for token in tokens] == ["\uc544\uce68\uc5d0", "\uac00\uac8c\uc5d0", "\uac14\uc5b4\uc694"]
+
+
+def test_tokenize_sentence_keeps_japanese_hiragana_and_katakana_together() -> None:
+    tokens = tokenize_sentence("\u4eca\u65e5\u306f\u30b3\u30d4\u30fc\u3067\u52c9\u5f37\u3057\u307e\u3057\u305f\u3002", "ja")
+
+    assert [token.surface_form for token in tokens] == ["\u4eca\u65e5", "\u306f", "\u30b3\u30d4\u30fc", "\u3067", "\u52c9\u5f37", "\u3057\u307e\u3057\u305f"]
+
+
+def test_tokenize_sentence_keeps_russian_words_together() -> None:
+    tokens = tokenize_sentence("\u041f\u0440\u0438\u0432\u0435\u0442, \u043c\u0438\u0440!", "ru")
+
+    assert [token.surface_form for token in tokens] == ["\u041f\u0440\u0438\u0432\u0435\u0442", "\u043c\u0438\u0440"]
+
+
+def test_tokenize_sentence_keeps_arabic_words_together() -> None:
+    tokens = tokenize_sentence("\u0645\u0631\u062d\u0628\u0627 \u0628\u0627\u0644\u0639\u0627\u0644\u0645.", "ar")
+
+    assert [token.surface_form for token in tokens] == ["\u0645\u0631\u062d\u0628\u0627", "\u0628\u0627\u0644\u0639\u0627\u0644\u0645"]
+
+
+def test_tokenize_sentence_keeps_hebrew_words_together() -> None:
+    tokens = tokenize_sentence("\u05d0\u05e0\u05d9 \u05d1\u05d1\u05d9\u05ea.", "he")
+
+    assert [token.surface_form for token in tokens] == ["\u05d0\u05e0\u05d9", "\u05d1\u05d1\u05d9\u05ea"]
 
 
 def test_tokenize_sentence_falls_back_to_characters_when_jieba_is_missing(monkeypatch) -> None:

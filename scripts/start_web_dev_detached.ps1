@@ -13,8 +13,6 @@ $startInfo.UseShellExecute = $false
 $startInfo.CreateNoWindow = $true
 $startInfo.RedirectStandardOutput = $true
 $startInfo.RedirectStandardError = $true
-$startInfo.EnvironmentVariables['NEXT_IGNORE_INCORRECT_LOCKFILE'] = '1'
-
 $process = [System.Diagnostics.Process]::Start($startInfo)
 
 $stdout = [System.IO.StreamWriter]::new($log, $true)

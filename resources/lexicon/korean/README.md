@@ -25,7 +25,7 @@ TOPIK should be used as a prioritization anchor, not as a public word-count ladd
 
 ## Acquisition Workflow
 
-1. Download an official KRDICT export in XML or JSON from the dictionary site.
+1. Download an official KRDICT export in XML or JSON from the dictionary site, or stage a workbook-derived seed list when you are only ranking candidate headwords.
 2. Prefer the export options that include `word`, `pos`, `pronunciation`, `word_grade`, and `definition`.
 3. Keep the export file local and run the pack builder against it:
 
@@ -33,8 +33,10 @@ TOPIK should be used as a prioritization anchor, not as a public word-count ladd
 python scripts/build_korean_lexicon.py --source <path-to-krdict-export.xml-or-json>
 ```
 
-4. Review the generated `lexicon.csv` before importing it into the SQLite pack.
-5. Use the official dictionary grade and subject categories to prioritize basic reading vocabulary first.
+4. If you are starting from the curated TOPIK workbook, normalize it first with `scripts/normalize_korean_vocab_workbook.py`, then turn the staging CSV into the canonical pack with `scripts/build_korean_vocab_pack.py`.
+5. Keep a small `lexicon.override.csv` beside the generated pack for sample-text bridge entries that are needed for reader QA.
+6. Review the generated `lexicon.csv` before importing it into the SQLite pack.
+7. Use the official dictionary grade and subject categories to prioritize basic reading vocabulary first.
 
 ## Pack Goal
 

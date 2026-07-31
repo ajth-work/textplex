@@ -39,9 +39,11 @@ services:
       USER_DATA_DIR: /workspace/data/user
       DEFAULT_LANGUAGE: zh
       AI_PROVIDER: openai
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/textplex-google-translate-sa.json
       TEXTPLEX_CORS_ORIGINS: ${TEXTPLEX_CORS_ORIGINS:-http://127.0.0.1:3000,http://localhost:3000,http://127.0.0.1:8200,https://ajth-work.github.io}
       TEXTPLEX_CORS_ORIGIN_REGEX: ${TEXTPLEX_CORS_ORIGIN_REGEX:-}
     ports:
       - "8201:8000"
     volumes:
       - ./data:/workspace/data
+      - ${GOOGLE_APPLICATION_CREDENTIALS}:/run/secrets/textplex-google-translate-sa.json:ro

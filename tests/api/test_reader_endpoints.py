@@ -39,6 +39,10 @@ def test_get_reader_page_returns_page_payload_and_image(imported_real_scan: tupl
     assert page["page"]["page_number"] == 1
     assert page["extraction"]["page"]["page_number"] == 1
     assert page["image_url"] == f"/books/{record.id}/pages/1/image"
+    assert page["reader_capabilities"] == {
+        "token_display_modes": ["word"],
+        "default_token_display_mode": "word",
+    }
 
     image_response = client.get(f"/books/{record.id}/pages/1/image")
     assert image_response.status_code == 200
@@ -153,6 +157,49 @@ def test_import_text_endpoint_creates_reader_ready_book(tmp_path: Path) -> None:
     assert page["extraction"]["page"]["page_number"] == 1
     assert len(page["extraction"]["page"]["sentences"]) == 2
     assert len(page["extraction"]["page"]["sentences"][0]["tokens"]) > 0
+
+
+def test_sentence_translation_endpoint_persists_google_translation_cache(tmp_path: Path, monkeypatch) -> None:
+    app.state.data_root = tmp_path
+    client = TestClient(app)
+
+    def translate_text_stub(source_text: str, source_language_code: str, target_language_code: str = "en") -> str:
+      return f"{source_text} (translated)"
+
+    monkeypatch.setattr("app.services.book_extraction.is_google_translate_configured", lambda: True)
+    monkeypatch.setattr("app.services.book_extraction.translate_text", translate_text_stub)
+    monkeypatch.setattr("app.services.book_extraction.record_google_translate_usage", lambda **_: None)
+
+    response = client.post(
+        "/texts/import",
+        json={
+            "text": "아침에 갔어요.",
+            "language_code": "ko",
+            "title": "Sentence translation sample",
+            "translation_mode": "off",
+        },
+    )
+    assert response.status_code == 200
+    record = response.json()
+
+    live_response = client.post(f"/books/{record['id']}/pages/1/sentences/1/translation", json={})
+    assert live_response.status_code == 200
+    live_payload = live_response.json()
+    assert live_payload["translation"] == "아침에 갔어요. (translated)"
+    assert live_payload["translation_source"] == "google_translate_live"
+    assert live_payload["resolution_source"] == "google_translate_live"
+
+    page_response = client.get(f"/books/{record['id']}/pages/1")
+    assert page_response.status_code == 200
+    page = page_response.json()
+    sentence = page["extraction"]["page"]["sentences"][0]
+    assert sentence["translation"] == "아침에 갔어요. (translated)"
+    assert sentence["translation_source"] == "google_translate_live"
+
+    cached_response = client.post(f"/books/{record['id']}/pages/1/sentences/1/translation", json={})
+    assert cached_response.status_code == 200
+    cached_payload = cached_response.json()
+    assert cached_payload["resolution_source"] == "google_translate_cache"
 
 
 def test_parse_text_endpoint_uses_imported_lexicon_pinyin(tmp_path: Path) -> None:

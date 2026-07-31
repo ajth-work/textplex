@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from app.schemas.books import BookRecord
 from app.schemas.surfaces import (
     ActivityEvent,
     ActivitySurfaceResponse,
+    ReadingHistoryPoint,
     AnalysisSeriesPoint,
     AnalysisLexicalEntrySummary,
     BookAnalysisSurfaceResponse,
@@ -23,11 +25,14 @@ from app.schemas.surfaces import (
     SettingsUpdateRequest,
     StudyQueueItem,
     StudySurfaceResponse,
+    StudyVocabularyGroup,
+    StudyVocabularyItem,
 )
 from app.services.book_registry import load_registry
 from app.services.book_extraction import recover_book_extraction_result
 from app.services.learning_profile import ensure_profile_database, get_learning_profile_summary
 from app.services.lexicon import lookup_lexicon_hsk_levels_map
+from app.services.study_programs import build_study_program_groups
 from app.core.paths import resolve_books_root
 from processor import calculate_book_hsk_metrics, calculate_hsk_series, is_hanzi
 from processor.contracts import BookExtractionResult
@@ -49,7 +54,13 @@ def _load_book_extraction(data_root: Path, book_id: str) -> BookExtractionResult
     artifact_path = _book_artifact_path(data_root, book_id)
     if not artifact_path.exists():
         return None
-    extraction = BookExtractionResult.model_validate_json(artifact_path.read_text(encoding="utf-8"))
+    raw_extraction = artifact_path.read_text(encoding="utf-8")
+    if not raw_extraction.strip():
+        return None
+    try:
+        extraction = BookExtractionResult.model_validate_json(raw_extraction)
+    except ValueError:
+        return None
     recovered = recover_book_extraction_result(extraction, data_root=_books_root(data_root))
     if recovered is not extraction:
         artifact_path.write_text(recovered.model_dump_json(indent=2), encoding="utf-8")
@@ -78,6 +89,23 @@ def _snippet(text: str, query: str, *, width: int = 140) -> str:
 
 def _book_title_map(registry: dict[str, BookRecord]) -> dict[str, str]:
     return {book_id: record.title for book_id, record in registry.items()}
+
+
+def _language_label(language_code: str) -> str:
+    normalized = (language_code or "").strip().lower()
+    if normalized.startswith("zh"):
+        return "Chinese"
+    if normalized.startswith("ja"):
+        return "Japanese"
+    if normalized.startswith("ko"):
+        return "Korean"
+    if normalized.startswith("fr"):
+        return "French"
+    if normalized.startswith("en"):
+        return "English"
+    if normalized == "local":
+        return "Local"
+    return language_code.upper() if language_code else "Unknown"
 
 
 def get_book_analysis_surface(data_root: Path, book_id: str) -> BookAnalysisSurfaceResponse:
@@ -234,13 +262,16 @@ def get_study_surface(
     owner_id: str | None = None,
 ) -> StudySurfaceResponse:
     limit = max(0, limit)
+    registry = load_registry(_books_root(data_root) / "registry.json")
+    title_map = _book_title_map(registry)
     db_path = ensure_profile_database(data_root, owner_id)
+    study_programs = build_study_program_groups(data_root, language_code=language_code)
     with sqlite3.connect(db_path) as connection:
         connection.row_factory = sqlite3.Row
         rows = connection.execute(
             """
             SELECT language_code, lemma, raw_exposures, weighted_exposure, unique_pages, unique_books,
-                   help_requests, state, confidence_score, manual_override, first_seen_at, last_seen_at
+                   help_requests, state, confidence_score, next_due_at, manual_override, first_seen_at, last_seen_at
             FROM vocabulary_progress
             WHERE (? IS NULL OR language_code = ?)
             ORDER BY
@@ -258,6 +289,18 @@ def get_study_surface(
             """,
             (language_code, language_code, limit),
         ).fetchall()
+        study_rows = connection.execute(
+            """
+            SELECT language_code, lemma, display_form, source_book_id, source_page_number, source_sentence_order,
+                   source_token_order, source_surface_form, source_sentence_text, pronunciation, romanization,
+                   definition_short, proficiency_level, click_count, first_seen_at, last_seen_at
+            FROM study_vocabulary_items
+            WHERE (? IS NULL OR language_code = ?)
+            ORDER BY language_code ASC, last_seen_at DESC, click_count DESC, lemma ASC
+            LIMIT ?
+            """,
+            (language_code, language_code, limit),
+        ).fetchall()
 
     items = [
         StudyQueueItem(
@@ -270,13 +313,61 @@ def get_study_surface(
             help_requests=row["help_requests"],
             state=row["state"],
             confidence_score=row["confidence_score"],
+            next_due_at=row["next_due_at"],
             manual_override=row["manual_override"],
             first_seen_at=row["first_seen_at"],
             last_seen_at=row["last_seen_at"],
         )
         for row in rows
     ]
-    return StudySurfaceResponse(queue_size=len(items), queued_items=items)
+
+    grouped_items: dict[str, list[StudyVocabularyItem]] = {}
+    group_order: list[str] = []
+    for row in study_rows:
+        row_language_code = row["language_code"]
+        if row_language_code not in grouped_items:
+            grouped_items[row_language_code] = []
+            group_order.append(row_language_code)
+        grouped_items[row_language_code].append(
+            StudyVocabularyItem(
+                language_code=row_language_code,
+                language_label=_language_label(row_language_code),
+                lemma=row["lemma"],
+                display_form=row["display_form"],
+                source_book_id=row["source_book_id"],
+                source_book_title=title_map.get(row["source_book_id"], row["source_book_id"]),
+                source_page_number=row["source_page_number"],
+                source_sentence_order=row["source_sentence_order"],
+                source_token_order=row["source_token_order"],
+                source_surface_form=row["source_surface_form"],
+                source_sentence_text=row["source_sentence_text"],
+                pronunciation=row["pronunciation"],
+                romanization=row["romanization"],
+                definition_short=row["definition_short"],
+                proficiency_level=row["proficiency_level"],
+                click_count=row["click_count"],
+                first_seen_at=row["first_seen_at"],
+                last_seen_at=row["last_seen_at"],
+            )
+        )
+
+    study_groups = [
+        StudyVocabularyGroup(
+            language_code=language_code_value,
+            language_label=_language_label(language_code_value),
+            item_count=len(grouped_items[language_code_value]),
+            items=grouped_items[language_code_value],
+        )
+        for language_code_value in group_order
+    ]
+
+    return StudySurfaceResponse(
+        queue_size=len(items),
+        queued_items=items,
+        study_programs=study_programs,
+        study_item_count=sum(group.item_count for group in study_groups),
+        study_groups=study_groups,
+    )
 
 
 def get_progress_surface(data_root: Path, *, owner_id: str | None = None) -> ProgressSurfaceResponse:
@@ -290,18 +381,46 @@ def get_progress_surface(data_root: Path, *, owner_id: str | None = None) -> Pro
         connection.row_factory = sqlite3.Row
         page_rows = connection.execute(
             """
-            SELECT book_id, COUNT(*) AS page_reads, COALESCE(SUM(active_seconds), 0) AS active_seconds
+            SELECT book_id,
+                   COUNT(*) AS page_reads,
+                   COALESCE(SUM(active_seconds), 0) AS active_seconds,
+                   MAX(page_number) AS furthest_page,
+                   MAX(completed_at) AS last_read_at
             FROM page_reads
             GROUP BY book_id
             """
         ).fetchall()
         sentence_rows = connection.execute(
             """
-            SELECT book_id, COUNT(*) AS sentence_reads, COALESCE(SUM(active_seconds), 0) AS active_seconds
+            SELECT book_id,
+                   COUNT(*) AS sentence_reads,
+                   COUNT(DISTINCT CAST(page_number AS TEXT) || ':' || CAST(sentence_order AS TEXT)) AS sentences_read,
+                   COALESCE(SUM(active_seconds), 0) AS active_seconds,
+                   MAX(completed_at) AS last_read_at
             FROM sentence_reads
             GROUP BY book_id
             """
         ).fetchall()
+        latest_sentence_rows = connection.execute(
+            """
+            SELECT current.book_id, current.page_number, current.sentence_order
+            FROM sentence_reads AS current
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM sentence_reads AS newer
+                WHERE newer.book_id = current.book_id
+                  AND (
+                    newer.completed_at > current.completed_at
+                    OR (newer.completed_at = current.completed_at AND newer.id > current.id)
+                  )
+            )
+            """
+        ).fetchall()
+
+    latest_sentence_by_book = {
+        row["book_id"]: (int(row["page_number"]), int(row["sentence_order"]))
+        for row in latest_sentence_rows
+    }
 
     for row in page_rows:
         book_id = row["book_id"]
@@ -311,6 +430,10 @@ def get_progress_surface(data_root: Path, *, owner_id: str | None = None) -> Pro
             page_reads=int(row["page_reads"]),
             sentence_reads=0,
             active_seconds=int(row["active_seconds"]),
+            furthest_page=int(row["furthest_page"] or 0),
+            resume_page=int(row["furthest_page"] or 0),
+            resume_sentence_order=1,
+            last_read_at=str(row["last_read_at"]) if row["last_read_at"] else None,
         )
 
     for row in sentence_rows:
@@ -323,12 +446,35 @@ def get_progress_surface(data_root: Path, *, owner_id: str | None = None) -> Pro
                 page_reads=0,
                 sentence_reads=0,
                 active_seconds=0,
+                resume_page=0,
+                resume_sentence_order=0,
             ),
         )
         entry.sentence_reads += int(row["sentence_reads"])
         entry.active_seconds += int(row["active_seconds"])
+        entry.sentences_read += int(row["sentences_read"] or 0)
+        sentence_last_read_at = str(row["last_read_at"]) if row["last_read_at"] else None
+        if sentence_last_read_at and (not entry.last_read_at or sentence_last_read_at > entry.last_read_at):
+            entry.last_read_at = sentence_last_read_at
 
-    books = sorted(aggregate.values(), key=lambda item: (-item.active_seconds, item.title))
+    for book_id, (resume_page, resume_sentence_order) in latest_sentence_by_book.items():
+        entry = aggregate.get(book_id)
+        if entry is not None:
+            entry.resume_page = resume_page
+            entry.resume_sentence_order = resume_sentence_order
+
+    for book_id, entry in aggregate.items():
+        record = registry.get(book_id)
+        entry.total_pages = max(0, int(record.total_pages or 0)) if record else 0
+        extraction = _load_book_extraction(data_root, book_id)
+        entry.total_sentences = sum(len(page.sentences) for page in extraction.pages) if extraction else 0
+        entry.progress_unit = "pages" if entry.total_pages > 1 else "sentences"
+        numerator = entry.furthest_page if entry.progress_unit == "pages" else entry.sentences_read
+        denominator = entry.total_pages if entry.progress_unit == "pages" else entry.total_sentences
+        entry.progress_percent = min(100, round((numerator / denominator) * 100)) if denominator > 0 else 0
+
+    books = sorted(aggregate.values(), key=lambda item: item.title)
+    books = sorted(books, key=lambda item: item.last_read_at or "", reverse=True)
     return ProgressSurfaceResponse(profile=profile, books=books)
 
 
@@ -342,6 +488,65 @@ def get_profile_surface(data_root: Path, *, owner_id: str | None = None) -> Prof
     )
 
 
+def _reading_history(connection: sqlite3.Connection, registry: dict[str, BookRecord]) -> list[ReadingHistoryPoint]:
+    paginated_book_ids = {book_id for book_id, record in registry.items() if int(record.total_pages or 0) > 1}
+    page_first_days: dict[tuple[str, int], str] = {}
+    sentence_first_days: dict[tuple[str, int, int], str] = {}
+    reading_days: set[str] = set()
+
+    page_rows = connection.execute(
+        """
+        SELECT book_id, page_number, completed_at, date(completed_at) AS day
+        FROM page_reads
+        WHERE counted_as_read = 1
+        ORDER BY completed_at ASC, id ASC
+        """
+    ).fetchall()
+    for row in page_rows:
+        if row["book_id"] not in paginated_book_ids:
+            continue
+        day = str(row["day"])
+        reading_days.add(day)
+        page_first_days.setdefault((row["book_id"], int(row["page_number"])), day)
+
+    sentence_rows = connection.execute(
+        """
+        SELECT book_id, page_number, sentence_order, completed_at, date(completed_at) AS day
+        FROM sentence_reads
+        ORDER BY completed_at ASC, id ASC
+        """
+    ).fetchall()
+    for row in sentence_rows:
+        day = str(row["day"])
+        reading_days.add(day)
+        sentence_first_days.setdefault(
+            (row["book_id"], int(row["page_number"]), int(row["sentence_order"])),
+            day,
+        )
+
+    page_completions_by_day = Counter(page_first_days.values())
+    sentence_completions_by_day = Counter(sentence_first_days.values())
+    cumulative_pages = 0
+    cumulative_sentences = 0
+    history: list[ReadingHistoryPoint] = []
+    for day_index, day in enumerate(sorted(reading_days), start=1):
+        pages_read = page_completions_by_day[day]
+        sentences_read = sentence_completions_by_day[day]
+        cumulative_pages += pages_read
+        cumulative_sentences += sentences_read
+        history.append(
+            ReadingHistoryPoint(
+                day_index=day_index,
+                day=day,
+                pages_read=pages_read,
+                cumulative_pages=cumulative_pages,
+                sentences_read=sentences_read,
+                cumulative_sentences=cumulative_sentences,
+            )
+        )
+    return history
+
+
 def get_activity_surface(
     data_root: Path,
     *,
@@ -353,6 +558,7 @@ def get_activity_surface(
     title_map = _book_title_map(registry)
     db_path = ensure_profile_database(data_root, owner_id)
     events: list[ActivityEvent] = []
+    reading_history: list[ReadingHistoryPoint] = []
 
     with sqlite3.connect(db_path) as connection:
         connection.row_factory = sqlite3.Row
@@ -412,14 +618,22 @@ def get_activity_surface(
         ).fetchall()
         for row in interaction_rows:
             book_title = title_map.get(row["book_id"], row["book_id"])
+            interaction_type = str(row["interaction_type"] or "")
+            event_kind = "study_vocabulary_item" if interaction_type == "study_saved" else "pronunciation_playback" if interaction_type == "pronunciation_playback" else "definition_lookup"
+            if interaction_type == "pronunciation_playback":
+                detail = f"Audio played: {_snippet(str(row['lemma'] or ''), str(row['lemma'] or ''), width=72)}"
+            elif interaction_type == "study_saved":
+                detail = f"Saved: {_snippet(str(row['lemma'] or ''), str(row['lemma'] or ''), width=72)}"
+            else:
+                detail = f"Lookup: {_snippet(str(row['lemma'] or ''), str(row['lemma'] or ''), width=72)}"
             events.append(
                 ActivityEvent(
-                    kind="definition_lookup",
+                    kind=event_kind,
                     occurred_at=row["occurred_at"],
                     book_id=row["book_id"],
                     page_number=row["page_number"],
                     title=book_title,
-                    detail=f"{row['lemma']} - {row['interaction_type']}",
+                    detail=detail,
                 )
             )
 
@@ -443,10 +657,15 @@ def get_activity_surface(
                     detail=f"Session active for {row['active_seconds']}s",
                 )
             )
+        reading_history = _reading_history(connection, registry)
 
     events.sort(key=lambda event: event.occurred_at, reverse=True)
     limited_events = events[:limit]
-    return ActivitySurfaceResponse(event_count=len(limited_events), events=limited_events)
+    return ActivitySurfaceResponse(
+        event_count=len(limited_events),
+        events=limited_events,
+        reading_history=reading_history,
+    )
 
 
 def get_import_surface(data_root: Path, *, default_language: str = "zh") -> ImportSurfaceResponse:

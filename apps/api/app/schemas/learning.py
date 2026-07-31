@@ -70,6 +70,85 @@ class SentenceReadRecord(BaseModel):
     completed_at: str
 
 
+class StudyVocabularyItemCreateRequest(BaseModel):
+    book_id: str = Field(min_length=1)
+    language_code: str = Field(min_length=1)
+    lemma: str = Field(min_length=1)
+    display_form: str = Field(min_length=1)
+    page_number: int = Field(ge=1)
+    sentence_order: int = Field(ge=1)
+    token_order: int = Field(ge=1)
+    source_surface_form: str = Field(min_length=1)
+    source_sentence_text: str = Field(min_length=1)
+    pronunciation: str | None = None
+    romanization: str | None = None
+    definition_short: str | None = None
+    proficiency_level: str | None = None
+    first_seen_at: str | None = None
+
+
+class StudyVocabularyItemRecord(BaseModel):
+    language_code: str
+    lemma: str
+    display_form: str
+    source_book_id: str
+    source_page_number: int
+    source_sentence_order: int
+    source_token_order: int
+    source_surface_form: str
+    source_sentence_text: str
+    pronunciation: str | None = None
+    romanization: str | None = None
+    definition_short: str | None = None
+    proficiency_level: str | None = None
+    click_count: int = 0
+    first_seen_at: str | None = None
+    last_seen_at: str | None = None
+
+
+VocabularyAssessmentAxisKey = Literal[
+    "form_to_meaning",
+    "form_to_reading",
+    "meaning_to_form",
+    "reading_to_form",
+]
+
+VocabularyAssessmentResult = Literal["correct", "incorrect"]
+
+
+class VocabularyAssessmentReviewRequest(BaseModel):
+    language_code: str = Field(min_length=1)
+    lemma: str = Field(min_length=1)
+    axis_key: VocabularyAssessmentAxisKey
+    result: VocabularyAssessmentResult
+    occurred_at: str | None = None
+
+
+class VocabularyAssessmentAxisRecord(BaseModel):
+    language_code: str
+    lemma: str
+    axis_key: VocabularyAssessmentAxisKey
+    prompt_type: str
+    response_type: str
+    stage: int
+    due_at: str | None = None
+    last_seen_at: str | None = None
+    last_result: VocabularyAssessmentResult | None = None
+    pass_count: int = 0
+    fail_count: int = 0
+
+
+class VocabularyAssessmentStateRecord(BaseModel):
+    language_code: str
+    lemma: str
+    mastery_level: str
+    mastery_score: float
+    srs_stage: int
+    next_due_at: str | None = None
+    stage_zero_complete: bool = False
+    axes: list[VocabularyAssessmentAxisRecord] = Field(default_factory=list)
+
+
 class LearningSyncResponse(BaseModel):
     status: Literal["synced", "pending"]
     uploaded_event_count: int = Field(ge=0)
@@ -82,10 +161,29 @@ class LearningSyncResponse(BaseModel):
     last_error: str | None = None
 
 
+class WordInteractionCreateRequest(BaseModel):
+    book_id: str = Field(min_length=1)
+    language_code: str = Field(min_length=1)
+    target_text: str = Field(min_length=1)
+    page_number: int = Field(ge=1)
+    interaction_type: Literal["definition_lookup", "study_saved", "pronunciation_playback"]
+    occurred_at: str | None = None
+
+
+class WordInteractionRecord(BaseModel):
+    id: int
+    book_id: str
+    page_number: int
+    language_code: str
+    target_text: str
+    interaction_type: Literal["definition_lookup", "study_saved", "pronunciation_playback"]
+    occurred_at: str
+
+
 class LearningEventPayload(BaseModel):
     event_id: str = Field(min_length=1)
     idempotency_key: str = Field(min_length=1)
-    event_type: Literal["reading_session", "page_read", "sentence_read"]
+    event_type: Literal["reading_session", "page_read", "sentence_read", "study_vocabulary_item", "word_interaction"]
     book_id: str = Field(min_length=1)
     occurred_at: str
     payload: dict[str, Any] = Field(default_factory=dict)

@@ -14,17 +14,20 @@ from .contracts import (
 )
 
 _TOKEN_RE = re.compile(
-    r"[\u4e00-\u9fff]+|[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?|[。！？!?.,:;，、；：…—“”‘’（）()\[\]{}《》〈〉「」『』【】]",
+    r"[\u4e00-\u9fff]+|[\u3041-\u309f]+|[\u30a1-\u30ff\uff66-\uff9f]+|[\uac00-\ud7a3\u3131-\u318e]+|[\u0400-\u04ff\u0500-\u052f]+|[\u0590-\u05ff\uFB1D-\uFB4F]+|[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+|[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?|[\u3002\uff01\uff1f!?.,:;\uff0c\u3001\uff1b\uff1a\u2026\u2014\u201c\u201d\u2018\u2019\uff08\uff09()\[\]{}\u300a\u300b\u3008\u3009\u300c\u300d\u300e\u300f\u3010\u3011\u30fb\u060c\u061b\u061f\u06d4]",
 )
 _CHINESE_RUN_RE = re.compile(r"[\u4e00-\u9fff]+")
+_JAPANESE_HIRAGANA_RUN_RE = re.compile(r"[\u3041-\u309f]+")
+_JAPANESE_KATAKANA_RUN_RE = re.compile(r"[\u30a1-\u30ff\uff66-\uff9f]+")
+_KOREAN_RUN_RE = re.compile(r"[\uac00-\ud7a3\u3131-\u318e]+")
 _WORDISH_RE = re.compile(
-    r"[\u4e00-\u9fff]+|[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?|[。！？!?.,:;，、；：…—“”‘’（）()\[\]{}《》〈〉「」『』【】]",
+    r"[\u4e00-\u9fff]+|[\u3041-\u309f]+|[\u30a1-\u30ff\uff66-\uff9f]+|[\uac00-\ud7a3\u3131-\u318e]+|[\u0400-\u04ff\u0500-\u052f]+|[\u0590-\u05ff\uFB1D-\uFB4F]+|[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+|[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?|[\u3002\uff01\uff1f!?.,:;\uff0c\u3001\uff1b\uff1a\u2026\u2014\u201c\u201d\u2018\u2019\uff08\uff09()\[\]{}\u300a\u300b\u3008\u3009\u300c\u300d\u300e\u300f\u3010\u3011\u30fb\u060c\u061b\u061f\u06d4]",
 )
 _WHITESPACE_RE = re.compile(r"\s+")
-_SENTENCE_ENDERS = set("\u3002\uff01\uff1f!?.")
+_SENTENCE_ENDERS = set("\u3002\uff01\uff1f!?.\u061f\u06d4")
 _TRAILING_SENTENCE_CLOSERS = set("\"')]}〉》」』】〗〟”’")
 _HARD_NO_SPACE_JOIN_LANGS = {"zh", "ja", "ko"}
-_PUNCTUATION_TOKENS = set("。！？!?.，、；：,;:…—“”‘’（）()[]{}《》〈〉「」『』【】")
+_PUNCTUATION_TOKENS = set("。！？!?.，、；：,;:…—“”‘’（）()[]{}《》〈〉「」『』【】،؛؟۔")
 
 try:
     from jieba import lcut as _jieba_lcut
@@ -276,15 +279,53 @@ def _tokenize_chinese_sentence(sentence: str) -> list[str]:
     return pieces
 
 
+def _tokenize_japanese_sentence(sentence: str) -> list[str]:
+    pieces: list[str] = []
+    for match in _WORDISH_RE.finditer(sentence):
+        chunk = match.group(0)
+        if _is_punctuation_token(chunk):
+            continue
+        if _CHINESE_RUN_RE.fullmatch(chunk) or _JAPANESE_HIRAGANA_RUN_RE.fullmatch(chunk) or _JAPANESE_KATAKANA_RUN_RE.fullmatch(chunk):
+            pieces.append(chunk)
+        else:
+            pieces.append(chunk)
+    return pieces
+
+
+def _tokenize_korean_sentence(sentence: str) -> list[str]:
+    return [match.group(0) for match in _TOKEN_RE.finditer(sentence) if not _is_punctuation_token(match.group(0))]
+
+
+def _tokenize_wordish_sentence(sentence: str, pattern: re.Pattern[str]) -> list[str]:
+    return [match.group(0) for match in pattern.finditer(sentence) if not _is_punctuation_token(match.group(0))]
+
+
+def _tokenize_russian_sentence(sentence: str) -> list[str]:
+    return _tokenize_wordish_sentence(sentence, _TOKEN_RE)
+
+
+def _tokenize_arabic_sentence(sentence: str) -> list[str]:
+    return _tokenize_wordish_sentence(sentence, _TOKEN_RE)
+
+
+def _tokenize_generic_sentence(sentence: str) -> list[str]:
+    return _tokenize_wordish_sentence(sentence, _TOKEN_RE)
+
+
 def tokenize_sentence(sentence: str, language_code: str) -> list[TokenResult]:
-    if language_code.lower().startswith("zh"):
+    language_root = _language_root(language_code)
+    if language_root == "zh":
         surfaces = _tokenize_chinese_sentence(sentence)
+    elif language_root == "ja":
+        surfaces = _tokenize_japanese_sentence(sentence)
+    elif language_root == "ko":
+        surfaces = _tokenize_korean_sentence(sentence)
+    elif language_root == "ru":
+        surfaces = _tokenize_russian_sentence(sentence)
+    elif language_root == "ar":
+        surfaces = _tokenize_arabic_sentence(sentence)
     else:
-        surfaces = [
-            match.group(0)
-            for match in _TOKEN_RE.finditer(sentence)
-            if not _is_punctuation_token(match.group(0))
-        ]
+        surfaces = _tokenize_generic_sentence(sentence)
 
     tokens: list[TokenResult] = []
     for index, surface_form in enumerate(surfaces, start=1):
@@ -307,7 +348,9 @@ def build_page_extraction_result(
     source_page_sha256: str | None = None,
     sentence_texts: list[str] | None = None,
     sentence_translations: list[str] | None = None,
+    sentence_translation_sources: list[str] | None = None,
     page_translation: str | None = None,
+    page_translation_source: str | None = None,
     page_ends_with_sentence_terminator: bool | None = None,
     token_hints: list[Mapping[str, object]] | None = None,
 ) -> PageExtractionResult:
@@ -315,12 +358,14 @@ def build_page_extraction_result(
     candidate_sentences = _normalize_sentence_inputs(sentence_texts, clean_text)
     hint_map = _normalize_token_hints(token_hints, language_code)
     sentence_translations = _normalize_sentence_translations(sentence_translations, len(candidate_sentences))
+    sentence_translation_sources = _normalize_sentence_translations(sentence_translation_sources, len(candidate_sentences))
     sentences = [
         _apply_token_hints(
             SentenceResult(
                 order=index,
                 text=sentence,
                 translation=sentence_translations[index - 1],
+                translation_source=sentence_translation_sources[index - 1],
                 tokens=tokenize_sentence(sentence, language_code),
                 ends_with_sentence_terminator=ends_with_sentence_terminator(sentence),
             ),
@@ -367,6 +412,9 @@ def build_page_extraction_result(
         raw_text=raw_text,
         clean_text=clean_text,
         page_translation=page_translation.strip() if isinstance(page_translation, str) and page_translation.strip() else None,
+        page_translation_source=page_translation_source.strip()
+        if isinstance(page_translation_source, str) and page_translation_source.strip()
+        else None,
         sentences=sentences,
         page_ends_with_sentence_terminator=page_ends_with_sentence_terminator
         if page_ends_with_sentence_terminator is not None

@@ -10,15 +10,24 @@ from .books import (
 from .auth import AuthMeResponse
 from .learning import (
     LearningProfileSummary,
+    StudyVocabularyItemCreateRequest,
+    StudyVocabularyItemRecord,
+    VocabularyAssessmentAxisRecord,
+    VocabularyAssessmentReviewRequest,
+    VocabularyAssessmentStateRecord,
+    WordInteractionCreateRequest,
+    WordInteractionRecord,
     PageReadCreateRequest,
     PageReadRecord,
     ReadingSessionCreateRequest,
     ReadingSessionRecord,
 )
+from .google_translate import GoogleTranslateUsageSummary
 from .lexicon import LexiconEntryRecord, LexiconImportRequest, LexiconImportSummary, LexiconLookupResponse
 from .surfaces import (
     ActivityEvent,
     ActivitySurfaceResponse,
+    ReadingHistoryPoint,
     AnalysisLexicalEntrySummary,
     BookAnalysisSurfaceResponse,
     ImportRecentBook,
@@ -32,6 +41,8 @@ from .surfaces import (
     SettingsUpdateRequest,
     StudyQueueItem,
     StudySurfaceResponse,
+    StudyVocabularyGroup,
+    StudyVocabularyItem,
 )
 
 __all__ = [
@@ -44,10 +55,18 @@ __all__ = [
     "PageRecord",
     "TextImportRequest",
     "LearningProfileSummary",
+    "StudyVocabularyItemCreateRequest",
+    "StudyVocabularyItemRecord",
+    "VocabularyAssessmentAxisRecord",
+    "VocabularyAssessmentReviewRequest",
+    "VocabularyAssessmentStateRecord",
+    "WordInteractionCreateRequest",
+    "WordInteractionRecord",
     "PageReadCreateRequest",
     "PageReadRecord",
     "ReadingSessionCreateRequest",
     "ReadingSessionRecord",
+    "GoogleTranslateUsageSummary",
     "LexiconEntryRecord",
     "LexiconImportRequest",
     "LexiconImportSummary",
@@ -67,4 +86,6 @@ __all__ = [
     "SettingsUpdateRequest",
     "StudyQueueItem",
     "StudySurfaceResponse",
+    "StudyVocabularyGroup",
+    "StudyVocabularyItem",
 ]

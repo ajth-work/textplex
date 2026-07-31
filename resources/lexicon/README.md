@@ -27,4 +27,6 @@ For non-Chinese languages, those fields can be used as the closest compatible re
 - `korean/` is the first non-Chinese source pack slot.
 - `russian/` is the next non-Romanized source pack slot being brought to the same starter-pack state.
 - `japanese/` follows as the next first-wave source pack slot.
+- `arabic/` is the ACTFL-anchored Arabic starter-pack slot and should stay aligned with MSA-first lookup, bidi rendering, and transliteration-aware pronunciation.
+- `wiktionary-basic-word-lists/` is a cross-language discovery index for learner-oriented seed lists and frequency-style source pages.
 - future language packs should follow the same pattern.

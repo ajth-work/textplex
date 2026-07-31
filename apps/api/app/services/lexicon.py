@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import csv
 import sqlite3
+import re
 from contextlib import closing
+from functools import lru_cache
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
 from app.core.paths import get_lexicon_source_root
+from app.services.google_translate_usage import record_google_translate_usage
 from app.schemas.lexicon import LexiconEntryRecord, LexiconImportSummary, LexiconLookupResponse
+from app.services.google_translate import is_google_translate_configured, romanize_text, translate_text
 
 
 def _utc_now() -> str:
@@ -23,11 +27,36 @@ def _migration_root() -> Path:
     return Path(__file__).resolve().parents[1] / "db" / "migrations" / "lexicon"
 
 
+def _ensure_google_translate_cache_schema(connection: sqlite3.Connection) -> None:
+    row = connection.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (_cache_table_name(),),
+    ).fetchone()
+    if not row:
+        migration_path = _migration_root() / "0002_google_translate_cache.sql"
+        connection.executescript(migration_path.read_text(encoding="utf-8"))
+        connection.commit()
+        row = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (_cache_table_name(),),
+        ).fetchone()
+        if not row:
+            return
+
+    columns = _cache_table_columns(connection)
+    if "pronunciation" not in columns:
+        migration_path = _migration_root() / "0003_google_translate_cache_pronunciation.sql"
+        connection.executescript(migration_path.read_text(encoding="utf-8"))
+        connection.commit()
+
+
 def ensure_lexicon_database(data_root: Path) -> Path:
     db_path = get_lexicon_db_path(data_root)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     if db_path.exists() and db_path.stat().st_size > 0:
+        with closing(sqlite3.connect(db_path)) as connection:
+            _ensure_google_translate_cache_schema(connection)
         return db_path
 
     with closing(sqlite3.connect(db_path)) as connection:
@@ -38,17 +67,37 @@ def ensure_lexicon_database(data_root: Path) -> Path:
     return db_path
 
 
-def _lexicon_entry_count(data_root: Path) -> int:
+def _lexicon_entry_count(data_root: Path, *, language_code: str | None = None) -> int:
     db_path = ensure_lexicon_database(data_root)
     with closing(sqlite3.connect(db_path)) as connection:
-        row = connection.execute("SELECT COUNT(*) FROM lexicon_entries").fetchone()
+        if language_code:
+            row = connection.execute(
+                "SELECT COUNT(*) FROM lexicon_entries WHERE language_code = ?",
+                (language_code,),
+            ).fetchone()
+        else:
+            row = connection.execute("SELECT COUNT(*) FROM lexicon_entries").fetchone()
     return int(row[0] if row else 0)
 
 
 def _ensure_seeded_lexicon(data_root: Path, *, language_code: str = "zh") -> None:
-    if _lexicon_entry_count(data_root) > 0:
+    normalized_language_code = _normalized_language_code(language_code)
+    if _lexicon_entry_count(data_root, language_code=normalized_language_code) > 0:
         return
-    import_lexicon_from_source(None, data_root=data_root, language_code=language_code, replace_existing=False)
+    import_lexicon_from_source(
+        None,
+        data_root=data_root,
+        language_code=normalized_language_code,
+        replace_existing=False,
+    )
+
+
+def _ensure_seeded_lexicon_if_available(data_root: Path, *, language_code: str) -> bool:
+    try:
+        _ensure_seeded_lexicon(data_root, language_code=language_code)
+    except FileNotFoundError:
+        return False
+    return True
 
 
 def _connect(data_root: Path) -> sqlite3.Connection:
@@ -173,6 +222,250 @@ def _normalized_language_code(language_code: str) -> str:
     return language_code.split("-", 1)[0].strip().lower()
 
 
+def _has_cyrillic_text(value: str | None) -> bool:
+    return bool(value and re.search(r"[\u0400-\u04FF]", value))
+
+
+_RUSSIAN_LOOKUP_SUFFIX_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("иями", ("ия", "ие")),
+    ("ями", ("я", "е", "ь")),
+    ("ами", ("а", "о", "я", "е", "ь")),
+    ("ого", ("ый", "ой", "ий")),
+    ("его", ("ий", "ый")),
+    ("ому", ("ый", "ий", "ой")),
+    ("ему", ("ий", "ый")),
+    ("ыми", ("ый", "ой", "ий")),
+    ("ими", ("ий", "ый")),
+    ("ою", ("ая",)),
+    ("ею", ("яя",)),
+    ("ую", ("ая", "яя")),
+    ("юю", ("яя", "ая")),
+    ("ая", ("а", "я", "ь")),
+    ("яя", ("я", "ь")),
+    ("ое", ("о", "е")),
+    ("ее", ("е", "о")),
+    ("ом", ("о", "е", "ь")),
+    ("ем", ("е", "я", "ь")),
+    ("ам", ("а", "я", "е", "о", "ь")),
+    ("ям", ("я", "а", "е", "о", "ь")),
+    ("ах", ("а", "я", "е", "о", "ь")),
+    ("ях", ("я", "а", "е", "о", "ь")),
+    ("ов", ("", "о", "а", "я", "ь")),
+    ("ев", ("", "е", "я", "ь")),
+    ("ей", ("я", "е", "ь")),
+    ("ий", ("ий", "ь")),
+    ("ый", ("ый", "ий")),
+    ("ой", ("ой", "ая", "я", "ь")),
+    ("а", ("", "ь", "я", "е", "о")),
+    ("я", ("", "ь", "й", "е", "а", "о")),
+    ("у", ("", "ь", "й", "а", "я", "о")),
+    ("ю", ("", "ь", "й", "е", "я", "а")),
+    ("ы", ("", "а", "я", "е", "о", "ь")),
+    ("и", ("", "я", "а", "е", "о", "ь")),
+    ("е", ("", "ь", "й", "я", "а", "о")),
+    ("о", ("", "е", "а", "я", "ь")),
+    ("ь", ("",)),
+)
+
+
+@lru_cache(maxsize=4096)
+def _lookup_term_candidates(language_code: str, term: str) -> tuple[tuple[str, float], ...]:
+    normalized_term = term.strip()
+    if not normalized_term:
+        return ()
+
+    normalized_language_code = _normalized_language_code(language_code)
+    if normalized_language_code != "ru":
+        return ((normalized_term, 1.0),)
+
+    lowered_term = normalized_term.lower()
+    candidates: dict[str, float] = {}
+
+    def add_candidate(candidate: str, confidence: float) -> None:
+        if not candidate:
+            return
+        cleaned = candidate.strip().lower()
+        if not cleaned or not _has_cyrillic_text(cleaned):
+            return
+        existing = candidates.get(cleaned)
+        if existing is None or confidence > existing:
+            candidates[cleaned] = confidence
+
+    add_candidate(lowered_term, 1.0)
+    for suffix, replacements in _RUSSIAN_LOOKUP_SUFFIX_RULES:
+        if len(lowered_term) <= len(suffix) + 1 or not lowered_term.endswith(suffix):
+            continue
+        stem = lowered_term[: -len(suffix)]
+        add_candidate(stem, 0.88)
+        for replacement in replacements:
+            add_candidate(f"{stem}{replacement}", 0.95)
+
+    return tuple(sorted(candidates.items(), key=lambda item: (-item[1], item[0])))
+
+
+def _row_map_by_surface(rows: Iterable[sqlite3.Row]) -> dict[str, list[sqlite3.Row]]:
+    row_map: dict[str, list[sqlite3.Row]] = {}
+    for row in rows:
+        surface_form = row["surface_form"]
+        if not surface_form:
+            continue
+        row_map.setdefault(surface_form, []).append(row)
+    return row_map
+
+
+def _best_row_for_term(
+    *,
+    row_map: dict[str, list[sqlite3.Row]],
+    language_code: str,
+    term: str,
+) -> tuple[sqlite3.Row | None, float | None, str | None]:
+    for candidate, confidence in _lookup_term_candidates(language_code, term):
+        candidate_rows = row_map.get(candidate)
+        if candidate_rows:
+            return candidate_rows[0], confidence, candidate
+    return None, None, None
+
+
+def _cache_table_name() -> str:
+    return "lexicon_google_translate_cache"
+
+
+def _cache_table_columns(connection: sqlite3.Connection) -> set[str]:
+    rows = connection.execute(f"PRAGMA table_info({_cache_table_name()})").fetchall()
+    columns: set[str] = set()
+    for row in rows:
+        column_name = row[1] if len(row) > 1 else None
+        if isinstance(column_name, str) and column_name.strip():
+            columns.add(column_name.strip())
+    return columns
+
+
+def _cache_row_to_entry(row: sqlite3.Row) -> LexiconEntryRecord:
+    return LexiconEntryRecord(
+        id=row["id"],
+        language_code=row["language_code"],
+        entry_type=row["entry_type"],
+        surface_form=row["surface_form"],
+        pronunciation=row["pronunciation"] if "pronunciation" in row.keys() else None,
+        pinyin=row["pinyin"],
+        tone=row["tone"],
+        definition=row["definition"],
+        radical=row["radical"],
+        stroke_count=row["stroke_count"],
+        hsk_level=row["hsk_level"],
+        frequency_rank=row["frequency_rank"],
+        note=row["note"],
+        source_name=row["source_name"],
+        source_path=row["source_path"],
+    )
+
+
+def _select_google_cache_entry(
+    *,
+    connection: sqlite3.Connection,
+    language_code: str,
+    term: str,
+) -> LexiconEntryRecord | None:
+    row = connection.execute(
+        f"""
+        SELECT id, language_code, entry_type, surface_form, pronunciation, pinyin, tone, definition, radical, stroke_count, hsk_level, frequency_rank, note, source_name, source_path
+        FROM {_cache_table_name()}
+        WHERE language_code = ? AND surface_form = ?
+        ORDER BY id ASC
+        """,
+        (language_code, term),
+    ).fetchone()
+    return _cache_row_to_entry(row) if row else None
+
+
+def _cache_google_translation(
+    *,
+    connection: sqlite3.Connection,
+    language_code: str,
+    term: str,
+    translation: str,
+    pronunciation: str | None,
+) -> LexiconEntryRecord:
+    source_name = "Google Cloud Translation"
+    source_path = "https://translation.googleapis.com/language/translate/v2"
+    note = f"Google translation fallback from {language_code} to en"
+    connection.execute(
+        f"""
+        INSERT INTO {_cache_table_name()} (
+            language_code,
+            entry_type,
+            surface_form,
+            pronunciation,
+            pinyin,
+            tone,
+            definition,
+            radical,
+            stroke_count,
+            hsk_level,
+            frequency_rank,
+            note,
+            source_name,
+            source_path,
+            created_at,
+            updated_at
+        )
+        VALUES (?, 'word', ?, ?, NULL, NULL, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?)
+        ON CONFLICT(language_code, surface_form) DO UPDATE SET
+            pronunciation = excluded.pronunciation,
+            definition = excluded.definition,
+            note = excluded.note,
+            source_name = excluded.source_name,
+            source_path = excluded.source_path,
+            updated_at = excluded.updated_at
+        """,
+        (language_code, term, pronunciation, translation, note, source_name, source_path, _utc_now(), _utc_now()),
+    )
+    connection.commit()
+    cached = _select_google_cache_entry(connection=connection, language_code=language_code, term=term)
+    if cached is None:
+        raise RuntimeError("Could not cache Google translation fallback.")
+    return cached
+
+
+def _lookup_google_translate_entry(
+    *,
+    data_root: Path,
+    connection: sqlite3.Connection,
+    language_code: str,
+    term: str,
+) -> LexiconEntryRecord | None:
+    cached_entry = _select_google_cache_entry(connection=connection, language_code=language_code, term=term)
+    if cached_entry is not None:
+        return cached_entry
+
+    if not is_google_translate_configured():
+        return None
+
+    translated_text = translate_text(term, source_language_code=language_code)
+    if not translated_text:
+        return None
+
+    try:
+        record_google_translate_usage(data_root=data_root, characters=len(term))
+    except Exception:
+        pass
+
+    pronunciation = romanize_text(term, source_language_code=language_code)
+    if pronunciation:
+        try:
+            record_google_translate_usage(data_root=data_root, characters=len(term))
+        except Exception:
+            pass
+
+    return _cache_google_translation(
+        connection=connection,
+        language_code=language_code,
+        term=term,
+        translation=translated_text,
+        pronunciation=pronunciation,
+    )
+
+
 def _import_from_canonical_pack(
     *,
     connection: sqlite3.Connection,
@@ -219,6 +512,37 @@ def _import_from_canonical_pack(
     return len(rows), 0, imported_rows
 
 
+def _import_from_override_pack(
+    *,
+    connection: sqlite3.Connection,
+    source_root: Path,
+    language_code: str,
+) -> tuple[int, int, int]:
+    override_csv = _source_candidates(
+        source_root,
+        [
+            Path("lexicon.override.csv"),
+            Path("lexicon.overrides.csv"),
+        ],
+    )
+    if override_csv is None:
+        return 0, 0, 0
+
+    rows = _read_csv_rows(override_csv)
+    if not rows:
+        return 0, 0, 0
+
+    imported_rows = _upsert_rows(
+        connection=connection,
+        rows=rows,
+        language_code=language_code,
+        entry_type="word",
+        source_name=override_csv.name,
+        source_path=str(override_csv),
+    )
+    return len(rows), 0, imported_rows
+
+
 def import_lexicon_from_source(
     source_root: str | Path | None = None,
     *,
@@ -250,6 +574,14 @@ def import_lexicon_from_source(
                 language_code=normalized_language_code,
                 replace_existing=replace_existing,
             )
+            override_vocabulary_rows, override_character_rows, override_imported_rows = _import_from_override_pack(
+                connection=connection,
+                source_root=resolved_source_root,
+                language_code=normalized_language_code,
+            )
+            vocabulary_rows += override_vocabulary_rows
+            character_rows += override_character_rows
+            imported_rows += override_imported_rows
             connection.commit()
 
         return LexiconImportSummary(
@@ -406,44 +738,66 @@ def lookup_lexicon_entry(
     data_root: Path,
     language_code: str,
     term: str,
+    allow_google_fallback: bool = False,
 ) -> LexiconLookupResponse:
     normalized_language_code = _normalized_language_code(language_code)
-    _ensure_seeded_lexicon(data_root, language_code=normalized_language_code)
+    _ensure_seeded_lexicon_if_available(data_root, language_code=normalized_language_code)
     db_path = ensure_lexicon_database(data_root)
+    entries: list[LexiconEntryRecord] = []
+    resolution_source: str = "local"
+    match_confidence: float | None = None
+    matched_term: str | None = None
+    candidate_terms = _lookup_term_candidates(normalized_language_code, term)
     with closing(sqlite3.connect(db_path)) as connection:
         connection.row_factory = sqlite3.Row
-        rows = connection.execute(
-            """
-            SELECT id, language_code, entry_type, surface_form, pinyin, tone, definition, radical, stroke_count, hsk_level, frequency_rank, note, source_name, source_path
-            FROM lexicon_entries
-            WHERE language_code = ? AND surface_form = ?
-            ORDER BY CASE entry_type WHEN 'word' THEN 0 ELSE 1 END, frequency_rank IS NULL, frequency_rank ASC, id ASC
-            """,
-            (normalized_language_code, term),
-        ).fetchall()
+        if candidate_terms:
+            candidate_surface_forms = [candidate for candidate, _confidence in candidate_terms]
+            placeholders = ", ".join("?" for _ in candidate_surface_forms)
+            rows = connection.execute(
+                f"""
+                SELECT id, language_code, entry_type, surface_form, pinyin, tone, definition, radical, stroke_count, hsk_level, frequency_rank, note, source_name, source_path
+                FROM lexicon_entries
+                WHERE language_code = ? AND surface_form IN ({placeholders})
+                ORDER BY CASE entry_type WHEN 'word' THEN 0 ELSE 1 END, frequency_rank IS NULL, frequency_rank ASC, id ASC
+                """,
+                [normalized_language_code, *candidate_surface_forms],
+            ).fetchall()
+        else:
+            rows = []
+
+        row_map = _row_map_by_surface(rows)
+        best_row, best_confidence, best_candidate = _best_row_for_term(
+            row_map=row_map,
+            language_code=normalized_language_code,
+            term=term,
+        )
+        if best_row is not None:
+            entries = [_cache_row_to_entry(row) for row in row_map.get(best_row["surface_form"], [best_row])]
+            match_confidence = best_confidence
+            matched_term = best_candidate
+        if not entries:
+            cached_entry = _select_google_cache_entry(connection=connection, language_code=normalized_language_code, term=term)
+            if cached_entry is not None:
+                entries = [cached_entry]
+                resolution_source = "google_translate_cache"
+            elif allow_google_fallback:
+                google_entry = _lookup_google_translate_entry(
+                    data_root=data_root,
+                    connection=connection,
+                    language_code=normalized_language_code,
+                    term=term,
+                )
+                if google_entry is not None:
+                    entries = [google_entry]
+                    resolution_source = "google_translate_live"
 
     return LexiconLookupResponse(
         query=term,
         language_code=normalized_language_code,
-        entries=[
-            LexiconEntryRecord(
-                id=row["id"],
-                language_code=row["language_code"],
-                entry_type=row["entry_type"],
-                surface_form=row["surface_form"],
-                pinyin=row["pinyin"],
-                tone=row["tone"],
-                definition=row["definition"],
-                radical=row["radical"],
-                stroke_count=row["stroke_count"],
-                hsk_level=row["hsk_level"],
-                frequency_rank=row["frequency_rank"],
-                note=row["note"],
-                source_name=row["source_name"],
-                source_path=row["source_path"],
-            )
-            for row in rows
-        ],
+        entries=entries,
+        resolution_source=resolution_source,
+        match_confidence=match_confidence,
+        matched_term=matched_term,
     )
 
 
@@ -458,27 +812,40 @@ def lookup_lexicon_pinyin_map(
     if not normalized_terms:
         return {}
 
-    _ensure_seeded_lexicon(data_root, language_code=normalized_language_code)
+    _ensure_seeded_lexicon_if_available(data_root, language_code=normalized_language_code)
     db_path = ensure_lexicon_database(data_root)
-    placeholders = ", ".join("?" for _ in normalized_terms)
+    candidate_terms: list[str] = []
+    seen_candidates: set[str] = set()
+    for term in normalized_terms:
+        candidates = _lookup_term_candidates(normalized_language_code, term)
+        for candidate, _confidence in candidates:
+            if candidate not in seen_candidates:
+                seen_candidates.add(candidate)
+                candidate_terms.append(candidate)
+
+    placeholders = ", ".join("?" for _ in candidate_terms)
     with closing(sqlite3.connect(db_path)) as connection:
         connection.row_factory = sqlite3.Row
-        rows = connection.execute(
-            f"""
-            SELECT surface_form, pinyin
-            FROM lexicon_entries
-            WHERE language_code = ? AND surface_form IN ({placeholders}) AND pinyin IS NOT NULL AND pinyin != ''
-            ORDER BY CASE entry_type WHEN 'word' THEN 0 ELSE 1 END, frequency_rank IS NULL, frequency_rank ASC, id ASC
-            """,
-            [normalized_language_code, *normalized_terms],
-        ).fetchall()
+        rows = (
+            connection.execute(
+                f"""
+                SELECT surface_form, pinyin
+                FROM lexicon_entries
+                WHERE language_code = ? AND surface_form IN ({placeholders}) AND pinyin IS NOT NULL AND pinyin != ''
+                ORDER BY CASE entry_type WHEN 'word' THEN 0 ELSE 1 END, frequency_rank IS NULL, frequency_rank ASC, id ASC
+                """,
+                [normalized_language_code, *candidate_terms],
+            ).fetchall()
+            if candidate_terms
+            else []
+        )
 
+        row_map = _row_map_by_surface(rows)
         pinyin_map: dict[str, str] = {}
-        for row in rows:
-            surface_form = row["surface_form"]
-            pinyin = row["pinyin"]
-            if surface_form not in pinyin_map and pinyin:
-                pinyin_map[surface_form] = pinyin
+        for term in normalized_terms:
+            best_row, _, _ = _best_row_for_term(row_map=row_map, language_code=normalized_language_code, term=term)
+            if best_row is not None and best_row["pinyin"]:
+                pinyin_map[term] = best_row["pinyin"]
 
         missing_terms = [term for term in normalized_terms if term not in pinyin_map]
         if missing_terms:
@@ -529,41 +896,55 @@ def lookup_lexicon_entry_map(
     if not normalized_terms:
         return {}
 
-    _ensure_seeded_lexicon(data_root, language_code=normalized_language_code)
+    _ensure_seeded_lexicon_if_available(data_root, language_code=normalized_language_code)
     db_path = ensure_lexicon_database(data_root)
-    placeholders = ", ".join("?" for _ in normalized_terms)
+    candidate_terms: list[str] = []
+    seen_candidates: set[str] = set()
+    for term in normalized_terms:
+        candidates = _lookup_term_candidates(normalized_language_code, term)
+        for candidate, _confidence in candidates:
+            if candidate not in seen_candidates:
+                seen_candidates.add(candidate)
+                candidate_terms.append(candidate)
+
+    placeholders = ", ".join("?" for _ in candidate_terms)
     with closing(sqlite3.connect(db_path)) as connection:
         connection.row_factory = sqlite3.Row
-        rows = connection.execute(
-            f"""
-            SELECT id, language_code, entry_type, surface_form, pinyin, tone, definition, radical, stroke_count, hsk_level, frequency_rank, note, source_name, source_path
-            FROM lexicon_entries
-            WHERE language_code = ? AND surface_form IN ({placeholders})
-            ORDER BY CASE entry_type WHEN 'word' THEN 0 ELSE 1 END, frequency_rank IS NULL, frequency_rank ASC, id ASC
-            """,
-            [normalized_language_code, *normalized_terms],
-        ).fetchall()
+        rows = (
+            connection.execute(
+                f"""
+                SELECT id, language_code, entry_type, surface_form, pinyin, tone, definition, radical, stroke_count, hsk_level, frequency_rank, note, source_name, source_path
+                FROM lexicon_entries
+                WHERE language_code = ? AND surface_form IN ({placeholders})
+                ORDER BY CASE entry_type WHEN 'word' THEN 0 ELSE 1 END, frequency_rank IS NULL, frequency_rank ASC, id ASC
+                """,
+                [normalized_language_code, *candidate_terms],
+            ).fetchall()
+            if candidate_terms
+            else []
+        )
 
     entry_map: dict[str, LexiconEntryRecord] = {}
-    for row in rows:
-        surface_form = row["surface_form"]
-        if not surface_form or surface_form in entry_map:
+    row_map = _row_map_by_surface(rows)
+    for term in normalized_terms:
+        best_row, _, _ = _best_row_for_term(row_map=row_map, language_code=normalized_language_code, term=term)
+        if best_row is None:
             continue
-        entry_map[surface_form] = LexiconEntryRecord(
-            id=row["id"],
-            language_code=row["language_code"],
-            entry_type=row["entry_type"],
-            surface_form=surface_form,
-            pinyin=row["pinyin"],
-            tone=row["tone"],
-            definition=row["definition"],
-            radical=row["radical"],
-            stroke_count=row["stroke_count"],
-            hsk_level=row["hsk_level"],
-            frequency_rank=row["frequency_rank"],
-            note=row["note"],
-            source_name=row["source_name"],
-            source_path=row["source_path"],
+        entry_map[term] = LexiconEntryRecord(
+            id=best_row["id"],
+            language_code=best_row["language_code"],
+            entry_type=best_row["entry_type"],
+            surface_form=best_row["surface_form"],
+            pinyin=best_row["pinyin"],
+            tone=best_row["tone"],
+            definition=best_row["definition"],
+            radical=best_row["radical"],
+            stroke_count=best_row["stroke_count"],
+            hsk_level=best_row["hsk_level"],
+            frequency_rank=best_row["frequency_rank"],
+            note=best_row["note"],
+            source_name=best_row["source_name"],
+            source_path=best_row["source_path"],
         )
 
     return entry_map

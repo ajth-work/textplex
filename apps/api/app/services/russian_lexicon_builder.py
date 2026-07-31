@@ -75,6 +75,10 @@ def _normalize_key(value: str) -> str:
     return re.sub(r"[^0-9a-zA-Z]+", "_", value.strip().lower()).strip("_")
 
 
+def _has_cyrillic_text(value: str | None) -> bool:
+    return bool(value and re.search(r"[\u0400-\u04FF]", value))
+
+
 def _normalized_row_map(row: dict[str, Any]) -> dict[str, Any]:
     normalized: dict[str, Any] = {}
     for key, value in row.items():
@@ -146,14 +150,14 @@ def _parse_json_items(payload: Any) -> list[dict[str, Any]]:
 
 def _canonical_record_from_map(row: dict[str, Any]) -> dict[str, Any] | None:
     surface_form = _pick_text(row, "lemma", "surface_form", "word", "headword", "term")
-    if not surface_form:
+    if not surface_form or not _has_cyrillic_text(surface_form):
         return None
 
     lemma = _pick_text(row, "lemma", "headword", "word", "surface_form", "term") or surface_form
     pronunciation = _pick_text(row, "pronunciation", "transcription", "romanization", "reading", "stress")
     level = _normalize_level_label(_pick_text(row, "trki_level", "level", "cefr", "word_grade", "proficiency_level"))
     part_of_speech = _pick_text(row, "part_of_speech", "pos", "gramm", "grammar")
-    definitions = _collect_text_values(row, "definition", "definitions", "gloss", "meaning", "english")
+    definitions = _collect_text_values(row, "definition", "definitions", "gloss", "meaning", "english", "english_translation")
     frequency_rank = _safe_int(_pick_text(row, "frequency_rank", "rank", "freq_rank", "order"))
     frequency_score = _safe_float(_pick_text(row, "ipm", "frequency", "count", "occurrences"))
 

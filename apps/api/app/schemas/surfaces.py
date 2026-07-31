@@ -97,14 +97,85 @@ class StudyQueueItem(BaseModel):
     help_requests: int
     state: str
     confidence_score: float
+    next_due_at: str | None = None
     manual_override: str | None = None
     first_seen_at: str | None = None
     last_seen_at: str | None = None
 
 
+class StudyVocabularyItem(BaseModel):
+    language_code: str
+    language_label: str
+    lemma: str
+    display_form: str
+    source_book_id: str
+    source_book_title: str | None = None
+    source_page_number: int
+    source_sentence_order: int
+    source_token_order: int
+    source_surface_form: str
+    source_sentence_text: str
+    pronunciation: str | None = None
+    romanization: str | None = None
+    definition_short: str | None = None
+    proficiency_level: str | None = None
+    click_count: int = 0
+    first_seen_at: str | None = None
+    last_seen_at: str | None = None
+
+
+class StudyProgramItem(BaseModel):
+    language_code: str
+    language_label: str
+    program_code: str
+    program_label: str
+    program_source_label: str
+    level_code: str
+    level_label: str
+    lemma: str
+    display_form: str
+    pronunciation: str | None = None
+    definition_short: str | None = None
+    proficiency_level: str | None = None
+    frequency_rank: int | None = None
+    progress_state: Literal["new", "learning", "review", "mastered"] = "new"
+    confidence_score: float | None = None
+    saved_count: int = 0
+    first_seen_at: str | None = None
+    last_seen_at: str | None = None
+
+
+class StudyProgramLevel(BaseModel):
+    level_code: str
+    level_label: str
+    item_count: int
+    introduction_note: str
+    items: list[StudyProgramItem] = Field(default_factory=list)
+
+
+class StudyProgramGroup(BaseModel):
+    language_code: str
+    language_label: str
+    program_code: str
+    program_label: str
+    program_source_label: str
+    level_count: int
+    levels: list[StudyProgramLevel] = Field(default_factory=list)
+
+
+class StudyVocabularyGroup(BaseModel):
+    language_code: str
+    language_label: str
+    item_count: int
+    items: list[StudyVocabularyItem] = Field(default_factory=list)
+
+
 class StudySurfaceResponse(BaseModel):
     queue_size: int
     queued_items: list[StudyQueueItem] = Field(default_factory=list)
+    study_programs: list[StudyProgramGroup] = Field(default_factory=list)
+    study_item_count: int = 0
+    study_groups: list[StudyVocabularyGroup] = Field(default_factory=list)
 
 
 class ProgressBookSummary(BaseModel):
@@ -113,6 +184,15 @@ class ProgressBookSummary(BaseModel):
     page_reads: int
     sentence_reads: int
     active_seconds: int
+    total_pages: int = 0
+    furthest_page: int = 0
+    resume_page: int = 0
+    resume_sentence_order: int = 0
+    total_sentences: int = 0
+    sentences_read: int = 0
+    progress_percent: int = Field(default=0, ge=0, le=100)
+    progress_unit: Literal["pages", "sentences"] = "pages"
+    last_read_at: str | None = None
 
 
 class ProgressSurfaceResponse(BaseModel):
@@ -136,7 +216,7 @@ class ProfileSurfaceResponse(BaseModel):
 
 
 class ActivityEvent(BaseModel):
-    kind: Literal["page_read", "sentence_read", "definition_lookup", "reading_session"]
+    kind: Literal["page_read", "sentence_read", "definition_lookup", "study_vocabulary_item", "pronunciation_playback", "reading_session"]
     occurred_at: str
     book_id: str
     page_number: int | None = None
@@ -145,9 +225,19 @@ class ActivityEvent(BaseModel):
     detail: str
 
 
+class ReadingHistoryPoint(BaseModel):
+    day_index: int
+    day: str
+    pages_read: int = 0
+    cumulative_pages: int = 0
+    sentences_read: int = 0
+    cumulative_sentences: int = 0
+
+
 class ActivitySurfaceResponse(BaseModel):
     event_count: int
     events: list[ActivityEvent] = Field(default_factory=list)
+    reading_history: list[ReadingHistoryPoint] = Field(default_factory=list)
 
 
 class ImportRecentBook(BaseModel):

@@ -108,6 +108,7 @@ OCR or AI providers can supply token hints.
 
 - Keep Russian text visible as written.
 - Surface transliteration on demand or in a compact token panel, not as a forced rewrite of the page.
+- When the lexicon provides a reading, split it into compact syllable-like chunks in the token panel so learners can see how the word unfolds without losing the Cyrillic surface form.
 - Preserve original punctuation and quote style.
 - Reader tokens should stay stable across rereads so exposure tracking remains consistent.
 

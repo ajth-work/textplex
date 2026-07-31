@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -14,6 +16,7 @@ class LexiconEntryRecord(BaseModel):
     language_code: str
     entry_type: str
     surface_form: str
+    pronunciation: str | None = None
     pinyin: str | None = None
     tone: int | None = None
     definition: str | None = None
@@ -30,6 +33,9 @@ class LexiconLookupResponse(BaseModel):
     query: str
     language_code: str
     entries: list[LexiconEntryRecord]
+    resolution_source: Literal["local", "google_translate_live", "google_translate_cache"] = "local"
+    match_confidence: float | None = None
+    matched_term: str | None = None
 
 
 class LexiconImportSummary(BaseModel):

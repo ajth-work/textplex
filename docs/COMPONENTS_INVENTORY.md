@@ -20,10 +20,12 @@ Unless a task explicitly calls for legacy or GitHub Pages compatibility work, im
 | --- | --- | --- | --- | --- |
 | `shell.root-layout` | region | Root layout | `apps/web/app/layout.tsx` | Global document, theme bootstrap, and page content frame. |
 | `shell.theme-provider` | region | Theme provider | `apps/web/components/theme-provider.tsx` | Loads, applies, and persists the app theme. |
+| `shell.inventory-label-toggle` | button | Inventory labels toggle | `apps/web/components/inventory-inspector.tsx`, `apps/web/components/landing-page.tsx`, `apps/web/components/app-shell.tsx` | Developer-only, content-sized toggle placed in the landing/app header row that overlays inventory IDs on tracked regions, cards, and controls for QA and code review. |
 | `shell.header` | region | App header | `apps/web/components/app-shell.tsx` (`AppShell`) | Brand, demo/live badge, current book context, and shell actions. |
 | `shell.context` | region | Reading context | `apps/web/components/app-shell.tsx` | Shows the active book and page carried through navigation. |
 | `shell.actions` | region | Context actions | `apps/web/components/app-shell.tsx` | Back, Book, Reader, and Analysis controls. |
 | `shell.primary-nav` | region | Primary navigation | `apps/web/components/app-shell.tsx` | Home, Library, Reader, Analysis, Search, Study, Progress, Roadmap, Profile, Activity, Import, and Settings links. |
+| `shell.account-menu` | region | Account menu | `apps/web/components/account-menu.tsx`, `apps/web/components/app-shell.tsx` | Shared sign-in/profile/settings/sign-out control shown in the app shell and reused by route headers. |
 | `surface.route-hero` | region | Route hero | `apps/web/components/route-page.tsx` (`RoutePage`) | Shared eyebrow, title, description, badge, route links, and metrics for data-backed surfaces. |
 | `surface.metrics` | region | Route metrics | `apps/web/components/route-page.tsx` | Compact metric row rendered by `RoutePage`. |
 | `surface.loading-state` | region | Loading state | `apps/web/components/loading-skeleton.tsx` | Shared loading skeleton used by library, book detail, reader, and data-backed surfaces. |
@@ -36,7 +38,9 @@ Unless a task explicitly calls for legacy or GitHub Pages compatibility work, im
 
 | Page ID | Path | Primary source |
 | --- | --- | --- |
-| `home` | `/` | `apps/web/components/home-surface.tsx` |
+| `landing` | `/` | `apps/web/components/landing-page.tsx` |
+| `auth` | `/auth` | `apps/web/app/auth/page.tsx` |
+| `home` | `/portal` | `apps/web/app/portal/page.tsx` |
 | `library` | `/library` | `apps/web/components/library-view.tsx` |
 | `book-detail` | `/books/:bookId` | `apps/web/components/book-detail-view.tsx` |
 | `reader` | `/reader/:bookId/:pageNumber` | `apps/web/components/reader-view.tsx` |
@@ -49,27 +53,56 @@ Unless a task explicitly calls for legacy or GitHub Pages compatibility work, im
 | `search` | `/search` | `apps/web/components/surface-views.tsx` |
 | `settings` | `/settings` | `apps/web/components/surface-views.tsx` |
 | `study` | `/study` | `apps/web/components/surface-views.tsx` |
+| `study-practice` | `/study/practice` | `apps/web/components/study-practice-view.tsx`, `apps/web/app/study/practice/page.tsx` |
 | `roadmap` | `/roadmap` | `apps/web/app/roadmap/page.tsx` |
 
-### `home` — `/`
+### `landing` — `/`
 
-Source: `apps/web/components/home-surface.tsx` (`HomeSurface`)
+Source: `apps/web/components/landing-page.tsx` (`LandingPage`)
 
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
-| `home.page` | page | Home | Compact Next home surface that mirrors the standalone 8200 preview shell. |
+| `landing.page` | page | Landing | Public discovery page with the product pitch, feature summary, monthly pricing tiers, and one-time theme framing. |
+| `landing.hero` | region | Landing hero | Split hero with the primary call to action and the monthly-vs-theme support summary. |
+| `landing.account-menu` | region | Landing account menu | `apps/web/components/account-menu.tsx`, `apps/web/components/landing-page.tsx` | Account indicator in the public landing header with profile, settings, and sign-out access when signed in. |
+| `landing.features` | region | Product overview | Foundational explainer for import, context reading, progress tracking, and history retention. |
+| `landing.feature-card` | card | Product card | One core capability card describing the app's reading workflow or tracking model. |
+| `landing.pricing` | region | Pricing | Monthly pricing tier overview and subscription framing. |
+| `landing.pricing-tier` | card | Pricing tier | One subscription tier card with price, cadence, and feature list. |
+| `landing.themes` | region | Theme support | One-time theme purchase framing and visual-pack summary. |
+| `landing.theme-card` | card | Theme card | One visual pack card showing a one-time purchase option. |
+| `landing.cta` | card | Final CTA | Closing account-creation and portal entry call to action. |
+
+### `auth` — `/auth`
+
+Source: `apps/web/app/auth/page.tsx` (`AuthPage`) and `apps/web/app/auth/callback/page.tsx` (`AuthCallbackPage`)
+
+| ID | Type | Visible name | Purpose |
+| --- | --- | --- | --- |
+| `auth.page` | page | Account | Public email/password sign-in, account creation, and password reset entry point. |
+| `auth.account-card` | card | Account form card | Bounded account form and signed-in confirmation state. |
+| `auth.form` | region | Account form | Display name, email, password, and account action controls. |
+| `auth.error-state` | card | Authentication error | Visible sign-in, sign-up, or reset failure message. |
+| `auth.callback-state` | page | Authentication callback | Session restoration state after email confirmation or password reset redirect. |
+
+### `home` — `/portal`
+
+Source: `apps/web/app/portal/page.tsx` (`PortalPage`) rendering `apps/web/components/home-surface.tsx` (`HomeSurface`)
+
+| ID | Type | Visible name | Purpose |
+| --- | --- | --- | --- |
+| `home.page` | page | Home | Compact portal home surface that mirrors the standalone 8200 preview shell. |
 | `home.header` | region | Home header | Centered brand header and notification action. |
 | `home.search` | region | Search | Search field for texts, authors, and topics. |
-| `home.continue-reading` | region | Continue reading | Section showing the active book to resume. |
-| `home.continue-reading-card` | card | Continue reading card | Open-book card with art, metadata, and progress. |
-| `home.recent-analyses` | region | Recent analyses | Section listing the latest analyzed books. |
-| `home.recent-analysis-row` | region | Recent analysis row | One analysis row with art, metadata, and score. |
+| `home.continue-reading` | region | Continue reading | Featured continuation section showing the most recently read book or article and learner reading progress. |
+| `home.continue-reading-card` | card | Continue reading card | Featured reading card with art, metadata, a resume link, and progress based on furthest learner position. |
+| `home.continue-reading-list` | region | Recently read | Follow-on list of the next most recently read books and articles; this is not an extraction or difficulty report. |
+| `home.continue-reading-row` | region | Continue reading row | One resumable reading row with art, content type, learner progress ring, and a reader link. |
 | `home.goals` | region | Goals | Reading goal and exposure summary section. |
 | `home.weekly-goal` | card | Weekly reading goal | Weekly page-reading progress ring. |
 | `home.exposure-goal` | card | Reading exposure | Sentence-read exposure summary card. |
 | `home.empty-state` | card | Empty state | First-text call to action when no books are available. |
 | `home.error-state` | card | Error state | Error message shown when the home data request fails. |
-
 ### `library` — `/library`
 
 Source: `apps/web/components/library-view.tsx` (`LibraryView`)
@@ -77,7 +110,9 @@ Source: `apps/web/components/library-view.tsx` (`LibraryView`)
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
 | `library.page-header` | region | Library title bar | Centered TextPlex title with back navigation at the top of the library route. |
-| `library.search-hero` | region | Search hero | Search field and document count header for the library shelf. |
+| `library.account-menu` | region | Library account menu | `apps/web/components/account-menu.tsx`, `apps/web/components/library-view.tsx` | Account indicator in the library header with profile, settings, and sign-out access. |
+| `library.search-hero` | region | Search hero | Search field, language filter row, and document count header for the library shelf. |
+| `library.language-filter` | region | Language filter | Fixed target-language buttons used to filter the library shelf by `language_code`. |
 | `library.search` | region | Library search | Search input used to filter library items. |
 | `library.document-count` | region | Document count | Visible count of matching books in the shelf. |
 | `library.shelf` | region | Library shelf | Book collection grid, loading card, and empty state. |
@@ -108,15 +143,35 @@ Source: `apps/web/components/reader-view.tsx` (`ReaderView`)
 
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
-| `reader.header` | region | Reader header | Book/page identity, compact controls, page navigation, and reading-session summary. |
-| `reader.options-dialog` | region | Reader options | Font, text size, reading theme, token mode, and focus-mode controls. |
+| `reader.header` | region | Reader header | Book/page identity with adaptive two-line title sizing, compact controls, page navigation, and reading-session summary. |
+| `reader.account-menu` | region | Reader account menu | `apps/web/components/account-menu.tsx`, `apps/web/components/reader-view.tsx` | Account indicator in the reader header with profile, settings, and sign-out access. |
+| `reader.settings-button` | button | Reader settings | Cog control in the right side of the reader header grid that opens the reader options dialog. |
+| `reader.options-dialog` | region | Reader options | Font, text size, pronunciation freshness toggle, reading theme, focus-mode controls, Google translation fallback usage, and the moved reader utilities. |
+| `reader.mode-control` | control | Reader mode | Reader mode selector for sentence, page, or token-focused reading inside the reader settings panel. |
+| `reader.token-audio-toggle` | control | Token audio toggle | Enables token-by-token pronunciation playback when a reader token is tapped. |
+| `reader.pronunciation-visibility-section` | region | Pronunciation visibility | Fresh-word pronunciation controls that keep readings visible for recent study items and quieter for mature items. |
+| `reader.pronunciation-visibility-toggle` | button | Fresh words only toggle | Turns the pronunciation freshness filter on or off inside the reader options dialog. |
+| `reader.lookup-fallback-section` | region | Lookup fallback | Toggle for the reader's Google Cloud Translation fallback, monthly usage summary, and cost note when local lexicon lookup misses. |
 | `reader.page-card` | card | Reader page | Page image/reflowed text reading surface and sentence content. |
-| `reader.navigation-card` | region | Reader pager | Compact previous/next sentence controls and page/sentence position pill. |
+| `reader.navigation-card` | region | Reader pager | Compact previous/next sentence controls, swipe navigation, page/sentence position pill, and sentence-aware resume position. |
+| `reader.sentence-tools` | region | Sentence display and translation tools | Language-aware three- or four-button row beneath the session summary for token display, sentence audio, translation, and source, followed by audio speed choices and speech-synchronized token highlighting. |
+| `reader.token-mode-button` | button | Word/character mode | Language-dependent control exposed for Chinese, Japanese, and Korean readers to toggle the sentence display between word and character units. |
+| `reader.sentence-audio-button` | button | Sentence audio playback | Plays the selected sentence aloud and records the pronunciation playback interaction for learner history. |
+| `reader.sentence-audio-speed` | region | Sentence audio speed | Selects 0.25x, 0.5x, 0.75x, or 1x browser speech playback speed for the active sentence. |
+| `reader.page-bookmark` | button | Page bookmark | Bookmark control inside the page position segment, saving the current page to the page bookmark list. |
+| `reader.sentence-bookmark` | button | Sentence bookmark | Bookmark control inside the sentence position segment, saving the active sentence to the sentence bookmark list. |
+| `reader.source-sentence-card` | card | Source sentence | Collapsible raw source sentence panel without tokenization. |
+| `reader.sentence-translation-card` | card | Sentence translation | Collapsible translation panel for the selected sentence or page fallback, including translation provenance. |
+| `reader.bookmark-toast` | status | Bookmark confirmation | Temporary confirmation of page or sentence bookmark saves and removals. |
 | `reader.sentence` | region | Reader sentence | One readable sentence with sentence-level timing and interaction state. |
 | `reader.token` | region | Reader token | Clickable word/character unit with lookup and exposure behavior. |
-| `reader.token-inspector` | card | Token inspector | Selected token, pronunciation, level, definitions, and action state. |
+| `reader.token-inspector` | card | Token inspector | Selected token, pronunciation, audio, syllable playback, reading display toggle, level, definitions, and study-save state. |
+| `reader.word-audio-button` | button | Word audio playback | Plays the selected token aloud from the token inspector and records the pronunciation playback interaction for learner history. |
+| `reader.definition-segment` | button | Syllable playback chip | Plays an individual syllable from the token inspector while keeping the syllable breakdown visible. |
+| `reader.russian-syllable-toggle` | button | Russian syllable display toggle | Switches the token-inspector syllable chips between romanized and Cyrillic labels. |
+| `reader.study-save-button` | button | Study save action | Saves the selected token into the learner's study vocabulary list with source metadata. |
 | `reader.sentence-hsk-chart` | card | Sentence HSK chart | HSK level plotted across the readable tokens in the selected sentence. |
-| `reader.tools-card` | card | Reader tools | Collapsed utility drawer for sentence chart, page image control, book frequency, dictionary wiring, reading profile, and page navigation. |
+| `reader.tools-card` | region | Reader tools | Reader utility section nested inside the options dialog for sentence chart, page image control, book frequency, dictionary wiring, reading profile, and page navigation. |
 | `reader.book-frequency-card` | card | Book frequency | Nested book-wide frequency panel inside the collapsed reader tools drawer. |
 | `reader.dictionary-card` | card | Dictionary wiring | Nested dictionary/lexical-entry lookup status and source details inside the collapsed reader tools drawer. |
 | `reader.reading-profile-card` | card | Reading profile | Nested learner exposure and progress details inside the collapsed reader tools drawer. |
@@ -156,8 +211,13 @@ Live source: `apps/web/components/surface-views.tsx` (`ActivitySurfaceView`); de
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
 | `activity.route-hero` | region | Activity hero | Shared hero with event-count and state metrics. |
-| `activity.recent-events-card` | card | Recent events | Time-ordered page, sentence, token, and session events. |
-| `activity.event-item` | region | Activity event | One event row with kind, timestamp, title, and detail. |
+| `activity.pages-progress-chart` | card | Pages read over time | Cumulative page progress by active reading day for multi-page books; empty for article-only history. |
+| `activity.sentences-progress-chart` | card | Sentences read over time | Cumulative sentence progress by active reading day across books and articles. |
+| `activity.recent-events-card` | card | Recently read | Book/article groups ordered by their most recent reading activity, with individual events collapsed by default. |
+| `activity.recent-books-list` | region | Recently read books | Ordered list of books/articles represented in the activity feed. |
+| `activity.recent-book-group` | region | Recent book group | Expandable book/article summary showing its latest reading time and event count. |
+| `activity.event-list` | region | Reading event list | Expandable list of reading, lookup, study, and session events for one book/article. |
+| `activity.event-item` | region | Activity event | One event row with kind, timestamp, and detail inside an expandable book/article group. |
 | `activity.loading-state` | region | Activity loading | Loading skeleton for the activity request. |
 | `activity.error-state` | card | Activity error | Activity request error. |
 
@@ -168,7 +228,8 @@ Live source: `apps/web/components/surface-views.tsx` (`ImportSurfaceView`); demo
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
 | `import.route-hero` | region | Import hero | Supported-input, upload, and paste capability summary. |
-| `import.form` | card | Import form | Switches between paste-text and PDF-upload flows and submits real API imports. |
+| `import.form` | card | Import form | Switches between paste-text and PDF-upload flows, uses a fixed target-language dropdown, surfaces translation-cost planning, and submits real API imports. |
+| `import.translation-confirmation-card` | card | Translation confirmation | Large-paste safety checkpoint that confirms translation preloading before import proceeds. |
 | `import.progress-card` | card | Import progress | Shows the submitted book status and polls background extraction progress. |
 | `import.recent-books-card` | card | Recent books | Recently imported book records and processing status. |
 | `import.book-item` | region | Recent book item | One recent-book row with language, status, and timestamp. |
@@ -200,10 +261,9 @@ Live source: `apps/web/components/surface-views.tsx` (`ProfileSurfaceView`); dem
 | `profile.selected-track-card` | card | Selected track | Current benchmark/learning-track details. |
 | `profile.theme-picker` | card | Global theme | Live app theme preview and profile-backed theme save. |
 | `profile.theme-shop-entry` | region | Theme shop entry | Featured 2×3 theme grid and navigation tile for the full theme collection. |
-| `profile.legacy-link` | region | Legacy compatibility link | Explicit profile entry point to the standalone legacy reader shell. |
 | `profile.hosted-account-card` | card | Hosted account | Authenticated hosted profile identity and hosted settings count; demo uses a clearly labeled packaged account. |
 | `profile.migration-card` | card | Local profile migration | Preview and non-destructive merge state for anonymous local learner data. |
-| `profile.preferences-card` | card | Preferences | Saved settings and current reader mode/theme values. |
+| `profile.preferences-card` | card | Preferences | Saved app-wide settings and current theme values; reader-specific controls live in the reader settings panel. |
 | `profile.book-activity-card` | card | Book activity | Per-book reading activity history. |
 | `profile.loading-state` | region | Profile loading | Loading skeleton for profile data. |
 | `profile.error-state` | card | Profile error | Profile request error. |
@@ -216,11 +276,23 @@ Live and demo source: `apps/web/components/surface-views.tsx` (`ThemeShopSurface
 | --- | --- | --- | --- |
 | `theme-shop.route-hero` | region | Theme shop hero | Collection description, profile navigation, and theme metrics. |
 | `theme-shop.catalog-card` | card | Theme catalog | Complete theme collection with live previews. |
+| `theme-shop.store-controls` | region | Theme shop controls | Search field and browsing controls for navigating a growing catalog. |
+| `theme-shop.search` | region | Theme search | Search field for finding themes by title, description, or catalog ID. |
+| `theme-shop.category-nav` | region | Theme collection navigation | Horizontal collection tabs for Included, Fruit, Vegetable, Seasonal, International, Console, and All Collections. |
+| `theme-shop.mode-tabs` | region | Theme mode filters | All, Daylight, and Night filters for paired theme families. |
+| `theme-shop.catalog-grid` | region | Filtered theme catalog | Horizontal rail of server-catalog theme options with ownership and preview status. |
 | `theme-shop.theme-option` | region | Theme option | One selectable visual theme with swatch, name, and description. |
+| `theme-shop.collections-carousel` | region | All Collections carousel | One-at-a-time collection offer browser for the growing bundle catalog. |
+| `theme-shop.collection-slide` | card | Collection slide | Focused bundle offer with included themes, price, savings, and preview action. |
+| `theme-shop.collection-arrows` | region | Collection carousel arrows | Previous and next controls for moving through collection offers. |
+| `theme-shop.collection-dots` | region | Collection page dots | Direct-access pagination controls for the collection carousel. |
+| `theme-shop.collection-rail` | region | Theme collection rail | Horizontal theme-card rail for each catalog collection with a section arrow. |
 | `theme-shop.bundle-card` | card | Theme bundle | A discounted topical collection showing included themes, individual total, bundle price, and savings. |
+| `theme-shop.empty-state` | card | Theme catalog empty state | Clear recovery state when search and filters produce no matching themes. |
 | `theme-shop.save-action` | region | Save theme action | Persists the selected theme to the learner profile. |
 | `theme-shop.loading-state` | region | Theme shop loading | Loading skeleton for settings-backed theme state. |
 | `theme-shop.error-state` | card | Theme shop error | Theme shop load/save error. |
+| `theme-shop.preview-tuning` | region | Wallpaper preview tuning | Development controls for comparing full-image, cropped, and manually positioned wallpaper treatments inside the theme card frame. |
 
 ### `search` — `/search`
 
@@ -242,7 +314,7 @@ Live source: `apps/web/components/surface-views.tsx` (`SettingsSurfaceView`); de
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
 | `settings.route-hero` | region | Settings hero | Profile-storage, theme, and reader-mode metrics. |
-| `settings.preferences-card` | card | Preferences form | App theme, reader mode, and save action. |
+| `settings.preferences-card` | card | Preferences form | App theme, canvas artwork opacity, and save action. |
 | `settings.roadmap-card` | card | Vocabulary roadmap | Direct Settings entry to the language-pack implementation roadmap. |
 | `settings.loading-state` | region | Settings loading | Loading skeleton for settings. |
 | `settings.error-state` | card | Settings error | Settings load/save error. |
@@ -254,8 +326,36 @@ Live source: `apps/web/components/surface-views.tsx` (`StudySurfaceView`); demo 
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
 | `study.route-hero` | region | Study hero | Queue size and learner-state metrics. |
-| `study.queue-card` | card | Queued items | Due vocabulary items ordered for review. |
-| `study.queue-item` | region | Queued item | One lemma’s state, raw/weighted exposure, page, and book counts. |
+| `study.programs-card` | card | Program introduction | Curated level vocabulary from the active language programs. |
+| `study.program-group` | region | Program group | One collapsible language-program curriculum block. |
+| `study.program-level` | region | Program level | One level within a language program, including its introductory vocabulary slice. |
+| `study.program-item` | region | Program item | One curated vocabulary item inside a study-program level. |
+| `study.program-practice-link-summary` | button | Practice this level | Launches the one-by-one practice page from the collapsed program-level summary. |
+| `study.queue-card` | card | Due items | Collapsible due-vocabulary area with a forecast chart and language-grouped review subcards. |
+| `study.queue-card-toggle` | button | Due items toggle | Opens and closes the due-items card. |
+| `study.due-review-chart` | region | Upcoming review forecast | Adjustable-horizon bar chart anchored at the current time and labeled with coarse time-frame check-ins over the upcoming period. |
+| `study.queue-language-group` | region | Due language group | One collapsible language subcard inside the due-items card with a top-right expand toggle and language-specific study action. |
+| `study.queue-language-group-toggle` | button | Due language toggle | Opens and closes one language subcard in the due-items card. |
+| `study.queue-language-group-details` | region | Due language details | Expanded due-term pills, language-specific start-now action, and reminder controls for one language. |
+| `study.queue-language-term-pill` | region | Due term pill | One compact term pill shown in an expanded language subcard. |
+| `study.queue-language-start-now` | button | Start now | Launches a review session filtered to the language from one due-language subcard. |
+| `study.queue-language-notify` | button | Notify me | Captures a reminder request for a language with no items due yet. |
+| `study.review-practice-link` | button | Start review session | Launches the one-by-one review page for due or saved vocabulary. |
+| `study.saved-vocabulary-card` | card | Saved vocabulary | Collapsible language-grouped terms saved from the reader with source metadata. |
+| `study.saved-vocabulary-card-summary` | button | Saved vocabulary toggle | Opens and closes the saved-vocabulary card. |
+| `study.language-group` | region | Study language group | One collapsible language bucket inside the saved vocabulary list. |
+| `study.saved-item` | region | Saved vocabulary item | One expandable saved term row that shows Arabic form, pronunciation, and English meaning before the full source metadata. |
+| `study.saved-item-toggle` | button | Saved term toggle | Opens and closes the full metadata inspector for one saved term. |
+| `study.saved-item-details` | region | Saved term details | Expanded metadata panel for one saved term. |
+| `study.practice-page` | page | Vocabulary practice | One-at-a-time practice route for program study or due-item review. |
+| `study.practice-card` | card | Practice card | Active practice card with reveal, typed-answer, and progression controls. |
+| `study.practice-answer-input` | region | Answer input | Single-line learner response field for the active practice term. |
+| `study.practice-answer-submit` | button | Check answer | Submits the typed practice response against the stored meaning. |
+| `study.practice-navigation` | region | Practice navigation | Previous, check-answer, and gated next controls for the active practice term, unlocked by a checked answer or Not sure response. |
+| `study.practice-previous` | button | Previous term | Moves to the previous practice term. |
+| `study.practice-next` | button | Next term | Moves to the next term after the current answer has been checked. |
+| `study.practice-not-sure` | button | Not sure | Reveals the meaning and allows the learner to continue when they cannot provide an answer. |
+| `study.practice-answer-feedback` | region | Answer feedback | Correct/incorrect feedback after checking the typed response. |
 | `study.loading-state` | region | Study loading | Loading skeleton for the study queue. |
 | `study.error-state` | card | Study error | Study queue request error. |
 
@@ -334,13 +434,13 @@ Use this section to move from a component ID to the issue that owns its pending 
 | `preview.home.recent-analyses`, `preview.home.recent-analysis-row`, `analysis.difficulty-card`, `analysis.estimated-level-card`, `analysis.vocabulary-distribution-card`, `analysis.average-vocabulary-level-card`, `analysis.unknown-words-card`, `analysis.estimated-comprehension-card`, `analysis.recommendation-card` | [#42](https://github.com/ajth-work/textplex/issues/42) | Define the canonical difficulty/expected-HSK metric and wire the live and preview consumers. |
 | `analysis.*`, `reader.*` analytics regions | [#31](https://github.com/ajth-work/textplex/issues/31) | Broader reader-detail analytics work; #42 owns the difficulty/HSK metric contract. |
 | `progress.*`, `study.*`, `preview.vocabulary.*` | [#27](https://github.com/ajth-work/textplex/issues/27) | Multi-path insights dashboard and assessment-family progression. |
-| `profile.theme-picker`, `profile.theme-shop-entry`, `theme-shop.*` | Add theme store and commerce entitlements (Local pending) | Prototype theme browsing, bundle offers, live preview, and profile-backed save behavior; the parent initiative owns future catalog, checkout, fulfillment, and entitlement work. |
-| `home.page`, `home.header`, `home.search`, `home.continue-reading`, `home.continue-reading-card`, `home.recent-analyses`, `home.recent-analysis-row`, `home.goals`, `home.weekly-goal`, `home.exposure-goal`, `home.empty-state`, `home.error-state`, `library.page-header`, `library.search-hero`, `library.search`, `library.document-count`, `library.shelf`, `library.skeleton-card`, `library.book-card`, `library.book-info-button`, `library.book-open-button`, `library.empty-state`, `library.error-state`, `shell.primary-nav` | Frontend migration Phase 7 (In progress) | Canonical Next home and library parity slices now mirror the compact standalone 8200 shell with live book/profile hydration, the standalone-style TextPlex library title, library search/count/shelf behavior, continue-reading/recent-analysis/goal cards, and skeleton/error states. |
-| `reader.header`, `reader.options-dialog`, `reader.page-card`, `reader.navigation-card`, `reader.tools-card`, `reader.token-inspector`, `reader.sentence-hsk-chart` | Consolidate standalone preview features into the Next.js app (Local pending) | Phase 2 reader parity slice; Next now owns the reader metadata, compact pager, collapsed utility drawer, and selected-sentence HSK visualization while standalone remains the compatibility reference. |
-| `import.form`, `import.progress-card`, `import.recent-books-card`, `import.book-item` | Consolidate standalone preview features into the Next.js app (Local pending) | Phase 2 import slice; Next now submits pasted text and PDF uploads to the API and tracks background extraction. |
+| `profile.theme-picker`, `profile.theme-shop-entry`, `theme-shop.route-hero`, `theme-shop.catalog-card`, `theme-shop.store-controls`, `theme-shop.search`, `theme-shop.category-nav`, `theme-shop.mode-tabs`, `theme-shop.catalog-grid`, `theme-shop.theme-option`, `theme-shop.collections-carousel`, `theme-shop.collection-slide`, `theme-shop.collection-arrows`, `theme-shop.collection-dots`, `theme-shop.collection-rail`, `theme-shop.bundle-card`, `theme-shop.preview-tuning`, `theme-shop.empty-state`, `theme-shop.save-action`, `theme-shop.loading-state`, `theme-shop.error-state` | Add theme store and commerce entitlements (Local pending) | Scalable theme discovery now includes an app-store-style search header, horizontal category navigation, server-backed bundles, an All Collections carousel with page dots, horizontal theme rails with section arrows, Daylight/Night filters, ownership states, live preview, wallpaper frame tuning controls, and profile-backed save behavior; the parent initiative owns future catalog, checkout, fulfillment, and entitlement work. |
+| `home.page`, `home.header`, `home.search`, `home.continue-reading`, `home.continue-reading-card`, `home.continue-reading-list`, `home.continue-reading-row`, `home.goals`, `home.weekly-goal`, `home.exposure-goal`, `home.empty-state`, `home.error-state`, `library.page-header`, `library.search-hero`, `library.language-filter`, `library.search`, `library.document-count`, `library.shelf`, `library.skeleton-card`, `library.book-card`, `library.book-info-button`, `library.book-open-button`, `library.empty-state`, `library.error-state`, `shell.primary-nav` | Frontend migration Phase 7 (In progress) | Canonical Next home and library parity slices now mirror the compact standalone 8200 shell with live book/learner-progress hydration, the standalone-style TextPlex library title, library search/count/shelf behavior, featured continuation and recently-read rows, and skeleton/error states. |
+| `reader.header`, `reader.options-dialog`, `reader.lookup-fallback-section`, `reader.page-card`, `reader.navigation-card`, `reader.sentence-tools`, `reader.token-mode-button`, `reader.source-sentence-card`, `reader.sentence-translation-card`, `reader.tools-card`, `reader.token-inspector`, `reader.sentence-hsk-chart` | Consolidate standalone preview features into the Next.js app (Local pending) | Phase 2 reader parity slice; Next now owns the reader metadata, compact pager, moved options-panel utilities, Google fallback usage summary, language-aware sentence tools row, and selected-sentence HSK visualization while standalone remains the compatibility reference. |
+| `reader.word-audio-button`, `reader.definition-segment`, `reader.russian-syllable-toggle`, `reader.token-audio-toggle` | Add pronunciation freshness controls and sentence audio playback (Local pending) | Selected-token playback, syllable-chip audio, the Russian syllable display toggle, and the reader setting that enables token-tap audio. |
+| `import.form`, `import.translation-confirmation-card`, `import.progress-card`, `import.recent-books-card`, `import.book-item` | Consolidate standalone preview features into the Next.js app (Local pending) | Phase 2 import slice; Next now submits pasted text and PDF uploads to the API, tracks background extraction, and gates large translation preloads with a confirmation step. |
 | `analysis.difficulty-card`, `analysis.vocabulary-distribution-card`, `analysis.summary-card`, `analysis.sentence-hsk-chart`, `analysis.page-hsk-chart`, `book-detail.extraction-snapshot-card`, `book-detail.page-hsk-chart`, `reader.sentence-hsk-chart` | Frontend migration Phase 3 (Local complete) | API-backed sentence/page/book HSK analytics now render in Next analysis and book-detail routes with compatibility previews retained. |
 | `settings.roadmap-card` | Untracked | Settings discovery entry for the existing Roadmap route; create a dedicated tracker item if roadmap navigation becomes a larger product initiative. |
-| `profile.legacy-link` | Frontend migration Phase 4 (Complete) | Explicit rollback/compatibility entry from the canonical Next profile surface to the standalone legacy shell. |
 | `profile.hosted-account-card` | Frontend migration Phase 5 (In Progress) | Authenticated read-only hosted profile hydration; local learner metrics remain the default profile source. |
 | `profile.migration-card` | Frontend migration Phase 5 (In Progress) | Explicit preview, ready, completed, empty, and error states for account migration. |
 

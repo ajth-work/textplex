@@ -4,12 +4,14 @@ import Link from "next/link";
 import { usePathname, useParams, useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { isDemoMode } from "../lib/textplex";
-import { useAuth } from "./auth-provider";
+import { isDemoMode, resolveReaderResumeHref } from "../lib/textplex";
+import { AccountMenu } from "./account-menu";
+import { InventoryInspectorToggle } from "./inventory-inspector";
 
 const LAST_BOOK_KEY = "textplex:last-book-id";
 const LAST_PAGE_KEY = "textplex:last-page-number";
 const LAST_SEARCH_KEY = "textplex:last-search-query";
+const PORTAL_PATH = "/portal";
 
 type NavigationContext = {
   bookId: string | null;
@@ -63,8 +65,7 @@ export function AppShell() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [storedContext, setStoredContext] = useState<NavigationContext>(() => readStoredContext());
-  const { configured, loading: authLoading, user, signOut } = useAuth();
+  const [storedContext, setStoredContext] = useState<NavigationContext>({ bookId: null, pageNumber: null, searchQuery: null });
 
   const routeContext = useMemo(
     () => parseRouteContext(pathname, params as Record<string, string | string[] | undefined>, searchParams),
@@ -94,7 +95,7 @@ export function AppShell() {
   const activePageNumber = routeContext.pageNumber ?? storedContext.pageNumber;
   const activeSearchQuery = routeContext.searchQuery ?? storedContext.searchQuery;
 
-  const readerHref = activeBookId ? `/reader/${activeBookId}/${activePageNumber ?? 1}` : "/library";
+  const readerHref = activeBookId ? resolveReaderResumeHref(activeBookId, null, activePageNumber ?? 1) : "/library";
   const analysisHref = activeBookId ? `/analysis/${activeBookId}` : "/library";
   const bookHref = activeBookId ? `/books/${activeBookId}` : "/library";
   const searchHref = activeSearchQuery ? `/search?q=${encodeURIComponent(activeSearchQuery)}` : "/search";
@@ -105,10 +106,10 @@ export function AppShell() {
       router.back();
       return;
     }
-    router.push("/library");
+    router.push(PORTAL_PATH);
   }
 
-  if (pathname === "/" || pathname === "/library") {
+  if (pathname === "/" || pathname.startsWith("/auth") || pathname === "/library" || pathname.startsWith("/reader/")) {
     return null;
   }
 
@@ -116,10 +117,11 @@ export function AppShell() {
     <>
       <header className="app-shell-bar card">
         <div className="app-shell-brand">
-          <Link className="app-shell-home" href="/">
+          <Link className="app-shell-home" href={PORTAL_PATH}>
             TextPlex
           </Link>
           <span className="pill">{isDemoMode ? "Demo" : "Live"}</span>
+          <InventoryInspectorToggle />
         </div>
         <div className="app-shell-context">
           <span className="eyebrow">Context</span>
@@ -139,21 +141,13 @@ export function AppShell() {
           <Link className="button button-secondary shell-button" href={analysisHref}>
             Analysis
           </Link>
-          {!isDemoMode && !authLoading && user ? (
-            <button className="button button-secondary shell-button" type="button" onClick={() => void signOut()}>
-              Sign out
-            </button>
-          ) : !isDemoMode && configured ? (
-            <Link className="button button-secondary shell-button" href="/auth">
-              Sign in
-            </Link>
-          ) : null}
+          {!isDemoMode ? <AccountMenu returnTo={PORTAL_PATH} compact className="shell-account-menu" /> : null}
         </div>
       </header>
 
       <nav className="app-nav card" aria-label="Primary">
-        <Link className={navLinkClassName(pathname, "/")} href="/">
-          Home
+        <Link className={navLinkClassName(pathname, PORTAL_PATH)} href={PORTAL_PATH}>
+          Portal
         </Link>
         <Link className={navLinkClassName(pathname, "/library")} href="/library">
           Library

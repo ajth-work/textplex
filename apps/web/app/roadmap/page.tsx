@@ -21,16 +21,16 @@ const implementationPlan: PlanStep[] = [
     description: "Keep every language pack in a canonical lexicon.sqlite3 or lexicon.csv layout under resources/lexicon/<language>.",
   },
   {
-    title: "Build the Korean starter pack",
-    description: "Seed Korean first so the importer, lookup path, and preview surfaces have one non-Chinese reference implementation.",
+    title: "Finish the Korean starter pack",
+    description: "Keep Korean as the active build so the importer, lookup path, pronunciation guides, and preview surfaces share one non-Chinese reference implementation.",
   },
   {
-    title: "Repeat the same shape for the next languages",
-    description: "Use the same ingest and lookup rules for Japanese, Russian, Hebrew, and Arabic instead of creating one-off pipelines.",
+    title: "Bring Russian and Hebrew onto the same pack contract",
+    description: "Use the same ingest, lookup, and pronunciation rules for Russian and Hebrew so the next languages do not fork the pipeline.",
   },
   {
-    title: "Anchor each pack to a learning benchmark",
-    description: "Track against TOPIK, JLPT, TORFL, and domestic literacy goals so the vocab lists map to real learner expectations.",
+    title: "Extend the shared contract to Japanese and Arabic",
+    description: "Keep Japanese kana/kanji handling and Arabic right-to-left, diacritic-aware handling inside the same language-pack model.",
   },
   {
     title: "Keep the tracker visible in the app",
@@ -52,46 +52,46 @@ const languageTracker: LanguageTrack[] = [
     code: "ko",
     language: "Korean",
     status: "Active build",
-    progress: 35,
+    progress: 60,
     pack: "resources/lexicon/korean",
     benchmark: "TOPIK, school literacy goals, and public-domain readers",
-    next: "Seed Hangul, syllable blocks, readings, and high-frequency vocabulary.",
+    next: "Finish the starter-pack cleanup, pronunciation guides, and pack validation pass.",
+  },
+  {
+    code: "ru",
+    language: "Russian",
+    status: "Sourcing",
+    progress: 35,
+    pack: "resources/lexicon/russian",
+    benchmark: "TORFL and domestic school literacy goals",
+    next: "Stabilize the starter pack, override forms, and lemma-backed lookup coverage.",
+  },
+  {
+    code: "he",
+    language: "Hebrew",
+    status: "RTL support",
+    progress: 30,
+    pack: "resources/lexicon/hebrew",
+    benchmark: "YAEL and domestic literacy goals",
+    next: "Finish the starter pack shape, transliteration fallback, and bidi-safe reader checks.",
   },
   {
     code: "ja",
     language: "Japanese",
     status: "Queued",
-    progress: 10,
+    progress: 20,
     pack: "resources/lexicon/japanese",
     benchmark: "JLPT and domestic school literacy goals",
     next: "Define the corpus, the starter pack, and the first import smoke tests.",
   },
   {
-    code: "ru",
-    language: "Russian",
-    status: "Queued",
-    progress: 10,
-    pack: "resources/lexicon/russian",
-    benchmark: "TORFL and domestic school literacy goals",
-    next: "Decide the first public-domain sources and Cyrillic vocabulary coverage.",
-  },
-  {
-    code: "he",
-    language: "Hebrew",
-    status: "Queued",
-    progress: 10,
-    pack: "resources/lexicon/hebrew",
-    benchmark: "Domestic literacy goals and learner-community vocabulary",
-    next: "Set the source pack shape for right-to-left text and modern reading support.",
-  },
-  {
     code: "ar",
     language: "Arabic",
     status: "Queued",
-    progress: 10,
+    progress: 15,
     pack: "resources/lexicon/arabic",
-    benchmark: "Domestic literacy goals and learner-community vocabulary",
-    next: "Define segmentation, diacritics handling, and the first source pack.",
+    benchmark: "ACTFL-based Arabic proficiency bands",
+    next: "Build the MSA starter pack around ACTFL/AAPPL topic buckets, then add segmentation, diacritics handling, and transliteration coverage.",
   },
 ];
 
@@ -104,10 +104,10 @@ export default function RoadmapPage() {
       badge="Preview"
       className="roadmap-hero"
       metrics={[
-        { label: "Languages", value: String(languageTracker.length) },
-        { label: "Active build", value: "Korean" },
-        { label: "Queued", value: "4" },
-      ]}
+          { label: "Languages", value: String(languageTracker.length) },
+          { label: "Active build", value: "Korean" },
+          { label: "Queued", value: "4" },
+        ]}
     >
       <section className="feature-grid">
         <article className="card feature-card">
@@ -130,12 +130,14 @@ export default function RoadmapPage() {
         <article className="card feature-card">
           <h2>Current focus</h2>
           <p>
-            Korean is the first live target because it forces the importer to handle Hangul, a new source-pack path,
-            and TOPIK-aligned vocabulary at the same time.
+            Korean remains the active build because it forces the importer to handle Hangul, a new source-pack path,
+            pronunciation guidance, and TOPIK-aligned vocabulary at the same time.
           </p>
           <p className="small-copy">
-            The next pass after Korean should reuse the same pack contract for Japanese, Russian, Hebrew, and Arabic
-            instead of creating separate code paths.
+            The next pass should keep Russian and Hebrew on the same sourcing and fallback contract, then carry the
+            same pack model forward to Japanese and Arabic instead of creating separate code paths. Arabic should
+            stay MSA-first and be staged through ACTFL/AAPPL topic buckets rather than a separate one-off lookup
+            model.
           </p>
         </article>
       </section>

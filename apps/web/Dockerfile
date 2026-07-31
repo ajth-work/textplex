@@ -41,6 +41,7 @@ COPY --from=builder /workspace/apps/web/package.json ./apps/web/package.json
 COPY --from=builder /workspace/apps/web/next.config.js ./apps/web/next.config.js
 COPY --from=builder /workspace/apps/web/eslint.config.mjs ./apps/web/eslint.config.mjs
 COPY --from=builder /workspace/apps/web/.next ./apps/web/.next
+COPY --from=builder /workspace/apps/web/public ./apps/web/public
 COPY --from=builder /workspace/apps/web/app ./apps/web/app
 COPY --from=builder /workspace/apps/web/components ./apps/web/components
 COPY --from=builder /workspace/apps/web/lib ./apps/web/lib

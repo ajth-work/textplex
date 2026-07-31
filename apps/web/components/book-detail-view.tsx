@@ -7,12 +7,14 @@ import {
   fetchJson,
   formatDateTime,
   isDemoMode,
+  resolveReaderResumeHref,
   triggerBookExtraction,
   type BookExtractionResult,
   type BookAnalysisSurfaceResponse,
   type BookPageManifest,
   type BookReaderPageResponse,
   type BookRecord,
+  type ProgressSurfaceResponse,
 } from "../lib/textplex";
 import { LoadingSkeleton } from "./loading-skeleton";
 import { HskSeriesChart } from "./hsk-series-chart";
@@ -21,6 +23,7 @@ export function BookDetailView({ bookId }: { bookId: string }) {
   const [book, setBook] = useState<BookRecord | null>(null);
   const [manifest, setManifest] = useState<BookPageManifest | null>(null);
   const [summary, setSummary] = useState<BookExtractionResult | null>(null);
+  const [progress, setProgress] = useState<ProgressSurfaceResponse | null>(null);
   const [analysis, setAnalysis] = useState<BookAnalysisSurfaceResponse | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(true);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -38,6 +41,7 @@ export function BookDetailView({ bookId }: { bookId: string }) {
     setAnalysis(null);
     setAnalysisError(null);
     setFirstPageExtractionSource(null);
+    setProgress(null);
 
     async function loadBook() {
       try {
@@ -50,6 +54,17 @@ export function BookDetailView({ bookId }: { bookId: string }) {
         }
         setBook(bookResult);
         setManifest(manifestResult);
+        void fetchJson<ProgressSurfaceResponse>("/progress")
+          .then((progressResult) => {
+            if (active) {
+              setProgress(progressResult);
+            }
+          })
+          .catch(() => {
+            if (active) {
+              setProgress(null);
+            }
+          });
         try {
           const pageResult = await fetchJson<BookReaderPageResponse>(`/books/${bookId}/pages/${manifestResult.pages[0]?.page_number ?? 1}`);
           if (active) {
@@ -127,6 +142,7 @@ export function BookDetailView({ bookId }: { bookId: string }) {
   }
 
   const firstPageNumber = manifest?.pages[0]?.page_number ?? 1;
+  const resumeReaderHref = resolveReaderResumeHref(bookId, progress, firstPageNumber);
   const needsExtraction = (book?.extracted_page_count ?? 0) <= 0;
   const extractionSourceLabel = firstPageExtractionSource ? firstPageExtractionSource.toUpperCase() : "UNAVAILABLE";
 
@@ -179,7 +195,7 @@ export function BookDetailView({ bookId }: { bookId: string }) {
               Extraction source: <strong>{extractionSourceLabel}</strong>
             </p>
             <div className="button-row">
-              <Link className="button button-primary" href={`/reader/${book.id}/${firstPageNumber}`}>
+              <Link className="button button-primary" href={resumeReaderHref}>
                 Open reader
               </Link>
               <button className="button button-secondary" type="button" onClick={() => void handleExtractNow()} disabled={extracting || loading || isDemoMode}>

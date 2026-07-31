@@ -4,7 +4,23 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
 
-import { fetchJson, formatDateTime, type BookRecord } from "../lib/textplex";
+import { AccountMenu } from "./account-menu";
+import { fetchJson, formatDateTime, resolveReaderResumeHref, type BookRecord, type ProgressSurfaceResponse } from "../lib/textplex";
+
+type LibraryLanguageOption = {
+  code: string;
+  label: string;
+};
+
+const libraryLanguageOptions: LibraryLanguageOption[] = [
+  { code: "all", label: "All" },
+  { code: "zh", label: "Chinese" },
+  { code: "ko", label: "Korean" },
+  { code: "ja", label: "Japanese" },
+  { code: "ru", label: "Russian" },
+  { code: "he", label: "Hebrew" },
+  { code: "ar", label: "Arabic" },
+];
 
 function bookFormatLabel(book: BookRecord): string {
   const suffix = book.source_filename.split(".").pop()?.trim();
@@ -64,6 +80,10 @@ function matchesBook(book: BookRecord, query: string): boolean {
     .join(" ")
     .toLowerCase();
   return haystack.includes(query);
+}
+
+function matchesLibraryLanguage(book: BookRecord, languageCode: string): boolean {
+  return languageCode === "all" || book.language_code === languageCode;
 }
 
 function LibrarySkeletonCard() {
@@ -168,9 +188,11 @@ function LibraryLoadingState() {
 export function LibraryView() {
   const router = useRouter();
   const [books, setBooks] = useState<BookRecord[]>([]);
+  const [progress, setProgress] = useState<ProgressSurfaceResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [languageCode, setLanguageCode] = useState("all");
 
   useEffect(() => {
     let active = true;
@@ -199,17 +221,37 @@ export function LibraryView() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+
+    void fetchJson<ProgressSurfaceResponse>("/progress")
+      .then((result) => {
+        if (active) {
+          setProgress(result);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setProgress(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const visibleBooks = useMemo(() => {
     const normalizedQuery = normalizeQuery(query);
-    return books.filter((book) => matchesBook(book, normalizedQuery));
-  }, [books, query]);
+    return books.filter((book) => matchesBook(book, normalizedQuery) && matchesLibraryLanguage(book, languageCode));
+  }, [books, languageCode, query]);
 
   function openInfo(bookId: string) {
     router.push(`/books/${bookId}`);
   }
 
   function openReader(bookId: string) {
-    router.push(`/reader/${bookId}/1`);
+    router.push(resolveReaderResumeHref(bookId, progress));
   }
 
   function retryLoad() {
@@ -229,6 +271,7 @@ export function LibraryView() {
 
   const visibleCount = visibleBooks.length;
   const hasBooks = books.length > 0;
+  const hasQuery = Boolean(normalizeQuery(query));
 
   return (
     <section className="library-page">
@@ -237,7 +280,7 @@ export function LibraryView() {
           <span aria-hidden="true">←</span>
         </Link>
         <h1 className="library-brand">TextPlex</h1>
-        <span aria-hidden="true" />
+        <AccountMenu returnTo="/library" compact className="library-account-menu" />
       </header>
 
       <header className="library-hero card" data-inventory-id="library.search-hero">
@@ -271,6 +314,23 @@ export function LibraryView() {
             {loading ? null : `${visibleCount} document${visibleCount === 1 ? "" : "s"}`}
           </div>
         </div>
+
+        <div className="library-language-filter" data-inventory-id="library.language-filter" aria-label="Filter library by language">
+          <span className="library-language-filter-label">Languages</span>
+          <div className="library-language-filter-row" role="group" aria-label="Language filter buttons">
+            {libraryLanguageOptions.map((option) => (
+              <button
+                key={option.code}
+                type="button"
+                className={`library-language-button ${languageCode === option.code ? "is-selected" : ""}`}
+                aria-pressed={languageCode === option.code}
+                onClick={() => setLanguageCode(option.code)}
+              >
+                {option.code === "all" ? option.label : `(${option.code.toUpperCase()})`}
+              </button>
+            ))}
+          </div>
+        </div>
       </header>
 
       <section className="library-shell card">
@@ -300,16 +360,21 @@ export function LibraryView() {
 
         {!error && !loading && visibleBooks.length === 0 ? (
           <section className="library-empty-card" data-inventory-id="library.empty-state">
-            <h2>{hasBooks ? "No visible library items match this search." : "No books imported yet."}</h2>
+            <h2>{hasBooks ? "No visible library items match your search or language filter." : "No books imported yet."}</h2>
             <p>
               {hasBooks
-                ? "Try a different title, author, or source filename."
+                ? "Try a different title, author, source filename, or language."
                 : "Use the import flow to register a scan, then TextPlex will expose it here for reading."}
             </p>
             <div className="button-row">
-              {hasBooks ? (
+              {hasBooks && hasQuery ? (
                 <button className="button button-secondary" type="button" onClick={() => setQuery("")}>
                   Clear search
+                </button>
+              ) : null}
+              {hasBooks && languageCode !== "all" ? (
+                <button className="button button-secondary" type="button" onClick={() => setLanguageCode("all")}>
+                  Show all languages
                 </button>
               ) : null}
               <Link className="button button-primary" href="/import">

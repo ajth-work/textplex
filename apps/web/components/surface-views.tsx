@@ -1,18 +1,20 @@
 ﻿"use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { RoutePage } from "./route-page";
 import { useAuth } from "./auth-provider";
+import { resolveAccountLabel } from "../lib/auth-display";
 import {
   fetchJson,
   formatDateTime,
-  legacySurfaceUrl,
   postFormData,
   postJson,
   putJson,
+  resolveReaderResumeHref,
+  type ActivityEvent,
   type ActivitySurfaceResponse,
   type BookAnalysisSurfaceResponse,
   type BookRecord,
@@ -33,23 +35,118 @@ import {
 import {
   appThemeLabels,
   appThemeOptions,
+  DEFAULT_APP_THEME_GRID_ENABLED,
+  DEFAULT_APP_THEME_PATTERN_OPACITY,
   INDIVIDUAL_THEME_PRICE,
   persistAppTheme,
+  persistAppThemeGridEnabled,
+  persistAppThemePatternOpacity,
   readStoredAppTheme,
+  readStoredAppThemeGridEnabled,
+  readStoredAppThemePatternOpacity,
   resolveAppTheme,
   resolveAppThemeFromSettings,
+  resolveAppThemeGridEnabledFromSettings,
+  resolveAppThemePatternOpacityFromSettings,
   themeBundles,
   type AppTheme,
 } from "../lib/theme";
+import {
+  getThemeCatalogCategory,
+  getThemeCatalogMode,
+  getThemeWallpaperPath,
+  matchesThemeCatalogFilters,
+  themeCatalogCategories,
+  themeCatalogCollectionDescriptions,
+  themeCatalogModes,
+  type ThemeCatalogCategory,
+  type ThemeCatalogMode,
+} from "../lib/theme-catalog";
 import { LoadingSkeleton } from "./loading-skeleton";
 import { GlobalThemePicker } from "./global-theme-picker";
 import { HskSeriesChart } from "./hsk-series-chart";
+import { ReadingProgressChart } from "./reading-progress-chart";
+import { DueReviewChart } from "./due-review-chart";
+import { StudyDueLanguageGroups } from "./study-due-language-groups";
 
 type LexicalEntryDetail = {
   pinyin: string | null;
   definition: string | null;
   hskLevel: string | null;
 };
+
+type ImportLanguageOption = {
+  code: string;
+  label: string;
+};
+
+const googleTranslatePricePerMillionCharacters = 10;
+const translationConfirmationCharacterThreshold = 40000;
+
+const importLanguageOptions: ImportLanguageOption[] = [
+  { code: "zh", label: "Chinese" },
+  { code: "ko", label: "Korean" },
+  { code: "ja", label: "Japanese" },
+  { code: "ru", label: "Russian" },
+  { code: "he", label: "Hebrew" },
+  { code: "ar", label: "Arabic" },
+];
+
+function formatCurrencyUsd(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+type ActivityBookGroup = {
+  bookId: string;
+  title: string;
+  latestActivityAt: string;
+  latestReadAt: string | null;
+  events: ActivityEvent[];
+};
+
+const readingActivityKinds = new Set<ActivityEvent["kind"]>(["page_read", "sentence_read", "reading_session"]);
+
+function activityTimestamp(value: string): number {
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function groupActivityEvents(events: ActivityEvent[]): ActivityBookGroup[] {
+  const groups = new Map<string, ActivityBookGroup>();
+
+  for (const event of events) {
+    const existing = groups.get(event.book_id);
+    if (!existing) {
+      groups.set(event.book_id, {
+        bookId: event.book_id,
+        title: event.title ?? event.book_id,
+        latestActivityAt: event.occurred_at,
+        latestReadAt: readingActivityKinds.has(event.kind) ? event.occurred_at : null,
+        events: [event],
+      });
+      continue;
+    }
+
+    existing.events.push(event);
+    if (activityTimestamp(event.occurred_at) > activityTimestamp(existing.latestActivityAt)) {
+      existing.latestActivityAt = event.occurred_at;
+    }
+    if (readingActivityKinds.has(event.kind) && (!existing.latestReadAt || activityTimestamp(event.occurred_at) > activityTimestamp(existing.latestReadAt))) {
+      existing.latestReadAt = event.occurred_at;
+    }
+  }
+
+  return Array.from(groups.values()).sort((left, right) => {
+    const leftTimestamp = activityTimestamp(left.latestReadAt ?? left.latestActivityAt);
+    const rightTimestamp = activityTimestamp(right.latestReadAt ?? right.latestActivityAt);
+    return rightTimestamp - leftTimestamp;
+  });
+}
 
 export function ActivitySurfaceView() {
   const [data, setData] = useState<ActivitySurfaceResponse | null>(null);
@@ -72,39 +169,74 @@ export function ActivitySurfaceView() {
       active = false;
     };
   }, []);
+  const activityBookGroups = data ? groupActivityEvents(data.events) : [];
   return (
     <RoutePage
       eyebrow="Activity"
       title="Reading activity feed"
-      description="A time-ordered feed of page completions, sentence reads, token lookups, and sessions."
-      badge={data ? `${data.event_count} events` : "Live"}
+      description="Books and articles are ordered by the most recent reading activity, with their individual events available on demand."
+      badge={data ? `${activityBookGroups.length} books` : "Live"}
       links={[
         { href: "/progress", label: "Progress" },
         { href: "/study", label: "Study" },
       ]}
       metrics={[
-        { label: "Feed", value: data ? String(data.event_count) : "Loading" },
+        { label: "Reading days", value: data ? String(data.reading_history.length) : "Loading" },
+        { label: "Events", value: data ? String(data.event_count) : "Loading" },
         { label: "State", value: error ? "Error" : data ? "Loaded" : "Loading", detail: error ?? "Derived from learner events" },
       ]}
     >
       {error ? <section className="card feature-card">{error}</section> : null}
       {!data && !error ? <LoadingSkeleton label="Loading activity" /> : null}
       {data ? (
-        <section className="card feature-card">
-          <h2>Recent events</h2>
-          <div className="surface-list">
-            {data.events.map((event) => (
-              <article key={`${event.kind}-${event.occurred_at}-${event.book_id}-${event.page_number ?? "na"}`} className="surface-list-item">
-                <div className="card-topline">
-                  <strong>{event.kind.replaceAll("_", " ")}</strong>
-                  <span className="muted">{formatDateTime(event.occurred_at)}</span>
+        <>
+          <section className="feature-grid activity-progress-grid" aria-label="Reading progress over time">
+            <ReadingProgressChart
+              inventoryId="activity.pages-progress-chart"
+              title="Pages read over time"
+              description="Cumulative pages completed across multi-page books."
+              points={data.reading_history}
+              metric="pages"
+              emptyMessage="Page progress appears after a multi-page book is read."
+            />
+            <ReadingProgressChart
+              inventoryId="activity.sentences-progress-chart"
+              title="Sentences read over time"
+              description="Cumulative sentences completed across books and articles."
+              points={data.reading_history}
+              metric="sentences"
+              emptyMessage="Sentence progress appears after a sentence is completed."
+            />
+          </section>
+          <section className="card feature-card" data-inventory-id="activity.recent-events-card">
+          <h2>Recently read</h2>
+          <p className="small-copy">Open a book or article to see its reading events.</p>
+          <div className="activity-book-list" data-inventory-id="activity.recent-books-list">
+            {activityBookGroups.map((group) => (
+              <details key={group.bookId} className="activity-book-group" data-inventory-id="activity.recent-book-group">
+                <summary className="activity-book-summary">
+                  <span className="activity-book-summary-copy">
+                    <strong>{group.title}</strong>
+                    <span className="small-copy">Last read {formatDateTime(group.latestReadAt ?? group.latestActivityAt)}</span>
+                  </span>
+                  <span className="pill">{group.events.length} events</span>
+                </summary>
+                <div className="surface-list" data-inventory-id="activity.event-list">
+                  {group.events.map((event, index) => (
+                    <article key={`${event.kind}-${event.occurred_at}-${event.book_id}-${event.page_number ?? "na"}-${index}`} className="surface-list-item" data-inventory-id="activity.event-item">
+                      <div className="card-topline">
+                        <strong>{event.kind.replaceAll("_", " ")}</strong>
+                        <span className="muted">{formatDateTime(event.occurred_at)}</span>
+                      </div>
+                      <p>{event.detail}</p>
+                    </article>
+                  ))}
                 </div>
-                <p>{event.title ?? event.book_id}</p>
-                <p className="small-copy">{event.detail}</p>
-              </article>
+              </details>
             ))}
           </div>
-        </section>
+          </section>
+        </>
       ) : null}
     </RoutePage>
   );
@@ -190,7 +322,7 @@ export function AnalysisSurfaceView({ bookId }: { bookId: string }) {
       badge={data ? `${data.sentence_count} sentences` : bookId}
       links={[
         { href: "/library", label: "Library" },
-        { href: data ? `/reader/${bookId}/1` : "/library", label: "Reader" },
+        { href: data ? resolveReaderResumeHref(bookId, null) : "/library", label: "Reader" },
       ]}
       metrics={[
         { label: "Extraction", value: data ? `${data.extraction_progress_percent}%` : "Loading" },
@@ -292,6 +424,8 @@ export function ImportSurfaceView() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [translationMode, setTranslationMode] = useState<"on-demand" | "preload">("on-demand");
+  const [showTranslationConfirm, setShowTranslationConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -343,8 +477,22 @@ export function ImportSurfaceView() {
     };
   }, [activeBook?.id, activeBook?.extraction_status, activeBook?.status]);
 
-  const handleImport = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const draftText = text.trim();
+  const draftCharacterCount = mode === "paste" ? Array.from(draftText).length : 0;
+  const draftWordCount = mode === "paste" ? draftText.split(/\s+/).filter(Boolean).length : 0;
+  const draftTranslationCost = (draftCharacterCount / 1_000_000) * googleTranslatePricePerMillionCharacters;
+  const translationConfirmationRequired =
+    mode === "paste" &&
+    translationMode === "preload" &&
+    draftCharacterCount >= translationConfirmationCharacterThreshold;
+
+  useEffect(() => {
+    if (!translationConfirmationRequired) {
+      setShowTranslationConfirm(false);
+    }
+  }, [translationConfirmationRequired]);
+
+  const runImport = async () => {
     setActionError(null);
     setActionMessage(null);
     setSubmitting(true);
@@ -352,14 +500,15 @@ export function ImportSurfaceView() {
     try {
       let book: BookRecord;
       if (mode === "paste") {
-        if (!text.trim()) {
+        if (!draftText) {
           throw new Error("Paste or type text before processing it.");
         }
         book = await postJson<BookRecord>("/texts/import", {
-          text: text.trim(),
+          text: draftText,
           language_code: languageCode,
           title: title.trim() || null,
           author: author.trim() || null,
+          translation_mode: translationMode === "preload" ? "preload" : "off",
         });
       } else {
         if (!file) {
@@ -371,6 +520,7 @@ export function ImportSurfaceView() {
         const formData = new FormData();
         formData.append("file", file);
         formData.append("language_code", languageCode);
+        formData.append("translation_mode", translationMode === "preload" ? "preload" : "off");
         if (title.trim()) formData.append("title", title.trim());
         if (author.trim()) formData.append("author", author.trim());
         book = await postFormData<BookRecord>("/books/upload", formData);
@@ -384,6 +534,7 @@ export function ImportSurfaceView() {
       );
       setText("");
       setFile(null);
+      setShowTranslationConfirm(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
       const refreshed = await fetchJson<ImportSurfaceResponse>("/import");
       setData(refreshed);
@@ -392,6 +543,21 @@ export function ImportSurfaceView() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleImport = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (translationConfirmationRequired && !showTranslationConfirm) {
+      setShowTranslationConfirm(true);
+      setActionError(null);
+      setActionMessage(
+        `This paste is ${draftCharacterCount.toLocaleString()} characters. Preloading translation is estimated at ${formatCurrencyUsd(
+          draftTranslationCost,
+        )}. Confirm below to continue or switch to on-demand translation.`,
+      );
+      return;
+    }
+    await runImport();
   };
 
   const extractionTotal = activeBook?.extraction_total_pages ?? 0;
@@ -434,38 +600,93 @@ export function ImportSurfaceView() {
               </button>
             </div>
             <form className="surface-form" onSubmit={handleImport}>
-              <div className="import-form-grid">
-                <label>
-                  Title
-                  <input className="text-input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Optional title" />
-                </label>
+                <div className="import-form-grid">
+                  <label>
+                    Title
+                    <input className="text-input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Optional title" />
+                  </label>
                 <label>
                   Author or source
                   <input className="text-input" value={author} onChange={(event) => setAuthor(event.target.value)} placeholder="Optional author" />
                 </label>
                 <label>
                   Language
-                  <input className="text-input" value={languageCode} onChange={(event) => setLanguageCode(event.target.value)} maxLength={12} required />
-                </label>
-              </div>
-              {mode === "paste" ? (
-                <label>
-                  Article text
-                  <textarea className="text-input import-textarea" value={text} onChange={(event) => setText(event.target.value)} placeholder="Paste an article or passage here..." required />
-                </label>
-              ) : (
-                <label>
-                  PDF file
-                  <input ref={fileInputRef} className="text-input" type="file" accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} required />
-                </label>
-              )}
-              {actionError ? <p className="form-error" role="alert">{actionError}</p> : null}
-              {actionMessage ? <p className="form-message" role="status">{actionMessage}</p> : null}
-              <button className="button button-primary" type="submit" disabled={submitting}>
-                {submitting ? "Processing..." : mode === "paste" ? "Process text" : "Upload and process"}
-              </button>
-            </form>
-          </section>
+                  <select className="text-input" value={languageCode} onChange={(event) => setLanguageCode(event.target.value)} required>
+                    {importLanguageOptions.map((option) => (
+                      <option key={option.code} value={option.code}>
+                        {option.label} ({option.code.toUpperCase()})
+                      </option>
+                    ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="import-translation-grid" aria-label="Translation planning summary">
+                  <span className="pill">Characters {mode === "paste" ? draftCharacterCount.toLocaleString() : "—"}</span>
+                  <span className="pill">Words {mode === "paste" ? draftWordCount.toLocaleString() : "—"}</span>
+                  <span className="pill">GT est. {mode === "paste" ? formatCurrencyUsd(draftTranslationCost) : "After extraction"}</span>
+                </div>
+                <div className="button-row" aria-label="Translation mode">
+                  <button
+                    type="button"
+                    className={`button ${translationMode === "on-demand" ? "button-primary" : "button-secondary"}`}
+                    onClick={() => {
+                      setTranslationMode("on-demand");
+                      setShowTranslationConfirm(false);
+                    }}
+                  >
+                    Translate on demand
+                  </button>
+                  <button
+                    type="button"
+                    className={`button ${translationMode === "preload" ? "button-primary" : "button-secondary"}`}
+                    onClick={() => setTranslationMode("preload")}
+                  >
+                    Translate now
+                  </button>
+                </div>
+                {mode === "paste" ? (
+                  <label>
+                    Article text
+                    <textarea className="text-input import-textarea" value={text} onChange={(event) => setText(event.target.value)} placeholder="Paste an article or passage here..." required />
+                  </label>
+                ) : (
+                  <label>
+                    PDF file
+                    <input ref={fileInputRef} className="text-input" type="file" accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} required />
+                  </label>
+                )}
+                {actionError ? <p className="form-error" role="alert">{actionError}</p> : null}
+                {actionMessage ? <p className="form-message" role="status">{actionMessage}</p> : null}
+                {translationConfirmationRequired && showTranslationConfirm ? (
+                  <section className="card import-confirmation-card">
+                    <h3>Confirm translation preload</h3>
+                    <p className="small-copy">
+                      This paste is above the {translationConfirmationCharacterThreshold.toLocaleString()} character safety threshold. Preloading translation is
+                      estimated at {formatCurrencyUsd(draftTranslationCost)} based on {draftCharacterCount.toLocaleString()} characters.
+                    </p>
+                    <div className="button-row">
+                      <button className="button button-primary" type="button" onClick={() => void runImport()} disabled={submitting}>
+                        {submitting ? "Working..." : "Confirm and translate now"}
+                      </button>
+                      <button
+                        className="button button-secondary"
+                        type="button"
+                        onClick={() => {
+                          setTranslationMode("on-demand");
+                          setShowTranslationConfirm(false);
+                          setActionMessage("Switched to on-demand translation. The reader will translate sentences when opened.");
+                        }}
+                      >
+                        Switch to on-demand
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
+                <button className="button button-primary" type="submit" disabled={submitting}>
+                  {submitting ? "Processing..." : mode === "paste" ? "Process text" : "Upload and process"}
+                </button>
+              </form>
+            </section>
 
           {activeBook ? (
             <section className="card feature-card import-progress-card" aria-live="polite">
@@ -481,7 +702,7 @@ export function ImportSurfaceView() {
                 {extractionTotal > 0 ? `${extractionProcessed} of ${extractionTotal} pages processed.` : activeBook.extraction_status === "complete" ? "Text is ready to read." : "Waiting for extraction progress..."}
               </p>
               {activeBook.extraction_status === "complete" || activeBook.status === "extracted" ? (
-                <Link className="button button-secondary" href={`/reader/${activeBook.id}/1`}>Open reader</Link>
+                <Link className="button button-secondary" href={resolveReaderResumeHref(activeBook.id, null)}>Open reader</Link>
               ) : null}
             </section>
           ) : null}
@@ -708,6 +929,8 @@ export function ProfileSurfaceView() {
   }
 
   const settingsMap = new Map(data?.settings.entries.map((entry) => [entry.key, entry.value]) ?? []);
+  const profilePreferenceEntries = data?.settings.entries.filter((entry) => entry.key !== "readerMode" && entry.key !== "readerTokenAudioOnTap") ?? [];
+  const accountLabel = resolveAccountLabel(hostedData?.user ?? authenticatedUser);
   const selectedTrack =
     data?.profile.learning_tracks.find((track) => track.code === data.profile.selected_track_code) ??
     data?.profile.learning_tracks[0] ??
@@ -729,9 +952,6 @@ export function ProfileSurfaceView() {
         { label: "Sentence reads", value: data ? String(data.profile.sentence_reads) : "Loading" },
       ]}
     >
-      <p className="small-copy profile-legacy-link" data-inventory-id="profile.legacy-link">
-        <a href={legacySurfaceUrl}>legacy</a>
-      </p>
       {hostedError ? (
         <section className="card feature-card" data-inventory-id="profile.hosted-account-card">
           <h2>Hosted account</h2>
@@ -741,7 +961,10 @@ export function ProfileSurfaceView() {
       {hostedData ? (
         <section className="card feature-card" data-inventory-id="profile.hosted-account-card">
           <h2>Hosted account</h2>
-          <p>{hostedData.user.email ?? hostedData.profile.display_name ?? hostedData.user.id}</p>
+          <p>Hello, {accountLabel}</p>
+          <p className="small-copy">
+            Signed in as {hostedData.user.email ?? hostedData.user.id}. This account owns the hosted profile, imports, and saved settings.
+          </p>
           <label>
             Display name
             <input className="text-input" value={hostedDisplayName} onChange={(event) => setHostedDisplayName(event.target.value)} />
@@ -758,6 +981,7 @@ export function ProfileSurfaceView() {
       {authenticatedUser ? (
         <section className="card feature-card" data-inventory-id="profile.migration-card">
           <h2>Local profile migration</h2>
+          <p className="small-copy">Use this to merge the anonymous local profile into this account and turn your seeded test data into user zero.</p>
           {migrationError ? <p className="small-copy">{migrationError}</p> : null}
           {!migration && !migrationError ? <LoadingSkeleton label="Checking local profile migration" /> : null}
           {migration ? (
@@ -806,8 +1030,8 @@ export function ProfileSurfaceView() {
           <article className="card feature-card">
             <h2>Preferences</h2>
             <div className="surface-list">
-              {data.settings.entries.length > 0 ? (
-                data.settings.entries.map((entry) => (
+              {profilePreferenceEntries.length > 0 ? (
+                profilePreferenceEntries.map((entry) => (
                   <div key={entry.key} className="surface-list-item">
                     <div className="card-topline">
                       <strong>{entry.key}</strong>
@@ -819,9 +1043,7 @@ export function ProfileSurfaceView() {
                 <p className="small-copy">No saved settings yet.</p>
               )}
             </div>
-            <p className="small-copy">
-              Theme: {appThemeLabels[resolveAppTheme(settingsMap.get("theme"))]} • Reader mode: {settingsMap.get("readerMode") ?? "sentence"}
-            </p>
+            <p className="small-copy">Theme: {appThemeLabels[resolveAppTheme(settingsMap.get("theme"))]}</p>
           </article>
           <article className="card feature-card">
             <h2>Book activity</h2>
@@ -855,7 +1077,21 @@ export function ThemeShopSurfaceView() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [theme, setTheme] = useState<AppTheme>(() => readStoredAppTheme() ?? "neutral");
+  const [theme, setTheme] = useState<AppTheme>("neutral");
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<ThemeCatalogCategory>("all");
+  const [mode, setMode] = useState<ThemeCatalogMode>("all");
+  const [bundleIndex, setBundleIndex] = useState(0);
+  const [wallpaperMode, setWallpaperMode] = useState<"full" | "crop" | "manual">("full");
+  const [wallpaperZoom, setWallpaperZoom] = useState(100);
+  const [wallpaperPositionX, setWallpaperPositionX] = useState(50);
+  const [wallpaperPositionY, setWallpaperPositionY] = useState(50);
+  const [wallpaperFrame, setWallpaperFrame] = useState<"2 / 3" | "9 / 16" | "1 / 1">("2 / 3");
+  const railRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    setTheme(readStoredAppTheme() ?? "neutral");
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -923,8 +1159,60 @@ export function ThemeShopSurfaceView() {
   }
 
   const selectedOption = appThemeOptions.find((option) => option.value === theme) ?? appThemeOptions[0];
-  const serverThemeMap = new Map(catalog?.themes.map((item) => [item.id, item]) ?? []);
+  const catalogThemes = catalog?.themes ?? appThemeOptions.map((option) => ({
+    id: option.value,
+    title: option.title,
+    description: option.description,
+    price_cents: Math.round(option.price * 100),
+    is_free: ["neutral", "sepia", "ink", "black"].includes(option.value),
+    is_owned: ["neutral", "sepia", "ink", "black"].includes(option.value),
+    preview_available: true,
+  }));
+  const serverThemeMap = new Map(catalogThemes.map((item) => [item.id, item]));
+  const collectionGroups = themeCatalogCategories
+    .filter((item): item is { value: Exclude<ThemeCatalogCategory, "all">; label: string } => item.value !== "all" && (category === "all" || category === item.value))
+    .map((collection) => ({
+      ...collection,
+      description: themeCatalogCollectionDescriptions[collection.value],
+      themes: catalogThemes.filter((item) => matchesThemeCatalogFilters(item, query, collection.value, mode)),
+    }))
+    .filter((collection) => collection.themes.length > 0);
+  const fallbackBundles = themeBundles.map((bundle) => ({
+    id: bundle.id,
+    title: bundle.title,
+    description: bundle.description,
+    theme_ids: bundle.themeValues,
+    price_cents: Math.round(bundle.bundlePrice * 100),
+    is_owned: bundle.themeValues.every((value) => serverThemeMap.get(value)?.is_owned),
+  }));
+  const catalogBundles = catalog?.bundles ?? fallbackBundles;
+  const activeBundleIndex = catalogBundles.length ? Math.min(bundleIndex, catalogBundles.length - 1) : 0;
+  const activeBundle = catalogBundles[activeBundleIndex];
   const formatPrice = (price: number) => `$${price.toFixed(2)}`;
+
+  function moveBundle(direction: number) {
+    if (!catalogBundles.length) {
+      return;
+    }
+    setBundleIndex((current) => (current + direction + catalogBundles.length) % catalogBundles.length);
+  }
+
+  function scrollRail(collection: string, direction: number) {
+    railRefs.current[collection]?.scrollBy({ left: direction * 280, behavior: "smooth" });
+  }
+
+  function themeStatus(item: (typeof catalogThemes)[number]) {
+    if (item.is_free) {
+      return "Included";
+    }
+    if (item.is_owned) {
+      return "Owned";
+    }
+    if (catalog?.mode === "hosted") {
+      return "Preview only";
+    }
+    return formatPrice(item.price_cents / 100);
+  }
 
   return (
     <RoutePage
@@ -945,7 +1233,7 @@ export function ThemeShopSurfaceView() {
       {error ? <section className="card feature-card">{error}</section> : null}
       {!data && !error ? <LoadingSkeleton label="Loading theme shop" /> : null}
       {data ? (
-        <section className="card feature-card theme-shop-card">
+      <section className="card feature-card theme-shop-card">
           <div className="card-topline">
             <div>
               <span className="eyebrow">Your current preview</span>
@@ -954,61 +1242,253 @@ export function ThemeShopSurfaceView() {
             <span className="pill">Live preview</span>
           </div>
           <p className="global-theme-intro">{selectedOption.description}</p>
-          <div className="theme-bundle-grid" aria-label="Theme bundles">
-            {themeBundles.map((bundle) => {
-              const individualTotal = bundle.themeValues.length * INDIVIDUAL_THEME_PRICE;
-              const savings = individualTotal - bundle.bundlePrice;
-              return (
-                <article key={bundle.id} className="theme-bundle-card" data-inventory-id="theme-shop.bundle-card">
-                  <div className="card-topline">
-                    <div>
-                      <span className="eyebrow">Collection offer</span>
-                      <h3>{bundle.title}</h3>
-                    </div>
-                    <span className="pill">Save {formatPrice(savings)}</span>
-                  </div>
-                  <p>{bundle.description}</p>
-                  <div className="theme-bundle-themes">
-                    {bundle.themeValues.map((value) => <span key={value}>{appThemeLabels[value]}</span>)}
-                  </div>
-                  <div className="theme-bundle-price-row">
-                    <strong>{formatPrice(bundle.bundlePrice)}</strong>
-                    <span>{formatPrice(individualTotal)} individually</span>
-                  </div>
-                  <button className="button button-secondary" type="button" onClick={() => selectTheme(bundle.themeValues[0])}>
-                    Preview collection
-                  </button>
-                </article>
-              );
-            })}
+          <div className="theme-shop-store-controls" data-inventory-id="theme-shop.store-controls">
+            <label className="theme-shop-search" data-inventory-id="theme-shop.search">
+              <span>Search themes</span>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search fruit, cities, consoles..."
+                type="search"
+              />
+            </label>
+            <div className="theme-shop-category-nav" role="tablist" aria-label="Theme collections" data-inventory-id="theme-shop.category-nav">
+              {themeCatalogCategories.map((item) => (
+                <button
+                  key={item.value}
+                  className={`theme-shop-category-tab ${category === item.value ? "is-active" : ""}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={category === item.value}
+                  onClick={() => setCategory(item.value)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <div className="theme-shop-mode-nav" role="tablist" aria-label="Theme modes" data-inventory-id="theme-shop.mode-tabs">
+              {themeCatalogModes.map((item) => (
+                <button
+                  key={item.value}
+                  className={`theme-shop-filter ${mode === item.value ? "is-active" : ""}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === item.value}
+                  onClick={() => setMode(item.value)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="theme-shop-grid" role="radiogroup" aria-label="All global app themes">
-            {appThemeOptions.map((option) => (
+          <details className="theme-shop-preview-controls" open data-inventory-id="theme-shop.preview-tuning">
+            <summary>
+              <span className="theme-shop-preview-controls-title">
+                <span className="eyebrow">Developer preview</span>
+                <strong>Wallpaper frame tuning</strong>
+                <span>Adjust every illustrated tile before choosing the final presentation.</span>
+              </span>
+              <span className="pill">Live controls</span>
+            </summary>
+            <div className="theme-shop-preview-controls-body">
+              <div className="theme-shop-preview-control">
+                <span className="theme-shop-preview-control-label">Image treatment</span>
+                <div className="theme-shop-preview-toggle-group" role="group" aria-label="Wallpaper image treatment">
+                  {[
+                    ["full", "Full image"],
+                    ["crop", "Cover crop"],
+                    ["manual", "Manual zoom"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      className={`theme-shop-preview-toggle ${wallpaperMode === value ? "is-active" : ""}`}
+                      type="button"
+                      aria-pressed={wallpaperMode === value}
+                      onClick={() => setWallpaperMode(value as "full" | "crop" | "manual")}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="theme-shop-preview-control">
+                <span className="theme-shop-preview-control-label">Frame ratio</span>
+                <div className="theme-shop-preview-toggle-group" role="group" aria-label="Wallpaper frame ratio">
+                  {[
+                    ["2 / 3", "Tall"],
+                    ["9 / 16", "Wallpaper"],
+                    ["1 / 1", "Square"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      className={`theme-shop-preview-toggle ${wallpaperFrame === value ? "is-active" : ""}`}
+                      type="button"
+                      aria-pressed={wallpaperFrame === value}
+                      onClick={() => setWallpaperFrame(value as "2 / 3" | "9 / 16" | "1 / 1")}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label className="theme-shop-preview-slider">
+                <span><span>Zoom</span><output>{wallpaperZoom}%</output></span>
+                <input type="range" min="50" max="180" step="5" value={wallpaperZoom} onChange={(event) => setWallpaperZoom(Number(event.target.value))} />
+              </label>
+              <label className="theme-shop-preview-slider">
+                <span><span>Horizontal position</span><output>{wallpaperPositionX}%</output></span>
+                <input type="range" min="0" max="100" step="1" value={wallpaperPositionX} onChange={(event) => setWallpaperPositionX(Number(event.target.value))} />
+              </label>
+              <label className="theme-shop-preview-slider">
+                <span><span>Vertical position</span><output>{wallpaperPositionY}%</output></span>
+                <input type="range" min="0" max="100" step="1" value={wallpaperPositionY} onChange={(event) => setWallpaperPositionY(Number(event.target.value))} />
+              </label>
               <button
-                key={option.value}
+                className="button button-secondary theme-shop-preview-reset"
                 type="button"
-                className={`global-theme-option theme-shop-option ${theme === option.value ? "is-selected" : ""}`}
-                onClick={() => selectTheme(option.value)}
-                role="radio"
-                aria-checked={theme === option.value}
+                onClick={() => {
+                  setWallpaperMode("full");
+                  setWallpaperZoom(100);
+                  setWallpaperPositionX(50);
+                  setWallpaperPositionY(50);
+                  setWallpaperFrame("2 / 3");
+                }}
               >
-                <span className="global-theme-swatch" data-theme={option.value} aria-hidden="true" />
-                <span className="global-theme-option-copy">
-                  <strong>{option.title}</strong>
-                  <span>{option.description}</span>
-                  <span>
-                    {serverThemeMap.get(option.value)
-                      ? serverThemeMap.get(option.value)?.is_owned
-                        ? "Owned"
-                        : catalog?.mode === "hosted"
-                          ? "Preview only"
-                          : formatPrice((serverThemeMap.get(option.value)?.price_cents ?? 0) / 100)
-                      : formatPrice(option.price)}
-                  </span>
-                </span>
+                Reset preview controls
               </button>
-            ))}
+            </div>
+          </details>
+          <div className="theme-bundle-carousel" data-inventory-id="theme-shop.collections-carousel" aria-roledescription="carousel" aria-label="All theme collections">
+            <div className="theme-bundle-carousel-heading">
+              <div>
+                <span className="eyebrow">Browse by collection</span>
+                <h3>All Collections</h3>
+              </div>
+              {catalogBundles.length ? <span className="small-copy">Collection {activeBundleIndex + 1} of {catalogBundles.length}</span> : null}
+            </div>
+            {activeBundle ? (
+              <>
+                <div className="theme-bundle-carousel-controls" data-inventory-id="theme-shop.collection-arrows">
+                  <button className="theme-bundle-arrow" type="button" onClick={() => moveBundle(-1)} aria-label="Previous collection">
+                    <span aria-hidden="true">←</span>
+                  </button>
+                  <button className="theme-bundle-arrow" type="button" onClick={() => moveBundle(1)} aria-label="Next collection">
+                    <span aria-hidden="true">→</span>
+                  </button>
+                </div>
+                <div className="theme-bundle-slide" data-inventory-id="theme-shop.collection-slide" role="group" aria-roledescription="slide" aria-label={`${activeBundleIndex + 1} of ${catalogBundles.length}: ${activeBundle.title}`}>
+                  <article className="theme-bundle-card" data-inventory-id="theme-shop.bundle-card">
+                    <div className="card-topline">
+                      <div>
+                        <span className="eyebrow">Collection offer</span>
+                        <h3>{activeBundle.title}</h3>
+                      </div>
+                      <span className="pill">Save {formatPrice(activeBundle.theme_ids.length * INDIVIDUAL_THEME_PRICE - activeBundle.price_cents / 100)}</span>
+                    </div>
+                    <p>{activeBundle.description}</p>
+                    <div className="theme-bundle-themes">
+                      {activeBundle.theme_ids.map((value) => <span key={value}>{serverThemeMap.get(value)?.title ?? appThemeLabels[value as AppTheme] ?? value}</span>)}
+                    </div>
+                    <div className="theme-bundle-price-row">
+                      <strong>{formatPrice(activeBundle.price_cents / 100)}</strong>
+                      <span>{formatPrice(activeBundle.theme_ids.length * INDIVIDUAL_THEME_PRICE)} individually</span>
+                    </div>
+                    <button className="button button-secondary" type="button" onClick={() => {
+                      const firstTheme = activeBundle.theme_ids.find((value) => appThemeOptions.some((option) => option.value === value));
+                      if (firstTheme) {
+                        selectTheme(firstTheme as AppTheme);
+                      }
+                      setQuery("");
+                      setCategory("all");
+                      setMode("all");
+                    }}>
+                      Preview collection
+                    </button>
+                  </article>
+                </div>
+                <div className="theme-bundle-dots" data-inventory-id="theme-shop.collection-dots" role="tablist" aria-label="Choose a theme collection">
+                  {catalogBundles.map((bundle, index) => (
+                    <button
+                      key={bundle.id}
+                      className={`theme-bundle-dot ${index === activeBundleIndex ? "is-active" : ""}`}
+                      type="button"
+                      role="tab"
+                      aria-selected={index === activeBundleIndex}
+                      aria-label={`Show ${bundle.title}`}
+                      onClick={() => setBundleIndex(index)}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : <p className="small-copy">No collections are available yet.</p>}
           </div>
+          <section className="theme-shop-collections" data-inventory-id="theme-shop.catalog-card">
+            <div className="theme-shop-catalog-heading">
+              <div>
+                <span className="eyebrow">Browse themes</span>
+                <h3>{category === "all" ? "All Collections" : themeCatalogCategories.find((item) => item.value === category)?.label}</h3>
+              </div>
+              <span className="small-copy">{collectionGroups.reduce((total, collection) => total + collection.themes.length, 0)} themes</span>
+            </div>
+            {collectionGroups.length ? collectionGroups.map((collection) => (
+              <section key={collection.value} className="theme-shop-rail" data-inventory-id="theme-shop.collection-rail">
+                <div className="theme-shop-rail-heading">
+                  <div>
+                    <h4>{collection.label}</h4>
+                    <p>{collection.description}</p>
+                  </div>
+                  <button className="theme-shop-rail-arrow" type="button" onClick={() => scrollRail(collection.value, 1)} aria-label={`Next ${collection.label} themes`}>
+                    <span aria-hidden="true">→</span>
+                  </button>
+                </div>
+                <div className="theme-shop-rail-track" ref={(element) => { railRefs.current[collection.value] = element; }} data-inventory-id="theme-shop.catalog-grid" aria-label={`${collection.label} themes`}>
+                  {collection.themes.map((item) => {
+                  const knownOption = appThemeOptions.find((option) => option.value === item.id);
+                  const isSelected = theme === item.id;
+                  const itemMode = getThemeCatalogMode(item.id);
+                  const itemCategory = getThemeCatalogCategory(item.id, item.is_free);
+                  const wallpaperPath = getThemeWallpaperPath(item.id);
+                  const wallpaperStyle = wallpaperPath ? {
+                    aspectRatio: wallpaperFrame,
+                    backgroundImage: `url(${wallpaperPath})`,
+                    backgroundPosition: `${wallpaperPositionX}% ${wallpaperPositionY}%`,
+                    backgroundSize: wallpaperMode === "full" ? "contain" : wallpaperMode === "crop" ? "cover" : `${wallpaperZoom}% auto`,
+                  } : undefined;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`theme-shop-product-card ${isSelected ? "is-selected" : ""}`}
+                      onClick={() => knownOption && item.preview_available ? selectTheme(knownOption.value) : undefined}
+                      aria-pressed={isSelected}
+                      disabled={!knownOption || !item.preview_available}
+                    >
+                      <span
+                        className={`theme-shop-product-swatch global-theme-swatch ${wallpaperPath ? "theme-shop-product-swatch--wallpaper" : ""}`}
+                        data-theme={item.id}
+                        style={wallpaperStyle}
+                        aria-hidden="true"
+                      />
+                      <span className="theme-shop-product-copy">
+                        <span className="theme-shop-option-meta"><span>{themeCatalogCategories.find((entry) => entry.value === itemCategory)?.label}</span>{itemMode ? <span>{itemMode === "daylight" ? "Daylight" : "Night"}</span> : null}</span>
+                        <strong>{item.title}</strong>
+                        <span>{item.description}</span>
+                        <span className="theme-shop-product-price">{themeStatus(item)}</span>
+                      </span>
+                    </button>
+                  );
+                  })}
+                </div>
+              </section>
+            )) : (
+              <div className="theme-shop-empty" data-inventory-id="theme-shop.empty-state">
+                <strong>No themes match those filters.</strong>
+                <button className="button button-secondary" type="button" onClick={() => { setQuery(""); setCategory("all"); setMode("all"); }}>
+                  Clear filters
+                </button>
+              </div>
+            )}
+          </section>
           <div className="global-theme-footer">
             <p className="small-copy">
               Previewing <strong>{selectedOption.title}</strong>. The preview applies immediately on this device.
@@ -1122,8 +1602,15 @@ export function SettingsSurfaceView() {
   const [data, setData] = useState<SettingsSurfaceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [theme, setTheme] = useState<AppTheme>(() => readStoredAppTheme() ?? "neutral");
-  const [readerMode, setReaderMode] = useState("sentence");
+  const [theme, setTheme] = useState<AppTheme>("neutral");
+  const [gridEnabled, setGridEnabled] = useState(DEFAULT_APP_THEME_GRID_ENABLED);
+  const [patternOpacity, setPatternOpacity] = useState(DEFAULT_APP_THEME_PATTERN_OPACITY);
+
+  useEffect(() => {
+    setTheme(readStoredAppTheme() ?? "neutral");
+    setGridEnabled(readStoredAppThemeGridEnabled() ?? DEFAULT_APP_THEME_GRID_ENABLED);
+    setPatternOpacity(readStoredAppThemePatternOpacity() ?? DEFAULT_APP_THEME_PATTERN_OPACITY);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -1134,11 +1621,11 @@ export function SettingsSurfaceView() {
         }
         setData(result);
         const nextTheme = resolveAppThemeFromSettings(result.entries);
-        const modeEntry = result.entries.find((entry) => entry.key === "readerMode");
+        const nextGridEnabled = resolveAppThemeGridEnabledFromSettings(result.entries);
+        const nextPatternOpacity = resolveAppThemePatternOpacityFromSettings(result.entries);
         setTheme(nextTheme);
-        if (modeEntry) {
-          setReaderMode(modeEntry.value);
-        }
+        setGridEnabled(nextGridEnabled ?? readStoredAppThemeGridEnabled() ?? DEFAULT_APP_THEME_GRID_ENABLED);
+        setPatternOpacity(nextPatternOpacity ?? readStoredAppThemePatternOpacity() ?? DEFAULT_APP_THEME_PATTERN_OPACITY);
       })
       .catch((err) => {
         if (active) {
@@ -1156,12 +1643,15 @@ export function SettingsSurfaceView() {
       const payload: SettingsUpdateRequest = {
         entries: [
           { key: "theme", value: theme },
-          { key: "readerMode", value: readerMode },
+          { key: "themeGridEnabled", value: gridEnabled ? "on" : "off" },
+          { key: "themePatternOpacity", value: String(patternOpacity) },
         ],
       };
       const result = await putJson<SettingsSurfaceResponse>("/settings", payload);
       setData(result);
       persistAppTheme(theme);
+      persistAppThemeGridEnabled(gridEnabled);
+      persistAppThemePatternOpacity(patternOpacity);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save settings.");
@@ -1183,37 +1673,63 @@ export function SettingsSurfaceView() {
       metrics={[
         { label: "Profile", value: authenticatedUser ? "Hosted account" : authConfigured ? "Sign-in available" : "Local first" },
         { label: "Theme", value: data ? appThemeLabels[theme] : "Loading" },
-        { label: "Reader mode", value: data ? readerMode : "Loading" },
       ]}
     >
       {error ? <section className="card feature-card">{error}</section> : null}
       {!data && !error ? <LoadingSkeleton label="Loading settings" /> : null}
       <section className="card feature-card">
-        <h2>Preferences</h2>
-        {data ? <div className="surface-form">
-          <label>
-            App theme
-            <select className="text-input" value={theme} onChange={(event) => setTheme(resolveAppTheme(event.target.value))}>
-              {appThemeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Reader mode
-            <select className="text-input" value={readerMode} onChange={(event) => setReaderMode(event.target.value)}>
-              <option value="sentence">Sentence</option>
-              <option value="page">Page</option>
-              <option value="token">Token</option>
-            </select>
-          </label>
-          <button className="button button-primary" type="button" onClick={() => void saveSettings()} disabled={saving}>
-            {saving ? "Saving..." : "Save settings"}
-          </button>
-        </div> : null}
-        {data ? <p className="small-copy">Stored settings: {data.entries.length}</p> : null}
+          <h2>Preferences</h2>
+          {data ? <div className="surface-form">
+            <label>
+              App theme
+              <select className="text-input" value={theme} onChange={(event) => setTheme(resolveAppTheme(event.target.value))}>
+                {appThemeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="theme-opacity-slider">
+              <span className="theme-opacity-slider-head">
+                <span>Theme artwork opacity</span>
+                <strong>{patternOpacity}%</strong>
+              </span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value={patternOpacity}
+                onChange={(event) => {
+                  const nextOpacity = Number(event.target.value);
+                  setPatternOpacity(nextOpacity);
+                  persistAppThemePatternOpacity(nextOpacity);
+                }}
+                aria-label="Theme artwork opacity"
+              />
+              <span className="small-copy">Controls the canvas artwork only. Cards and reading text stay fully opaque.</span>
+            </label>
+            <label className="theme-grid-toggle">
+              <input
+                type="checkbox"
+                checked={gridEnabled}
+                onChange={(event) => {
+                  const nextGridEnabled = event.target.checked;
+                  setGridEnabled(nextGridEnabled);
+                  persistAppThemeGridEnabled(nextGridEnabled);
+                }}
+              />
+              <span>
+                <strong>Show canvas grid</strong>
+                <small>Toggle the fixed background grid without changing wallpaper, gradients, or cards.</small>
+              </span>
+            </label>
+            <button className="button button-primary" type="button" onClick={() => void saveSettings()} disabled={saving}>
+              {saving ? "Saving..." : "Save settings"}
+            </button>
+          </div> : null}
+          {data ? <p className="small-copy">Stored settings: {data.entries.length}</p> : null}
       </section>
       <Link className="card feature-card settings-roadmap-card" href="/roadmap" data-inventory-id="settings.roadmap-card">
         <div className="card-topline">
@@ -1233,6 +1749,7 @@ export function SettingsSurfaceView() {
 export function StudySurfaceView() {
   const [data, setData] = useState<StudySurfaceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedStudyItemKey, setSelectedStudyItemKey] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -1240,6 +1757,7 @@ export function StudySurfaceView() {
       .then((result) => {
         if (active) {
           setData(result);
+          setSelectedStudyItemKey(null);
         }
       })
       .catch((err) => {
@@ -1251,6 +1769,19 @@ export function StudySurfaceView() {
       active = false;
     };
   }, []);
+
+  function getStudyItemKey(
+    item: NonNullable<StudySurfaceResponse["study_groups"]>[number]["items"][number],
+  ): string {
+    return [
+      item.language_code,
+      item.lemma,
+      item.source_book_id,
+      item.source_page_number,
+      item.source_sentence_order,
+      item.source_token_order,
+    ].join(":");
+  }
 
   return (
     <RoutePage
@@ -1264,28 +1795,257 @@ export function StudySurfaceView() {
       ]}
       metrics={[
         { label: "Queue", value: data ? String(data.queue_size) : "Loading" },
-        { label: "State", value: error ? "Error" : data ? "Loaded" : "Loading", detail: "Derived from vocabulary progress" },
+        { label: "Saved", value: data ? String(data.study_item_count) : "Loading", detail: "Grouped by language" },
       ]}
     >
       {error ? <section className="card feature-card">{error}</section> : null}
       {!data && !error ? <LoadingSkeleton label="Loading study queue" /> : null}
       {data ? (
-        <section className="card feature-card">
-          <h2>Queued items</h2>
-          <div className="surface-list">
-            {data.queued_items.map((item) => (
-              <article key={`${item.language_code}-${item.lemma}`} className="surface-list-item">
-                <div className="card-topline">
-                  <strong>{item.lemma}</strong>
-                  <span className="muted">{item.state}</span>
+        <>
+          <section className="card feature-card" data-inventory-id="study.programs-card">
+            <h2>Program introduction</h2>
+            <p className="small-copy">
+              Curated level vocabulary from the active language programs. Level 1 starts from the highest-value frequency slice.
+            </p>
+            {data.study_programs.length ? (
+              <div className="study-program-groups">
+                {data.study_programs.map((program) => (
+                  <details key={program.program_code} className="study-program-group" data-inventory-id="study.program-group" open>
+                    <summary className="study-program-group-summary">
+                      <div>
+                        <span className="eyebrow">{program.language_label}</span>
+                        <h3>{program.program_label}</h3>
+                      </div>
+                      <span className="pill">{program.program_source_label}</span>
+                    </summary>
+                    <div className="study-program-levels">
+                      {program.levels.map((level, levelIndex) => {
+                        const practiceHref = `/study/practice?${new URLSearchParams({
+                          mode: "program",
+                          language: program.language_code,
+                          program: program.program_code,
+                          level: level.level_code,
+                        }).toString()}`;
+
+                        return (
+                          <details
+                            key={`${program.program_code}-${level.level_code}`}
+                            className="study-program-level"
+                            data-inventory-id="study.program-level"
+                            open={levelIndex === 0}
+                          >
+                            <summary className="study-program-level-summary">
+                              <div>
+                                <span className="eyebrow">{level.level_label}</span>
+                                <h4>{level.introduction_note}</h4>
+                              </div>
+                              <div className="study-program-level-summary-actions">
+                                <span className="pill">{level.item_count} terms</span>
+                                <Link
+                                  className="button button-secondary button-compact"
+                                  href={practiceHref}
+                                  data-inventory-id="study.program-practice-link-summary"
+                                  onClick={(event: MouseEvent<HTMLAnchorElement>) => event.stopPropagation()}
+                                >
+                                  Practice this level
+                                </Link>
+                              </div>
+                            </summary>
+                            <div className="study-program-items">
+                              {level.items.map((item) => {
+                                const pronunciation = item.pronunciation ?? "-";
+                                const englishMeaning = item.definition_short ?? "-";
+
+                                return (
+                                  <article
+                                    key={`${program.program_code}-${level.level_code}-${item.lemma}`}
+                                    className="study-program-item"
+                                    data-inventory-id="study.program-item"
+                                  >
+                                    <div className="study-program-item-row" dir="auto">
+                                      <span className="study-program-item-term" lang={item.language_code}>
+                                        {item.display_form}
+                                      </span>
+                                      <span className="study-program-item-pronunciation">({pronunciation})</span>
+                                      <span className="study-program-item-meaning">{englishMeaning}</span>
+                                    </div>
+                                    <div className="study-program-item-meta">
+                                      <span className="eyebrow">{item.progress_state}</span>
+                                      <span className="muted">
+                                        {item.frequency_rank != null ? `#${item.frequency_rank}` : item.proficiency_level ?? "-"}
+                                      </span>
+                                    </div>
+                                  </article>
+                                );
+                              })}
+                            </div>
+                          </details>
+                        );
+                      })}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            ) : (
+              <p className="small-copy">No curated program vocabulary is available yet for the imported language packs.</p>
+            )}
+          </section>
+          <details className="card feature-card study-queue-card" data-inventory-id="study.queue-card" open>
+            <summary className="study-queue-card-summary" data-inventory-id="study.queue-card-toggle">
+              <div>
+                <h2>Due items</h2>
+                <p className="small-copy">Tap a language card for review pills and timing.</p>
+              </div>
+            </summary>
+            <DueReviewChart items={data.queued_items} />
+            <StudyDueLanguageGroups items={data.queued_items} />
+            <div className="study-queue-actions">
+              <Link className="button button-secondary" href="/study/practice?mode=review" data-inventory-id="study.review-practice-link">
+                Start review session
+              </Link>
+            </div>
+          </details>
+      <details className="card feature-card study-saved-vocabulary-card" data-inventory-id="study.saved-vocabulary-card" open>
+        <summary className="study-saved-vocabulary-card-summary" data-inventory-id="study.saved-vocabulary-card-summary">
+          <div>
+            <h2>Saved vocabulary</h2>
+            <p className="small-copy">Language-grouped terms saved from the reader with source metadata.</p>
+          </div>
+        </summary>
+        {data.study_groups.length ? (
+          <div className="study-language-groups">
+            {data.study_groups.map((group) => (
+              <details key={group.language_code} className="study-language-group" data-inventory-id="study.language-group">
+                <summary className="study-language-group-summary">
+                  <div>
+                    <span className="eyebrow">{group.language_label}</span>
+                    <h3>{group.item_count} terms</h3>
+                  </div>
+                  <span className="pill">{group.language_label}</span>
+                </summary>
+                <div className="surface-list">
+                {group.items.map((item) => {
+                  const itemKey = getStudyItemKey(item);
+                  const expanded = selectedStudyItemKey === itemKey;
+                    const pronunciation = item.pronunciation ?? item.romanization ?? "—";
+                    const englishMeaning = item.definition_short ?? "—";
+
+                    return (
+                      <article key={itemKey} className="surface-list-item study-saved-item" data-inventory-id="study.saved-item">
+                        <button
+                          type="button"
+                          className={`study-saved-item-toggle ${expanded ? "is-expanded" : ""}`}
+                          onClick={() => {
+                            setSelectedStudyItemKey((current) => (current === itemKey ? null : itemKey));
+                          }}
+                          aria-expanded={expanded}
+                          aria-controls={`study-item-details-${itemKey}`}
+                          data-inventory-id="study.saved-item-toggle"
+                        >
+                        <div className="study-saved-item-row" dir="auto">
+                          <span className="study-saved-item-term" lang={item.language_code}>
+                            {item.display_form}
+                          </span>
+                          <span className="study-saved-item-pronunciation">({pronunciation})</span>
+                          <span className="study-saved-item-meaning">{englishMeaning}</span>
+                        </div>
+                      </button>
+                      {expanded ? (
+                          <div
+                            id={`study-item-details-${itemKey}`}
+                            className="study-saved-item-details"
+                            data-inventory-id="study.saved-item-details"
+                          >
+                            <div className="study-metadata-grid">
+                              <div>
+                                <span className="eyebrow">Display form</span>
+                                <strong>{item.display_form}</strong>
+                              </div>
+                              <div>
+                                <span className="eyebrow">Lemma</span>
+                                <strong>{item.lemma}</strong>
+                              </div>
+                              <div>
+                                <span className="eyebrow">English meaning</span>
+                                <strong>{englishMeaning}</strong>
+                              </div>
+                              <div>
+                                <span className="eyebrow">Language</span>
+                                <strong>{item.language_label}</strong>
+                              </div>
+                              <div>
+                                <span className="eyebrow">Book</span>
+                                <strong>{item.source_book_title ?? item.source_book_id}</strong>
+                              </div>
+                              <div>
+                                <span className="eyebrow">Book ID</span>
+                                <strong>{item.source_book_id}</strong>
+                              </div>
+                              <div>
+                                <span className="eyebrow">Page</span>
+                                <strong>{item.source_page_number}</strong>
+                              </div>
+                              <div>
+                                <span className="eyebrow">Sentence</span>
+                                <strong>{item.source_sentence_order}</strong>
+                              </div>
+                              <div>
+                                <span className="eyebrow">Token</span>
+                                <strong>{item.source_token_order}</strong>
+                              </div>
+                              <div>
+                                <span className="eyebrow">Source form</span>
+                                <strong>{item.source_surface_form}</strong>
+                              </div>
+                              <div>
+                                <span className="eyebrow">Pronunciation</span>
+                                <strong>{item.pronunciation ?? "—"}</strong>
+                              </div>
+                              <div>
+                                <span className="eyebrow">Romanization</span>
+                                <strong>{item.romanization ?? "—"}</strong>
+                              </div>
+                              <div>
+                                <span className="eyebrow">Proficiency</span>
+                                <strong>{item.proficiency_level ?? "—"}</strong>
+                              </div>
+                              <div>
+                                <span className="eyebrow">Saved count</span>
+                                <strong>{item.click_count}</strong>
+                              </div>
+                              <div>
+                                <span className="eyebrow">First seen</span>
+                                <strong>{formatDateTime(item.first_seen_at)}</strong>
+                              </div>
+                              <div>
+                                <span className="eyebrow">Last seen</span>
+                                <strong>{formatDateTime(item.last_seen_at)}</strong>
+                              </div>
+                            </div>
+                            <div>
+                              <span className="eyebrow">Source sentence</span>
+                              <p className="small-copy">{item.source_sentence_text}</p>
+                            </div>
+                            <div>
+                              <span className="eyebrow">Current note</span>
+                              <p className="small-copy">
+                                This is the full metadata dump for now so we can decide which fields belong in the final study view.
+                              </p>
+                            </div>
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })}
                 </div>
-                <p className="small-copy">
-                  Raw {item.raw_exposures} - Weighted {item.weighted_exposure.toFixed(1)} - Pages {item.unique_pages} - Books {item.unique_books}
-                </p>
-              </article>
+              </details>
             ))}
           </div>
-        </section>
+            ) : (
+              <p className="small-copy">Clicked tokens will appear here with the page and sentence that introduced them.</p>
+            )}
+      </details>
+        </>
       ) : null}
     </RoutePage>
   );

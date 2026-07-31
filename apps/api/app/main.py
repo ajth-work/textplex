@@ -14,7 +14,9 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from app.core.paths import get_data_root, get_repo_root, resolve_books_root, resolve_user_data_root
 from app.schemas.auth import AuthMeResponse, HostedProfileSurfaceResponse, HostedProfileUpdateRequest
-from app.schemas.books import BookExtractionRequest, BookImportRequest, BookPageManifest, BookReaderPageResponse, BookRecord, PageExtractionArtifact, TextImportRequest, TextParseRequest
+from app.schemas.books import BookExtractionRequest, BookImportRequest, BookPageManifest, BookReaderPageResponse, BookRecord, PageExtractionArtifact, SentenceTranslationResponse, TextImportRequest, TextParseRequest
+from app.services.reader_capabilities import get_reader_capabilities
+from app.schemas.google_translate import GoogleTranslateUsageSummary
 from app.schemas.learning import (
     LearningProfileSummary,
     LearningSyncResponse,
@@ -22,9 +24,16 @@ from app.schemas.learning import (
     PageReadRecord,
     ReadingSessionCreateRequest,
     ReadingSessionRecord,
+    VocabularyAssessmentReviewRequest,
+    VocabularyAssessmentStateRecord,
+    StudyVocabularyItemCreateRequest,
+    StudyVocabularyItemRecord,
     SentenceReadCreateRequest,
     SentenceReadRecord,
+    WordInteractionCreateRequest,
+    WordInteractionRecord,
 )
+from app.schemas.russian_program import RussianProgramResponse
 from app.schemas.lexicon import LexiconImportRequest, LexiconImportSummary, LexiconLookupResponse
 from app.schemas.surfaces import ActivitySurfaceResponse, BookAnalysisSurfaceResponse, ImportSurfaceResponse, ProgressSurfaceResponse, ProfileSurfaceResponse, SearchSurfaceResponse, SettingEntry, SettingsSurfaceResponse, SettingsUpdateRequest, StudySurfaceResponse
 from app.services.book_extraction import (
@@ -32,16 +41,20 @@ from app.services.book_extraction import (
     import_text_into_book,
     load_page_artifact,
     parse_text_into_page_artifact,
+    preload_book_sentence_translations,
     recover_book_extraction_result,
+    translate_page_sentence,
 )
 from app.schemas.migration import ProfileMigrationRequest, ProfileMigrationResponse
 from app.schemas.themes import ThemeCatalogResponse, ThemeCheckoutRequest, ThemeCheckoutResponse, ThemeEntitlementResponse
 from app.services.book_registry import delete_book_from_path, import_book_from_path, load_registry, save_registry
 from app.services.auth import AuthenticatedUserContext, get_authenticated_user_context, get_current_user, get_hosted_profile, get_hosted_settings, get_optional_user_context, get_public_user_context, supabase_is_configured, update_hosted_profile, update_hosted_settings
-from app.services.learning_profile import create_reading_session, get_learning_profile_summary, record_page_read, record_sentence_read
+from app.services.google_translate_usage import get_google_translate_usage_summary
+from app.services.learning_profile import create_reading_session, get_learning_profile_summary, record_page_read, record_sentence_read, record_study_vocabulary_item, record_vocabulary_assessment_review, record_word_interaction
 from app.services.learning_sync import sync_learning_events
 from app.services.commerce import apply_sandbox_event, create_checkout_session, get_entitlements, verify_sandbox_signature
 from app.services.lexicon import import_lexicon_from_source, lookup_lexicon_entry
+from app.services.russian_program import get_russian_program
 from app.services.profile_migration import apply_profile_migration, preview_profile_migration
 from app.services.themes import get_theme_catalog, validate_theme_settings
 from app.services.surfaces import get_activity_surface, get_book_analysis_surface, get_import_surface, get_progress_surface, get_profile_surface, get_study_surface, load_settings_surface, search_surfaces, update_settings_surface
@@ -189,7 +202,13 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _extract_and_persist_book(book: BookRecord, *, page_start: int, page_count: int | None) -> BookRecord:
+def _extract_and_persist_book(
+    book: BookRecord,
+    *,
+    page_start: int,
+    page_count: int | None,
+    translation_mode: str = "off",
+) -> BookRecord:
     extraction_path, extracted_page_count = extract_book_text(
         book=book,
         page_start=page_start,
@@ -198,6 +217,13 @@ def _extract_and_persist_book(book: BookRecord, *, page_start: int, page_count: 
         ocr_provider=book.ocr_provider,
         data_root=_books_root(),
     )
+    if translation_mode == "preload":
+        preload_book_sentence_translations(
+            book=book,
+            page_start=page_start,
+            page_count=page_count if page_count is not None else extracted_page_count,
+            data_root=_books_root(),
+        )
 
     book.extraction_status = "complete"
     book.extracted_page_count = extracted_page_count
@@ -257,7 +283,7 @@ def _fail_book_extraction(book: BookRecord) -> None:
     _persist_book(book)
 
 
-def _start_background_extraction(book: BookRecord, *, page_start: int, page_count: int | None) -> None:
+def _start_background_extraction(book: BookRecord, *, page_start: int, page_count: int | None, translation_mode: str = "off") -> None:
     _initialize_book_extraction(book, page_count=page_count)
     _persist_book(book)
 
@@ -280,6 +306,13 @@ def _start_background_extraction(book: BookRecord, *, page_start: int, page_coun
                 data_root=_books_root(),
                 progress_callback=progress_callback,
             )
+            if translation_mode == "preload":
+                preload_book_sentence_translations(
+                    book=book,
+                    page_start=page_start,
+                    page_count=page_count if page_count is not None else extracted_page_count,
+                    data_root=_books_root(),
+                )
         except Exception:
             _fail_book_extraction(book)
             return
@@ -358,6 +391,7 @@ def import_text(
             language_code=payload.language_code,
             title=payload.title,
             author=payload.author,
+            translation_mode=payload.translation_mode,
             data_root=_books_root(),
             owner_id=context.user.id if context else None,
         )
@@ -413,6 +447,7 @@ def import_book(
             book,
             page_start=payload.page_start,
             page_count=payload.page_count,
+            translation_mode=payload.translation_mode,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -429,6 +464,7 @@ async def upload_book(
     page_start: int = Form(default=1),
     page_count: int | None = Form(default=None),
     ocr_provider: str | None = Form(default=None),
+    translation_mode: str = Form(default="off"),
     context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
 ) -> BookRecord:
     filename = Path(file.filename or "uploaded.pdf").name
@@ -462,7 +498,7 @@ async def upload_book(
             data_root=_books_root(),
             owner_id=context.user.id if context else None,
         )
-        _start_background_extraction(book, page_start=page_start, page_count=page_count)
+        _start_background_extraction(book, page_start=page_start, page_count=page_count, translation_mode=translation_mode)
         succeeded = True
         return book
     except FileNotFoundError as exc:
@@ -515,7 +551,50 @@ def get_book_page(
 
     extraction = load_page_artifact(book_id=book_id, page_number=page_number, data_root=_books_root())
     image_url = f"/books/{book_id}/pages/{page_number}/image"
-    return BookReaderPageResponse(book=book, page=page, image_url=image_url, extraction=extraction)
+    return BookReaderPageResponse(
+        book=book,
+        page=page,
+        image_url=image_url,
+        extraction=extraction,
+        reader_capabilities=get_reader_capabilities(book.language_code),
+    )
+
+
+@app.post("/books/{book_id}/pages/{page_number}/sentences/{sentence_order}/translation", response_model=SentenceTranslationResponse)
+def get_book_sentence_translation(
+    book_id: str,
+    page_number: int,
+    sentence_order: int,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> SentenceTranslationResponse:
+    book = _book_exists(book_id, context)
+    artifact = load_page_artifact(book_id=book_id, page_number=page_number, data_root=_books_root())
+    if artifact is None:
+        raise HTTPException(status_code=404, detail=f"Page artifact not found for page: {page_number}")
+
+    updated_page, sentence, resolution_source = translate_page_sentence(
+        artifact.page,
+        sentence_order=sentence_order,
+        data_root=_books_root(),
+    )
+    if sentence is None:
+        raise HTTPException(status_code=404, detail=f"Sentence not found: {sentence_order}")
+
+    if updated_page is not artifact.page:
+        updated_artifact = artifact.model_copy(update={"page": updated_page})
+        artifact_path = _books_root() / book.id / "extractions" / "pages" / f"page-{page_number:04d}.json"
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path.write_text(updated_artifact.model_dump_json(indent=2), encoding="utf-8")
+
+    return SentenceTranslationResponse(
+        book_id=book_id,
+        page_number=page_number,
+        sentence_order=sentence_order,
+        sentence_text=sentence.text,
+        translation=sentence.translation,
+        translation_source=sentence.translation_source,
+        resolution_source=resolution_source,
+    )
 
 
 @app.get("/books/{book_id}/pages/{page_number}/image")
@@ -633,6 +712,11 @@ def get_learning_profile(
     return get_learning_profile_summary(app.state.data_root, owner_id=context.user.id if context else None)
 
 
+@app.get("/learning/programs/russian", response_model=RussianProgramResponse)
+def get_russian_learning_program() -> RussianProgramResponse:
+    return get_russian_program()
+
+
 @app.get("/auth/me", response_model=AuthMeResponse)
 def get_authenticated_user(user: AuthMeResponse = Depends(get_current_user)) -> AuthMeResponse:
     return user
@@ -671,6 +755,41 @@ def create_sentence_read(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@app.post("/learning/study-items", response_model=StudyVocabularyItemRecord)
+def create_study_vocabulary_item(
+    payload: StudyVocabularyItemCreateRequest,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> StudyVocabularyItemRecord:
+    _book_exists(payload.book_id, context)
+    try:
+        return record_study_vocabulary_item(app.state.data_root, payload, owner_id=context.user.id if context else None)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/learning/vocabulary-reviews", response_model=VocabularyAssessmentStateRecord)
+def create_vocabulary_assessment_review(
+    payload: VocabularyAssessmentReviewRequest,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> VocabularyAssessmentStateRecord:
+    try:
+        return record_vocabulary_assessment_review(app.state.data_root, payload, owner_id=context.user.id if context else None)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/learning/word-interactions", response_model=WordInteractionRecord)
+def create_word_interaction(
+    payload: WordInteractionCreateRequest,
+    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+) -> WordInteractionRecord:
+    _book_exists(payload.book_id, context)
+    try:
+        return record_word_interaction(app.state.data_root, payload, owner_id=context.user.id if context else None)
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/learning/sync", response_model=LearningSyncResponse)
 def synchronize_learning_events(
     context: AuthenticatedUserContext = Depends(get_authenticated_user_context),
@@ -699,12 +818,18 @@ def import_lexicon(payload: LexiconImportRequest) -> LexiconImportSummary:
 
 
 @app.get("/lexicon/lookup", response_model=LexiconLookupResponse)
-def lookup_lexicon(language_code: str, term: str) -> LexiconLookupResponse:
+def lookup_lexicon(language_code: str, term: str, allow_google_fallback: bool = False) -> LexiconLookupResponse:
     return lookup_lexicon_entry(
         data_root=app.state.data_root,
         language_code=language_code,
         term=term,
+        allow_google_fallback=allow_google_fallback,
     )
+
+
+@app.get("/lexicon/google-translate/usage", response_model=GoogleTranslateUsageSummary)
+def google_translate_usage() -> GoogleTranslateUsageSummary:
+    return get_google_translate_usage_summary(app.state.data_root)
 
 
 @app.get("/analysis/{book_id}", response_model=BookAnalysisSurfaceResponse)

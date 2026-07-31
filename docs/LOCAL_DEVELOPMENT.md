@@ -44,6 +44,15 @@ The live web app reads `NEXT_PUBLIC_SUPABASE_URL` and
 values identify the Supabase project; never put a Supabase secret/service key in
 browser-exposed variables.
 
+If you want the reader's Google translation fallback for missing lexicon entries,
+configure Application Default Credentials with a Google service account JSON key.
+Set `GOOGLE_APPLICATION_CREDENTIALS` in the API environment to the full path of
+the JSON file, and give the service account the `roles/cloudtranslate.user`
+permission. Keep the key server-side only; the reader toggle just enables or
+disables the fallback behavior. If you run the API in Docker, mount that JSON
+file into the container first and point `GOOGLE_APPLICATION_CREDENTIALS` at the
+in-container path.
+
 The canonical profile page exposes a `legacy` compatibility link. Set
 `TEXTPLEX_LEGACY_URL` when the standalone shell is hosted somewhere other than
 `http://127.0.0.1:8200/legacy/index.html`.
@@ -60,6 +69,31 @@ sign-in, email confirmation redirects, and password reset requests. The API
 identity check is available at `/auth/me` and validates the bearer token with
 Supabase Auth.
 
+For local testing, create one Supabase Auth user that you treat as `user zero`.
+Give it a predictable dev-only password such as `password`, sign in with that
+account, and then use the profile migration card to merge the anonymous local
+profile into it. That keeps the old anonymous reading history available while
+new test accounts still start empty.
+
+When testing from another device, use the same LAN origin throughout the flow,
+for example `http://192.168.192.231:3000`. Add that exact origin and callback to
+Supabase Auth URL Configuration:
+
+```text
+http://192.168.192.231:3000
+http://192.168.192.231:3000/auth/callback
+http://localhost:3000/auth/callback
+http://127.0.0.1:3000/auth/callback
+```
+
+If email confirmation is enabled, the account must be confirmed before
+password sign-in can create a session.
+
+Next development requests from that device are allowed through
+`TEXTPLEX_ALLOWED_DEV_ORIGINS` in `apps/web/.env.local` (the default is the LAN
+address above). Set it to your machine's LAN host if the address changes, then
+restart `npm run dev:web`.
+
 ## Web app
 
 Install and run from the repo root:
@@ -68,6 +102,8 @@ Install and run from the repo root:
 npm install
 npm run dev:web
 ```
+
+`npm run dev:web` listens on `0.0.0.0:3000`, so same-Wi-Fi devices can open the Next app at your machine's LAN address, for example `http://192.168.192.231:3000`. If that still fails on Windows, allow inbound traffic for the private network firewall profile.
 
 Build the web app:
 
