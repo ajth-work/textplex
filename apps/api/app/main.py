@@ -218,7 +218,7 @@ async def request_observability(request: Request, call_next):
             )
     try:
         response = await call_next(request)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception(json.dumps({"event": "request_error", "request_id": request_id, "method": request.method, "path": request.url.path}))
         raise
     duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
@@ -404,7 +404,7 @@ def _start_background_extraction(book: BookRecord, *, page_start: int, page_coun
                     page_count=page_count if page_count is not None else extracted_page_count,
                     data_root=_books_root(),
                 )
-        except Exception:  # noqa: BLE001
+        except Exception:
             _fail_book_extraction(book)
             return
         _complete_book_extraction(book, extraction_path=extraction_path, extracted_page_count=extracted_page_count)
@@ -1020,7 +1020,7 @@ async def themes_sandbox_webhook(
     try:
         payload = await request.json()
         if not isinstance(payload, dict):
-            raise ValueError("Webhook payload must be an object.")
+            raise TypeError("Webhook payload must be an object.")
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="Invalid sandbox webhook JSON.") from None
     return apply_sandbox_event(app.state.data_root, payload)

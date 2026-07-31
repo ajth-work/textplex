@@ -103,17 +103,14 @@ STATIC_BUNDLES = [
 def _server_catalog() -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     if not supabase_is_configured():
         return STATIC_THEMES, STATIC_BUNDLES
-    try:
-        themes = _supabase_rest_request(
-            "theme_catalog?select=id,title,description,price_cents,is_free,preview_available&order=sort_order.asc",
-            _supabase_publishable_key(),
-        )
-        bundles = _supabase_rest_request(
-            "theme_bundles?select=id,title,description,theme_ids,price_cents&order=id.asc",
-            _supabase_publishable_key(),
-        )
-    except HTTPException:
-        raise
+    themes = _supabase_rest_request(
+        "theme_catalog?select=id,title,description,price_cents,is_free,preview_available&order=sort_order.asc",
+        _supabase_publishable_key(),
+    )
+    bundles = _supabase_rest_request(
+        "theme_bundles?select=id,title,description,theme_ids,price_cents&order=id.asc",
+        _supabase_publishable_key(),
+    )
     if not isinstance(themes, list) or not isinstance(bundles, list):
         raise HTTPException(status_code=502, detail="Supabase returned an invalid theme catalog.")
     return themes, bundles

@@ -11,8 +11,14 @@ from typing import Any
 
 try:
     from google.auth import default as google_auth_default
+    from google.auth import exceptions as google_auth_exceptions
 except ImportError:  # pragma: no cover - exercised only when the dependency is missing locally.
     google_auth_default = None
+    class _GoogleAuthExceptions:
+        class GoogleAuthError(Exception):
+            pass
+
+    google_auth_exceptions = _GoogleAuthExceptions()
 
 GOOGLE_APPLICATION_CREDENTIALS_ENV = "GOOGLE_APPLICATION_CREDENTIALS"
 GOOGLE_TRANSLATE_ENDPOINT = "https://translation.googleapis.com/language/translate/v2"
@@ -70,7 +76,7 @@ def _load_google_credentials() -> Any | None:
 
     try:
         credentials, _ = google_auth_default(scopes=[GOOGLE_TRANSLATE_SCOPE])
-    except Exception:
+    except google_auth_exceptions.GoogleAuthError:
         return None
     return credentials
 
@@ -81,7 +87,7 @@ def _load_google_project_id() -> str | None:
     if credentials_path is not None:
         try:
             payload = json.loads(credentials_path.read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
             payload = None
         if isinstance(payload, dict):
             for key in ("project_id", "quota_project_id"):
@@ -94,7 +100,7 @@ def _load_google_project_id() -> str | None:
 
     try:
         _, project_id = google_auth_default(scopes=[GOOGLE_TRANSLATE_SCOPE])
-    except Exception:
+    except google_auth_exceptions.GoogleAuthError:
         return None
     return project_id.strip() if isinstance(project_id, str) and project_id.strip() else None
 
@@ -120,7 +126,7 @@ def translate_text(
     try:
         if not getattr(credentials, "valid", False):
             credentials.refresh(_UrlLibRequest())
-    except Exception:
+    except google_auth_exceptions.GoogleAuthError:
         return None
 
     token = getattr(credentials, "token", None)
@@ -149,7 +155,7 @@ def translate_text(
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
             payload = json.loads(response.read().decode("utf-8"))
-    except Exception:
+    except (OSError, UnicodeDecodeError, urllib.error.URLError, json.JSONDecodeError):
         return None
 
     translations = _translation_items(payload)
@@ -187,7 +193,7 @@ def romanize_texts(
     try:
         if not getattr(credentials, "valid", False):
             credentials.refresh(_UrlLibRequest())
-    except Exception:
+    except google_auth_exceptions.GoogleAuthError:
         return [None] * len(normalized_texts)
 
     token = getattr(credentials, "token", None)
@@ -214,7 +220,7 @@ def romanize_texts(
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
             payload = json.loads(response.read().decode("utf-8"))
-    except Exception:
+    except (OSError, UnicodeDecodeError, urllib.error.URLError, json.JSONDecodeError):
         return [None] * len(normalized_texts)
 
     romanized_items = _romanization_items(payload)

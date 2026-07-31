@@ -236,4 +236,4 @@ class LearningProfileSummary(BaseModel):
     average_seconds_per_word: float | None = None
     average_seconds_per_character: float | None = None
     selected_track_code: str = "local"
-    learning_tracks: list["LearningTrackSummary"] = Field(default_factory=list)
+    learning_tracks: list[LearningTrackSummary] = Field(default_factory=list)

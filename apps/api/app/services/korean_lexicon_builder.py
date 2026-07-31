@@ -329,7 +329,7 @@ def parse_korean_dictionary_export(source_path: Path) -> list[dict[str, Any]]:
     text = source_path.read_text(encoding="utf-8-sig")
     stripped = text.lstrip()
 
-    if source_path.suffix.lower() in {".json", ".jsonl"} or stripped.startswith("{") or stripped.startswith("["):
+    if source_path.suffix.lower() in {".json", ".jsonl"} or stripped.startswith(("{", "[")):
         payload = json.loads(text)
         records = []
         krdict_records = _parse_krdict_json_records(payload)
@@ -407,7 +407,7 @@ def build_korean_lexicon_rows(
     source_path: str,
     max_rows: int | None = None,
 ) -> list[dict[str, str]]:
-    grouped: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+    grouped: OrderedDict[str, dict[str, Any]] = OrderedDict()
 
     for record in sorted(records, key=_priority_key):
         word = _first_text(record.get("word"))

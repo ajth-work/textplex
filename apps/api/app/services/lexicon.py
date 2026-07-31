@@ -3,11 +3,12 @@ from __future__ import annotations
 import csv
 import re
 import sqlite3
-from contextlib import closing
+from collections.abc import Iterable
+from contextlib import closing, suppress
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from app.core.paths import get_lexicon_source_root
 from app.schemas.lexicon import (
@@ -349,12 +350,13 @@ def _cache_table_columns(connection: sqlite3.Connection) -> set[str]:
 
 
 def _cache_row_to_entry(row: sqlite3.Row) -> LexiconEntryRecord:
+    row_keys = row.keys()
     return LexiconEntryRecord(
         id=row["id"],
         language_code=row["language_code"],
         entry_type=row["entry_type"],
         surface_form=row["surface_form"],
-        pronunciation=row["pronunciation"] if "pronunciation" in row.keys() else None,
+        pronunciation=row["pronunciation"] if "pronunciation" in row_keys else None,
         pinyin=row["pinyin"],
         tone=row["tone"],
         definition=row["definition"],
@@ -453,17 +455,13 @@ def _lookup_google_translate_entry(
     if not translated_text:
         return None
 
-    try:
+    with suppress(OSError, sqlite3.Error):
         record_google_translate_usage(data_root=data_root, characters=len(term))
-    except Exception:
-        pass
 
     pronunciation = romanize_text(term, source_language_code=language_code)
     if pronunciation:
-        try:
+        with suppress(OSError, sqlite3.Error):
             record_google_translate_usage(data_root=data_root, characters=len(term))
-        except Exception:
-            pass
 
     return _cache_google_translation(
         connection=connection,

@@ -371,7 +371,7 @@ def transcribe_page_image(
         raise RuntimeError(f"OpenAI OCR request failed: {exc.reason}") from exc
 
     if not isinstance(response_payload, dict):
-        raise RuntimeError("OpenAI OCR response was not a JSON object.")
+        raise TypeError("OpenAI OCR response was not a JSON object.")
 
     response_text = _extract_response_text(response_payload)
     return _extract_structured_ocr_result(response_text, fallback_text=response_text)

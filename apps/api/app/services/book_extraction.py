@@ -4,8 +4,8 @@ import hashlib
 import json
 import re
 from datetime import datetime, timezone
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 from uuid import uuid4
 
 from app.core.paths import get_books_root

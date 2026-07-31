@@ -2,6 +2,9 @@
 
 ## 2026-07-31
 
+- Fixed the API and processor Ruff regressions that were breaking GitHub Actions, including export sorting, exception narrowing, and legacy lexicon row handling; verified with `ruff check` and `pytest`.
+- Added a Latin-script roadmap lane for French, Spanish, Italian, German, Yoruba, and related languages so they stay planned together before any individual starter packs are built.
+- Added Yoruba to the import dropdown, library language filter, and study language labels so the Latin-script lane shows a real language name instead of a generic code, and added a matching Yoruba starter-pack note to the issue tracker.
 - Added night variants for Citrus Grove, Sunlit Meadow, and Seaside Garden with supplied fixed wallpaper assets, dark semantic palettes, swatches, browser colors, and separate `$1.99` pricing; expanded the Summer Editions bundle to six themes at `$8.99`.
 - Added a global day/night theme toggle in the top-right corner of every page and a settings option to follow the device light/dark scheme.
 - Shrunk the global day/night theme toggle to a small fixed icon button so it no longer stretches across the mobile viewport.

@@ -123,9 +123,9 @@ def _level_rank(value: str | None) -> int:
     label = _normalize_level_label(value)
     if not label:
         return len(RUSSIAN_LEVEL_PRIORITY)
-    for candidate in RUSSIAN_LEVEL_PRIORITY:
+    for candidate, rank in RUSSIAN_LEVEL_PRIORITY.items():
         if candidate in label.upper():
-            return RUSSIAN_LEVEL_PRIORITY[candidate]
+            return rank
     return len(RUSSIAN_LEVEL_PRIORITY)
 
 
@@ -205,7 +205,7 @@ def parse_russian_lexicon_export(source_path: Path) -> list[dict[str, Any]]:
                     records.append(record)
         return records
 
-    if source_path.suffix.lower() == ".json" or stripped.startswith("{") or stripped.startswith("["):
+    if source_path.suffix.lower() == ".json" or stripped.startswith(("{", "[")):
         payload = json.loads(text)
         records = []
         for item in _parse_json_items(payload):
@@ -249,7 +249,7 @@ def build_russian_lexicon_rows(
     source_path: str,
     max_rows: int | None = None,
 ) -> list[dict[str, str]]:
-    grouped: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+    grouped: OrderedDict[str, dict[str, Any]] = OrderedDict()
 
     for record in sorted(records, key=_priority_key):
         surface_form = _first_text(record.get("lemma") or record.get("surface_form"))

@@ -97,7 +97,7 @@ class BookReaderPageResponse(BaseModel):
     page: PageRecord
     image_url: str
     extraction: PageExtractionArtifact | None = None
-    reader_capabilities: "ReaderCapabilities"
+    reader_capabilities: ReaderCapabilities
 
 
 class ReaderCapabilities(BaseModel):

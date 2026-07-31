@@ -44,7 +44,7 @@ _HEBREW_FINAL_FORMS = {
 }
 
 _HEBREW_RTL_MARKS = {"\u200f", "\u200e"}
-_HEBREW_DIACRITICS = set(chr(codepoint) for codepoint in range(0x0591, 0x05c8))
+_HEBREW_DIACRITICS = {chr(codepoint) for codepoint in range(0x0591, 0x05c8)}
 
 
 def _is_hebrew_letter(char: str) -> bool:

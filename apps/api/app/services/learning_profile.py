@@ -113,7 +113,7 @@ def _normalize_track_code(language_code: str | None) -> str:
         return "topik"
     if normalized.startswith("ru"):
         return "trki"
-    if normalized.startswith("fr") or normalized.startswith("en"):
+    if normalized.startswith(("fr", "en")):
         return "cefr"
     return "local"
 
