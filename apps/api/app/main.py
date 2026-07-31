@@ -404,7 +404,7 @@ def _start_background_extraction(book: BookRecord, *, page_start: int, page_coun
                     page_count=page_count if page_count is not None else extracted_page_count,
                     data_root=_books_root(),
                 )
-        except Exception:
+        except (OSError, RuntimeError, TypeError, ValueError):
             _fail_book_extraction(book)
             return
         _complete_book_extraction(book, extraction_path=extraction_path, extracted_page_count=extracted_page_count)

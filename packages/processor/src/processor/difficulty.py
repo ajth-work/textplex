@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Mapping, Sequence
 from collections import Counter
+from collections.abc import Mapping, Sequence
 from statistics import mean
 
 from .contracts import BookExtractionResult
