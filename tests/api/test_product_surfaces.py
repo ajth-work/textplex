@@ -5,7 +5,6 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.schemas.books import BookRecord
 from app.services.lexicon import ensure_lexicon_database
-from app.services.lexicon import import_lexicon_from_source
 from processor.contracts import BookExtractionResult, PageExtractionResult, SentenceResult, TokenResult
 
 
