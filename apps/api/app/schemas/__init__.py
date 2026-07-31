@@ -73,6 +73,7 @@ __all__ = [
     "LexiconLookupResponse",
     "ActivityEvent",
     "ActivitySurfaceResponse",
+    "ReadingHistoryPoint",
     "AnalysisLexicalEntrySummary",
     "BookAnalysisSurfaceResponse",
     "ImportRecentBook",
