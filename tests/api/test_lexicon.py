@@ -11,6 +11,7 @@ from app.services.lexicon import (
     lookup_lexicon_entry_map,
     lookup_lexicon_pinyin_map,
 )
+from typing_extensions import Self
 
 
 def test_import_and_lookup_lexicon_from_canonical_sqlite_pack(tmp_path: Path) -> None:
@@ -246,7 +247,7 @@ def test_translate_text_uses_google_service_account_and_returns_translation(tmp_
     credentials_path.write_text("{}", encoding="utf-8")
 
     class FakeResponse:
-        def __enter__(self) -> "FakeResponse":
+        def __enter__(self) -> Self:
             return self
 
         def __exit__(self, exc_type, exc, tb) -> bool:
@@ -282,7 +283,7 @@ def test_translate_text_uses_google_service_account_and_returns_translation(tmp_
             seen["token_request_body"] = request.data.decode("utf-8")
 
             class FakeTokenResponse:
-                def __enter__(self) -> "FakeTokenResponse":
+                def __enter__(self) -> Self:
                     return self
 
                 def __exit__(self, exc_type, exc, tb) -> bool:
@@ -355,7 +356,7 @@ def test_romanize_text_uses_google_service_account_and_returns_romanized_text(tm
             seen["token_request_body"] = request.data.decode("utf-8")
 
             class FakeTokenResponse:
-                def __enter__(self) -> "FakeTokenResponse":
+                def __enter__(self) -> Self:
                     return self
 
                 def __exit__(self, exc_type, exc, tb) -> bool:
@@ -383,7 +384,7 @@ def test_romanize_text_uses_google_service_account_and_returns_romanized_text(tm
         seen["body"] = json.loads(request.data.decode("utf-8"))
         seen["authorization"] = request.get_header("Authorization")
         class FakeRomanizeResponse:
-            def __enter__(self) -> "FakeRomanizeResponse":
+            def __enter__(self) -> Self:
                 return self
 
             def __exit__(self, exc_type, exc, tb) -> bool:

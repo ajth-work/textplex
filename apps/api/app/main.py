@@ -142,6 +142,18 @@ from processor.contracts import BookExtractionResult
 
 app = FastAPI(title="TextPlex API", version="0.1.0")
 app.state.data_root = get_data_root()
+OPTIONAL_USER_CONTEXT = Depends(get_optional_user_context)
+AUTHENTICATED_USER_CONTEXT = Depends(get_authenticated_user_context)
+PUBLIC_USER_CONTEXT = Depends(get_public_user_context)
+CURRENT_USER = Depends(get_current_user)
+UPLOAD_FILE = File(...)
+REQUIRED_LANGUAGE_CODE = Form(...)
+OPTIONAL_TITLE = Form(default=None)
+OPTIONAL_AUTHOR = Form(default=None)
+OPTIONAL_PAGE_START = Form(default=1)
+OPTIONAL_PAGE_COUNT = Form(default=None)
+OPTIONAL_OCR_PROVIDER = Form(default=None)
+TRANSLATION_MODE = Form(default="off")
 logger = logging.getLogger("textplex.api")
 cors_origins = [
     origin.strip()
@@ -206,7 +218,7 @@ async def request_observability(request: Request, call_next):
             )
     try:
         response = await call_next(request)
-    except Exception:
+    except Exception:  # noqa: BLE001
         logger.exception(json.dumps({"event": "request_error", "request_id": request_id, "method": request.method, "path": request.url.path}))
         raise
     duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
@@ -392,7 +404,7 @@ def _start_background_extraction(book: BookRecord, *, page_start: int, page_coun
                     page_count=page_count if page_count is not None else extracted_page_count,
                     data_root=_books_root(),
                 )
-        except Exception:
+        except Exception:  # noqa: BLE001
             _fail_book_extraction(book)
             return
         _complete_book_extraction(book, extraction_path=extraction_path, extracted_page_count=extracted_page_count)
@@ -427,9 +439,7 @@ def _production_configuration_ready() -> bool:
         return True
     configured_origins = [origin.strip().lower() for origin in os.getenv("TEXTPLEX_CORS_ORIGINS", "").split(",") if origin.strip()]
     has_insecure_origin = any(
-        origin.startswith("http://localhost")
-        or origin.startswith("http://127.")
-        or origin.startswith("http://192.168.")
+        origin.startswith(("http://localhost", "http://127.", "http://192.168."))
         for origin in configured_origins
     )
     return bool(configured_origins) and not has_insecure_origin and supabase_is_configured()
@@ -462,7 +472,7 @@ def parse_text(payload: TextParseRequest) -> PageExtractionArtifact:
 @app.post("/texts/import", response_model=BookRecord)
 def import_text(
     payload: TextImportRequest,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookRecord:
     try:
         return import_text_into_book(
@@ -480,7 +490,7 @@ def import_text(
 
 @app.get("/books", response_model=list[BookRecord])
 def list_books(
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> list[BookRecord]:
     return sorted(
         (book for book in _visible_books(context) if book.archived_at is None),
@@ -491,7 +501,7 @@ def list_books(
 
 @app.get("/books/archived", response_model=list[BookRecord])
 def list_archived_books(
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> list[BookRecord]:
     return sorted(
         (book for book in _visible_books(context) if book.archived_at is not None),
@@ -503,7 +513,7 @@ def list_archived_books(
 @app.post("/books/import", response_model=BookRecord)
 def import_book(
     payload: BookImportRequest,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookRecord:
     try:
         source_path = _validate_import_source(
@@ -536,15 +546,15 @@ def import_book(
 
 @app.post("/books/upload", response_model=BookRecord)
 async def upload_book(
-    file: UploadFile = File(...),
-    language_code: str = Form(...),
-    title: str | None = Form(default=None),
-    author: str | None = Form(default=None),
-    page_start: int = Form(default=1),
-    page_count: int | None = Form(default=None),
-    ocr_provider: str | None = Form(default=None),
-    translation_mode: str = Form(default="off"),
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    file: UploadFile = UPLOAD_FILE,
+    language_code: str = REQUIRED_LANGUAGE_CODE,
+    title: str | None = OPTIONAL_TITLE,
+    author: str | None = OPTIONAL_AUTHOR,
+    page_start: int = OPTIONAL_PAGE_START,
+    page_count: int | None = OPTIONAL_PAGE_COUNT,
+    ocr_provider: str | None = OPTIONAL_OCR_PROVIDER,
+    translation_mode: str = TRANSLATION_MODE,
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookRecord:
     filename = Path(file.filename or "uploaded.pdf").name
     if Path(filename).suffix.lower() != ".pdf":
@@ -593,7 +603,7 @@ async def upload_book(
 @app.get("/books/{book_id}", response_model=BookRecord)
 def get_book(
     book_id: str,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookRecord:
     return _book_exists(book_id, context)
 
@@ -601,7 +611,7 @@ def get_book(
 @app.get("/books/{book_id}/pages", response_model=BookPageManifest)
 def get_book_pages(
     book_id: str,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookPageManifest:
     _book_exists(book_id, context)
     pages_path = _books_root() / book_id / "pages" / "manifest.json"
@@ -614,7 +624,7 @@ def get_book_pages(
 def get_book_page(
     book_id: str,
     page_number: int,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookReaderPageResponse:
     book = _book_exists(book_id, context)
 
@@ -644,7 +654,7 @@ def get_book_sentence_translation(
     book_id: str,
     page_number: int,
     sentence_order: int,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> SentenceTranslationResponse:
     book = _book_exists(book_id, context)
     artifact = load_page_artifact(book_id=book_id, page_number=page_number, data_root=_books_root())
@@ -680,7 +690,7 @@ def get_book_sentence_translation(
 def get_book_page_image(
     book_id: str,
     page_number: int,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> FileResponse:
     book = _book_exists(book_id, context)
 
@@ -694,7 +704,7 @@ def get_book_page_image(
 @app.delete("/books/{book_id}")
 def delete_book(
     book_id: str,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> dict[str, str]:
     _book_exists(book_id, context)
 
@@ -705,7 +715,7 @@ def delete_book(
 @app.post("/books/{book_id}/archive", response_model=BookRecord)
 def archive_book(
     book_id: str,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookRecord:
     book = _book_exists(book_id, context)
     book.archived_at = book.archived_at or book.processed_at or book.created_at
@@ -716,7 +726,7 @@ def archive_book(
 @app.post("/books/{book_id}/restore", response_model=BookRecord)
 def restore_book(
     book_id: str,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookRecord:
     book = _book_exists(book_id, context)
     book.archived_at = None
@@ -733,7 +743,7 @@ def restore_book(
 def extract_book(
     book_id: str,
     payload: BookExtractionRequest,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> dict[str, str]:
     registry_path = _registry_path()
     registry = _load_book_registry()
@@ -770,7 +780,7 @@ def extract_book(
 @app.get("/books/{book_id}/extractions", response_model=BookExtractionResult)
 def get_book_extraction(
     book_id: str,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookExtractionResult:
     _book_exists(book_id, context)
     extraction_path = _books_root() / book_id / "extractions" / "book-extraction.json"
@@ -786,7 +796,7 @@ def get_book_extraction(
 
 @app.get("/learning/profile", response_model=LearningProfileSummary)
 def get_learning_profile(
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> LearningProfileSummary:
     return get_learning_profile_summary(app.state.data_root, owner_id=context.user.id if context else None)
 
@@ -797,14 +807,14 @@ def get_russian_learning_program() -> RussianProgramResponse:
 
 
 @app.get("/auth/me", response_model=AuthMeResponse)
-def get_authenticated_user(user: AuthMeResponse = Depends(get_current_user)) -> AuthMeResponse:
+def get_authenticated_user(user: AuthMeResponse = CURRENT_USER) -> AuthMeResponse:
     return user
 
 
 @app.post("/learning/sessions", response_model=ReadingSessionRecord)
 def open_learning_session(
     payload: ReadingSessionCreateRequest,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> ReadingSessionRecord:
     _book_exists(payload.book_id, context)
     return create_reading_session(app.state.data_root, payload, owner_id=context.user.id if context else None)
@@ -813,7 +823,7 @@ def open_learning_session(
 @app.post("/learning/page-reads", response_model=PageReadRecord)
 def create_page_read(
     payload: PageReadCreateRequest,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> PageReadRecord:
     _book_exists(payload.book_id, context)
     try:
@@ -825,7 +835,7 @@ def create_page_read(
 @app.post("/learning/sentence-reads", response_model=SentenceReadRecord)
 def create_sentence_read(
     payload: SentenceReadCreateRequest,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> SentenceReadRecord:
     _book_exists(payload.book_id, context)
     try:
@@ -837,7 +847,7 @@ def create_sentence_read(
 @app.post("/learning/study-items", response_model=StudyVocabularyItemRecord)
 def create_study_vocabulary_item(
     payload: StudyVocabularyItemCreateRequest,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> StudyVocabularyItemRecord:
     _book_exists(payload.book_id, context)
     try:
@@ -849,7 +859,7 @@ def create_study_vocabulary_item(
 @app.post("/learning/vocabulary-reviews", response_model=VocabularyAssessmentStateRecord)
 def create_vocabulary_assessment_review(
     payload: VocabularyAssessmentReviewRequest,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> VocabularyAssessmentStateRecord:
     try:
         return record_vocabulary_assessment_review(app.state.data_root, payload, owner_id=context.user.id if context else None)
@@ -860,7 +870,7 @@ def create_vocabulary_assessment_review(
 @app.post("/learning/word-interactions", response_model=WordInteractionRecord)
 def create_word_interaction(
     payload: WordInteractionCreateRequest,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> WordInteractionRecord:
     _book_exists(payload.book_id, context)
     try:
@@ -871,7 +881,7 @@ def create_word_interaction(
 
 @app.post("/learning/sync", response_model=LearningSyncResponse)
 def synchronize_learning_events(
-    context: AuthenticatedUserContext = Depends(get_authenticated_user_context),
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
 ) -> LearningSyncResponse:
     return sync_learning_events(app.state.data_root, context)
 
@@ -914,7 +924,7 @@ def google_translate_usage() -> GoogleTranslateUsageSummary:
 @app.get("/analysis/{book_id}", response_model=BookAnalysisSurfaceResponse)
 def get_analysis_surface(
     book_id: str,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookAnalysisSurfaceResponse:
     try:
         _book_exists(book_id, context)
@@ -932,7 +942,7 @@ def search_surface(query: str, limit: int = 20) -> SearchSurfaceResponse:
 def study_surface(
     language_code: str | None = None,
     limit: int = 50,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> StudySurfaceResponse:
     return get_study_surface(
         app.state.data_root,
@@ -944,21 +954,21 @@ def study_surface(
 
 @app.get("/progress", response_model=ProgressSurfaceResponse)
 def progress_surface(
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> ProgressSurfaceResponse:
     return get_progress_surface(app.state.data_root, owner_id=context.user.id if context else None)
 
 
 @app.get("/profile", response_model=ProfileSurfaceResponse)
 def profile_surface(
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> ProfileSurfaceResponse:
     return get_profile_surface(app.state.data_root, owner_id=context.user.id if context else None)
 
 
 @app.get("/profile/hosted", response_model=HostedProfileSurfaceResponse)
 def hosted_profile_surface(
-    context: AuthenticatedUserContext = Depends(get_authenticated_user_context),
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
 ) -> HostedProfileSurfaceResponse:
     return get_hosted_profile(context)
 
@@ -966,14 +976,14 @@ def hosted_profile_surface(
 @app.put("/profile/hosted", response_model=HostedProfileSurfaceResponse)
 def put_hosted_profile(
     payload: HostedProfileUpdateRequest,
-    context: AuthenticatedUserContext = Depends(get_authenticated_user_context),
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
 ) -> HostedProfileSurfaceResponse:
     return update_hosted_profile(context, payload)
 
 
 @app.get("/profile/migration", response_model=ProfileMigrationResponse)
 def get_profile_migration(
-    context: AuthenticatedUserContext = Depends(get_authenticated_user_context),
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
 ) -> ProfileMigrationResponse:
     return preview_profile_migration(app.state.data_root, context.user.id)
 
@@ -981,14 +991,14 @@ def get_profile_migration(
 @app.post("/profile/migration", response_model=ProfileMigrationResponse)
 def post_profile_migration(
     payload: ProfileMigrationRequest,
-    context: AuthenticatedUserContext = Depends(get_authenticated_user_context),
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
 ) -> ProfileMigrationResponse:
     return apply_profile_migration(app.state.data_root, context.user.id, payload)
 
 
 @app.get("/themes/catalog", response_model=ThemeCatalogResponse)
 def themes_catalog(
-    context: AuthenticatedUserContext | None = Depends(get_public_user_context),
+    context: AuthenticatedUserContext | None = PUBLIC_USER_CONTEXT,
 ) -> ThemeCatalogResponse:
     return get_theme_catalog(context, data_root=app.state.data_root)
 
@@ -996,7 +1006,7 @@ def themes_catalog(
 @app.post("/themes/checkout", response_model=ThemeCheckoutResponse)
 def themes_checkout(
     payload: ThemeCheckoutRequest,
-    context: AuthenticatedUserContext = Depends(get_authenticated_user_context),
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
 ) -> ThemeCheckoutResponse:
     return create_checkout_session(app.state.data_root, context.user.id, payload)
 
@@ -1018,7 +1028,7 @@ async def themes_sandbox_webhook(
 
 @app.get("/themes/entitlements", response_model=ThemeEntitlementResponse)
 def themes_entitlements(
-    context: AuthenticatedUserContext = Depends(get_authenticated_user_context),
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
 ) -> ThemeEntitlementResponse:
     return get_entitlements(app.state.data_root, context.user.id)
 
@@ -1026,7 +1036,7 @@ def themes_entitlements(
 @app.get("/activity", response_model=ActivitySurfaceResponse)
 def activity_surface(
     limit: int = 50,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> ActivitySurfaceResponse:
     return get_activity_surface(
         app.state.data_root,
@@ -1042,7 +1052,7 @@ def import_surface() -> ImportSurfaceResponse:
 
 @app.get("/settings", response_model=SettingsSurfaceResponse)
 def get_settings_surface(
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> SettingsSurfaceResponse:
     if context:
         hosted_entries = get_hosted_settings(context)
@@ -1053,7 +1063,7 @@ def get_settings_surface(
 @app.put("/settings", response_model=SettingsSurfaceResponse)
 def put_settings_surface(
     payload: SettingsUpdateRequest,
-    context: AuthenticatedUserContext | None = Depends(get_optional_user_context),
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> SettingsSurfaceResponse:
     if context:
         validate_theme_settings(payload, context, data_root=app.state.data_root)

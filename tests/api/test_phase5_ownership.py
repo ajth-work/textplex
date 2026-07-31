@@ -17,6 +17,7 @@ from app.services.profile_migration import (
     preview_profile_migration,
 )
 from fastapi.testclient import TestClient
+from typing_extensions import Self
 
 
 def _configure_supabase(monkeypatch) -> None:
@@ -142,7 +143,7 @@ def test_hosted_settings_use_token_and_server_entitlements(monkeypatch) -> None:
         def __init__(self, payload: object) -> None:
             self.payload = payload
 
-        def __enter__(self) -> "FakeResponse":
+        def __enter__(self) -> Self:
             return self
 
         def __exit__(self, *args: object) -> None:
@@ -153,8 +154,8 @@ def test_hosted_settings_use_token_and_server_entitlements(monkeypatch) -> None:
 
     def fake_urlopen(request: object, timeout: int) -> FakeResponse:
         assert timeout == 5
-        url = getattr(request, "full_url")
-        headers = getattr(request, "headers")
+        url = request.full_url
+        headers = request.headers
         if url.endswith("/auth/v1/user"):
             assert headers["Authorization"] == "Bearer valid-token"
             return FakeResponse({"id": "user-123", "email": "reader@example.com"})
