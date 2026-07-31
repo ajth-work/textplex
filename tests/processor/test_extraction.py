@@ -1,6 +1,11 @@
-import processor.extraction as extraction
-
-from processor import build_page_extraction_result, normalize_text, split_sentences, stitch_page_sentence_carryover, tokenize_sentence
+from processor import (
+    build_page_extraction_result,
+    extraction,
+    normalize_text,
+    split_sentences,
+    stitch_page_sentence_carryover,
+    tokenize_sentence,
+)
 
 
 def test_normalize_text_collapses_whitespace() -> None:

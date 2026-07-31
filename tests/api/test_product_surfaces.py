@@ -1,11 +1,15 @@
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.schemas.books import BookRecord
 from app.services.lexicon import ensure_lexicon_database
-from processor.contracts import BookExtractionResult, PageExtractionResult, SentenceResult, TokenResult
+from fastapi.testclient import TestClient
+from processor.contracts import (
+    BookExtractionResult,
+    PageExtractionResult,
+    SentenceResult,
+    TokenResult,
+)
 
 
 def test_analysis_search_import_and_settings_surfaces(imported_real_scan: tuple[Path, BookRecord]) -> None:

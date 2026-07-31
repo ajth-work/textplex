@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.services.korean_lexicon_builder import build_korean_lexicon_rows, parse_korean_dictionary_export
+from app.services.korean_lexicon_builder import (
+    build_korean_lexicon_rows,
+    parse_korean_dictionary_export,
+)
 
 
 def test_parse_korean_dictionary_xml_export(tmp_path: Path) -> None:

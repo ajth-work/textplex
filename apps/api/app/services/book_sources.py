@@ -6,7 +6,6 @@ import textwrap
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
-
 from processor import normalize_text
 
 

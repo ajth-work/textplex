@@ -1,7 +1,6 @@
 import pytest
-from pydantic import ValidationError
-
 from processor.contracts import PageExtractionResult, SentenceResult, TokenResult
+from pydantic import ValidationError
 
 
 def test_page_extraction_result_accepts_minimal_valid_payload() -> None:

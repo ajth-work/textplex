@@ -1,9 +1,8 @@
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from app.core.paths import get_data_root, resolve_books_root, resolve_user_data_root
 from app.main import app
+from fastapi.testclient import TestClient
 
 
 def test_configured_storage_roots_are_honored(monkeypatch, tmp_path: Path) -> None:

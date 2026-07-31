@@ -7,7 +7,6 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
-
 KOREAN_SUBJECT_PRIORITY = [
     "인사하기",
     "소개하기(자기소개)",

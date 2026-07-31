@@ -1,8 +1,7 @@
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from app.main import app
+from fastapi.testclient import TestClient
 
 
 def test_russian_learning_program_surfaces_a_curated_level_one_slice(tmp_path: Path) -> None:

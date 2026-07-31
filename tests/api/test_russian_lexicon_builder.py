@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.services.russian_lexicon_builder import build_russian_lexicon_rows, parse_russian_lexicon_export
+from app.services.russian_lexicon_builder import (
+    build_russian_lexicon_rows,
+    parse_russian_lexicon_export,
+)
 
 
 def test_parse_russian_lexicon_csv_export(tmp_path: Path) -> None:

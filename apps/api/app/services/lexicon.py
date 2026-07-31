@@ -1,18 +1,26 @@
 from __future__ import annotations
 
 import csv
-import sqlite3
 import re
+import sqlite3
 from contextlib import closing
-from functools import lru_cache
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
 
 from app.core.paths import get_lexicon_source_root
+from app.schemas.lexicon import (
+    LexiconEntryRecord,
+    LexiconImportSummary,
+    LexiconLookupResponse,
+)
+from app.services.google_translate import (
+    is_google_translate_configured,
+    romanize_text,
+    translate_text,
+)
 from app.services.google_translate_usage import record_google_translate_usage
-from app.schemas.lexicon import LexiconEntryRecord, LexiconImportSummary, LexiconLookupResponse
-from app.services.google_translate import is_google_translate_configured, romanize_text, translate_text
 
 
 def _utc_now() -> str:

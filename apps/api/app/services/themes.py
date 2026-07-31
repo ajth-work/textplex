@@ -1,19 +1,21 @@
 from __future__ import annotations
 
-from urllib.parse import quote
 from pathlib import Path
-
-from fastapi import HTTPException
+from urllib.parse import quote
 
 from app.schemas.surfaces import SettingsUpdateRequest
-from app.schemas.themes import ThemeBundleCatalogItem, ThemeCatalogItem, ThemeCatalogResponse
+from app.schemas.themes import (
+    ThemeBundleCatalogItem,
+    ThemeCatalogItem,
+    ThemeCatalogResponse,
+)
 from app.services.auth import (
     AuthenticatedUserContext,
     _supabase_publishable_key,
     _supabase_rest_request,
     supabase_is_configured,
 )
-
+from fastapi import HTTPException
 
 STATIC_THEMES = [
     {"id": "neutral", "title": "Neutral", "description": "White and cool-grey surfaces with crisp black typography.", "price_cents": 0, "is_free": True},
@@ -42,6 +44,9 @@ STATIC_THEMES = [
     {"id": "season-summer-citrus", "title": "Citrus Grove", "description": "Warm cream, citrus color, blossom white, and botanical green.", "price_cents": 199, "is_free": False},
     {"id": "season-summer-meadow", "title": "Sunlit Meadow", "description": "Pale sky, wildflower color, cream, and soft meadow green.", "price_cents": 199, "is_free": False},
     {"id": "season-summer-seaside", "title": "Seaside Garden", "description": "Aqua, sand, coral, sea grass, and deep teal in a coastal garden mood.", "price_cents": 199, "is_free": False},
+    {"id": "season-summer-citrus-night", "title": "Citrus Grove — Night", "description": "Deep botanical green, citrus amber, and blossom light for a quiet evening orchard mood.", "price_cents": 199, "is_free": False},
+    {"id": "season-summer-meadow-night", "title": "Sunlit Meadow — Night", "description": "Midnight blue, dusk wildflowers, soft gold, and drifting meadow detail for evening reading.", "price_cents": 199, "is_free": False},
+    {"id": "season-summer-seaside-night", "title": "Seaside Garden — Night", "description": "Deep ocean blue, moonlit shells, cool botanicals, and restrained star-like light.", "price_cents": 199, "is_free": False},
     {"id": "city-moscow-daylight", "title": "Moscow — Daylight", "description": "Pale birch, red-brick geometry, and cool river-city light inspired by Moscow.", "price_cents": 199, "is_free": False},
     {"id": "city-moscow-night", "title": "Moscow — Night", "description": "Deep navy, cool birch branches, and warm architectural light inspired by Moscow after dark.", "price_cents": 199, "is_free": False},
     {"id": "city-st-petersburg-daylight", "title": "St. Petersburg — Daylight", "description": "Canal water, pale façades, blue flowers, and northern daylight inspired by St. Petersburg.", "price_cents": 199, "is_free": False},
@@ -81,9 +86,9 @@ STATIC_BUNDLES = [
     {
         "id": "summer-editions",
         "title": "Summer Editions",
-        "description": "Three illustrated summer atmospheres spanning citrus, meadow, and seaside color.",
-        "theme_ids": ["season-summer-citrus", "season-summer-meadow", "season-summer-seaside"],
-        "price_cents": 499,
+        "description": "Six illustrated summer atmospheres spanning citrus, meadow, and seaside color by day and night.",
+        "theme_ids": ["season-summer-citrus", "season-summer-citrus-night", "season-summer-meadow", "season-summer-meadow-night", "season-summer-seaside", "season-summer-seaside-night"],
+        "price_cents": 899,
     },
     {
         "id": "fall-editions",

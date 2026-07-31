@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from app.schemas.books import ReaderCapabilities
 
-
 _CHARACTER_DISPLAY_LANGUAGES = frozenset({"ja", "ko", "zh"})
 
 

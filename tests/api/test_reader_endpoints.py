@@ -1,10 +1,9 @@
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.schemas.books import BookRecord
 from app.services.lexicon import import_lexicon_from_source
+from fastapi.testclient import TestClient
 
 
 def test_list_books_returns_imported_sample(imported_real_scan: tuple[Path, BookRecord]) -> None:

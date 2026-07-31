@@ -7,7 +7,6 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
-
 RUSSIAN_LEVEL_PRIORITY = {
     "A1": 0,
     "A2": 1,

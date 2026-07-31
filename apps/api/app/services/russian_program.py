@@ -7,7 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from app.core.paths import get_lexicon_source_root
-from app.schemas.russian_program import RussianProgramItem, RussianProgramLevel, RussianProgramResponse
+from app.schemas.russian_program import (
+    RussianProgramItem,
+    RussianProgramLevel,
+    RussianProgramResponse,
+)
 
 
 def _read_json_file(source_path: Path) -> dict[str, Any]:

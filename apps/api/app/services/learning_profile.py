@@ -1,28 +1,27 @@
 from __future__ import annotations
 
-import sqlite3
 import hashlib
 import json
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
 from app.core.paths import resolve_books_root, resolve_user_data_root
-
 from app.schemas.learning import (
     LearningProfileSummary,
     LearningTrackJourneyStep,
     LearningTrackSummary,
     PageReadCreateRequest,
     PageReadRecord,
-    SentenceReadCreateRequest,
-    SentenceReadRecord,
     ReadingSessionCreateRequest,
     ReadingSessionRecord,
-    VocabularyAssessmentReviewRequest,
-    VocabularyAssessmentStateRecord,
+    SentenceReadCreateRequest,
+    SentenceReadRecord,
     StudyVocabularyItemCreateRequest,
     StudyVocabularyItemRecord,
+    VocabularyAssessmentReviewRequest,
+    VocabularyAssessmentStateRecord,
     WordInteractionCreateRequest,
     WordInteractionRecord,
 )

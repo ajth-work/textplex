@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.services.lexicon import import_lexicon_from_source
+from fastapi.testclient import TestClient
 
 
 def test_study_surface_exposes_language_program_levels(tmp_path: Path) -> None:

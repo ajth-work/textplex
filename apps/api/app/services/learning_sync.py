@@ -6,11 +6,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import HTTPException
-
 from app.schemas.learning import LearningSyncResponse
 from app.services import learning_profile
 from app.services.auth import AuthenticatedUserContext, supabase_rest_request
+from fastapi import HTTPException
 
 
 def _utc_now() -> str:

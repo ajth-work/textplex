@@ -8,7 +8,6 @@ from typing import Mapping, Sequence
 
 from .contracts import BookExtractionResult
 
-
 _HSK_NUMBER_RE = re.compile(r"(?<!\d)(\d+(?:\.\d+)?)(?:\s*[-–]\s*(\d+(?:\.\d+)?))?(?!\d)")
 
 

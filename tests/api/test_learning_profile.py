@@ -1,9 +1,8 @@
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.schemas.books import BookRecord
+from fastapi.testclient import TestClient
 
 
 def test_learning_profile_records_session_and_page_read(imported_real_scan: tuple[Path, BookRecord]) -> None:

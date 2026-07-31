@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
-
 from processor.contracts import PageExtractionResult
+from pydantic import BaseModel, Field
 
 OcrProviderMode = Literal["local", "openai"]
 TranslationMode = Literal["off", "preload"]

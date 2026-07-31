@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+import sqlite3
 from contextlib import closing
 from dataclasses import dataclass
-import sqlite3
 from pathlib import Path
 from typing import Any
 
 from app.core.paths import get_lexicon_source_root
-from app.services.lexicon import ensure_lexicon_database, import_lexicon_from_source
 from app.schemas.surfaces import StudyProgramGroup, StudyProgramItem, StudyProgramLevel
+from app.services.lexicon import ensure_lexicon_database, import_lexicon_from_source
 
 
 @dataclass(frozen=True)

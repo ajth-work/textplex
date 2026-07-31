@@ -8,8 +8,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import fitz
-from pypdf import PdfReader
-
 from app.core.paths import get_books_root
 from app.schemas.books import BookPageManifest, BookRecord, PageRecord
 from app.services.book_sources import (
@@ -20,6 +18,7 @@ from app.services.book_sources import (
     render_text_page_image,
 )
 from app.services.ocr import normalize_ocr_provider
+from pypdf import PdfReader
 
 
 def _utc_now() -> str:

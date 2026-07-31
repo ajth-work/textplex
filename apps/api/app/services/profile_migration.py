@@ -9,7 +9,6 @@ from pathlib import Path
 from app.schemas.migration import ProfileMigrationRequest, ProfileMigrationResponse
 from app.services.learning_profile import ensure_profile_database, get_profile_db_path
 
-
 MIGRATABLE_COLUMNS: dict[str, tuple[str, ...]] = {
     "reading_sessions": ("id", "book_id", "started_at", "ended_at", "active_seconds"),
     "page_reads": (

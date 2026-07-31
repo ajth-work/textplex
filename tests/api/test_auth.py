@@ -3,10 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.services import auth as auth_service
+from fastapi.testclient import TestClient
 
 
 def test_auth_me_requires_a_bearer_token() -> None:

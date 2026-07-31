@@ -2,15 +2,14 @@ import json
 from pathlib import Path
 
 import fitz
-from fastapi.testclient import TestClient
 import pytest
-
 from app.main import app
 from app.schemas.books import BookRecord
 from app.schemas.lexicon import LexiconEntryRecord
-from app.services.book_registry import import_book_from_path
 from app.services import book_extraction as book_extraction_service
+from app.services.book_registry import import_book_from_path
 from app.services.ocr import OcrPageResult
+from fastapi.testclient import TestClient
 from processor.contracts import BookExtractionResult
 
 

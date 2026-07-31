@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
-
 from app.schemas.learning import LearningProfileSummary
+from pydantic import BaseModel, Field
 
 
 class AnalysisLexicalEntrySummary(BaseModel):

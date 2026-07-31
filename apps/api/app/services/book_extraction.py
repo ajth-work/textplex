@@ -8,19 +8,38 @@ from pathlib import Path
 from typing import Callable
 from uuid import uuid4
 
-from pypdf import PdfReader
-
 from app.core.paths import get_books_root
 from app.schemas.books import BookRecord, PageExtractionArtifact
-from app.services.book_registry import import_book_from_path, load_registry, save_registry
-from app.services.book_sources import is_text_fixture_source, load_text_fixture_pages, write_text_fixture_source
-from app.services.google_translate import is_google_translate_configured, romanize_texts, translate_text
-from app.services.hebrew_transliteration import transliterate_hebrew_text
+from app.services.book_registry import (
+    import_book_from_path,
+    load_registry,
+    save_registry,
+)
+from app.services.book_sources import (
+    is_text_fixture_source,
+    load_text_fixture_pages,
+    write_text_fixture_source,
+)
+from app.services.google_translate import (
+    is_google_translate_configured,
+    romanize_texts,
+    translate_text,
+)
 from app.services.google_translate_usage import record_google_translate_usage
+from app.services.hebrew_transliteration import transliterate_hebrew_text
 from app.services.lexicon import lookup_lexicon_entry_map, lookup_lexicon_pinyin_map
 from app.services.ocr import get_text_source_signature, resolve_page_ocr
-from processor import build_book_extraction_result, build_page_extraction_result, stitch_page_sentence_carryover
-from processor.contracts import BookExtractionResult, PageExtractionResult, SentenceResult
+from processor import (
+    build_book_extraction_result,
+    build_page_extraction_result,
+    stitch_page_sentence_carryover,
+)
+from processor.contracts import (
+    BookExtractionResult,
+    PageExtractionResult,
+    SentenceResult,
+)
+from pypdf import PdfReader
 
 FIXTURE_TEXT_SOURCE = "fixture"
 FIXTURE_TEXT_SIGNATURE = "fixture-text-v1"

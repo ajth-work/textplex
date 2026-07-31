@@ -1,4 +1,3 @@
-from pathlib import Path
 import json
 import logging
 import os
@@ -6,16 +5,31 @@ import shutil
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
-
-from app.core.paths import get_data_root, get_repo_root, resolve_books_root, resolve_user_data_root
-from app.schemas.auth import AuthMeResponse, HostedProfileSurfaceResponse, HostedProfileUpdateRequest
-from app.schemas.books import BookExtractionRequest, BookImportRequest, BookPageManifest, BookReaderPageResponse, BookRecord, PageExtractionArtifact, SentenceTranslationResponse, TextImportRequest, TextParseRequest
-from app.services.reader_capabilities import get_reader_capabilities
+from app.core.paths import (
+    get_data_root,
+    get_repo_root,
+    resolve_books_root,
+    resolve_user_data_root,
+)
+from app.schemas.auth import (
+    AuthMeResponse,
+    HostedProfileSurfaceResponse,
+    HostedProfileUpdateRequest,
+)
+from app.schemas.books import (
+    BookExtractionRequest,
+    BookImportRequest,
+    BookPageManifest,
+    BookReaderPageResponse,
+    BookRecord,
+    PageExtractionArtifact,
+    SentenceTranslationResponse,
+    TextImportRequest,
+    TextParseRequest,
+)
 from app.schemas.google_translate import GoogleTranslateUsageSummary
 from app.schemas.learning import (
     LearningProfileSummary,
@@ -24,18 +38,52 @@ from app.schemas.learning import (
     PageReadRecord,
     ReadingSessionCreateRequest,
     ReadingSessionRecord,
-    VocabularyAssessmentReviewRequest,
-    VocabularyAssessmentStateRecord,
-    StudyVocabularyItemCreateRequest,
-    StudyVocabularyItemRecord,
     SentenceReadCreateRequest,
     SentenceReadRecord,
+    StudyVocabularyItemCreateRequest,
+    StudyVocabularyItemRecord,
+    VocabularyAssessmentReviewRequest,
+    VocabularyAssessmentStateRecord,
     WordInteractionCreateRequest,
     WordInteractionRecord,
 )
+from app.schemas.lexicon import (
+    LexiconImportRequest,
+    LexiconImportSummary,
+    LexiconLookupResponse,
+)
+from app.schemas.migration import ProfileMigrationRequest, ProfileMigrationResponse
 from app.schemas.russian_program import RussianProgramResponse
-from app.schemas.lexicon import LexiconImportRequest, LexiconImportSummary, LexiconLookupResponse
-from app.schemas.surfaces import ActivitySurfaceResponse, BookAnalysisSurfaceResponse, ImportSurfaceResponse, ProgressSurfaceResponse, ProfileSurfaceResponse, SearchSurfaceResponse, SettingEntry, SettingsSurfaceResponse, SettingsUpdateRequest, StudySurfaceResponse
+from app.schemas.surfaces import (
+    ActivitySurfaceResponse,
+    BookAnalysisSurfaceResponse,
+    ImportSurfaceResponse,
+    ProfileSurfaceResponse,
+    ProgressSurfaceResponse,
+    SearchSurfaceResponse,
+    SettingEntry,
+    SettingsSurfaceResponse,
+    SettingsUpdateRequest,
+    StudySurfaceResponse,
+)
+from app.schemas.themes import (
+    ThemeCatalogResponse,
+    ThemeCheckoutRequest,
+    ThemeCheckoutResponse,
+    ThemeEntitlementResponse,
+)
+from app.services.auth import (
+    AuthenticatedUserContext,
+    get_authenticated_user_context,
+    get_current_user,
+    get_hosted_profile,
+    get_hosted_settings,
+    get_optional_user_context,
+    get_public_user_context,
+    supabase_is_configured,
+    update_hosted_profile,
+    update_hosted_settings,
+)
 from app.services.book_extraction import (
     extract_book_text,
     import_text_into_book,
@@ -45,21 +93,52 @@ from app.services.book_extraction import (
     recover_book_extraction_result,
     translate_page_sentence,
 )
-from app.schemas.migration import ProfileMigrationRequest, ProfileMigrationResponse
-from app.schemas.themes import ThemeCatalogResponse, ThemeCheckoutRequest, ThemeCheckoutResponse, ThemeEntitlementResponse
-from app.services.book_registry import delete_book_from_path, import_book_from_path, load_registry, save_registry
-from app.services.auth import AuthenticatedUserContext, get_authenticated_user_context, get_current_user, get_hosted_profile, get_hosted_settings, get_optional_user_context, get_public_user_context, supabase_is_configured, update_hosted_profile, update_hosted_settings
+from app.services.book_registry import (
+    delete_book_from_path,
+    import_book_from_path,
+    load_registry,
+    save_registry,
+)
+from app.services.commerce import (
+    apply_sandbox_event,
+    create_checkout_session,
+    get_entitlements,
+    verify_sandbox_signature,
+)
 from app.services.google_translate_usage import get_google_translate_usage_summary
-from app.services.learning_profile import create_reading_session, get_learning_profile_summary, record_page_read, record_sentence_read, record_study_vocabulary_item, record_vocabulary_assessment_review, record_word_interaction
+from app.services.learning_profile import (
+    create_reading_session,
+    get_learning_profile_summary,
+    record_page_read,
+    record_sentence_read,
+    record_study_vocabulary_item,
+    record_vocabulary_assessment_review,
+    record_word_interaction,
+)
 from app.services.learning_sync import sync_learning_events
-from app.services.commerce import apply_sandbox_event, create_checkout_session, get_entitlements, verify_sandbox_signature
 from app.services.lexicon import import_lexicon_from_source, lookup_lexicon_entry
+from app.services.profile_migration import (
+    apply_profile_migration,
+    preview_profile_migration,
+)
+from app.services.reader_capabilities import get_reader_capabilities
 from app.services.russian_program import get_russian_program
-from app.services.profile_migration import apply_profile_migration, preview_profile_migration
+from app.services.surfaces import (
+    get_activity_surface,
+    get_book_analysis_surface,
+    get_import_surface,
+    get_profile_surface,
+    get_progress_surface,
+    get_study_surface,
+    load_settings_surface,
+    search_surfaces,
+    update_settings_surface,
+)
 from app.services.themes import get_theme_catalog, validate_theme_settings
-from app.services.surfaces import get_activity_surface, get_book_analysis_surface, get_import_surface, get_progress_surface, get_profile_surface, get_study_surface, load_settings_surface, search_surfaces, update_settings_surface
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from processor.contracts import BookExtractionResult
-
 
 app = FastAPI(title="TextPlex API", version="0.1.0")
 app.state.data_root = get_data_root()

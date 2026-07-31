@@ -4,14 +4,17 @@ import hashlib
 import hmac
 import json
 import os
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-import sqlite3
+from app.schemas.themes import (
+    ThemeCheckoutRequest,
+    ThemeCheckoutResponse,
+    ThemeEntitlementResponse,
+)
 from fastapi import HTTPException
-
-from app.schemas.themes import ThemeCheckoutRequest, ThemeCheckoutResponse, ThemeEntitlementResponse
 
 
 def _utc_now() -> str:

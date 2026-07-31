@@ -5,19 +5,20 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
+from app.core.paths import resolve_books_root
 from app.schemas.books import BookRecord
 from app.schemas.surfaces import (
     ActivityEvent,
     ActivitySurfaceResponse,
-    ReadingHistoryPoint,
-    AnalysisSeriesPoint,
     AnalysisLexicalEntrySummary,
+    AnalysisSeriesPoint,
     BookAnalysisSurfaceResponse,
     ImportRecentBook,
     ImportSurfaceResponse,
+    ProfileSurfaceResponse,
     ProgressBookSummary,
     ProgressSurfaceResponse,
-    ProfileSurfaceResponse,
+    ReadingHistoryPoint,
     SearchResult,
     SearchSurfaceResponse,
     SettingEntry,
@@ -28,12 +29,14 @@ from app.schemas.surfaces import (
     StudyVocabularyGroup,
     StudyVocabularyItem,
 )
-from app.services.book_registry import load_registry
 from app.services.book_extraction import recover_book_extraction_result
-from app.services.learning_profile import ensure_profile_database, get_learning_profile_summary
+from app.services.book_registry import load_registry
+from app.services.learning_profile import (
+    ensure_profile_database,
+    get_learning_profile_summary,
+)
 from app.services.lexicon import lookup_lexicon_hsk_levels_map
 from app.services.study_programs import build_study_program_groups
-from app.core.paths import resolve_books_root
 from processor import calculate_book_hsk_metrics, calculate_hsk_series, is_hanzi
 from processor.contracts import BookExtractionResult
 
