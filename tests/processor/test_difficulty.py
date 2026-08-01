@@ -1,7 +1,15 @@
 import pytest
-
-from processor.contracts import BookExtractionResult, PageExtractionResult, SentenceResult, TokenResult
-from processor.difficulty import calculate_book_hsk_metrics, calculate_hsk_series, parse_hsk_level
+from processor.contracts import (
+    BookExtractionResult,
+    PageExtractionResult,
+    SentenceResult,
+    TokenResult,
+)
+from processor.difficulty import (
+    calculate_book_hsk_metrics,
+    calculate_hsk_series,
+    parse_hsk_level,
+)
 
 
 def _extraction(language_code: str = "zh") -> BookExtractionResult:

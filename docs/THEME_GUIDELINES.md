@@ -2,7 +2,7 @@
 
 Status: active product guideline  
 Scope: every user-facing screen, card, control, state, and reading surface  
-Current theme packs: Neutral, Warm Sepia, Dark Ink, Pitch Black, Jade, Ceramic, Crimson Gold, NES, Famicom, SNES, Super Famicom
+Current theme packs: Neutral, Warm Sepia, Dark Ink, Pitch Black, Jade, Ceramic, Crimson Gold, NES, Famicom, SNES, Super Famicom, Fruit Stand, Garden Harvest, Summer Editions, Fall Editions, International City: Moscow, International City: St. Petersburg, International City: Kazan
 
 ## Purpose
 
@@ -73,14 +73,14 @@ These descriptions define the intended behavior of the current packs. Hex values
 
 | Pack | Canvas direction | Card direction | Text direction | Accent direction | Avoid |
 | --- | --- | --- | --- | --- | --- |
-| Neutral | Warm ivory with a light editorial gradient | Ivory and soft white | Charcoal and slate | Restrained amber | Flat white everywhere. |
+| Neutral | White and cool grey with a near-white editorial gradient | White and very light grey | Black and cool graphite | Slate grey | Warm ivory, orange accents, or grey text that disappears on white. |
 | Warm Sepia | Parchment, tea, and aged paper | Cream and parchment | Deep brown | Burnt orange and tea brown | Brown-on-brown metadata. |
 | Dark Ink | Blue-charcoal and near-black | Soft charcoal | Ivory and cool white | Warm gold | Pure white text at every level. |
 | Pitch Black | Near-black with minimal atmosphere | Black and graphite | Soft white | Quiet cool gold | Thin grey text and invisible borders. |
 | Jade | Deep green with restrained gold light | Deep jade green | Ivory, pale jade, and warm gold | Jade-gold | Dark blue inherited from default styles. |
 | Ceramic | Porcelain, mist, and slate | White porcelain and cool grey | Graphite and slate | Slate blue-grey | Low-contrast grey on white. |
 | Crimson Gold | Lacquer red and deep wine | Warm gold-paper or cream | Pale gold on the canvas; dark red on cards | Luminous gold | Dark red text on dark red canvas. |
-| NES | Deep navy, cartridge grey, and signal red | Warm cartridge grey and soft navy | Cream on canvas; navy on cards | Signal red | Literal pixel-art treatment or red text on red fills. |
+| NES | Console grey with a restrained signal-red atmosphere | Near-black cards and graphite controls | Cream on canvas and soft white on cards | Signal red | Literal pixel-art treatment or red text on red fills. |
 | Famicom | Cream plastic and oxblood red | Warm ivory and charcoal | Charcoal and cream | Oxblood red | Over-saturating the page with red. |
 | SNES | Graphite lavender and cool plum | Pale lavender and soft graphite | Cream on canvas; plum on cards | Muted purple | Neon arcade gradients or low-contrast violet text. |
 | Super Famicom | Charcoal hardware, teal atmosphere, and coral detail | Soft graphite and warm porcelain | Cream on canvas; charcoal on cards | Coral with amber support | Treating the palette as a literal controller illustration. |
@@ -107,6 +107,9 @@ Rules:
 - Shadows are supportive. A theme must still work when shadows are reduced or unavailable.
 - Rounded corners and spacing remain product-level conventions. Themes change color, border, and atmosphere, not component geometry without a deliberate design decision.
 - Cover art, book artwork, and extracted page images are content. Do not apply a global color filter that damages them.
+- Optional canvas artwork may use a low-contrast, repeatable pattern when it reinforces the theme pack. Keep the artwork behind a translucent readability wash, avoid placing it over reading text or content cards, and preserve the same pattern scale across mobile and desktop.
+- Canvas artwork uses a single cover image rather than a repeated tile. Settings exposes a `0`-`100` artwork-opacity control; this affects only the themed canvas layer and must not reduce card, control, or reading-text opacity.
+- In the reader, the canvas artwork layer is viewport-fixed so sentence navigation and content scrolling do not shift the artwork position.
 
 ## Typography Rules
 
@@ -199,6 +202,184 @@ Specific controls:
 - The Classic Consoles bundle contains NES, Famicom, SNES, and Super Famicom. Its `$6.49` bundle price is discounted from `$7.96`, saving `$1.47`.
 - Bundle presentation is a catalog offer only until checkout and entitlement infrastructure exists. Do not imply payment completion from a preview or theme-selection action.
 - Bundle names and palette descriptions should communicate the shared design direction without using console logos, screenshots, or copied hardware artwork.
+
+### Planned Produce Collections
+
+These are implemented produce-inspired collections rather than literal illustrations: the fruit or vegetable is recognizable through hue, temperature, and material mood while the reader remains the priority surface.
+
+Shared rules:
+
+- Add stable IDs exactly as shown below; keep individual catalog pricing at `$1.99` per theme.
+- Treat `canvas`, `surface`, `card`, `card-raised`, `text`, `card-text`, `muted`, `card-muted`, `accent`, `accent-strong`, `accent-soft`, `border`, `focus`, `positive`, `warning`, `danger`, `reader-text`, and `reader-selected` as required roles.
+- Use a restrained two- or three-color identity per theme. Fruit/vegetable colors should shape the atmosphere and accents, not tint book artwork or page images.
+- Proposed six-theme collection pricing: `$8.99` each, down from `$11.94`, saving `$2.95` per collection. Keep this as catalog copy until the server catalog is updated.
+
+#### Fruit Stand
+
+Suggested bundle title: `Fruit Stand` — bright, fresh, and market-inspired without becoming playful UI chrome.
+
+| ID | Theme | Canvas / surface direction | Card / text direction | Accent direction | Guardrail |
+| --- | --- | --- | --- | --- | --- |
+| `fruit-strawberry` | Strawberry | Pale blush, warm cream, and a soft berry haze | Ivory cards; charcoal text with restrained plum metadata | Strawberry red with a small leaf-green positive state | Never use red text on red or pink fills. |
+| `fruit-blueberry` | Blueberry | Mist blue into deep blue-charcoal | Cool white cards; navy card text and slate metadata | Blueberry indigo with a muted lavender focus ring | Keep blue-black text off the darkest canvas. |
+| `fruit-citrus` | Citrus | Lemon cream with a restrained tangerine wash | Warm white cards; espresso text and amber metadata | Orange-coral accent with lemon used only as a soft fill | Yellow is a fill or highlight, never primary text. |
+| `fruit-mango` | Mango | Golden apricot, peach, and warm parchment | Cream cards; cocoa text with burnt-orange metadata | Mango orange with a muted green positive state | Avoid orange body text on peach surfaces. |
+| `fruit-watermelon` | Watermelon | Pale rind green with a cool blush transition | Cream cards; deep rind-green text and slate metadata | Watermelon coral-pink with rind-green support | Keep coral and green in separate roles; do not checkerboard them. |
+| `fruit-grape` | Grape | Muted lavender, dusty mauve, and soft ink | Pale lilac cards; deep plum text and cool slate metadata | Grape purple with a rose-lavender focus state | Avoid neon purple and purple text on dark purple. |
+
+#### Garden Harvest
+
+Suggested bundle title: `Garden Harvest` — grounded, botanical, and slightly more muted than Fruit Stand.
+
+| ID | Theme | Canvas / surface direction | Card / text direction | Accent direction | Guardrail |
+| --- | --- | --- | --- | --- | --- |
+| `vegetable-avocado` | Avocado | Soft sage, avocado cream, and deep forest atmosphere | Pale green-cream cards; forest card text and olive metadata | Avocado green with warm lime only for soft selection fills | Do not use mid-green for small text on sage. |
+| `vegetable-carrot` | Carrot | Warm sand and muted carrot-orange atmosphere | Cream cards; charcoal text and clay metadata | Carrot orange with a leafy green positive state | Keep orange out of long-form reader text. |
+| `vegetable-tomato` | Tomato | Dusty tomato blush, cream, and muted basil | Warm ivory cards; deep charcoal text with rust metadata | Tomato red, with basil green reserved for positive states | Avoid saturated red canvases and red-on-cream metadata. |
+| `vegetable-corn` | Corn | Butter yellow softened by oat and olive | Warm cream cards; deep olive text and brown metadata | Golden corn with a muted green support accent | Yellow belongs to fills, borders, and highlights—not text. |
+| `vegetable-cucumber` | Cucumber | Cool mint, cucumber green, and pale water-blue | Porcelain cards; deep green text and slate metadata | Fresh cucumber green with a blue-green focus ring | Do not let mint and white collapse into one surface. |
+| `vegetable-eggplant` | Eggplant | Aubergine, dusty violet, and deep charcoal | Pale lavender cards; deep plum text and cool grey metadata | Eggplant purple with a soft sage positive state | Keep plum text off aubergine and dark violet fills. |
+
+#### Summer Editions
+
+Suggested bundle title: `Summer Editions` — three illustrated seasonal atmospheres priced at `$1.99` individually or `$4.99` as a pack.
+
+| ID | Theme | Canvas / surface direction | Card / text direction | Accent direction | Guardrail |
+| --- | --- | --- | --- | --- | --- |
+| `season-summer-citrus` | Citrus Grove | Warm cream, lemon yellow, orange, and botanical green | Cream cards; espresso text with orange and leaf-green metadata | Citrus orange with botanical green support | Keep yellow as a fill or highlight, never small body text. |
+| `season-summer-meadow` | Sunlit Meadow | Pale sky blue, cream, sunflower yellow, and meadow green | Soft white cards; deep green text with slate metadata | Sunflower yellow with meadow-green positive states | Preserve enough blue-white separation for skeletons and muted copy. |
+| `season-summer-seaside` | Seaside Garden | Aqua, sand, coral, and deep teal | Porcelain cards; deep teal text with soft coral metadata | Coral for action emphasis and teal for support | Keep coral out of long-form text and avoid aqua-on-white collapse. |
+
+#### Fall Editions: Maple Walk
+
+Theme family ID: `season-fall-maple-walk`. These two `$1.99` seasonal variants use supplied maple, acorn, berry, branch, and leaf artwork as a calm fall reading atmosphere.
+
+| ID | Theme | Variant | Canvas / surface direction | Card / text direction | Accent direction | Contrast risk |
+| --- | --- | --- | --- | --- | --- |
+| `season-fall-maple-daylight` | Maple Walk — Daylight | Daylight | Parchment, warm cream, rust, amber, and olive | Warm cream cards with deep brown text and muted olive metadata | Rust for actions; amber and olive for support | Keep amber out of small text on cream; use dark brown for all reading copy. |
+| `season-fall-maple-night` | Maple Walk — Night | Night | Charcoal, ember, dark umber, and muted leaf tones | Dark raised cards with warm ivory text and softened metadata | Ember orange for actions; muted gold for focus | Do not use brown or orange text on the dark canvas; keep body copy warm ivory. |
+
+Motifs and rationale:
+
+- Maple leaves, oak leaves, acorns, berries, branches, and sparse falling leaves create a recognizable fall walking-season thread.
+- Daylight uses parchment and warm leaf color without turning the interface into orange-on-cream text.
+- Night is independently recolored for low-light reading with charcoal surfaces, ember leaves, dim foliage, and restrained warm points of light.
+
+Catalog metadata:
+
+- `season-fall-maple-daylight`: display title `Maple Walk — Daylight`, variant `daylight`, collection `Fall Editions`, cultural thread `maple leaves + woodland details`, price `$1.99`.
+- `season-fall-maple-night`: display title `Maple Walk — Night`, variant `night`, collection `Fall Editions`, cultural thread `maple leaves + woodland details`, price `$1.99`.
+- Inspired by autumn maple walks, acorns, berry branches, woodland leaves, and late-season light.
+
+#### Fall Editions: Pumpkin Patch
+
+Theme family ID: `season-fall-pumpkin-patch`. These two `$1.99` seasonal variants use supplied pumpkin, vine, leaf, blossom, and lantern-light artwork for a harvest reading atmosphere.
+
+| ID | Theme | Variant | Canvas / surface direction | Card / text direction | Accent direction | Contrast risk |
+| --- | --- | --- | --- | --- | --- | --- |
+| `season-fall-pumpkin-daylight` | Pumpkin Patch — Daylight | Daylight | Oat cream, pumpkin orange, sage, and deep brown | Warm cream cards with dark brown text and softened sage metadata | Pumpkin orange for actions; olive-sage for support | Keep orange and sage out of small text on cream; use dark brown for all reading copy. |
+| `season-fall-pumpkin-night` | Pumpkin Patch — Night | Night | Charcoal, pumpkin ember, muted vine green, and warm lantern light | Charcoal raised cards with warm ivory text and quiet muted metadata | Ember orange for actions; lantern gold for focus | Do not use orange or green as body text on charcoal; keep reading copy warm ivory. |
+
+Motifs and rationale:
+
+- Pumpkins, curled vines, leaves, small blossoms, and sparse lantern points create a focused harvest-patch thread without turning the interface into a Halloween novelty.
+- Daylight uses oat cream and sage to keep the pumpkin-orange artwork warm but readable.
+- Night is independently recolored for low-light reading with charcoal space, ember pumpkins, muted foliage, and restrained warm lights.
+
+Catalog metadata:
+
+- `season-fall-pumpkin-daylight`: display title `Pumpkin Patch — Daylight`, variant `daylight`, collection `Fall Editions`, cultural thread `pumpkin harvest + vine garden details`, price `$1.99`.
+- `season-fall-pumpkin-night`: display title `Pumpkin Patch — Night`, variant `night`, collection `Fall Editions`, cultural thread `pumpkin harvest + vine garden details`, price `$1.99`.
+- Inspired by autumn pumpkin patches, curling squash vines, garden leaves, small blossoms, and evening lantern light.
+
+#### Fall Editions: Harvest Orchard
+
+Theme family ID: `season-fall-harvest-orchard`. These two `$1.99` seasonal variants use supplied apple, pear, blossom, branch, maple leaf, and orchard-light artwork for an autumn harvest reading atmosphere.
+
+| ID | Theme | Variant | Canvas / surface direction | Card / text direction | Accent direction | Contrast risk |
+| --- | --- | --- | --- | --- | --- | --- |
+| `season-fall-harvest-daylight` | Harvest Orchard - Daylight | Daylight | Warm ivory, cranberry, golden wheat, and orchard green | Warm ivory cards with deep brown text and softened green metadata | Cranberry for actions; wheat-gold for support | Keep gold and green out of small text on ivory; use deep brown for all reading copy. |
+| `season-fall-harvest-night` | Harvest Orchard - Night | Night | Midnight navy, cranberry fruit, amber leaves, and soft orchard light | Navy raised cards with warm ivory text and muted neutral metadata | Cranberry and amber for actions; wheat-gold for focus | Do not use navy, brown, or muted green as text on the night canvas; keep body copy warm ivory. |
+
+Motifs and rationale:
+
+- Apples, pears, blossom branches, maple leaves, and sparse warm lights create a specific orchard-harvest thread without treating fall as a generic orange palette.
+- Daylight uses warm ivory and orchard green to keep cranberry fruit and golden foliage readable.
+- Night is independently recolored for low-light reading with midnight navy, deep fruit tones, amber leaves, and restrained points of light.
+
+Catalog metadata:
+
+- `season-fall-harvest-daylight`: display title `Harvest Orchard - Daylight`, variant `daylight`, collection `Fall Editions`, cultural thread `apple orchard + autumn harvest details`, price `$1.99`.
+- `season-fall-harvest-night`: display title `Harvest Orchard - Night`, variant `night`, collection `Fall Editions`, cultural thread `apple orchard + autumn harvest details`, price `$1.99`.
+- Inspired by autumn orchards, apples, pears, blossom branches, maple leaves, and late-season light.
+
+#### International City: Moscow
+
+Theme family ID: `international-moscow`. The two variants are separate `$1.99` products in the Russian collection and share a Moscow-specific architecture and birch-botanical thread. The artwork uses supplied user assets; it is not intended to represent all of Russia or Russian culture.
+
+| ID | Theme | Variant / region | Canvas / surface direction | Card / text direction | Accent direction | Contrast risk |
+| --- | --- | --- | --- | --- | --- | --- |
+| `city-moscow-daylight` | Moscow — Daylight | Daylight / Moscow, Russia | Pale birch blue-grey, cool stone, and a warm editorial wash | Warm ivory cards with dark blue-grey text and slate metadata | Brick red for actions; muted gold for focus and progress | Keep brick red out of small text on blush or warm ivory fills; use dark blue-grey for all reading copy. |
+| `city-moscow-night` | Moscow — Night | Night / Moscow, Russia | Deep navy with cool branches and restrained burgundy depth | Navy raised cards with light neutral text and softened white metadata | Warm architectural gold for actions and selected states | Never use navy or burgundy text on the night canvas; gold is reserved for readable emphasis and must not carry long-form copy. |
+
+Motifs and rationale:
+
+- Birch branches and sparse leaves provide the primary botanical thread and keep the repeat composition quiet around reading content.
+- Red-brick tower geometry, clock details, and onion-dome silhouettes provide recognizable Moscow architectural cues without using flags, maps, logos, or a tourist-poster collage.
+- The Daylight variant uses pale stone, birch, and washed architectural red for a calm editorial atmosphere.
+- The Night variant is independently composed in deep navy with cool branches and restrained warm window-light details for low-light reading; it is not an inverted Daylight asset.
+
+Catalog metadata:
+
+- `city-moscow-daylight`: display title `Moscow — Daylight`, variant `daylight`, language collection `Russian`, region `Moscow, Russia`, cultural thread `architecture + birch botanicals`, price `$1.99`.
+- `city-moscow-night`: display title `Moscow — Night`, variant `night`, language collection `Russian`, region `Moscow, Russia`, cultural thread `architecture + birch botanicals`, price `$1.99`.
+- Inspired by Moscow red-brick architectural geometry, onion-dome silhouettes, birch branches, sparse leaves, and warm evening illumination.
+
+#### International City: St. Petersburg
+
+Theme family ID: `international-st-petersburg`. These two `$1.99` Russian-city variants use a shared canals-and-public-space thread. The artwork uses supplied user assets and focuses on St. Petersburg-specific water, bridge, façade, lamp, and botanical details rather than claiming to represent all of Russia.
+
+| ID | Theme | Variant / region | Canvas / surface direction | Card / text direction | Accent direction | Contrast risk |
+| --- | --- | --- | --- | --- | --- | --- |
+| `city-st-petersburg-daylight` | St. Petersburg — Daylight | Daylight / St. Petersburg, Russia | Pale water, warm ivory, mist green, and washed blue | Warm ivory cards with dark teal-grey text and blue-grey metadata | Canal blue for actions; muted brass for focus and progress | Keep pale blue and brass out of small text; use dark teal-grey on every light surface. |
+| `city-st-petersburg-night` | St. Petersburg — Night | Night / St. Petersburg, Russia | Deep canal navy with cool floral blue and reflected lamp light | Deep blue raised cards with soft ivory text and cool muted metadata | Warm lamp gold for actions and selected states | Never use blue-grey text on the night canvas; reserve gold for short emphasis and keep long-form text ivory. |
+
+Motifs and rationale:
+
+- Canal water and reflected light provide the primary visual thread, with generous negative space preserved for reading content.
+- Pale architectural façades, classical domes, narrow spires, bridge silhouettes, and wrought-iron lamps reference the city's built environment without using flags, maps, logos, or a landmark collage.
+- Blue flowers, leaves, and swallows carry the same gentle illustrated language across both variants.
+- The Night variant is separately composed in deep navy with illuminated lamps, windows, water reflections, and restrained stars for low-light reading.
+
+Catalog metadata:
+
+- `city-st-petersburg-daylight`: display title `St. Petersburg — Daylight`, variant `daylight`, language collection `Russian`, region `St. Petersburg, Russia`, cultural thread `canals + architecture + botanicals`, price `$1.99`.
+- `city-st-petersburg-night`: display title `St. Petersburg — Night`, variant `night`, language collection `Russian`, region `St. Petersburg, Russia`, cultural thread `canals + architecture + botanicals`, price `$1.99`.
+- Inspired by St. Petersburg canal water, pale façades, bridge and lamp silhouettes, northern twilight, blue flowers, leaves, and swallows.
+
+#### International City: Kazan
+
+Theme family ID: `international-kazan`. These two `$1.99` Russian-city variants use a shared architectural, botanical, and ornamental thread. The artwork uses supplied user assets and focuses on Kazan-specific mosque, tower, stone, and decorative details without claiming to represent all of Russia or Tatar culture.
+
+| ID | Theme | Variant / region | Canvas / surface direction | Card / text direction | Accent direction | Contrast risk |
+| --- | --- | --- | --- | --- | --- | --- |
+| `city-kazan-daylight` | Kazan — Daylight | Daylight / Kazan, Russia | Warm cream, pale stone, terracotta, and muted teal | Ivory cards with deep olive-grey text and restrained metadata | Terracotta for actions; teal for focus and positive states | Keep terracotta out of small text on cream; use olive-grey for body and reader text. |
+| `city-kazan-night` | Kazan — Night | Night / Kazan, Russia | Deep blue with silver foliage, warm windows, stars, and quiet ornament | Deep blue raised cards with soft ivory text and gold metadata | Warm gold for actions and selected states | Never use navy or muted blue text on the night canvas; keep stars and gold as accents, not body text. |
+
+Motifs and rationale:
+
+- Mosque domes, slender minarets, historic tower forms, and pale stone architecture provide the primary Kazan-specific visual thread.
+- Botanical branches and restrained ornamental motifs support the repeat without turning the wallpaper into a literal emblem or flag treatment.
+- The Daylight variant uses cream, terracotta, muted teal, and sage for a calm architectural reading atmosphere.
+- The Night variant is separately composed in deep blue with illuminated buildings, stars, a crescent detail, and silver foliage for low-light reading.
+
+Catalog metadata:
+
+- `city-kazan-daylight`: display title `Kazan — Daylight`, variant `daylight`, language collection `Russian`, region `Kazan, Russia`, cultural thread `architecture + botanicals + ornament`, price `$1.99`.
+- `city-kazan-night`: display title `Kazan — Night`, variant `night`, language collection `Russian`, region `Kazan, Russia`, cultural thread `architecture + botanicals + ornament`, price `$1.99`.
+- Inspired by Kazan mosque domes, minarets, historic towers, pale stone architecture, botanical branches, restrained ornamental motifs, and northern night-sky details.
+
+Implementation order: define the semantic token blocks and swatches first, then add the individual catalog entries, then add any bundle cards and entitlement IDs. Verify each collection in Profile, Theme Shop, Settings, Home, Library, and Reader at the mobile and desktop acceptance sizes before expanding the catalog.
 
 ### Import, Search, Activity, Settings, and Roadmap
 

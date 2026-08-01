@@ -3,14 +3,21 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.schemas.learning import ReadingSessionCreateRequest
 from app.schemas.migration import ProfileMigrationRequest
 from app.services import auth as auth_service
-from app.services.learning_profile import create_reading_session, get_learning_profile_summary, get_profile_db_path
-from app.services.profile_migration import apply_profile_migration, preview_profile_migration
+from app.services.learning_profile import (
+    create_reading_session,
+    get_learning_profile_summary,
+    get_profile_db_path,
+)
+from app.services.profile_migration import (
+    apply_profile_migration,
+    preview_profile_migration,
+)
+from fastapi.testclient import TestClient
+from typing_extensions import Self
 
 
 def _configure_supabase(monkeypatch) -> None:
@@ -79,6 +86,53 @@ def test_unconfigured_theme_catalog_is_server_defined(monkeypatch) -> None:
     assert themes["neutral"]["is_owned"] is True
     assert themes["jade"]["price_cents"] == 199
     assert themes["jade"]["is_owned"] is False
+    assert themes["fruit-strawberry"]["price_cents"] == 199
+    assert themes["vegetable-eggplant"]["is_owned"] is False
+    assert themes["season-summer-citrus"]["price_cents"] == 199
+    assert themes["season-summer-citrus-night"]["price_cents"] == 199
+    assert themes["season-summer-meadow-night"]["is_owned"] is False
+    assert themes["season-summer-seaside-night"]["is_owned"] is False
+    assert themes["city-moscow-daylight"]["price_cents"] == 199
+    assert themes["city-moscow-night"]["is_owned"] is False
+    assert themes["city-st-petersburg-daylight"]["price_cents"] == 199
+    assert themes["city-st-petersburg-night"]["is_owned"] is False
+    assert themes["city-kazan-daylight"]["price_cents"] == 199
+    assert themes["city-kazan-night"]["is_owned"] is False
+    assert themes["season-fall-maple-daylight"]["price_cents"] == 199
+    assert themes["season-fall-maple-night"]["is_owned"] is False
+    assert themes["season-fall-pumpkin-daylight"]["price_cents"] == 199
+    assert themes["season-fall-pumpkin-night"]["is_owned"] is False
+    assert themes["season-fall-harvest-daylight"]["price_cents"] == 199
+    assert themes["season-fall-harvest-night"]["is_owned"] is False
+    bundles = {item["id"]: item for item in response.json()["bundles"]}
+    assert bundles["fruit-stand"]["theme_ids"] == [
+        "fruit-strawberry",
+        "fruit-blueberry",
+        "fruit-citrus",
+        "fruit-mango",
+        "fruit-watermelon",
+        "fruit-grape",
+    ]
+    assert bundles["fruit-stand"]["price_cents"] == 899
+    assert bundles["garden-harvest"]["price_cents"] == 899
+    assert bundles["summer-editions"]["theme_ids"] == [
+        "season-summer-citrus",
+        "season-summer-citrus-night",
+        "season-summer-meadow",
+        "season-summer-meadow-night",
+        "season-summer-seaside",
+        "season-summer-seaside-night",
+    ]
+    assert bundles["summer-editions"]["price_cents"] == 899
+    assert bundles["fall-editions"]["theme_ids"] == [
+        "season-fall-maple-daylight",
+        "season-fall-maple-night",
+        "season-fall-pumpkin-daylight",
+        "season-fall-pumpkin-night",
+        "season-fall-harvest-daylight",
+        "season-fall-harvest-night",
+    ]
+    assert bundles["fall-editions"]["price_cents"] == 899
 
 
 def test_hosted_settings_use_token_and_server_entitlements(monkeypatch) -> None:
@@ -89,7 +143,7 @@ def test_hosted_settings_use_token_and_server_entitlements(monkeypatch) -> None:
         def __init__(self, payload: object) -> None:
             self.payload = payload
 
-        def __enter__(self) -> "FakeResponse":
+        def __enter__(self) -> Self:
             return self
 
         def __exit__(self, *args: object) -> None:
@@ -100,8 +154,8 @@ def test_hosted_settings_use_token_and_server_entitlements(monkeypatch) -> None:
 
     def fake_urlopen(request: object, timeout: int) -> FakeResponse:
         assert timeout == 5
-        url = getattr(request, "full_url")
-        headers = getattr(request, "headers")
+        url = request.full_url
+        headers = request.headers
         if url.endswith("/auth/v1/user"):
             assert headers["Authorization"] == "Bearer valid-token"
             return FakeResponse({"id": "user-123", "email": "reader@example.com"})

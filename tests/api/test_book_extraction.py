@@ -2,14 +2,14 @@ import json
 from pathlib import Path
 
 import fitz
-from fastapi.testclient import TestClient
 import pytest
-
 from app.main import app
 from app.schemas.books import BookRecord
-from app.services.book_registry import import_book_from_path
+from app.schemas.lexicon import LexiconEntryRecord
 from app.services import book_extraction as book_extraction_service
+from app.services.book_registry import import_book_from_path
 from app.services.ocr import OcrPageResult
+from fastapi.testclient import TestClient
 from processor.contracts import BookExtractionResult
 
 
@@ -146,6 +146,164 @@ def test_extract_book_text_records_openai_ocr_metadata(monkeypatch: pytest.Monke
     assert page_json["page"]["sentences"][0]["text"] == "这是第一句。"
     assert page_json["page"]["page_translation"] == "This is page one."
     assert page_json["page"]["sentences"][0]["translation"] == "This is the first sentence."
+
+
+def test_parse_text_into_page_artifact_enriches_korean_pronunciation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fake_entry_map(*, terms, **_kwargs):
+        return {
+            term: LexiconEntryRecord(
+                id=index + 1,
+                language_code="ko",
+                entry_type="word",
+                surface_form=term,
+                pinyin=term,
+                definition=f"definition for {term}",
+            )
+            for index, term in enumerate(terms)
+        }
+
+    def fake_pinyin_map(*, terms, **_kwargs):
+        return {term: term for term in terms}
+
+    monkeypatch.setattr(book_extraction_service, "lookup_lexicon_entry_map", fake_entry_map)
+    monkeypatch.setattr(book_extraction_service, "lookup_lexicon_pinyin_map", fake_pinyin_map)
+
+    artifact = book_extraction_service.parse_text_into_page_artifact(
+        text="아침에 가게에 갔어요.",
+        language_code="ko",
+        title="한국어",
+        data_root=tmp_path,
+    )
+
+    token_readings = [token.romanization for token in artifact.page.sentences[0].tokens]
+
+    assert token_readings == ["아침에", "가게에", "갔어요"]
+    assert artifact.page.sentences[0].tokens[0].definition_short == "definition for 아침에"
+
+
+def test_parse_text_into_page_artifact_enriches_japanese_reading(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fake_entry_map(*, terms, **_kwargs):
+        return {
+            term: LexiconEntryRecord(
+                id=index + 1,
+                language_code="ja",
+                entry_type="word",
+                surface_form=term,
+                pinyin=f"reading-{term}",
+                definition=f"definition for {term}",
+            )
+            for index, term in enumerate(terms)
+        }
+
+    def fake_pinyin_map(*, terms, **_kwargs):
+        return {term: f"reading-{term}" for term in terms}
+
+    monkeypatch.setattr(book_extraction_service, "lookup_lexicon_entry_map", fake_entry_map)
+    monkeypatch.setattr(book_extraction_service, "lookup_lexicon_pinyin_map", fake_pinyin_map)
+
+    artifact = book_extraction_service.parse_text_into_page_artifact(
+        text="\u4eca\u65e5\u306f\u56f3\u66f8\u9928\u3067\u52c9\u5f37\u3057\u307e\u3057\u305f\u3002",
+        language_code="ja",
+        title="\u65e5\u672c\u8a9e",
+        data_root=tmp_path,
+    )
+
+    token_surfaces = [token.surface_form for token in artifact.page.sentences[0].tokens]
+
+    assert token_surfaces == ["\u4eca\u65e5", "\u306f", "\u56f3\u66f8\u9928", "\u3067", "\u52c9\u5f37", "\u3057\u307e\u3057\u305f"]
+    assert artifact.page.sentences[0].tokens[0].romanization == "reading-\u4eca\u65e5"
+    assert artifact.page.sentences[0].tokens[2].definition_short == "definition for \u56f3\u66f8\u9928"
+
+
+def test_parse_text_into_page_artifact_uses_google_romanization_when_local_readings_are_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(book_extraction_service, "lookup_lexicon_entry_map", lambda **_kwargs: {})
+    monkeypatch.setattr(book_extraction_service, "lookup_lexicon_pinyin_map", lambda **_kwargs: {})
+    monkeypatch.setattr(book_extraction_service, "is_google_translate_configured", lambda: True)
+    monkeypatch.setattr(
+        book_extraction_service,
+        "romanize_texts",
+        lambda texts, **_kwargs: [f"romanized-{text}" for text in texts],
+    )
+
+    artifact = book_extraction_service.parse_text_into_page_artifact(
+        text="сегодня я занимался в библиотеке.",
+        language_code="ru",
+        title="Русский",
+        data_root=tmp_path,
+    )
+
+    token_readings = [token.romanization for token in artifact.page.sentences[0].tokens]
+
+    assert token_readings == [
+        "romanized-сегодня",
+        "romanized-я",
+        "romanized-занимался",
+        "romanized-в",
+        "romanized-библиотеке",
+    ]
+    assert artifact.page.sentences[0].tokens[0].pronunciation == "romanized-сегодня"
+
+
+def test_parse_text_into_page_artifact_uses_google_romanization_for_hebrew_without_local_pack(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def raise_missing_pack(*_args, **_kwargs):
+        raise FileNotFoundError
+
+    monkeypatch.setattr(book_extraction_service, "lookup_lexicon_entry_map", raise_missing_pack)
+    monkeypatch.setattr(book_extraction_service, "lookup_lexicon_pinyin_map", raise_missing_pack)
+    monkeypatch.setattr(book_extraction_service, "is_google_translate_configured", lambda: True)
+    monkeypatch.setattr(
+        book_extraction_service,
+        "romanize_texts",
+        lambda texts, **_kwargs: [f"romanized-{text}" for text in texts],
+    )
+
+    artifact = book_extraction_service.parse_text_into_page_artifact(
+        text="\u05d0\u05e0\u05d9 \u05d1\u05d1\u05d9\u05ea.",
+        language_code="he",
+        title="\u05e2\u05d1\u05e8\u05d9\u05ea",
+        data_root=tmp_path,
+    )
+
+    token_readings = [token.romanization for token in artifact.page.sentences[0].tokens]
+
+    assert token_readings == ["romanized-\u05d0\u05e0\u05d9", "romanized-\u05d1\u05d1\u05d9\u05ea"]
+    assert artifact.page.sentences[0].tokens[0].pronunciation == "romanized-\u05d0\u05e0\u05d9"
+
+
+def test_parse_text_into_page_artifact_uses_hebrew_transliteration_when_google_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def raise_missing_pack(*_args, **_kwargs):
+        raise FileNotFoundError
+
+    monkeypatch.setattr(book_extraction_service, "lookup_lexicon_entry_map", raise_missing_pack)
+    monkeypatch.setattr(book_extraction_service, "lookup_lexicon_pinyin_map", raise_missing_pack)
+    monkeypatch.setattr(book_extraction_service, "is_google_translate_configured", lambda: False)
+
+    artifact = book_extraction_service.parse_text_into_page_artifact(
+        text="\u05e9\u05dc\u05d5\u05dd \u05d0\u05e0\u05d9.",
+        language_code="he",
+        title="\u05e2\u05d1\u05e8\u05d9\u05ea",
+        data_root=tmp_path,
+    )
+
+    token_readings = [token.romanization for token in artifact.page.sentences[0].tokens]
+
+    assert token_readings == ["shlom", "ani"]
+    assert artifact.page.sentences[0].tokens[0].pronunciation == "shlom"
 
 
 def test_load_page_artifact_recovers_malformed_jsonish_transcription(tmp_path: Path) -> None:

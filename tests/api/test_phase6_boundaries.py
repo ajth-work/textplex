@@ -5,9 +5,6 @@ import hmac
 import json
 from pathlib import Path
 
-from fastapi import HTTPException
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.schemas.auth import AuthMeResponse
 from app.schemas.themes import ThemeCheckoutRequest
@@ -19,7 +16,8 @@ from app.services.commerce import (
     create_checkout_session,
     get_local_owned_theme_ids,
 )
-
+from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 SOURCE_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "books" / "alice-mini"
 

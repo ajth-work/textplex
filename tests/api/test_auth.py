@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.services import auth as auth_service
+from fastapi.testclient import TestClient
+from typing_extensions import Self
 
 
 def test_auth_me_requires_a_bearer_token() -> None:
@@ -24,7 +24,7 @@ def test_auth_me_validates_token_with_supabase(monkeypatch, tmp_path: Path) -> N
     monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "publishable-key")
 
     class FakeResponse:
-        def __enter__(self) -> "FakeResponse":
+        def __enter__(self) -> Self:
             return self
 
         def __exit__(self, *args: object) -> None:
@@ -41,8 +41,8 @@ def test_auth_me_validates_token_with_supabase(monkeypatch, tmp_path: Path) -> N
             ).encode("utf-8")
 
     def fake_urlopen(request: object, timeout: int) -> FakeResponse:
-        assert getattr(request, "full_url") == "https://project.example.supabase.co/auth/v1/user"
-        assert getattr(request, "headers")["Authorization"] == "Bearer valid-token"
+        assert request.full_url == "https://project.example.supabase.co/auth/v1/user"
+        assert request.headers["Authorization"] == "Bearer valid-token"
         assert timeout == 5
         return FakeResponse()
 
@@ -67,7 +67,7 @@ def test_hosted_profile_reads_user_owned_supabase_rows(monkeypatch) -> None:
         def __init__(self, payload: object) -> None:
             self.payload = payload
 
-        def __enter__(self) -> "FakeResponse":
+        def __enter__(self) -> Self:
             return self
 
         def __exit__(self, *args: object) -> None:
@@ -78,8 +78,8 @@ def test_hosted_profile_reads_user_owned_supabase_rows(monkeypatch) -> None:
 
     def fake_urlopen(request: object, timeout: int) -> FakeResponse:
         assert timeout == 5
-        url = getattr(request, "full_url")
-        assert getattr(request, "headers")["Authorization"] == "Bearer valid-token"
+        url = request.full_url
+        assert request.headers["Authorization"] == "Bearer valid-token"
         if url.endswith("/auth/v1/user"):
             return FakeResponse({"id": "user-123", "email": "reader@example.com"})
         if "/rest/v1/profiles?" in url:

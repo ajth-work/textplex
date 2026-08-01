@@ -31,27 +31,42 @@ test("canonical deployment docs keep the browser and API ports explicit", () => 
 
 test("Next keeps the import-to-reader-progress wiring explicit", () => {
   const importSource = read("apps", "web", "components", "surface-views.tsx");
+  const appShellSource = read("apps", "web", "components", "app-shell.tsx");
   const readerSource = read("apps", "web", "components", "reader-view.tsx");
 
   assert.match(importSource, /postJson<BookRecord>\("\/texts\/import"/);
-  assert.match(importSource, /href=\{`\/reader\/\$\{activeBook\.id\}\/1`\}/);
+  assert.match(importSource, /const importLanguageOptions: ImportLanguageOption\[\] = \[/);
+  assert.match(importSource, /translationConfirmationCharacterThreshold/);
+  assert.match(importSource, /translation_mode: translationMode === "preload" \? "preload" : "off"/);
+  assert.match(importSource, /formData\.append\("translation_mode", translationMode === "preload" \? "preload" : "off"\)/);
+  for (const code of ["zh", "ko", "ja", "ru", "he", "ar"]) {
+    assert.match(importSource, new RegExp(`code: "${code}"`));
+  }
+  assert.match(importSource, /<select className="text-input" value=\{languageCode\} onChange=\{\(event\) => setLanguageCode\(event\.target\.value\)\} required>/);
+  assert.match(importSource, /Translate on demand/);
+  assert.match(importSource, /Translate now/);
+  assert.match(importSource, /import-translation-grid/);
+  assert.match(importSource, /import-confirmation-card/);
+  assert.match(importSource, /resolveReaderResumeHref\(activeBook\.id, null\)/);
+  assert.match(appShellSource, /resolveReaderResumeHref\(activeBookId, null, activePageNumber \?\? 1\)/);
   assert.match(importSource, /Import complete\. The reader is ready\./);
   assert.match(readerSource, /postJson<ReadingSessionRecord>\("\/learning\/sessions"/);
   assert.match(readerSource, /postJson<PageReadRecord>\("\/learning\/page-reads"/);
   assert.match(readerSource, /postJson<SentenceReadRecord>\("\/learning\/sentence-reads"/);
-  assert.match(readerSource, /Save to vocabulary/);
+  assert.match(readerSource, /SentenceTranslationResponse/);
+  assert.match(readerSource, /reader-sentence-tools/);
+  assert.match(readerSource, /reader\.sentence-translation/);
+  assert.match(readerSource, /reader\.source-sentence/);
+  assert.match(readerSource, /handleToggleSentenceTranslation/);
+  assert.match(readerSource, /Save to study list/);
 });
 
-test("Next profile exposes the configurable legacy compatibility boundary", () => {
-  const compose = read("docker-compose.yml");
-  const client = read("apps", "web", "lib", "textplex.ts");
+test("Next profile keeps the legacy shell link removed", () => {
   const liveProfile = read("apps", "web", "components", "surface-views.tsx");
   const demoProfile = read("apps", "web", "components", "mock-route-views.tsx");
   const inventory = read("docs", "COMPONENTS_INVENTORY.md");
 
-  assert.match(compose, /NEXT_PUBLIC_TEXTPLEX_LEGACY_URL/);
-  assert.match(client, /legacySurfaceUrl/);
-  assert.match(liveProfile, /data-inventory-id="profile\.legacy-link"/);
-  assert.match(demoProfile, /data-inventory-id="profile\.legacy-link"/);
-  assert.match(inventory, /`profile\.legacy-link`/);
+  assert.doesNotMatch(liveProfile, /profile\.legacy-link|legacySurfaceUrl/);
+  assert.doesNotMatch(demoProfile, /profile\.legacy-link|legacySurfaceUrl/);
+  assert.doesNotMatch(inventory, /`profile\.legacy-link`/);
 });

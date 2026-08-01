@@ -17,6 +17,7 @@ RUN pip install --no-cache-dir \
     python-multipart \
     pypdf \
     pymupdf \
+    google-auth>=2.0.0 \
     pillow \
     jieba>=0.42.1
 

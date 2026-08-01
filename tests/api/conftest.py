@@ -1,10 +1,8 @@
 from pathlib import Path
 
 import pytest
-
 from app.schemas.books import BookRecord
 from app.services.book_registry import import_book_from_path
-
 
 SOURCE_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "books" / "alice-mini"
 SAMPLE_PAGE_START = 1

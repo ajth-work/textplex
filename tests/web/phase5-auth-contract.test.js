@@ -24,6 +24,13 @@ test("Phase 5 exposes an authenticated hosted profile read path", () => {
   const authService = read("apps", "api", "app", "services", "auth.py");
   const main = read("apps", "api", "app", "main.py");
   const profileSurface = read("apps", "web", "components", "surface-views.tsx");
+  const authPage = read("apps", "web", "app", "auth", "page.tsx");
+  const appFrame = read("apps", "web", "components", "app-frame.tsx");
+  const accountMenu = read("apps", "web", "components", "account-menu.tsx");
+  const appShell = read("apps", "web", "components", "app-shell.tsx");
+  const landingPage = read("apps", "web", "components", "landing-page.tsx");
+  const libraryView = read("apps", "web", "components", "library-view.tsx");
+  const readerView = read("apps", "web", "components", "reader-view.tsx");
   const sharedContracts = read("packages", "shared", "src", "contracts.ts");
 
   assert.match(authService, /get_authenticated_user_context/);
@@ -32,10 +39,26 @@ test("Phase 5 exposes an authenticated hosted profile read path", () => {
   assert.match(main, /@app\.put\("\/profile\/hosted"/);
   assert.match(main, /@app\.get\("\/profile\/migration"/);
   assert.match(main, /@app\.get\("\/themes\/catalog"/);
+  assert.match(appFrame, /router\.replace\(`\/auth\?returnTo=/);
+  assert.match(appFrame, /pathname\.startsWith\("\/auth"\)/);
+  assert.match(authPage, /Signed in as/);
+  assert.match(accountMenu, /Profile/);
+  assert.match(accountMenu, /Settings/);
+  assert.match(accountMenu, /Sign out/);
+  assert.match(appShell, /AccountMenu/);
+  assert.match(landingPage, /useAuth/);
+  assert.match(landingPage, /AccountMenu/);
+  assert.match(landingPage, /Signed-in account/);
+  assert.match(landingPage, /Welcome back\. Open your portal from here\./);
+  assert.match(landingPage, /Included in account/);
+  assert.match(libraryView, /AccountMenu/);
+  assert.match(readerView, /AccountMenu/);
   assert.match(profileSurface, /fetchJson<HostedProfileSurfaceResponse>\("\/profile\/hosted"\)/);
   assert.match(profileSurface, /putJson<HostedProfileSurfaceResponse>\("\/profile\/hosted"/);
   assert.match(profileSurface, /profile\.hosted-account-card/);
   assert.match(profileSurface, /profile\.migration-card/);
+  assert.match(profileSurface, /Hello,/);
+  assert.match(profileSurface, /user zero/);
   assert.match(sharedContracts, /HostedProfileSurfaceResponse/);
 });
 

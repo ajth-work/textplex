@@ -8,8 +8,6 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-from fastapi import Header, HTTPException
-
 from app.schemas.auth import (
     AuthMeResponse,
     HostedProfileRecord,
@@ -17,6 +15,7 @@ from app.schemas.auth import (
     HostedProfileUpdateRequest,
     HostedSettingEntry,
 )
+from fastapi import Header, HTTPException
 
 
 @dataclass(frozen=True)

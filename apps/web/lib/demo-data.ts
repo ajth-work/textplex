@@ -8,6 +8,7 @@ import type {
   BookReaderPageResponse,
   ImportSurfaceResponse,
   LearningProfileSummary,
+  GoogleTranslateUsageSummary,
   LexiconEntryRecord,
   LexiconLookupResponse,
   ProgressSurfaceResponse,
@@ -19,6 +20,8 @@ import type {
   SettingsSurfaceResponse,
   ReadingSessionRecord,
   StudySurfaceResponse,
+  StudyVocabularyItemRecord,
+  VocabularyAssessmentStateRecord,
   SentenceReadRecord,
   SentenceResult,
   TokenOccurrenceResult,
@@ -447,6 +450,10 @@ for (const page of demoPages) {
     },
     image_url: makePageImageDataUrl(pageNumber),
     extraction: pageArtifact,
+    reader_capabilities: {
+      token_display_modes: ["word", "character"],
+      default_token_display_mode: "word",
+    },
   });
 }
 
@@ -648,6 +655,20 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
     return demoLearningProfileSummary;
   }
 
+  if (route === "/lexicon/google-translate/usage") {
+    return {
+      month_key: "2026-07",
+      request_count: 0,
+      character_count: 0,
+      free_tier_limit: 500000,
+      free_remaining_characters: 500000,
+      billable_characters: 0,
+      billing_rate_per_million_usd: 20,
+      estimated_cost_usd: 0,
+      updated_at: "2026-07-09T12:00:00Z",
+    } satisfies GoogleTranslateUsageSummary;
+  }
+
   if (route === "/analysis/" + DEMO_BOOK_ID) {
     return {
       book_id: DEMO_BOOK_ID,
@@ -725,6 +746,9 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
           detail: "Demo sentence focus",
         },
       ],
+      reading_history: [
+        { day_index: 1, day: "2026-07-09", pages_read: 1, cumulative_pages: 1, sentences_read: 1, cumulative_sentences: 1 },
+      ],
     } satisfies ActivitySurfaceResponse;
   }
 
@@ -757,6 +781,15 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
           page_reads: 1,
           sentence_reads: 2,
           active_seconds: 120,
+          total_pages: demoBookRecord.total_pages,
+          furthest_page: 1,
+          resume_page: 1,
+          resume_sentence_order: 1,
+          total_sentences: demoBookExtractionResult.pages.reduce((total, page) => total + page.sentences.length, 0),
+          sentences_read: 2,
+          progress_percent: 33,
+          progress_unit: "pages" as const,
+          last_read_at: "2026-07-29T12:00:00Z",
         },
       ],
     } satisfies ProgressSurfaceResponse;
@@ -771,11 +804,19 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
         page_reads: index + 1,
         sentence_reads: index + 2,
         active_seconds: 120 + index * 45,
+        total_pages: book.total_pages,
+        furthest_page: Math.min(book.total_pages, index + 1),
+        resume_page: Math.min(book.total_pages, index + 1),
+        resume_sentence_order: 1,
+        total_sentences: demoBookExtractionResult.pages.reduce((total, page) => total + page.sentences.length, 0),
+        sentences_read: index + 2,
+        progress_percent: Math.round(((index + 1) / Math.max(book.total_pages, 1)) * 100),
+        progress_unit: "pages" as const,
+        last_read_at: "2026-07-29T12:00:00Z",
       })),
       settings: {
         entries: [
           { key: "theme", value: "neutral" },
-          { key: "readerMode", value: "sentence" },
           { key: "ocrProvider", value: "openai" },
         ],
       },
@@ -786,7 +827,6 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
     return {
       entries: [
         { key: "theme", value: "neutral" },
-        { key: "readerMode", value: "sentence" },
       ],
     } satisfies SettingsSurfaceResponse;
   }
@@ -805,6 +845,7 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
           help_requests: 0,
           state: "learning",
           confidence_score: 0.42,
+          next_due_at: "2026-08-01T06:00:00Z",
           manual_override: null,
           first_seen_at: "2026-07-09T12:00:00Z",
           last_seen_at: "2026-07-09T12:10:00Z",
@@ -819,9 +860,88 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
           help_requests: 0,
           state: "new",
           confidence_score: 0.2,
+          next_due_at: "2026-08-01T18:00:00Z",
           manual_override: null,
           first_seen_at: "2026-07-09T12:15:00Z",
           last_seen_at: "2026-07-09T12:15:00Z",
+        },
+      ],
+      study_item_count: 3,
+      study_programs: [],
+      study_groups: [
+        {
+          language_code: "zh",
+          language_label: "Chinese",
+          item_count: 2,
+          items: [
+            {
+              language_code: "zh",
+              language_label: "Chinese",
+              lemma: "我",
+              display_form: "我",
+              source_book_id: DEMO_BOOK_ID,
+              source_book_title: demoBookRecord.title,
+              source_page_number: 1,
+              source_sentence_order: 1,
+              source_token_order: 1,
+              source_surface_form: "我",
+              source_sentence_text: "我喜欢阅读。",
+              pronunciation: null,
+              romanization: "wo3",
+              definition_short: "I; me",
+              proficiency_level: "HSK 1",
+              click_count: 2,
+              first_seen_at: "2026-07-09T12:00:00Z",
+              last_seen_at: "2026-07-09T12:10:00Z",
+            },
+            {
+              language_code: "zh",
+              language_label: "Chinese",
+              lemma: "宇宙",
+              display_form: "宇宙",
+              source_book_id: DEMO_BOOK_ID,
+              source_book_title: demoBookRecord.title,
+              source_page_number: 2,
+              source_sentence_order: 1,
+              source_token_order: 3,
+              source_surface_form: "宇宙",
+              source_sentence_text: "宇宙很大。",
+              pronunciation: null,
+              romanization: "yu3 zhou4",
+              definition_short: "universe",
+              proficiency_level: "HSK 3",
+              click_count: 1,
+              first_seen_at: "2026-07-09T12:15:00Z",
+              last_seen_at: "2026-07-09T12:15:00Z",
+            },
+          ],
+        },
+        {
+          language_code: "ja",
+          language_label: "Japanese",
+          item_count: 1,
+          items: [
+            {
+              language_code: "ja",
+              language_label: "Japanese",
+              lemma: "たのしい",
+              display_form: "たのしい",
+              source_book_id: DEMO_BOOK_ID,
+              source_book_title: demoBookRecord.title,
+              source_page_number: 3,
+              source_sentence_order: 2,
+              source_token_order: 4,
+              source_surface_form: "たのしい",
+              source_sentence_text: "たのしい時間です。",
+              pronunciation: "たのしい",
+              romanization: "tanoshii",
+              definition_short: "fun; enjoyable",
+              proficiency_level: "JLPT N5",
+              click_count: 1,
+              first_seen_at: "2026-07-09T12:20:00Z",
+              last_seen_at: "2026-07-09T12:20:00Z",
+            },
+          ],
         },
       ],
     } satisfies StudySurfaceResponse;
@@ -870,6 +990,7 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
       language_code: url.searchParams.get("language_code") ?? "zh",
       entry_type: "demo",
       surface_form: term,
+      pronunciation: null,
       pinyin: null,
       tone: null,
       definition: `Demo dictionary entry for ${term}.`,
@@ -885,6 +1006,7 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
       query: term,
       language_code: entry.language_code,
       entries: [entry],
+      resolution_source: "local",
     } satisfies LexiconLookupResponse;
   }
 
@@ -942,6 +1064,56 @@ export function getDemoPostResponse(pathname: string, body: unknown): unknown | 
       active_seconds: request?.active_seconds ?? 0,
       completed_at: "2026-07-09T00:00:00Z",
     } satisfies SentenceReadRecord;
+  }
+
+  if (route === "/learning/study-items") {
+    const request = body as {
+      book_id?: string;
+      language_code?: string;
+      lemma?: string;
+      display_form?: string;
+      page_number?: number;
+      sentence_order?: number;
+      token_order?: number;
+      source_surface_form?: string;
+      source_sentence_text?: string;
+      pronunciation?: string | null;
+      romanization?: string | null;
+      definition_short?: string | null;
+      proficiency_level?: string | null;
+    } | null;
+    return {
+      language_code: request?.language_code ?? "zh",
+      lemma: request?.lemma ?? "",
+      display_form: request?.display_form ?? request?.lemma ?? "",
+      source_book_id: request?.book_id ?? DEMO_BOOK_ID,
+      source_page_number: request?.page_number ?? 1,
+      source_sentence_order: request?.sentence_order ?? 1,
+      source_token_order: request?.token_order ?? 1,
+      source_surface_form: request?.source_surface_form ?? request?.display_form ?? "",
+      source_sentence_text: request?.source_sentence_text ?? "",
+      pronunciation: request?.pronunciation ?? null,
+      romanization: request?.romanization ?? null,
+      definition_short: request?.definition_short ?? null,
+      proficiency_level: request?.proficiency_level ?? null,
+      click_count: 1,
+      first_seen_at: "2026-07-09T12:00:00Z",
+      last_seen_at: "2026-07-09T12:00:00Z",
+    } satisfies StudyVocabularyItemRecord;
+  }
+
+  if (route === "/learning/vocabulary-reviews") {
+    const request = body as { language_code?: string; lemma?: string } | null;
+    return {
+      language_code: request?.language_code ?? "zh",
+      lemma: request?.lemma ?? "",
+      mastery_level: "learning",
+      mastery_score: 0,
+      srs_stage: 1,
+      next_due_at: null,
+      stage_zero_complete: true,
+      axes: [],
+    } satisfies VocabularyAssessmentStateRecord;
   }
 
   return null;

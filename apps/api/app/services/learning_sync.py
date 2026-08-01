@@ -6,11 +6,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import HTTPException
-
 from app.schemas.learning import LearningSyncResponse
 from app.services import learning_profile
 from app.services.auth import AuthenticatedUserContext, supabase_rest_request
+from fastapi import HTTPException
 
 
 def _utc_now() -> str:
@@ -174,6 +173,100 @@ def _materialize_remote_event(connection: sqlite3.Connection, event: dict[str, o
                     weight=1.0 if token_kind == "word" else 0.5,
                     occurred_at=str(payload.get("completed_at") or event.get("occurred_at") or _utc_now()),
                 )
+        elif event_type == "study_vocabulary_item":
+            source_book_id = str(payload.get("book_id") or "").strip()
+            language_code = str(payload.get("language_code") or "local").strip().lower() or "local"
+            lemma = str(payload.get("lemma") or "").strip()
+            display_form = str(payload.get("display_form") or lemma).strip() or lemma
+            source_surface_form = str(payload.get("source_surface_form") or display_form).strip() or display_form
+            source_sentence_text = str(payload.get("source_sentence_text") or "").strip()
+            if not source_book_id or not lemma or not source_sentence_text:
+                return False
+            occurred_at = str(payload.get("last_seen_at") or event.get("occurred_at") or _utc_now())
+            first_seen_at = str(payload.get("first_seen_at") or occurred_at)
+            connection.execute(
+                """
+                INSERT INTO study_vocabulary_items (
+                    language_code,
+                    lemma,
+                    display_form,
+                    source_book_id,
+                    source_page_number,
+                    source_sentence_order,
+                    source_token_order,
+                    source_surface_form,
+                    source_sentence_text,
+                    pronunciation,
+                    romanization,
+                    definition_short,
+                    proficiency_level,
+                    click_count,
+                    first_seen_at,
+                    last_seen_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                ON CONFLICT(language_code, lemma) DO UPDATE SET
+                    display_form = excluded.display_form,
+                    source_book_id = excluded.source_book_id,
+                    source_page_number = excluded.source_page_number,
+                    source_sentence_order = excluded.source_sentence_order,
+                    source_token_order = excluded.source_token_order,
+                    source_surface_form = excluded.source_surface_form,
+                    source_sentence_text = excluded.source_sentence_text,
+                    pronunciation = excluded.pronunciation,
+                    romanization = excluded.romanization,
+                    definition_short = excluded.definition_short,
+                    proficiency_level = excluded.proficiency_level,
+                    click_count = study_vocabulary_items.click_count + 1,
+                    first_seen_at = COALESCE(study_vocabulary_items.first_seen_at, excluded.first_seen_at),
+                    last_seen_at = excluded.last_seen_at
+                """,
+                (
+                    language_code,
+                    lemma,
+                    display_form,
+                    source_book_id,
+                    int(payload.get("page_number") or 1),
+                    int(payload.get("sentence_order") or 1),
+                    int(payload.get("token_order") or 1),
+                    source_surface_form,
+                    source_sentence_text,
+                    payload.get("pronunciation"),
+                    payload.get("romanization"),
+                    payload.get("definition_short"),
+                    payload.get("proficiency_level"),
+                    first_seen_at,
+                    occurred_at,
+                ),
+            )
+        elif event_type == "word_interaction":
+            book_id = str(payload.get("book_id") or "").strip()
+            language_code = str(payload.get("language_code") or "local").strip().lower() or "local"
+            target_text = str(payload.get("target_text") or payload.get("lemma") or "").strip()
+            interaction_type = str(payload.get("interaction_type") or "definition_lookup").strip() or "definition_lookup"
+            if not book_id or not target_text:
+                return False
+            connection.execute(
+                """
+                INSERT INTO word_interactions (
+                    book_id,
+                    page_number,
+                    language_code,
+                    lemma,
+                    interaction_type,
+                    occurred_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    book_id,
+                    int(payload.get("page_number") or 1),
+                    language_code,
+                    target_text,
+                    interaction_type,
+                    payload.get("occurred_at") or event.get("occurred_at") or _utc_now(),
+                ),
+            )
         else:
             return False
     except (TypeError, ValueError, sqlite3.IntegrityError):

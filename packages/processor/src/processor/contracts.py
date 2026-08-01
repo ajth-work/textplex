@@ -44,6 +44,7 @@ class SentenceResult(BaseModel):
     order: int = Field(ge=1)
     text: str
     translation: str | None = None
+    translation_source: str | None = None
     tokens: list[TokenResult]
     grammar_patterns: list[str] = Field(default_factory=list)
     ends_with_sentence_terminator: bool = False
@@ -59,6 +60,7 @@ class PageExtractionResult(BaseModel):
     raw_text: str
     clean_text: str
     page_translation: str | None = None
+    page_translation_source: str | None = None
     sentences: list[SentenceResult]
     page_ends_with_sentence_terminator: bool = False
     token_occurrences: list[TokenOccurrenceResult] = Field(default_factory=list)

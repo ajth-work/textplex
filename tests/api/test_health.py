@@ -1,7 +1,7 @@
-from fastapi.testclient import TestClient
 from pathlib import Path
 
 from app.main import app
+from fastapi.testclient import TestClient
 
 
 def test_health_endpoint_returns_ok() -> None:
@@ -53,7 +53,7 @@ def test_production_readiness_rejects_insecure_or_missing_configuration(tmp_path
 
 
 def test_mutation_rate_limit_returns_retryable_response(monkeypatch) -> None:
-    import app.main as main
+    from app import main
 
     monkeypatch.setenv("TEXTPLEX_RATE_LIMIT_PER_MINUTE", "1")
     main._rate_limit_buckets.clear()

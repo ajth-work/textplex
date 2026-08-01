@@ -3,11 +3,10 @@ from __future__ import annotations
 import math
 import re
 from collections import Counter
+from collections.abc import Mapping, Sequence
 from statistics import mean
-from typing import Mapping, Sequence
 
 from .contracts import BookExtractionResult
-
 
 _HSK_NUMBER_RE = re.compile(r"(?<!\d)(\d+(?:\.\d+)?)(?:\s*[-–]\s*(\d+(?:\.\d+)?))?(?!\d)")
 
@@ -43,7 +42,7 @@ def format_hsk_level(level: float | None) -> str | None:
 
 def _level_bucket(level: float) -> str:
     if level <= 6:
-        return f"HSK {int(round(level))}"
+        return f"HSK {round(level)}"
     return "HSK 7-9"
 
 

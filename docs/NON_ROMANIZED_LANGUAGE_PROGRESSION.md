@@ -13,7 +13,7 @@ Use this as a planning aid for learner progression in TextPlex, not as a substit
 | Japanese | JLPT | No public official word-count ladder found in the official materials reviewed. JLPT measures language knowledge, including vocabulary and grammar. | Use JLPT bands as reading difficulty tiers, then derive internal vocab bands from corpus coverage. |
 | Russian | TRKI / Pushkin Institute certification | No public official word-count ladder found in the official materials reviewed. | Use A1-C2 certification levels and test section difficulty for staging. |
 | Hebrew | YAEL | No public official word-count ladder found in the official materials reviewed. YAEL tests vocabulary, grammar, syntax, reading, and writing. | Use YAEL as a placement-style benchmark, but not as a vocabulary quota system. |
-| Arabic | ACTFL OPI / AAPPL in Arabic | No public official vocabulary ladder is published in the official materials reviewed. | Use ACTFL proficiency bands for speaking/reading/writing milestones. |
+| Arabic | ACTFL Proficiency Guidelines 2024 / ACTFL OPI and AAPPL in Arabic | No public official vocabulary ladder is published in the official materials reviewed. | Use ACTFL proficiency bands for speaking/reading/writing milestones. |
 
 ## Chinese
 
@@ -88,12 +88,15 @@ What that means for TextPlex:
 
 For Arabic, the most portable official proficiency path is ACTFL-based:
 
-- AAPPL is available in Arabic
-- ACTFL OPI is available in Arabic varieties, including MSA and several regional options
+- The ACTFL Proficiency Guidelines 2024 describe Novice, Intermediate, Advanced, Superior, and Distinguished proficiency.
+- Novice, Intermediate, and Advanced are subdivided into Low, Mid, and High.
+- AAPPL is available in Arabic.
+- ACTFL OPI is available in Arabic varieties, including MSA and several regional options.
 
 What that means for TextPlex:
 
-- use ACTFL proficiency bands for milestone planning
+- use Novice Low through Advanced High as the core staged progression path
+- treat Superior and Distinguished as long-range milestones for stronger readers
 - use reading difficulty and script-handling complexity as primary progression signals
 - do not expect a public official vocabulary quota from these tests
 

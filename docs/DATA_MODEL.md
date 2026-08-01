@@ -187,6 +187,31 @@ Append-only evidence table.
 - occurred_at TEXT NOT NULL
 - UNIQUE(language_code, lemma, book_id, page_number, exposure_type)
 
+### vocabulary_assessment_axes
+
+One row per vocabulary item per active assessment axis.
+
+- language_code TEXT NOT NULL
+- lemma TEXT NOT NULL
+- axis_key TEXT NOT NULL
+- prompt_type TEXT NOT NULL
+- response_type TEXT NOT NULL
+- stage INTEGER DEFAULT 0
+- due_at TEXT
+- last_seen_at TEXT
+- last_result TEXT
+- pass_count INTEGER DEFAULT 0
+- fail_count INTEGER DEFAULT 0
+- PRIMARY KEY(language_code, lemma, axis_key)
+
+Stage 0 is the shared introduction gate for the item:
+
+- all active axes must be correct before the item exits stage 0
+- after that, axis rows advance independently
+- correct responses advance only the prompted axis row
+- incorrect responses regress only the prompted axis row, down to stage 0 if needed
+- the item is due whenever any axis row is due
+
 ### vocabulary_progress
 
 Materialized user state.
@@ -202,5 +227,12 @@ Materialized user state.
 - last_seen_at TEXT
 - state TEXT NOT NULL
 - confidence_score REAL NOT NULL
+- mastery_level TEXT
+- mastery_score REAL
+- srs_stage INTEGER
+- next_due_at TEXT
 - manual_override TEXT
 - PRIMARY KEY(language_code, lemma)
+
+The aggregate row should summarize the underlying axis records rather than replacing them.
+The detailed axis rows remain the source of truth for per-test scheduling.

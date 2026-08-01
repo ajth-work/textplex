@@ -3,14 +3,19 @@ import type {
   BookExtractionTriggerRequest,
   BookExtractionTriggerResponse,
   LearningSyncResponse,
+  VocabularyAssessmentStateRecord,
   ThemeCheckoutRequest,
   ThemeCheckoutResponse,
   ThemeEntitlementResponse,
+  GoogleTranslateUsageSummary,
+  ProgressBookSummary,
+  ProgressSurfaceResponse,
 } from "../../../packages/shared/src";
 import { getSupabaseClient } from "./supabase";
 export type {
   ActivityEvent,
   ActivitySurfaceResponse,
+  ReadingHistoryPoint,
   AnalysisDistributionBucket,
   AnalysisLexicalEntrySummary,
   AnalysisMetrics,
@@ -35,8 +40,13 @@ export type {
   BoundingBox,
   LearningProfileSummary,
   LearningSyncResponse,
+  VocabularyAssessmentAxisKey,
+  VocabularyAssessmentResult,
+  VocabularyAssessmentReviewRequest,
+  VocabularyAssessmentStateRecord,
   ImportRecentBook,
   ImportSurfaceResponse,
+  GoogleTranslateUsageSummary,
   LexicalEntryResult,
   LexiconEntryRecord,
   LexiconImportRequest,
@@ -57,8 +67,14 @@ export type {
   PageRecord,
   ReadingSessionCreateRequest,
   ReadingSessionRecord,
+  StudyVocabularyItemCreateRequest,
+  StudyVocabularyItemRecord,
   StudyQueueItem,
   StudySurfaceResponse,
+  StudyVocabularyGroup,
+  StudyVocabularyItem,
+  WordInteractionCreateRequest,
+  WordInteractionRecord,
   SentenceReadCreateRequest,
   SentenceReadRecord,
   SentenceReadTokenInput,
@@ -73,6 +89,124 @@ export type {
 export const apiBaseUrl = process.env.NEXT_PUBLIC_TEXTPLEX_API_URL ?? "/api";
 export const isDemoMode = process.env.NEXT_PUBLIC_TEXTPLEX_DEMO_MODE === "true";
 export const legacySurfaceUrl = process.env.NEXT_PUBLIC_TEXTPLEX_LEGACY_URL ?? "http://127.0.0.1:8200/legacy/index.html";
+
+const readerLastPositionStoragePrefix = "textplex.reader-last-position:";
+const readerTokenAudioOnTapStorageKey = "textplex.readerTokenAudioOnTap";
+
+export type ReaderResumePosition = {
+  pageNumber: number;
+  sentenceOrder: number | null;
+};
+
+function readerLastPositionStorageKey(bookId: string): string {
+  return `${readerLastPositionStoragePrefix}${bookId}`;
+}
+
+export function rememberReaderPosition(bookId: string, pageNumber: number, sentenceOrder: number | null): void {
+  if (typeof window === "undefined" || !bookId || !Number.isFinite(pageNumber) || pageNumber < 1) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      readerLastPositionStorageKey(bookId),
+      JSON.stringify({ pageNumber: Math.floor(pageNumber), sentenceOrder: sentenceOrder && sentenceOrder > 0 ? Math.floor(sentenceOrder) : null }),
+    );
+  } catch {
+    // Local storage is a convenience fallback; server progress remains authoritative when available.
+  }
+}
+
+export function rememberReaderPage(bookId: string, pageNumber: number): void {
+  rememberReaderPosition(bookId, pageNumber, null);
+}
+
+export function readStoredReaderTokenAudioOnTap(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.localStorage.getItem(readerTokenAudioOnTapStorageKey) === "true";
+}
+
+export function persistReaderTokenAudioOnTap(enabled: boolean): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(readerTokenAudioOnTapStorageKey, String(enabled));
+}
+
+function readRememberedReaderPosition(bookId: string): ReaderResumePosition | null {
+  if (typeof window === "undefined" || !bookId) {
+    return null;
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(readerLastPositionStorageKey(bookId));
+    if (!storedValue) {
+      return null;
+    }
+
+    const parsedValue: unknown = JSON.parse(storedValue);
+    if (typeof parsedValue === "number") {
+      return Number.isFinite(parsedValue) && parsedValue >= 1 ? { pageNumber: Math.floor(parsedValue), sentenceOrder: null } : null;
+    }
+    if (!parsedValue || typeof parsedValue !== "object") {
+      return null;
+    }
+
+    const pageNumber = Number((parsedValue as { pageNumber?: unknown }).pageNumber);
+    const sentenceOrderValue = Number((parsedValue as { sentenceOrder?: unknown }).sentenceOrder);
+    return Number.isFinite(pageNumber) && pageNumber >= 1
+      ? { pageNumber: Math.floor(pageNumber), sentenceOrder: Number.isFinite(sentenceOrderValue) && sentenceOrderValue >= 1 ? Math.floor(sentenceOrderValue) : null }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function resolveReaderResumePositionForBook(bookId: string, progressBook: ProgressBookSummary | null, fallbackPage = 1): ReaderResumePosition {
+  const rememberedPosition = readRememberedReaderPosition(bookId);
+  const serverPage = Math.max(progressBook?.resume_page ?? 0, progressBook?.furthest_page ?? 0);
+  if (serverPage > 0) {
+    if (rememberedPosition && rememberedPosition.pageNumber >= serverPage) {
+      return rememberedPosition;
+    }
+    return {
+      pageNumber: serverPage,
+      sentenceOrder: progressBook?.resume_sentence_order && progressBook.resume_sentence_order > 0 ? progressBook.resume_sentence_order : null,
+    };
+  }
+
+  if (rememberedPosition) {
+    return rememberedPosition;
+  }
+
+  return { pageNumber: Math.max(1, fallbackPage), sentenceOrder: null };
+}
+
+export function resolveReaderResumePageForBook(bookId: string, progressBook: ProgressBookSummary | null, fallbackPage = 1): number {
+  return resolveReaderResumePositionForBook(bookId, progressBook, fallbackPage).pageNumber;
+}
+
+export function resolveReaderResumePosition(bookId: string, progress: ProgressSurfaceResponse | null, fallbackPage = 1): ReaderResumePosition {
+  return resolveReaderResumePositionForBook(bookId, progress?.books.find((book) => book.book_id === bookId) ?? null, fallbackPage);
+}
+
+export function resolveReaderResumePage(bookId: string, progress: ProgressSurfaceResponse | null, fallbackPage = 1): number {
+  return resolveReaderResumePosition(bookId, progress, fallbackPage).pageNumber;
+}
+
+export function resolveReaderResumeHrefForBook(bookId: string, progressBook: ProgressBookSummary | null, fallbackPage = 1): string {
+  const position = resolveReaderResumePositionForBook(bookId, progressBook, fallbackPage);
+  return `/reader/${bookId}/${position.pageNumber}${position.sentenceOrder ? `?sentence=${position.sentenceOrder}` : ""}`;
+}
+
+export function resolveReaderResumeHref(bookId: string, progress: ProgressSurfaceResponse | null, fallbackPage = 1): string {
+  const position = resolveReaderResumePosition(bookId, progress, fallbackPage);
+  return `/reader/${bookId}/${position.pageNumber}${position.sentenceOrder ? `?sentence=${position.sentenceOrder}` : ""}`;
+}
 
 export function resolveResourceUrl(pathname: string): string {
   if (

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import Literal
 
+from processor.contracts import PageExtractionResult
 from pydantic import BaseModel, Field
 
-from processor.contracts import PageExtractionResult
-
 OcrProviderMode = Literal["local", "openai"]
+TranslationMode = Literal["off", "preload"]
+ReaderTokenDisplayMode = Literal["word", "character"]
 
 
 class BookImportRequest(BaseModel):
@@ -17,6 +18,7 @@ class BookImportRequest(BaseModel):
     page_start: int = Field(default=1, ge=1)
     page_count: int | None = Field(default=None, ge=1)
     ocr_provider: OcrProviderMode = Field(default="local")
+    translation_mode: TranslationMode = Field(default="off")
 
 
 class TextParseRequest(BaseModel):
@@ -27,6 +29,7 @@ class TextParseRequest(BaseModel):
 
 class TextImportRequest(TextParseRequest):
     author: str | None = None
+    translation_mode: TranslationMode = Field(default="off")
 
 
 class BookExtractionRequest(BaseModel):
@@ -94,3 +97,19 @@ class BookReaderPageResponse(BaseModel):
     page: PageRecord
     image_url: str
     extraction: PageExtractionArtifact | None = None
+    reader_capabilities: ReaderCapabilities
+
+
+class ReaderCapabilities(BaseModel):
+    token_display_modes: list[ReaderTokenDisplayMode] = Field(default_factory=lambda: ["word"])
+    default_token_display_mode: ReaderTokenDisplayMode = "word"
+
+
+class SentenceTranslationResponse(BaseModel):
+    book_id: str
+    page_number: int
+    sentence_order: int
+    sentence_text: str
+    translation: str | None = None
+    translation_source: str | None = None
+    resolution_source: str

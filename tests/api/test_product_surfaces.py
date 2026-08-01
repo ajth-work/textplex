@@ -1,11 +1,15 @@
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.schemas.books import BookRecord
 from app.services.lexicon import ensure_lexicon_database
-from processor.contracts import BookExtractionResult, PageExtractionResult, SentenceResult, TokenResult
+from fastapi.testclient import TestClient
+from processor.contracts import (
+    BookExtractionResult,
+    PageExtractionResult,
+    SentenceResult,
+    TokenResult,
+)
 
 
 def test_analysis_search_import_and_settings_surfaces(imported_real_scan: tuple[Path, BookRecord]) -> None:
@@ -150,6 +154,19 @@ def test_progress_study_and_activity_surfaces_record_learning_events(imported_re
     )
     assert sentence_response.status_code == 200
 
+    playback_response = client.post(
+        "/learning/word-interactions",
+        json={
+            "book_id": record.id,
+            "language_code": record.language_code,
+            "target_text": "æµ‹è¯• å¥å­ã€‚",
+            "page_number": 1,
+            "interaction_type": "pronunciation_playback",
+            "occurred_at": "2026-07-30T12:00:00Z",
+        },
+    )
+    assert playback_response.status_code == 200
+
     study_response = client.get("/study")
     assert study_response.status_code == 200
     study = study_response.json()
@@ -167,3 +184,38 @@ def test_progress_study_and_activity_surfaces_record_learning_events(imported_re
     assert activity["event_count"] >= 2
     assert any(event["kind"] == "page_read" for event in activity["events"])
     assert any(event["kind"] == "sentence_read" for event in activity["events"])
+    assert any(event["kind"] == "pronunciation_playback" for event in activity["events"])
+    assert activity["reading_history"]
+    assert activity["reading_history"][-1]["day_index"] == len(activity["reading_history"])
+    assert activity["reading_history"][-1]["cumulative_sentences"] >= 1
+    if record.total_pages > 1:
+        assert activity["reading_history"][-1]["cumulative_pages"] >= 1
+
+    study_item_response = client.post(
+        "/learning/study-items",
+        json={
+            "book_id": record.id,
+            "language_code": "zh",
+            "lemma": "测试",
+            "display_form": "测试",
+            "page_number": 1,
+            "sentence_order": 1,
+            "token_order": 1,
+            "source_surface_form": "测试",
+            "source_sentence_text": "测试 句子。",
+            "definition_short": "to test",
+            "proficiency_level": "HSK 1",
+        },
+    )
+    assert study_item_response.status_code == 200
+    study_item = study_item_response.json()
+    assert study_item["lemma"] == "测试"
+    assert study_item["source_page_number"] == 1
+    assert study_item["click_count"] >= 1
+
+    study_response = client.get("/study")
+    assert study_response.status_code == 200
+    study = study_response.json()
+    assert study["study_item_count"] >= 1
+    assert any(group["language_code"] == "zh" for group in study["study_groups"])
+    assert any(item["lemma"] == "测试" for group in study["study_groups"] for item in group["items"])

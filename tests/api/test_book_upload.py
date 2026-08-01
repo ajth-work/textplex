@@ -1,13 +1,11 @@
 import os
-from pathlib import Path
 import time
+from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.schemas.books import BookRecord
-
+from fastapi.testclient import TestClient
 
 
 def _get_source_pdf() -> Path | None:

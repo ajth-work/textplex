@@ -6,7 +6,6 @@ import textwrap
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
-
 from processor import normalize_text
 
 
@@ -25,12 +24,12 @@ def load_text_fixture_pages(source_path: Path) -> list[tuple[int, Path, str]]:
     manifest = load_text_fixture_manifest(source_path)
     pages = manifest.get("pages")
     if not isinstance(pages, list):
-        raise ValueError(f"Invalid text fixture manifest: {source_path}")
+        raise TypeError(f"Invalid text fixture manifest: {source_path}")
 
     loaded_pages: list[tuple[int, Path, str]] = []
     for index, relative_page_path in enumerate(pages, start=1):
         if not isinstance(relative_page_path, str):
-            raise ValueError(f"Invalid page path in text fixture manifest: {source_path}")
+            raise TypeError(f"Invalid page path in text fixture manifest: {source_path}")
         page_path = source_path / relative_page_path
         if not page_path.exists():
             raise FileNotFoundError(f"Text fixture page not found: {page_path}")
@@ -43,13 +42,13 @@ def hash_text_fixture_source(source_path: Path) -> str:
     manifest = load_text_fixture_manifest(source_path)
     pages = manifest.get("pages")
     if not isinstance(pages, list):
-        raise ValueError(f"Invalid text fixture manifest: {source_path}")
+        raise TypeError(f"Invalid text fixture manifest: {source_path}")
 
     digest = hashlib.sha256()
     digest.update((source_path / "manifest.json").read_bytes())
     for relative_page_path in pages:
         if not isinstance(relative_page_path, str):
-            raise ValueError(f"Invalid page path in text fixture manifest: {source_path}")
+            raise TypeError(f"Invalid page path in text fixture manifest: {source_path}")
         page_path = source_path / relative_page_path
         digest.update(relative_page_path.encode("utf-8"))
         digest.update(page_path.read_bytes())

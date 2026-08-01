@@ -9,7 +9,6 @@ from pathlib import Path
 from app.schemas.migration import ProfileMigrationRequest, ProfileMigrationResponse
 from app.services.learning_profile import ensure_profile_database, get_profile_db_path
 
-
 MIGRATABLE_COLUMNS: dict[str, tuple[str, ...]] = {
     "reading_sessions": ("id", "book_id", "started_at", "ended_at", "active_seconds"),
     "page_reads": (
@@ -80,6 +79,41 @@ MIGRATABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "state",
         "confidence_score",
         "manual_override",
+        "mastery_level",
+        "mastery_score",
+        "srs_stage",
+        "next_due_at",
+    ),
+    "vocabulary_assessment_axes": (
+        "language_code",
+        "lemma",
+        "axis_key",
+        "prompt_type",
+        "response_type",
+        "stage",
+        "due_at",
+        "last_seen_at",
+        "last_result",
+        "pass_count",
+        "fail_count",
+    ),
+    "study_vocabulary_items": (
+        "language_code",
+        "lemma",
+        "display_form",
+        "source_book_id",
+        "source_page_number",
+        "source_sentence_order",
+        "source_token_order",
+        "source_surface_form",
+        "source_sentence_text",
+        "pronunciation",
+        "romanization",
+        "definition_short",
+        "proficiency_level",
+        "click_count",
+        "first_seen_at",
+        "last_seen_at",
     ),
     "settings": ("key", "value", "updated_at"),
 }

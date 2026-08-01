@@ -1,24 +1,29 @@
 from __future__ import annotations
 
-import sqlite3
 import hashlib
 import json
-from datetime import datetime, timezone
+import sqlite3
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
 from app.core.paths import resolve_books_root, resolve_user_data_root
-
 from app.schemas.learning import (
     LearningProfileSummary,
     LearningTrackJourneyStep,
     LearningTrackSummary,
     PageReadCreateRequest,
     PageReadRecord,
-    SentenceReadCreateRequest,
-    SentenceReadRecord,
     ReadingSessionCreateRequest,
     ReadingSessionRecord,
+    SentenceReadCreateRequest,
+    SentenceReadRecord,
+    StudyVocabularyItemCreateRequest,
+    StudyVocabularyItemRecord,
+    VocabularyAssessmentReviewRequest,
+    VocabularyAssessmentStateRecord,
+    WordInteractionCreateRequest,
+    WordInteractionRecord,
 )
 from app.services.book_registry import load_registry
 
@@ -44,6 +49,13 @@ TRACK_DEFINITIONS: dict[str, dict[str, str]] = {
         "subtitle": "Korean reading track",
         "note": "Built from Korean books and learner activity in the local library.",
     },
+    "trki": {
+        "label": "TRKI",
+        "language_code": "ru",
+        "level": "Russian",
+        "subtitle": "Russian reading track",
+        "note": "Built from Russian books and learner activity in the local library.",
+    },
     "cefr": {
         "label": "CEFR",
         "language_code": "fr",
@@ -60,6 +72,36 @@ TRACK_DEFINITIONS: dict[str, dict[str, str]] = {
     },
 }
 
+VOCABULARY_ASSESSMENT_AXIS_ORDER: tuple[str, ...] = (
+    "form_to_meaning",
+    "form_to_reading",
+    "meaning_to_form",
+    "reading_to_form",
+)
+
+VOCABULARY_ASSESSMENT_AXIS_DEFINITIONS: dict[str, tuple[str, str]] = {
+    "form_to_meaning": ("source_form", "meaning"),
+    "form_to_reading": ("source_form", "reading"),
+    "meaning_to_form": ("meaning", "source_form"),
+    "reading_to_form": ("reading", "source_form"),
+}
+
+VOCABULARY_ASSESSMENT_STAGE_INTERVALS: dict[int, timedelta] = {
+    0: timedelta(0),
+    1: timedelta(hours=3),
+    2: timedelta(hours=6),
+    3: timedelta(hours=12),
+    4: timedelta(days=1),
+    5: timedelta(days=2),
+    6: timedelta(days=4),
+    7: timedelta(days=7),
+    8: timedelta(days=14),
+    9: timedelta(days=30),
+    10: timedelta(days=90),
+    11: timedelta(days=180),
+    12: timedelta(days=365),
+}
+
 
 def _normalize_track_code(language_code: str | None) -> str:
     normalized = (language_code or "").strip().lower()
@@ -69,7 +111,9 @@ def _normalize_track_code(language_code: str | None) -> str:
         return "jlpt"
     if normalized.startswith("ko"):
         return "topik"
-    if normalized.startswith("fr") or normalized.startswith("en"):
+    if normalized.startswith("ru"):
+        return "trki"
+    if normalized.startswith(("fr", "en")):
         return "cefr"
     return "local"
 
@@ -144,6 +188,54 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _parse_utc(value: str | None) -> datetime:
+    text = (value or "").strip()
+    if not text:
+        return datetime.now(timezone.utc)
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return datetime.now(timezone.utc)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _utc_from_datetime(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _assessment_axis_definition(axis_key: str) -> tuple[str, str]:
+    try:
+        return VOCABULARY_ASSESSMENT_AXIS_DEFINITIONS[axis_key]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported assessment axis: {axis_key}") from exc
+
+
+def _assessment_stage_interval(stage: int) -> timedelta:
+    normalized_stage = max(0, min(12, int(stage)))
+    return VOCABULARY_ASSESSMENT_STAGE_INTERVALS[normalized_stage]
+
+
+def _language_label(language_code: str) -> str:
+    normalized = (language_code or "").strip().lower()
+    if normalized.startswith("zh"):
+        return "Chinese"
+    if normalized.startswith("ja"):
+        return "Japanese"
+    if normalized.startswith("ko"):
+        return "Korean"
+    if normalized.startswith("ru"):
+        return "Russian"
+    if normalized.startswith("fr"):
+        return "French"
+    if normalized.startswith("en"):
+        return "English"
+    if normalized == "local":
+        return "Local"
+    return language_code.upper() if language_code else "Unknown"
+
+
 def get_profile_db_path(data_root: Path, owner_id: str | None = None) -> Path:
     user_root = resolve_user_data_root(data_root)
     if not owner_id:
@@ -166,9 +258,29 @@ def ensure_profile_database(data_root: Path, owner_id: str | None = None) -> Pat
         connection.execute("PRAGMA foreign_keys = ON")
         for migration_file in migration_files:
             connection.executescript(migration_file.read_text(encoding="utf-8"))
+        _ensure_profile_columns(connection)
         connection.commit()
 
     return db_path
+
+
+def _ensure_profile_columns(connection: sqlite3.Connection) -> None:
+    table_exists = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'vocabulary_progress'",
+    ).fetchone()
+    if table_exists is None:
+        return
+
+    connection.row_factory = sqlite3.Row
+    column_names = {str(row["name"]) for row in connection.execute("PRAGMA table_info(vocabulary_progress)").fetchall()}
+    if "mastery_level" not in column_names:
+        connection.execute("ALTER TABLE vocabulary_progress ADD COLUMN mastery_level TEXT")
+    if "mastery_score" not in column_names:
+        connection.execute("ALTER TABLE vocabulary_progress ADD COLUMN mastery_score REAL")
+    if "srs_stage" not in column_names:
+        connection.execute("ALTER TABLE vocabulary_progress ADD COLUMN srs_stage INTEGER")
+    if "next_due_at" not in column_names:
+        connection.execute("ALTER TABLE vocabulary_progress ADD COLUMN next_due_at TEXT")
 
 
 def _connect(data_root: Path, owner_id: str | None = None) -> sqlite3.Connection:
@@ -177,6 +289,275 @@ def _connect(data_root: Path, owner_id: str | None = None) -> sqlite3.Connection
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
+
+
+def _ensure_vocabulary_progress_row(connection: sqlite3.Connection, language_code: str, lemma: str) -> None:
+    existing = connection.execute(
+        "SELECT 1 FROM vocabulary_progress WHERE language_code = ? AND lemma = ?",
+        (language_code, lemma),
+    ).fetchone()
+    if existing is not None:
+        return
+    connection.execute(
+        """
+        INSERT INTO vocabulary_progress (
+            language_code,
+            lemma,
+            raw_exposures,
+            weighted_exposure,
+            unique_pages,
+            unique_books,
+            help_requests,
+            first_seen_at,
+            last_seen_at,
+            state,
+            confidence_score,
+            manual_override,
+            mastery_level,
+            mastery_score,
+            srs_stage,
+            next_due_at
+        )
+        VALUES (?, ?, 0, 0, 0, 0, 0, NULL, NULL, 'new', 0, NULL, 'new', 0, 0, NULL)
+        """,
+        (language_code, lemma),
+    )
+
+
+def _ensure_vocabulary_assessment_axes(connection: sqlite3.Connection, language_code: str, lemma: str) -> None:
+    table_exists = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'vocabulary_assessment_axes'",
+    ).fetchone()
+    if table_exists is None:
+        return
+
+    _ensure_vocabulary_progress_row(connection, language_code, lemma)
+    existing_rows = connection.execute(
+        """
+        SELECT axis_key
+        FROM vocabulary_assessment_axes
+        WHERE language_code = ? AND lemma = ?
+        """,
+        (language_code, lemma),
+    ).fetchall()
+    existing_keys = {str(row["axis_key"]) for row in existing_rows if row["axis_key"]}
+    now = _utc_now()
+    for axis_key in VOCABULARY_ASSESSMENT_AXIS_ORDER:
+        if axis_key in existing_keys:
+            continue
+        prompt_type, response_type = _assessment_axis_definition(axis_key)
+        connection.execute(
+            """
+            INSERT INTO vocabulary_assessment_axes (
+                language_code,
+                lemma,
+                axis_key,
+                prompt_type,
+                response_type,
+                stage,
+                due_at,
+                last_seen_at,
+                last_result,
+                pass_count,
+                fail_count
+            )
+            VALUES (?, ?, ?, ?, ?, 0, ?, NULL, NULL, 0, 0)
+            """,
+            (language_code, lemma, axis_key, prompt_type, response_type, now),
+        )
+
+
+def _assessment_axis_rows(connection: sqlite3.Connection, language_code: str, lemma: str) -> list[sqlite3.Row]:
+    table_exists = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'vocabulary_assessment_axes'",
+    ).fetchone()
+    if table_exists is None:
+        return []
+
+    return connection.execute(
+        """
+        SELECT language_code, lemma, axis_key, prompt_type, response_type, stage, due_at,
+               last_seen_at, last_result, pass_count, fail_count
+        FROM vocabulary_assessment_axes
+        WHERE language_code = ? AND lemma = ?
+        ORDER BY CASE axis_key
+            WHEN 'form_to_meaning' THEN 0
+            WHEN 'form_to_reading' THEN 1
+            WHEN 'meaning_to_form' THEN 2
+            WHEN 'reading_to_form' THEN 3
+            ELSE 4
+        END
+        """,
+        (language_code, lemma),
+    ).fetchall()
+
+
+def _refresh_assessment_progress(connection: sqlite3.Connection, language_code: str, lemma: str) -> None:
+    rows = _assessment_axis_rows(connection, language_code, lemma)
+    if not rows:
+        return
+
+    _ensure_vocabulary_progress_row(connection, language_code, lemma)
+    stages = [max(0, min(12, int(row["stage"] or 0))) for row in rows]
+    weakest_stage = min(stages)
+    strongest_stage = max(stages)
+    average_stage = sum(stages) / max(1, len(stages))
+    due_dates = [
+        _parse_utc(str(row["due_at"]))
+        for row in rows
+        if row["due_at"]
+    ]
+    next_due_at = _utc_from_datetime(min(due_dates)) if due_dates else None
+    if weakest_stage == 0 and strongest_stage == 0:
+        mastery_level = "new"
+    elif weakest_stage < 3:
+        mastery_level = "learning"
+    elif weakest_stage < 9:
+        mastery_level = "review"
+    else:
+        mastery_level = "mastered"
+
+    connection.execute(
+        """
+        UPDATE vocabulary_progress
+        SET mastery_level = ?,
+            mastery_score = ?,
+            srs_stage = ?,
+            next_due_at = ?
+        WHERE language_code = ? AND lemma = ?
+        """,
+        (mastery_level, round(average_stage / 12.0, 3), weakest_stage, next_due_at, language_code, lemma),
+    )
+
+
+def _summarize_assessment_state(
+    connection: sqlite3.Connection,
+    language_code: str,
+    lemma: str,
+) -> dict[str, object]:
+    rows = _assessment_axis_rows(connection, language_code, lemma)
+    if not rows:
+        return {
+            "language_code": language_code,
+            "lemma": lemma,
+            "mastery_level": "new",
+            "mastery_score": 0.0,
+            "srs_stage": 0,
+            "next_due_at": None,
+            "stage_zero_complete": False,
+            "axes": [],
+        }
+
+    axes = [
+        {
+            "language_code": str(row["language_code"]),
+            "lemma": str(row["lemma"]),
+            "axis_key": str(row["axis_key"]),
+            "prompt_type": str(row["prompt_type"]),
+            "response_type": str(row["response_type"]),
+            "stage": int(row["stage"] or 0),
+            "due_at": str(row["due_at"]) if row["due_at"] else None,
+            "last_seen_at": str(row["last_seen_at"]) if row["last_seen_at"] else None,
+            "last_result": str(row["last_result"]) if row["last_result"] else None,
+            "pass_count": int(row["pass_count"] or 0),
+            "fail_count": int(row["fail_count"] or 0),
+        }
+        for row in rows
+    ]
+    stages = [axis["stage"] for axis in axes]
+    weakest_stage = min(stages)
+    strongest_stage = max(stages)
+    average_stage = sum(stages) / max(1, len(stages))
+    due_dates = [_parse_utc(axis["due_at"]) for axis in axes if axis["due_at"]]
+    next_due_at = _utc_from_datetime(min(due_dates)) if due_dates else None
+    if weakest_stage == 0 and strongest_stage == 0:
+        mastery_level = "new"
+    elif weakest_stage < 3:
+        mastery_level = "learning"
+    elif weakest_stage < 9:
+        mastery_level = "review"
+    else:
+        mastery_level = "mastered"
+
+    return {
+        "language_code": language_code,
+        "lemma": lemma,
+        "mastery_level": mastery_level,
+        "mastery_score": round(average_stage / 12.0, 3),
+        "srs_stage": weakest_stage,
+        "next_due_at": next_due_at,
+        "stage_zero_complete": weakest_stage >= 1,
+        "axes": axes,
+    }
+
+
+def _apply_assessment_review(
+    connection: sqlite3.Connection,
+    *,
+    language_code: str,
+    lemma: str,
+    axis_key: str,
+    result: str,
+    occurred_at: str,
+) -> dict[str, object]:
+    _ensure_vocabulary_assessment_axes(connection, language_code, lemma)
+    prompt_type, response_type = _assessment_axis_definition(axis_key)
+    row = connection.execute(
+        """
+        SELECT stage, pass_count, fail_count
+        FROM vocabulary_assessment_axes
+        WHERE language_code = ? AND lemma = ? AND axis_key = ?
+        """,
+        (language_code, lemma, axis_key),
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"Assessment axis not found: {axis_key}")
+
+    stage = max(0, min(12, int(row["stage"] or 0)))
+    pass_count = int(row["pass_count"] or 0)
+    fail_count = int(row["fail_count"] or 0)
+    normalized_result = result.strip().lower()
+    review_time = _parse_utc(occurred_at)
+    if normalized_result == "correct":
+        pass_count += 1
+        stage = min(12, stage + 1)
+        due_at = _utc_from_datetime(review_time + _assessment_stage_interval(stage))
+    elif normalized_result == "incorrect":
+        fail_count += 1
+        stage = max(1, stage - 1) if stage > 0 else 0
+        due_at = _utc_from_datetime(review_time + _assessment_stage_interval(stage))
+    else:
+        raise ValueError(f"Unsupported assessment result: {result}")
+
+    connection.execute(
+        """
+        UPDATE vocabulary_assessment_axes
+        SET prompt_type = ?,
+            response_type = ?,
+            stage = ?,
+            due_at = ?,
+            last_seen_at = ?,
+            last_result = ?,
+            pass_count = ?,
+            fail_count = ?
+        WHERE language_code = ? AND lemma = ? AND axis_key = ?
+        """,
+        (
+            prompt_type,
+            response_type,
+            stage,
+            due_at,
+            occurred_at,
+            normalized_result,
+            pass_count,
+            fail_count,
+            language_code,
+            lemma,
+            axis_key,
+        ),
+    )
+    _refresh_assessment_progress(connection, language_code, lemma)
+    return _summarize_assessment_state(connection, language_code, lemma)
 
 
 def _queue_learning_event(
@@ -336,6 +717,255 @@ def _record_exposure(
     )
     if cursor.rowcount:
         _refresh_vocabulary_progress(connection, language_code, lemma)
+
+
+def record_study_vocabulary_item(
+    data_root: Path,
+    payload: StudyVocabularyItemCreateRequest,
+    *,
+    owner_id: str | None = None,
+) -> StudyVocabularyItemRecord:
+    saved_at = payload.first_seen_at or _utc_now()
+    language_code = payload.language_code.strip().lower() or "local"
+    lemma = payload.lemma.strip()
+    display_form = payload.display_form.strip() or lemma
+    source_surface_form = payload.source_surface_form.strip() or display_form
+    source_sentence_text = payload.source_sentence_text.strip()
+
+    with _connect(data_root, owner_id) as connection:
+        connection.execute(
+            """
+            INSERT INTO study_vocabulary_items (
+                language_code,
+                lemma,
+                display_form,
+                source_book_id,
+                source_page_number,
+                source_sentence_order,
+                source_token_order,
+                source_surface_form,
+                source_sentence_text,
+                pronunciation,
+                romanization,
+                definition_short,
+                proficiency_level,
+                click_count,
+                first_seen_at,
+                last_seen_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+            ON CONFLICT(language_code, lemma) DO UPDATE SET
+                display_form = excluded.display_form,
+                source_book_id = excluded.source_book_id,
+                source_page_number = excluded.source_page_number,
+                source_sentence_order = excluded.source_sentence_order,
+                source_token_order = excluded.source_token_order,
+                source_surface_form = excluded.source_surface_form,
+                source_sentence_text = excluded.source_sentence_text,
+                pronunciation = excluded.pronunciation,
+                romanization = excluded.romanization,
+                definition_short = excluded.definition_short,
+                proficiency_level = excluded.proficiency_level,
+                click_count = study_vocabulary_items.click_count + 1,
+                first_seen_at = COALESCE(study_vocabulary_items.first_seen_at, excluded.first_seen_at),
+                last_seen_at = excluded.last_seen_at
+            """,
+            (
+                language_code,
+                lemma,
+                display_form,
+                payload.book_id,
+                payload.page_number,
+                payload.sentence_order,
+                payload.token_order,
+                source_surface_form,
+                source_sentence_text,
+                payload.pronunciation,
+                payload.romanization,
+                payload.definition_short,
+                payload.proficiency_level,
+                saved_at,
+                saved_at,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO word_interactions (
+                book_id,
+                page_number,
+                language_code,
+                lemma,
+                interaction_type,
+                occurred_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                payload.book_id,
+                payload.page_number,
+                language_code,
+                lemma,
+                "study_saved",
+                saved_at,
+            ),
+        )
+        _queue_learning_event(
+            connection,
+            event_id=f"study-vocabulary-item:{uuid4().hex}",
+            event_type="study_vocabulary_item",
+            book_id=payload.book_id,
+            occurred_at=saved_at,
+            payload={
+                "book_id": payload.book_id,
+                "language_code": language_code,
+                "lemma": lemma,
+                "display_form": display_form,
+                "page_number": payload.page_number,
+                "sentence_order": payload.sentence_order,
+                "token_order": payload.token_order,
+                "source_surface_form": source_surface_form,
+                "source_sentence_text": source_sentence_text,
+                "pronunciation": payload.pronunciation,
+                "romanization": payload.romanization,
+                "definition_short": payload.definition_short,
+                "proficiency_level": payload.proficiency_level,
+                "first_seen_at": saved_at,
+                "last_seen_at": saved_at,
+            },
+        )
+        _ensure_vocabulary_assessment_axes(connection, language_code, lemma)
+        _refresh_assessment_progress(connection, language_code, lemma)
+        connection.commit()
+        row = connection.execute(
+            """
+            SELECT language_code, lemma, display_form, source_book_id, source_page_number, source_sentence_order,
+                   source_token_order, source_surface_form, source_sentence_text, pronunciation, romanization,
+                   definition_short, proficiency_level, click_count, first_seen_at, last_seen_at
+            FROM study_vocabulary_items
+            WHERE language_code = ? AND lemma = ?
+            """,
+            (language_code, lemma),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("Failed to record study vocabulary item.")
+        row_data = dict(row)
+
+    return StudyVocabularyItemRecord(
+        language_code=row_data["language_code"],
+        lemma=row_data["lemma"],
+        display_form=row_data["display_form"],
+        source_book_id=row_data["source_book_id"],
+        source_page_number=row_data["source_page_number"],
+        source_sentence_order=row_data["source_sentence_order"],
+        source_token_order=row_data["source_token_order"],
+        source_surface_form=row_data["source_surface_form"],
+        source_sentence_text=row_data["source_sentence_text"],
+        pronunciation=row_data["pronunciation"],
+        romanization=row_data["romanization"],
+        definition_short=row_data["definition_short"],
+        proficiency_level=row_data["proficiency_level"],
+        click_count=row_data["click_count"],
+        first_seen_at=row_data["first_seen_at"],
+        last_seen_at=row_data["last_seen_at"],
+    )
+
+
+def record_word_interaction(
+    data_root: Path,
+    payload: WordInteractionCreateRequest,
+    *,
+    owner_id: str | None = None,
+) -> WordInteractionRecord:
+    occurred_at = payload.occurred_at or _utc_now()
+    language_code = payload.language_code.strip().lower() or "local"
+    target_text = payload.target_text.strip()
+    if not target_text:
+        raise ValueError("Target text is required.")
+
+    with _connect(data_root, owner_id) as connection:
+        cursor = connection.execute(
+            """
+            INSERT INTO word_interactions (
+                book_id,
+                page_number,
+                language_code,
+                lemma,
+                interaction_type,
+                occurred_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                payload.book_id,
+                payload.page_number,
+                language_code,
+                target_text,
+                payload.interaction_type,
+                occurred_at,
+            ),
+        )
+        _queue_learning_event(
+            connection,
+            event_id=f"word-interaction:{uuid4().hex}",
+            event_type="word_interaction",
+            book_id=payload.book_id,
+            occurred_at=occurred_at,
+            payload={
+                "book_id": payload.book_id,
+                "page_number": payload.page_number,
+                "language_code": language_code,
+                "target_text": target_text,
+                "interaction_type": payload.interaction_type,
+                "occurred_at": occurred_at,
+            },
+        )
+        connection.commit()
+        row = connection.execute(
+            """
+            SELECT id, book_id, page_number, language_code, lemma, interaction_type, occurred_at
+            FROM word_interactions
+            WHERE id = ?
+            """,
+            (cursor.lastrowid,),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("Failed to record word interaction.")
+
+    return WordInteractionRecord(
+        id=row["id"],
+        book_id=row["book_id"],
+        page_number=row["page_number"],
+        language_code=row["language_code"],
+        target_text=row["lemma"],
+        interaction_type=row["interaction_type"],
+        occurred_at=row["occurred_at"],
+    )
+
+
+def record_vocabulary_assessment_review(
+    data_root: Path,
+    payload: VocabularyAssessmentReviewRequest,
+    *,
+    owner_id: str | None = None,
+) -> VocabularyAssessmentStateRecord:
+    occurred_at = payload.occurred_at or _utc_now()
+    language_code = payload.language_code.strip().lower() or "local"
+    lemma = payload.lemma.strip()
+    if not lemma:
+        raise ValueError("Lemma is required.")
+
+    with _connect(data_root, owner_id) as connection:
+        state = _apply_assessment_review(
+            connection,
+            language_code=language_code,
+            lemma=lemma,
+            axis_key=payload.axis_key,
+            result=payload.result,
+            occurred_at=occurred_at,
+        )
+        connection.commit()
+
+    return VocabularyAssessmentStateRecord.model_validate(state)
 
 
 def create_reading_session(

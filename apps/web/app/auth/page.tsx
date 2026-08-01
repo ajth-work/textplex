@@ -2,34 +2,47 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { useAuth } from "../../components/auth-provider";
+import { resolveAccountLabel } from "../../lib/auth-display";
 import { getSupabaseClient, isSupabaseConfigured } from "../../lib/supabase";
 
 type AuthMode = "sign-in" | "sign-up" | "reset";
 
+const DEFAULT_RETURN_TO = "/portal";
+
+function normalizeReturnTo(value: string | null): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return DEFAULT_RETURN_TO;
+  }
+  return value;
+}
+
 export default function AuthPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
-  const [mode, setMode] = useState<AuthMode>("sign-in");
+  const [mode, setMode] = useState<AuthMode>(searchParams.get("mode") === "sign-up" ? "sign-up" : searchParams.get("mode") === "reset" ? "reset" : "sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const returnTo = normalizeReturnTo(searchParams.get("returnTo"));
 
   if (user) {
+    const accountLabel = resolveAccountLabel(user);
     return (
-      <main className="auth-shell">
-        <section className="auth-card card">
+      <main className="auth-shell" data-inventory-id="auth.page">
+        <section className="auth-card card" data-inventory-id="auth.account-card">
           <span className="eyebrow">Account</span>
-          <h1>You are signed in.</h1>
-          <p className="lede">{user.email}</p>
+          <h1>Signed in as {accountLabel}</h1>
+          <p className="lede">{user.email ?? user.id}</p>
           <div className="button-row">
-            <Link className="button button-primary" href="/profile">
-              Open profile
+            <Link className="button button-primary" href={returnTo}>
+              Open portal
             </Link>
             <Link className="button button-secondary" href="/library">
               Open library
@@ -59,7 +72,7 @@ export default function AuthPage() {
 
     setSubmitting(true);
     try {
-      const redirectTo = `${window.location.origin}/auth/callback`;
+      const redirectTo = `${window.location.origin}/auth/callback?returnTo=${encodeURIComponent(returnTo)}`;
       if (mode === "reset") {
         const result = await client.auth.resetPasswordForEmail(email, { redirectTo });
         if (result.error) throw result.error;
@@ -77,13 +90,23 @@ export default function AuthPage() {
           },
         });
         if (result.error) throw result.error;
+        if (result.data.session) {
+          router.replace(returnTo);
+          router.refresh();
+          return;
+        }
         setMessage("Account created. Check your email to confirm the account.");
         return;
       }
 
       const result = await client.auth.signInWithPassword({ email, password });
       if (result.error) throw result.error;
-      router.push("/profile");
+      const sessionResult = await client.auth.getSession();
+      if (!sessionResult.data.session) {
+        throw new Error("Sign-in completed, but the session was not restored. Please try again.");
+      }
+      router.replace(returnTo);
+      router.refresh();
     } catch (submissionError) {
       setError(submissionError instanceof Error ? submissionError.message : "Unable to complete authentication.");
     } finally {
@@ -95,8 +118,8 @@ export default function AuthPage() {
   const isSignUp = mode === "sign-up";
 
   return (
-    <main className="auth-shell">
-      <section className="auth-card card">
+    <main className="auth-shell" data-inventory-id="auth.page">
+      <section className="auth-card card" data-inventory-id="auth.account-card">
         <span className="eyebrow">TextPlex account</span>
         <h1>{isReset ? "Reset your password" : isSignUp ? "Create your learner account" : "Welcome back"}</h1>
         <p className="lede">
@@ -105,7 +128,7 @@ export default function AuthPage() {
             : "Keep your reading history, vocabulary progress, and preferences available across devices."}
         </p>
 
-        <form className="auth-form" onSubmit={submit}>
+        <form className="auth-form" onSubmit={submit} data-inventory-id="auth.form">
           {isSignUp ? (
             <label>
               Display name
@@ -128,7 +151,7 @@ export default function AuthPage() {
         </form>
 
         {message ? <p className="auth-message" role="status">{message}</p> : null}
-        {error ? <p className="auth-error" role="alert">{error}</p> : null}
+        {error ? <p className="auth-error" role="alert" data-inventory-id="auth.error-state">{error}</p> : null}
 
         <div className="auth-links">
           {mode !== "sign-in" ? <button type="button" className="ghost-link" onClick={() => selectMode("sign-in")}>Sign in</button> : null}

@@ -7,7 +7,6 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
-
 RUSSIAN_LEVEL_PRIORITY = {
     "A1": 0,
     "A2": 1,
@@ -75,6 +74,10 @@ def _normalize_key(value: str) -> str:
     return re.sub(r"[^0-9a-zA-Z]+", "_", value.strip().lower()).strip("_")
 
 
+def _has_cyrillic_text(value: str | None) -> bool:
+    return bool(value and re.search(r"[\u0400-\u04FF]", value))
+
+
 def _normalized_row_map(row: dict[str, Any]) -> dict[str, Any]:
     normalized: dict[str, Any] = {}
     for key, value in row.items():
@@ -120,9 +123,9 @@ def _level_rank(value: str | None) -> int:
     label = _normalize_level_label(value)
     if not label:
         return len(RUSSIAN_LEVEL_PRIORITY)
-    for candidate in RUSSIAN_LEVEL_PRIORITY:
+    for candidate, rank in RUSSIAN_LEVEL_PRIORITY.items():
         if candidate in label.upper():
-            return RUSSIAN_LEVEL_PRIORITY[candidate]
+            return rank
     return len(RUSSIAN_LEVEL_PRIORITY)
 
 
@@ -146,14 +149,14 @@ def _parse_json_items(payload: Any) -> list[dict[str, Any]]:
 
 def _canonical_record_from_map(row: dict[str, Any]) -> dict[str, Any] | None:
     surface_form = _pick_text(row, "lemma", "surface_form", "word", "headword", "term")
-    if not surface_form:
+    if not surface_form or not _has_cyrillic_text(surface_form):
         return None
 
     lemma = _pick_text(row, "lemma", "headword", "word", "surface_form", "term") or surface_form
     pronunciation = _pick_text(row, "pronunciation", "transcription", "romanization", "reading", "stress")
     level = _normalize_level_label(_pick_text(row, "trki_level", "level", "cefr", "word_grade", "proficiency_level"))
     part_of_speech = _pick_text(row, "part_of_speech", "pos", "gramm", "grammar")
-    definitions = _collect_text_values(row, "definition", "definitions", "gloss", "meaning", "english")
+    definitions = _collect_text_values(row, "definition", "definitions", "gloss", "meaning", "english", "english_translation")
     frequency_rank = _safe_int(_pick_text(row, "frequency_rank", "rank", "freq_rank", "order"))
     frequency_score = _safe_float(_pick_text(row, "ipm", "frequency", "count", "occurrences"))
 
@@ -202,7 +205,7 @@ def parse_russian_lexicon_export(source_path: Path) -> list[dict[str, Any]]:
                     records.append(record)
         return records
 
-    if source_path.suffix.lower() == ".json" or stripped.startswith("{") or stripped.startswith("["):
+    if source_path.suffix.lower() == ".json" or stripped.startswith(("{", "[")):
         payload = json.loads(text)
         records = []
         for item in _parse_json_items(payload):
@@ -246,7 +249,7 @@ def build_russian_lexicon_rows(
     source_path: str,
     max_rows: int | None = None,
 ) -> list[dict[str, str]]:
-    grouped: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+    grouped: OrderedDict[str, dict[str, Any]] = OrderedDict()
 
     for record in sorted(records, key=_priority_key):
         surface_form = _first_text(record.get("lemma") or record.get("surface_form"))

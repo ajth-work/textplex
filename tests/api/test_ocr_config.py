@@ -1,6 +1,11 @@
 from pathlib import Path
 
-from app.services.ocr import OcrPageResult, get_text_source_signature, resolve_page_text, should_use_openai_ocr
+from app.services.ocr import (
+    OcrPageResult,
+    get_text_source_signature,
+    resolve_page_text,
+    should_use_openai_ocr,
+)
 
 
 def test_openai_ocr_requires_provider_and_key(monkeypatch) -> None:

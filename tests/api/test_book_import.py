@@ -1,10 +1,9 @@
 from pathlib import Path
 
-from fastapi.testclient import TestClient
 import pytest
-
 from app.main import app
 from app.schemas.books import BookRecord
+from fastapi.testclient import TestClient
 
 
 def test_import_book_from_path_registers_alice_mini_fixture(imported_real_scan: tuple[Path, BookRecord]) -> None:

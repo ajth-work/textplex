@@ -35,6 +35,17 @@ python scripts/build_russian_lexicon.py --source <path-to-rnc-export.csv>
 4. Review the generated `lexicon.csv` before importing it into the SQLite pack.
 5. Use the TRKI band and corpus frequency to prioritize basic reading vocabulary first.
 
+## CSV Seed Notes
+
+If you are starting from the curated `RU5000 (v0.1) - RU5000.csv` export, treat it as a frequency-ranked seed list for the starter pack:
+
+- keep the CSV local and out of Git
+- export or normalize the useful rows to CSV before building the canonical pack
+- preserve lemma, surface form, pronunciation, meaning, and frequency signal where the workbook provides them
+- use the CSV as a sourcing aid, not as the final runtime pack format
+
+The `lexicon.override.csv` file can hold a small bridge supplement for very common forms that the seed pack does not yet cover, such as calendar vocabulary and other high-value reading anchors.
+
 ## Pack Goal
 
 The bundled pack should eventually compile to a `lexicon.sqlite3` file with rows that the TextPlex importer can load directly.
@@ -47,4 +58,3 @@ Recommended mapping for the current compatibility schema:
 - `definition`: short English gloss
 
 Keep source conversion scripts alongside this pack once the first generated database exists.
-

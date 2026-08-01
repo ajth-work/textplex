@@ -7,7 +7,10 @@ from app.schemas.auth import AuthMeResponse
 from app.schemas.learning import ReadingSessionCreateRequest
 from app.services import learning_sync
 from app.services.auth import AuthenticatedUserContext
-from app.services.learning_profile import create_reading_session, get_learning_profile_summary
+from app.services.learning_profile import (
+    create_reading_session,
+    get_learning_profile_summary,
+)
 
 
 def _context() -> AuthenticatedUserContext:
