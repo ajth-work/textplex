@@ -30,6 +30,11 @@ from app.schemas.books import (
     TextImportRequest,
     TextParseRequest,
 )
+from app.schemas.generated_articles import (
+    GeneratedReaderArticlePromptDetails,
+    GeneratedReaderArticleRequest,
+    GeneratedReaderArticleResponse,
+)
 from app.schemas.google_translate import GoogleTranslateUsageSummary
 from app.schemas.learning import (
     LearningProfileSummary,
@@ -46,11 +51,6 @@ from app.schemas.learning import (
     VocabularyAssessmentStateRecord,
     WordInteractionCreateRequest,
     WordInteractionRecord,
-)
-from app.schemas.generated_articles import (
-    GeneratedReaderArticlePromptDetails,
-    GeneratedReaderArticleRequest,
-    GeneratedReaderArticleResponse,
 )
 from app.schemas.lexicon import (
     LexiconImportRequest,
@@ -110,7 +110,10 @@ from app.services.commerce import (
     get_entitlements,
     verify_sandbox_signature,
 )
-from app.services.generated_articles import generate_reader_article, load_generated_article_prompt_details
+from app.services.generated_articles import (
+    generate_reader_article,
+    load_generated_article_prompt_details,
+)
 from app.services.google_translate_usage import get_google_translate_usage_summary
 from app.services.learning_profile import (
     create_reading_session,

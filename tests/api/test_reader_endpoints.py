@@ -243,7 +243,7 @@ def test_sentence_translation_endpoint_persists_translation_alignment(tmp_path: 
         def read(self) -> bytes:
             return json.dumps({"output_text": json.dumps(alignment_payload, ensure_ascii=False)}).encode("utf-8")
 
-    def fake_urlopen(request, timeout=120):  # noqa: ANN001
+    def fake_urlopen(request, timeout=120):
         return FakeOpenAIResponse()
 
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")

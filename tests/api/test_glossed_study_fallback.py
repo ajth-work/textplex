@@ -62,7 +62,8 @@ def test_study_surface_backfills_missing_glossed_meaning_from_lexicon_fallback(t
         definition = "to return"
 
     class FakeLookup:
-        entries = [FakeEntry()]
+        def __init__(self) -> None:
+            self.entries = [FakeEntry()]
 
     monkeypatch.setattr(surfaces_service, "lookup_lexicon_entry", lambda **_kwargs: FakeLookup())
 

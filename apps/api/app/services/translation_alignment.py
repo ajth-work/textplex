@@ -9,7 +9,11 @@ from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from app.schemas.books import SentenceTranslationAlignment, TranslationAlignmentSegment, TranslationAlignmentToken
+from app.schemas.books import (
+    SentenceTranslationAlignment,
+    TranslationAlignmentSegment,
+    TranslationAlignmentToken,
+)
 from processor.contracts import SentenceResult
 
 logger = logging.getLogger(__name__)

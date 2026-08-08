@@ -3,6 +3,7 @@
 ## 2026-08-08
 
 - Fixed the Python API and processor Ruff failures by cleaning up the generated article and translation alignment services, removing stale test lint noise, and revalidating the API test suite.
+- Resolved the remaining CI Ruff 0.16.2 merge-check failures by sorting API imports, tightening generated-article and translation-alignment error handling, and fixing the two affected API tests.
 
 ## 2026-08-07
 

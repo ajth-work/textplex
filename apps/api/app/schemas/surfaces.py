@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from app.schemas.learning import LearningProfileSummary
-from app.schemas.learning import VocabularyAssessmentAxisRecord
+from app.schemas.learning import LearningProfileSummary, VocabularyAssessmentAxisRecord
 from pydantic import BaseModel, Field
 
 

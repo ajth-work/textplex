@@ -7,6 +7,7 @@ from pathlib import Path
 
 from app.core.paths import resolve_books_root
 from app.schemas.books import BookRecord
+from app.schemas.learning import VocabularyAssessmentAxisRecord
 from app.schemas.surfaces import (
     ActivityEvent,
     ActivitySurfaceResponse,
@@ -29,7 +30,6 @@ from app.schemas.surfaces import (
     StudyVocabularyGroup,
     StudyVocabularyItem,
 )
-from app.schemas.learning import VocabularyAssessmentAxisRecord
 from app.services.book_extraction import recover_book_extraction_result
 from app.services.book_registry import load_registry
 from app.services.learning_profile import (

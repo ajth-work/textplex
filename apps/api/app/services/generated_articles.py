@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sqlite3
 import re
+import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -725,7 +725,7 @@ def _call_openai(prompt: str) -> dict[str, Any]:
         raise RuntimeError(f"OpenAI article generation failed: {exc.reason}") from exc
 
     if not isinstance(response_payload, dict):
-        raise RuntimeError("OpenAI article generation response was not a JSON object.")
+        raise TypeError("OpenAI article generation response was not a JSON object.")
     return response_payload
 
 
@@ -740,7 +740,7 @@ def _parse_model_payload(text: str) -> dict[str, Any] | None:
 
 
 def _fallback_unknown_lemma_count(window: ArticleWindow) -> int:
-    return 0 if window.upcoming_terms else 0
+    return 0
 
 
 def _resolve_topic(language_code: str, topic: str | None, genre: str) -> str:
