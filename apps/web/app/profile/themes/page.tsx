@@ -1,5 +1,5 @@
-import { ThemeShopSurfaceView } from "../../../components/surface-views";
+import { ThemeSettingsSurfaceView } from "../../../components/surface-views";
 
-export default function ThemeShopPage() {
-  return <ThemeShopSurfaceView />;
+export default function ThemeSettingsPage() {
+  return <ThemeSettingsSurfaceView />;
 }

@@ -47,6 +47,11 @@ from app.schemas.learning import (
     WordInteractionCreateRequest,
     WordInteractionRecord,
 )
+from app.schemas.generated_articles import (
+    GeneratedReaderArticlePromptDetails,
+    GeneratedReaderArticleRequest,
+    GeneratedReaderArticleResponse,
+)
 from app.schemas.lexicon import (
     LexiconImportRequest,
     LexiconImportSummary,
@@ -105,6 +110,7 @@ from app.services.commerce import (
     get_entitlements,
     verify_sandbox_signature,
 )
+from app.services.generated_articles import generate_reader_article, load_generated_article_prompt_details
 from app.services.google_translate_usage import get_google_translate_usage_summary
 from app.services.learning_profile import (
     create_reading_session,
@@ -488,6 +494,23 @@ def import_text(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.post("/articles/generate", response_model=GeneratedReaderArticleResponse)
+def generate_article(
+    payload: GeneratedReaderArticleRequest,
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
+) -> GeneratedReaderArticleResponse:
+    try:
+        return generate_reader_article(
+            app.state.data_root,
+            payload,
+            owner_id=context.user.id if context else None,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/books", response_model=list[BookRecord])
 def list_books(
     context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
@@ -497,6 +520,18 @@ def list_books(
         key=lambda record: record.processed_at or record.created_at,
         reverse=True,
     )
+
+
+@app.get("/books/{book_id}/generation", response_model=GeneratedReaderArticlePromptDetails)
+def get_generated_article_prompt_details(
+    book_id: str,
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
+) -> GeneratedReaderArticlePromptDetails:
+    _book_exists(book_id, context)
+    record = load_generated_article_prompt_details(app.state.data_root, book_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Generated article prompt details not found for book: {book_id}")
+    return record
 
 
 @app.get("/books/archived", response_model=list[BookRecord])
@@ -683,6 +718,7 @@ def get_book_sentence_translation(
         translation=sentence.translation,
         translation_source=sentence.translation_source,
         resolution_source=resolution_source,
+        translation_alignment=sentence.translation_alignment.model_dump() if sentence.translation_alignment is not None else None,
     )
 
 

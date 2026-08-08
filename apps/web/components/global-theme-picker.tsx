@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
+import { useState } from "react";
 
 import {
   appThemeLabels,
@@ -14,9 +14,20 @@ import { putJson, type SettingEntry, type SettingsSurfaceResponse, type Settings
 type GlobalThemePickerProps = {
   initialTheme: AppTheme;
   entries: SettingEntry[];
+  catalogHref?: string;
+  inventoryId?: string;
+  onThemeChange?: (theme: AppTheme) => void;
+  onSaved?: (theme: AppTheme) => void;
 };
 
-export function GlobalThemePicker({ initialTheme, entries }: GlobalThemePickerProps) {
+export function GlobalThemePicker({
+  initialTheme,
+  entries,
+  catalogHref = "#theme-catalog",
+  inventoryId = "theme-settings.app-theme-card",
+  onThemeChange,
+  onSaved,
+}: GlobalThemePickerProps) {
   const [theme, setTheme] = useState<AppTheme>(initialTheme);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -27,6 +38,7 @@ export function GlobalThemePicker({ initialTheme, entries }: GlobalThemePickerPr
     setSaved(false);
     setError(null);
     persistAppTheme(nextTheme);
+    onThemeChange?.(nextTheme);
   }
 
   async function saveTheme() {
@@ -44,8 +56,9 @@ export function GlobalThemePicker({ initialTheme, entries }: GlobalThemePickerPr
       } satisfies SettingsUpdateRequest);
       persistAppTheme(theme);
       setSaved(true);
+      onSaved?.(theme);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save the global theme.");
+      setError(err instanceof Error ? err.message : "Unable to save the app theme.");
     } finally {
       setSaving(false);
     }
@@ -54,11 +67,11 @@ export function GlobalThemePicker({ initialTheme, entries }: GlobalThemePickerPr
   const selectedOption = appThemeOptions.find((option) => option.value === theme) ?? appThemeOptions[0];
 
   return (
-    <article className="card feature-card global-theme-card">
+    <article className="card feature-card global-theme-card" data-inventory-id={inventoryId}>
       <div className="card-topline global-theme-card-topline">
         <div>
           <span className="eyebrow">Appearance</span>
-          <h2>Global theme</h2>
+          <h2>App theme</h2>
         </div>
         <span className="pill">{appThemeLabels[theme]}</span>
       </div>
@@ -84,11 +97,11 @@ export function GlobalThemePicker({ initialTheme, entries }: GlobalThemePickerPr
             </button>
           ))}
         </div>
-        <Link className="global-theme-shop-link" href="/profile/themes">
+        <Link className="global-theme-shop-link" href={catalogHref}>
           <span className="eyebrow">Explore</span>
-          <strong>Theme shop</strong>
+          <strong>Theme catalog</strong>
           <span className="global-theme-shop-arrow" aria-hidden="true">→</span>
-          <span className="small-copy">See every visual pack</span>
+          <span className="small-copy">See the full owned theme catalog</span>
         </Link>
       </div>
       <div className="global-theme-footer">
@@ -96,7 +109,7 @@ export function GlobalThemePicker({ initialTheme, entries }: GlobalThemePickerPr
           Previewing <strong>{selectedOption.title}</strong>. Save it to make this your default across devices using this profile.
         </p>
         <button className="button button-primary" type="button" onClick={() => void saveTheme()} disabled={saving}>
-          {saving ? "Saving theme..." : saved ? "Global theme saved" : "Save global theme"}
+          {saving ? "Saving theme..." : saved ? "Theme saved" : "Save theme"}
         </button>
       </div>
       {error ? <p className="small-copy global-theme-error">{error}</p> : null}

@@ -8,6 +8,7 @@ const read = (...parts) => fs.readFileSync(path.join(repoRoot, ...parts), "utf8"
 const analysisRouteSource = read("apps", "web", "app", "analysis", "[bookId]", "page.tsx");
 const analysisSource = read("apps", "web", "components", "surface-views.tsx");
 const bookDetailSource = read("apps", "web", "components", "book-detail-view.tsx");
+const mockRouteSource = read("apps", "web", "components", "mock-route-views.tsx");
 const chartSource = read("apps", "web", "components", "hsk-series-chart.tsx");
 const stylesSource = read("apps", "web", "app", "globals.css");
 
@@ -15,6 +16,13 @@ test("Next analysis route remains dynamic and selects the live surface outside d
   assert.match(analysisRouteSource, /export const dynamic = "force-dynamic"/);
   assert.match(analysisRouteSource, /<MockAnalysisSurfaceView bookId=\{resolvedParams\.bookId\} \/>/);
   assert.match(analysisRouteSource, /<AnalysisSurfaceView bookId=\{resolvedParams\.bookId\} \/>/);
+  assert.match(analysisSource, /fetchGeneratedArticlePromptDetails\(bookId\)/);
+  assert.match(analysisSource, /analysis\.generation-prompt-card/);
+  assert.match(bookDetailSource, /fetchGeneratedArticlePromptDetails\(bookId\)/);
+  assert.match(bookDetailSource, /book-detail\.generation-prompt-card/);
+  assert.match(bookDetailSource, /GeneratedArticlePromptCard/);
+  assert.match(mockRouteSource, /demoGeneratedArticlePromptDetails/);
+  assert.match(mockRouteSource, /analysis\.generation-prompt-card/);
 });
 
 test("analysis surface covers loading, error, empty, and sentence/page HSK series states", () => {

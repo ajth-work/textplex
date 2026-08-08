@@ -105,6 +105,8 @@ npm run dev:web
 
 `npm run dev:web` listens on `0.0.0.0:3000`, so same-Wi-Fi devices can open the Next app at your machine's LAN address, for example `http://192.168.192.231:3000`. If that still fails on Windows, allow inbound traffic for the private network firewall profile.
 
+Chromium DevTools can auto-connect this workspace on `localhost` through `/.well-known/appspecific/com.chrome.devtools.json`. That makes source edits from DevTools persist back into `apps/web`, which is useful when you are tweaking the rendered copy or testing small UI changes live.
+
 Build the web app:
 
 ```powershell

@@ -29,13 +29,14 @@ from app.schemas.surfaces import (
     StudyVocabularyGroup,
     StudyVocabularyItem,
 )
+from app.schemas.learning import VocabularyAssessmentAxisRecord
 from app.services.book_extraction import recover_book_extraction_result
 from app.services.book_registry import load_registry
 from app.services.learning_profile import (
     ensure_profile_database,
     get_learning_profile_summary,
 )
-from app.services.lexicon import lookup_lexicon_hsk_levels_map
+from app.services.lexicon import lookup_lexicon_entry, lookup_lexicon_hsk_levels_map
 from app.services.study_programs import build_study_program_groups
 from processor import calculate_book_hsk_metrics, calculate_hsk_series, is_hanzi
 from processor.contracts import BookExtractionResult
@@ -92,6 +93,30 @@ def _snippet(text: str, query: str, *, width: int = 140) -> str:
 
 def _book_title_map(registry: dict[str, BookRecord]) -> dict[str, str]:
     return {book_id: record.title for book_id, record in registry.items()}
+
+
+def _resolve_glossed_definition_short(
+    data_root: Path,
+    *,
+    language_code: str,
+    candidates: tuple[str, ...],
+) -> str | None:
+    normalized_language_code = language_code.strip().lower()
+    for candidate in candidates:
+        term = candidate.strip()
+        if not term:
+            continue
+        lookup = lookup_lexicon_entry(
+            data_root=data_root,
+            language_code=normalized_language_code,
+            term=term,
+            allow_google_fallback=True,
+        )
+        entry = lookup.entries[0] if lookup.entries else None
+        definition = entry.definition.strip() if entry and entry.definition else None
+        if definition:
+            return definition
+    return None
 
 
 def _language_label(language_code: str) -> str:
@@ -268,7 +293,7 @@ def get_study_surface(
     registry = load_registry(_books_root(data_root) / "registry.json")
     title_map = _book_title_map(registry)
     db_path = ensure_profile_database(data_root, owner_id)
-    study_programs = build_study_program_groups(data_root, language_code=language_code)
+    glossed_definition_cache: dict[tuple[str, str], str | None] = {}
     with sqlite3.connect(db_path) as connection:
         connection.row_factory = sqlite3.Row
         rows = connection.execute(
@@ -304,24 +329,57 @@ def get_study_surface(
             """,
             (language_code, language_code, limit),
         ).fetchall()
+        assessment_rows = connection.execute(
+            """
+            SELECT language_code, lemma, axis_key, prompt_type, response_type, stage, due_at,
+                   last_seen_at, last_result, pass_count, fail_count
+            FROM vocabulary_assessment_axes
+            WHERE (? IS NULL OR language_code = ?)
+            """,
+            (language_code, language_code),
+        ).fetchall()
 
-    items = [
-        StudyQueueItem(
-            language_code=row["language_code"],
-            lemma=row["lemma"],
-            raw_exposures=row["raw_exposures"],
-            weighted_exposure=row["weighted_exposure"],
-            unique_pages=row["unique_pages"],
-            unique_books=row["unique_books"],
-            help_requests=row["help_requests"],
-            state=row["state"],
-            confidence_score=row["confidence_score"],
-            next_due_at=row["next_due_at"],
-            manual_override=row["manual_override"],
-            first_seen_at=row["first_seen_at"],
-            last_seen_at=row["last_seen_at"],
+    assessment_axes_by_item: dict[tuple[str, str], list[VocabularyAssessmentAxisRecord]] = {}
+    for row in assessment_rows:
+        key = (str(row["language_code"]), str(row["lemma"]))
+        assessment_axes_by_item.setdefault(key, []).append(
+            VocabularyAssessmentAxisRecord(
+                language_code=str(row["language_code"]),
+                lemma=str(row["lemma"]),
+                axis_key=str(row["axis_key"]),
+                prompt_type=str(row["prompt_type"]),
+                response_type=str(row["response_type"]),
+                stage=int(row["stage"] or 0),
+                due_at=str(row["due_at"]) if row["due_at"] else None,
+                last_seen_at=str(row["last_seen_at"]) if row["last_seen_at"] else None,
+                last_result=str(row["last_result"]) if row["last_result"] else None,
+                pass_count=int(row["pass_count"] or 0),
+                fail_count=int(row["fail_count"] or 0),
+            )
         )
-        for row in rows
+
+    study_programs = build_study_program_groups(data_root, language_code=language_code)
+    study_programs = [
+        program.model_copy(
+            update={
+                "levels": [
+                    level.model_copy(
+                        update={
+                            "items": [
+                                item.model_copy(
+                                    update={
+                                        "assessment_axes": assessment_axes_by_item.get((item.language_code, item.lemma), []),
+                                    },
+                                )
+                                for item in level.items
+                            ],
+                        },
+                    )
+                    for level in program.levels
+                ],
+            },
+        )
+        for program in study_programs
     ]
 
     grouped_items: dict[str, list[StudyVocabularyItem]] = {}
@@ -331,6 +389,30 @@ def get_study_surface(
         if row_language_code not in grouped_items:
             grouped_items[row_language_code] = []
             group_order.append(row_language_code)
+        definition_short = str(row["definition_short"] or "").strip() or None
+        if definition_short is None:
+            cache_key = (str(row_language_code), str(row["lemma"]))
+            if cache_key not in glossed_definition_cache:
+                glossed_definition_cache[cache_key] = _resolve_glossed_definition_short(
+                    data_root,
+                    language_code=str(row_language_code),
+                    candidates=(
+                        str(row["lemma"] or ""),
+                        str(row["display_form"] or ""),
+                        str(row["source_surface_form"] or ""),
+                    ),
+                )
+            definition_short = glossed_definition_cache[cache_key]
+            if definition_short:
+                connection.execute(
+                    """
+                    UPDATE study_vocabulary_items
+                    SET definition_short = ?
+                    WHERE language_code = ? AND lemma = ?
+                    """,
+                    (definition_short, row_language_code, row["lemma"]),
+                )
+                connection.commit()
         grouped_items[row_language_code].append(
             StudyVocabularyItem(
                 language_code=row_language_code,
@@ -346,11 +428,12 @@ def get_study_surface(
                 source_sentence_text=row["source_sentence_text"],
                 pronunciation=row["pronunciation"],
                 romanization=row["romanization"],
-                definition_short=row["definition_short"],
+                definition_short=definition_short,
                 proficiency_level=row["proficiency_level"],
                 click_count=row["click_count"],
                 first_seen_at=row["first_seen_at"],
                 last_seen_at=row["last_seen_at"],
+                assessment_axes=assessment_axes_by_item.get((row_language_code, row["lemma"]), []),
             )
         )
 
@@ -362,6 +445,43 @@ def get_study_surface(
             items=grouped_items[language_code_value],
         )
         for language_code_value in group_order
+    ]
+
+    program_term_keys = {
+        (program.language_code, item.lemma)
+        for program in study_programs
+        for level in program.levels
+        for item in level.items
+    }
+    glossed_term_keys = {
+        (group.language_code, item.lemma)
+        for group in study_groups
+        for item in group.items
+    }
+    items = [
+        StudyQueueItem(
+            language_code=row["language_code"],
+            lemma=row["lemma"],
+            raw_exposures=row["raw_exposures"],
+            weighted_exposure=row["weighted_exposure"],
+            unique_pages=row["unique_pages"],
+            unique_books=row["unique_books"],
+            help_requests=row["help_requests"],
+            state=row["state"],
+            confidence_score=row["confidence_score"],
+            next_due_at=row["next_due_at"],
+            manual_override=row["manual_override"],
+            first_seen_at=row["first_seen_at"],
+            last_seen_at=row["last_seen_at"],
+            assessment_axes=assessment_axes_by_item.get((row["language_code"], row["lemma"]), []),
+            origins=[
+                origin
+                for origin, origin_keys in (("glossed", glossed_term_keys), ("program", program_term_keys))
+                if (row["language_code"], row["lemma"]) in origin_keys
+            ]
+            or ["glossed"],
+        )
+        for row in rows
     ]
 
     return StudySurfaceResponse(
@@ -378,105 +498,84 @@ def get_progress_surface(data_root: Path, *, owner_id: str | None = None) -> Pro
     registry = load_registry(_books_root(data_root) / "registry.json")
     title_map = _book_title_map(registry)
     db_path = ensure_profile_database(data_root, owner_id)
-    aggregate: dict[str, ProgressBookSummary] = {}
+    books: list[ProgressBookSummary] = []
 
     with sqlite3.connect(db_path) as connection:
         connection.row_factory = sqlite3.Row
-        page_rows = connection.execute(
-            """
-            SELECT book_id,
-                   COUNT(*) AS page_reads,
-                   COALESCE(SUM(active_seconds), 0) AS active_seconds,
-                   MAX(page_number) AS furthest_page,
-                   MAX(completed_at) AS last_read_at
-            FROM page_reads
-            GROUP BY book_id
-            """
-        ).fetchall()
-        sentence_rows = connection.execute(
-            """
-            SELECT book_id,
-                   COUNT(*) AS sentence_reads,
-                   COUNT(DISTINCT CAST(page_number AS TEXT) || ':' || CAST(sentence_order AS TEXT)) AS sentences_read,
-                   COALESCE(SUM(active_seconds), 0) AS active_seconds,
-                   MAX(completed_at) AS last_read_at
-            FROM sentence_reads
-            GROUP BY book_id
-            """
-        ).fetchall()
-        latest_sentence_rows = connection.execute(
-            """
-            SELECT current.book_id, current.page_number, current.sentence_order
-            FROM sentence_reads AS current
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM sentence_reads AS newer
-                WHERE newer.book_id = current.book_id
-                  AND (
-                    newer.completed_at > current.completed_at
-                    OR (newer.completed_at = current.completed_at AND newer.id > current.id)
-                  )
-            )
-            """
-        ).fetchall()
+        progress_rows = {
+            str(row["book_id"]): row
+            for row in connection.execute(
+                """
+                SELECT book_id,
+                       reading_sessions,
+                       page_reads,
+                       sentence_reads,
+                       active_seconds,
+                       furthest_page,
+                       resume_page,
+                       resume_sentence_order,
+                       total_pages,
+                       total_sentences,
+                       progress_percent,
+                       progress_unit,
+                       reading_state,
+                       last_read_at
+                FROM book_progress
+                """
+            ).fetchall()
+        }
 
-    latest_sentence_by_book = {
-        row["book_id"]: (int(row["page_number"]), int(row["sentence_order"]))
-        for row in latest_sentence_rows
-    }
+    for book_id, record in registry.items():
+        if record.archived_at is not None:
+            continue
+        total_pages = max(0, int(record.total_pages or 0))
+        total_sentences = max(0, int(getattr(record, "total_sentences", 0) or 0))
+        progress_row = progress_rows.get(book_id)
+        reading_sessions = int(progress_row["reading_sessions"] or 0) if progress_row else 0
+        page_reads = int(progress_row["page_reads"] or 0) if progress_row else 0
+        sentence_reads = int(progress_row["sentence_reads"] or 0) if progress_row else 0
+        active_seconds = int(progress_row["active_seconds"] or 0) if progress_row else 0
+        furthest_page = int(progress_row["furthest_page"] or 0) if progress_row else 0
+        resume_page = int(progress_row["resume_page"] or 0) if progress_row else 0
+        resume_sentence_order = int(progress_row["resume_sentence_order"] or 0) if progress_row else 0
+        last_read_at = str(progress_row["last_read_at"]) if progress_row and progress_row["last_read_at"] else None
+        progress_unit = "pages" if total_pages > 1 else "sentences"
+        if progress_unit == "pages":
+            numerator = furthest_page
+            denominator = total_pages
+        else:
+            numerator = sentence_reads
+            denominator = total_sentences
+        progress_percent = min(100, round((numerator / denominator) * 100)) if denominator > 0 else 0
+        if page_reads <= 0 and sentence_reads <= 0:
+            reading_state = "not_read"
+        elif progress_percent >= 100:
+            reading_state = "finished"
+        else:
+            reading_state = "in_progress"
 
-    for row in page_rows:
-        book_id = row["book_id"]
-        aggregate[book_id] = ProgressBookSummary(
-            book_id=book_id,
-            title=title_map.get(book_id, registry[book_id].title if book_id in registry else book_id),
-            page_reads=int(row["page_reads"]),
-            sentence_reads=0,
-            active_seconds=int(row["active_seconds"]),
-            furthest_page=int(row["furthest_page"] or 0),
-            resume_page=int(row["furthest_page"] or 0),
-            resume_sentence_order=1,
-            last_read_at=str(row["last_read_at"]) if row["last_read_at"] else None,
-        )
-
-    for row in sentence_rows:
-        book_id = row["book_id"]
-        entry = aggregate.setdefault(
-            book_id,
+        books.append(
             ProgressBookSummary(
                 book_id=book_id,
-                title=title_map.get(book_id, registry[book_id].title if book_id in registry else book_id),
-                page_reads=0,
-                sentence_reads=0,
-                active_seconds=0,
-                resume_page=0,
-                resume_sentence_order=0,
-            ),
+                title=title_map.get(book_id, record.title),
+                reading_sessions=reading_sessions,
+                page_reads=page_reads,
+                sentence_reads=sentence_reads,
+                active_seconds=active_seconds,
+                total_pages=total_pages,
+                furthest_page=furthest_page,
+                resume_page=resume_page,
+                resume_sentence_order=resume_sentence_order,
+                total_sentences=total_sentences,
+                sentences_read=sentence_reads,
+                progress_percent=progress_percent,
+                progress_unit=progress_unit,
+                reading_state=reading_state,
+                last_read_at=last_read_at,
+            )
         )
-        entry.sentence_reads += int(row["sentence_reads"])
-        entry.active_seconds += int(row["active_seconds"])
-        entry.sentences_read += int(row["sentences_read"] or 0)
-        sentence_last_read_at = str(row["last_read_at"]) if row["last_read_at"] else None
-        if sentence_last_read_at and (not entry.last_read_at or sentence_last_read_at > entry.last_read_at):
-            entry.last_read_at = sentence_last_read_at
 
-    for book_id, (resume_page, resume_sentence_order) in latest_sentence_by_book.items():
-        entry = aggregate.get(book_id)
-        if entry is not None:
-            entry.resume_page = resume_page
-            entry.resume_sentence_order = resume_sentence_order
-
-    for book_id, entry in aggregate.items():
-        record = registry.get(book_id)
-        entry.total_pages = max(0, int(record.total_pages or 0)) if record else 0
-        extraction = _load_book_extraction(data_root, book_id)
-        entry.total_sentences = sum(len(page.sentences) for page in extraction.pages) if extraction else 0
-        entry.progress_unit = "pages" if entry.total_pages > 1 else "sentences"
-        numerator = entry.furthest_page if entry.progress_unit == "pages" else entry.sentences_read
-        denominator = entry.total_pages if entry.progress_unit == "pages" else entry.total_sentences
-        entry.progress_percent = min(100, round((numerator / denominator) * 100)) if denominator > 0 else 0
-
-    books = sorted(aggregate.values(), key=lambda item: item.title)
+    books = sorted(books, key=lambda item: item.title)
     books = sorted(books, key=lambda item: item.last_read_at or "", reverse=True)
     return ProgressSurfaceResponse(profile=profile, books=books)
 
@@ -622,11 +721,25 @@ def get_activity_surface(
         for row in interaction_rows:
             book_title = title_map.get(row["book_id"], row["book_id"])
             interaction_type = str(row["interaction_type"] or "")
-            event_kind = "study_vocabulary_item" if interaction_type == "study_saved" else "pronunciation_playback" if interaction_type == "pronunciation_playback" else "definition_lookup"
+            event_kind = (
+                "study_vocabulary_item"
+                if interaction_type == "study_saved"
+                else "pronunciation_playback"
+                if interaction_type == "pronunciation_playback"
+                else "definition_lookup_remembered"
+                if interaction_type == "definition_lookup_remembered"
+                else "definition_lookup_missed"
+                if interaction_type == "definition_lookup_missed"
+                else "definition_lookup"
+            )
             if interaction_type == "pronunciation_playback":
                 detail = f"Audio played: {_snippet(str(row['lemma'] or ''), str(row['lemma'] or ''), width=72)}"
             elif interaction_type == "study_saved":
                 detail = f"Saved: {_snippet(str(row['lemma'] or ''), str(row['lemma'] or ''), width=72)}"
+            elif interaction_type == "definition_lookup_remembered":
+                detail = f"Remembered: {_snippet(str(row['lemma'] or ''), str(row['lemma'] or ''), width=72)}"
+            elif interaction_type == "definition_lookup_missed":
+                detail = f"Missed: {_snippet(str(row['lemma'] or ''), str(row['lemma'] or ''), width=72)}"
             else:
                 detail = f"Lookup: {_snippet(str(row['lemma'] or ''), str(row['lemma'] or ''), width=72)}"
             events.append(

@@ -45,11 +45,12 @@ test("Phase 5 exposes an authenticated hosted profile read path", () => {
   assert.match(accountMenu, /Profile/);
   assert.match(accountMenu, /Settings/);
   assert.match(accountMenu, /Sign out/);
-  assert.match(appShell, /AccountMenu/);
+  assert.match(appShell, /nav-link-home/);
+  assert.match(appShell, /<span>Home<\/span>/);
   assert.match(landingPage, /useAuth/);
   assert.match(landingPage, /AccountMenu/);
-  assert.match(landingPage, /Signed-in account/);
-  assert.match(landingPage, /Welcome back\. Open your portal from here\./);
+  assert.match(landingPage, /Your Home, profile, and library are one tap away\./);
+  assert.match(landingPage, /Open Home/);
   assert.match(landingPage, /Included in account/);
   assert.match(libraryView, /AccountMenu/);
   assert.match(readerView, /AccountMenu/);

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Literal
 
 from app.schemas.learning import LearningProfileSummary
+from app.schemas.learning import VocabularyAssessmentAxisRecord
 from pydantic import BaseModel, Field
 
 
@@ -100,6 +101,8 @@ class StudyQueueItem(BaseModel):
     manual_override: str | None = None
     first_seen_at: str | None = None
     last_seen_at: str | None = None
+    assessment_axes: list[VocabularyAssessmentAxisRecord] = Field(default_factory=list)
+    origins: list[Literal["glossed", "program"]] = Field(default_factory=list)
 
 
 class StudyVocabularyItem(BaseModel):
@@ -121,6 +124,7 @@ class StudyVocabularyItem(BaseModel):
     click_count: int = 0
     first_seen_at: str | None = None
     last_seen_at: str | None = None
+    assessment_axes: list[VocabularyAssessmentAxisRecord] = Field(default_factory=list)
 
 
 class StudyProgramItem(BaseModel):
@@ -142,6 +146,7 @@ class StudyProgramItem(BaseModel):
     saved_count: int = 0
     first_seen_at: str | None = None
     last_seen_at: str | None = None
+    assessment_axes: list[VocabularyAssessmentAxisRecord] = Field(default_factory=list)
 
 
 class StudyProgramLevel(BaseModel):
@@ -180,6 +185,7 @@ class StudySurfaceResponse(BaseModel):
 class ProgressBookSummary(BaseModel):
     book_id: str
     title: str
+    reading_sessions: int = 0
     page_reads: int
     sentence_reads: int
     active_seconds: int
@@ -191,6 +197,7 @@ class ProgressBookSummary(BaseModel):
     sentences_read: int = 0
     progress_percent: int = Field(default=0, ge=0, le=100)
     progress_unit: Literal["pages", "sentences"] = "pages"
+    reading_state: Literal["not_read", "in_progress", "finished"] = "not_read"
     last_read_at: str | None = None
 
 
@@ -215,7 +222,16 @@ class ProfileSurfaceResponse(BaseModel):
 
 
 class ActivityEvent(BaseModel):
-    kind: Literal["page_read", "sentence_read", "definition_lookup", "study_vocabulary_item", "pronunciation_playback", "reading_session"]
+    kind: Literal[
+        "page_read",
+        "sentence_read",
+        "definition_lookup",
+        "study_vocabulary_item",
+        "pronunciation_playback",
+        "definition_lookup_remembered",
+        "definition_lookup_missed",
+        "reading_session",
+    ]
     occurred_at: str
     book_id: str
     page_number: int | None = None

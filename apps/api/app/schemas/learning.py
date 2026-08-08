@@ -113,7 +113,7 @@ VocabularyAssessmentAxisKey = Literal[
     "reading_to_form",
 ]
 
-VocabularyAssessmentResult = Literal["correct", "incorrect"]
+VocabularyAssessmentResult = Literal["correct", "incorrect", "wrong_axis", "retry"]
 
 
 class VocabularyAssessmentReviewRequest(BaseModel):
@@ -166,7 +166,13 @@ class WordInteractionCreateRequest(BaseModel):
     language_code: str = Field(min_length=1)
     target_text: str = Field(min_length=1)
     page_number: int = Field(ge=1)
-    interaction_type: Literal["definition_lookup", "study_saved", "pronunciation_playback"]
+    interaction_type: Literal[
+        "definition_lookup",
+        "study_saved",
+        "pronunciation_playback",
+        "definition_lookup_remembered",
+        "definition_lookup_missed",
+    ]
     occurred_at: str | None = None
 
 
@@ -176,7 +182,13 @@ class WordInteractionRecord(BaseModel):
     page_number: int
     language_code: str
     target_text: str
-    interaction_type: Literal["definition_lookup", "study_saved", "pronunciation_playback"]
+    interaction_type: Literal[
+        "definition_lookup",
+        "study_saved",
+        "pronunciation_playback",
+        "definition_lookup_remembered",
+        "definition_lookup_missed",
+    ]
     occurred_at: str
 
 
@@ -230,8 +242,12 @@ class LearningProfileSummary(BaseModel):
     unique_words_seen: int
     unique_characters_seen: int
     vocabulary_progress_rows: int
+    glossed_vocabulary_items: int
+    remembered_word_interactions: int
+    missed_word_interactions: int
     today_sentence_reads: int
     today_token_exposures: int
+    average_seconds_per_session: float | None = None
     average_seconds_per_sentence: float | None = None
     average_seconds_per_word: float | None = None
     average_seconds_per_character: float | None = None

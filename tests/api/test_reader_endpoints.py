@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from app.main import app
@@ -199,6 +200,85 @@ def test_sentence_translation_endpoint_persists_google_translation_cache(tmp_pat
     assert cached_response.status_code == 200
     cached_payload = cached_response.json()
     assert cached_payload["resolution_source"] == "google_translate_cache"
+
+
+def test_sentence_translation_endpoint_persists_translation_alignment(tmp_path: Path, monkeypatch) -> None:
+    app.state.data_root = tmp_path
+    client = TestClient(app)
+
+    def translate_text_stub(source_text: str, source_language_code: str, target_language_code: str = "en") -> str:
+        return f"{source_text} (translated)"
+
+    alignment_payload = {
+        "alignment_source": "openai",
+        "source_language_code": "ko",
+        "target_language_code": "en",
+        "source_tokens": [
+            {"token_id": 1, "text": "아침에", "token_kind": "word"},
+            {"token_id": 2, "text": "갔어요", "token_kind": "word"},
+            {"token_id": 3, "text": ".", "token_kind": "punctuation"},
+        ],
+        "target_tokens": [
+            {"token_id": 1, "text": "I", "token_kind": "word"},
+            {"token_id": 2, "text": "went", "token_kind": "word"},
+            {"token_id": 3, "text": "in", "token_kind": "word"},
+            {"token_id": 4, "text": "the", "token_kind": "word"},
+            {"token_id": 5, "text": "morning", "token_kind": "word"},
+            {"token_id": 6, "text": ".", "token_kind": "punctuation"},
+        ],
+        "segments": [
+            {"source_token_ids": [1], "target_token_ids": [3, 4, 5], "confidence": 0.95},
+            {"source_token_ids": [2], "target_token_ids": [2], "confidence": 0.92},
+            {"source_token_ids": [3], "target_token_ids": [6], "confidence": 1.0},
+        ],
+    }
+
+    class FakeOpenAIResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self) -> bytes:
+            return json.dumps({"output_text": json.dumps(alignment_payload, ensure_ascii=False)}).encode("utf-8")
+
+    def fake_urlopen(request, timeout=120):  # noqa: ANN001
+        return FakeOpenAIResponse()
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.services.book_extraction.is_google_translate_configured", lambda: True)
+    monkeypatch.setattr("app.services.book_extraction.translate_text", translate_text_stub)
+    monkeypatch.setattr("app.services.book_extraction.record_google_translate_usage", lambda **_: None)
+    monkeypatch.setattr("app.services.translation_alignment.urlopen", fake_urlopen)
+
+    response = client.post(
+        "/texts/import",
+        json={
+            "text": "ì•„ì¹¨ì— ê°”ì–´ìš”.",
+            "language_code": "ko",
+            "title": "Sentence translation alignment sample",
+            "translation_mode": "off",
+        },
+    )
+    assert response.status_code == 200
+    record = response.json()
+
+    live_response = client.post(f"/books/{record['id']}/pages/1/sentences/1/translation", json={})
+    assert live_response.status_code == 200
+    live_payload = live_response.json()
+    assert live_payload["translation"] == "ì•„ì¹¨ì— ê°”ì–´ìš”. (translated)"
+    assert live_payload["translation_source"] == "google_translate_live"
+    assert live_payload["resolution_source"] == "google_translate_live"
+    assert live_payload["translation_alignment"]["alignment_source"] == "openai"
+    assert live_payload["translation_alignment"]["segments"][0]["target_token_ids"] == [3, 4, 5]
+
+    page_response = client.get(f"/books/{record['id']}/pages/1")
+    assert page_response.status_code == 200
+    page = page_response.json()
+    sentence = page["extraction"]["page"]["sentences"][0]
+    assert sentence["translation"] == "ì•„ì¹¨ì— ê°”ì–´ìš”. (translated)"
+    assert sentence["translation_alignment"]["alignment_source"] == "openai"
 
 
 def test_parse_text_endpoint_uses_imported_lexicon_pinyin(tmp_path: Path) -> None:

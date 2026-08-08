@@ -8,6 +8,12 @@ from .books import (
     PageRecord,
     TextImportRequest,
 )
+from .generated_articles import (
+    GeneratedArticleTerm,
+    GeneratedReaderArticlePromptDetails,
+    GeneratedReaderArticleRequest,
+    GeneratedReaderArticleResponse,
+)
 from .google_translate import GoogleTranslateUsageSummary
 from .learning import (
     LearningProfileSummary,
@@ -60,6 +66,10 @@ __all__ = [
     "BookImportRequest",
     "BookPageManifest",
     "BookRecord",
+    "GeneratedArticleTerm",
+    "GeneratedReaderArticlePromptDetails",
+    "GeneratedReaderArticleRequest",
+    "GeneratedReaderArticleResponse",
     "GoogleTranslateUsageSummary",
     "ImportRecentBook",
     "ImportSurfaceResponse",

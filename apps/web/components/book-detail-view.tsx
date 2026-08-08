@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import {
   fetchJson,
   formatDateTime,
+  fetchGeneratedArticlePromptDetails,
   isDemoMode,
   resolveReaderResumeHref,
   triggerBookExtraction,
@@ -15,7 +16,9 @@ import {
   type BookReaderPageResponse,
   type BookRecord,
   type ProgressSurfaceResponse,
+  type GeneratedReaderArticlePromptDetails,
 } from "../lib/textplex";
+import { GeneratedArticlePromptCard } from "./generated-article-prompt-card";
 import { LoadingSkeleton } from "./loading-skeleton";
 import { HskSeriesChart } from "./hsk-series-chart";
 
@@ -25,7 +28,10 @@ export function BookDetailView({ bookId }: { bookId: string }) {
   const [summary, setSummary] = useState<BookExtractionResult | null>(null);
   const [progress, setProgress] = useState<ProgressSurfaceResponse | null>(null);
   const [analysis, setAnalysis] = useState<BookAnalysisSurfaceResponse | null>(null);
+  const [generationDetails, setGenerationDetails] = useState<GeneratedReaderArticlePromptDetails | null>(null);
+  const [generationLoading, setGenerationLoading] = useState(true);
   const [analysisLoading, setAnalysisLoading] = useState(true);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [firstPageExtractionSource, setFirstPageExtractionSource] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,6 +46,10 @@ export function BookDetailView({ bookId }: { bookId: string }) {
     setAnalysisLoading(true);
     setAnalysis(null);
     setAnalysisError(null);
+    setGenerationDetails(null);
+    setGenerationLoading(true);
+    setSummaryLoading(true);
+    setSummary(null);
     setFirstPageExtractionSource(null);
     setProgress(null);
 
@@ -54,6 +64,7 @@ export function BookDetailView({ bookId }: { bookId: string }) {
         }
         setBook(bookResult);
         setManifest(manifestResult);
+        setLoading(false);
         void fetchJson<ProgressSurfaceResponse>("/progress")
           .then((progressResult) => {
             if (active) {
@@ -65,51 +76,75 @@ export function BookDetailView({ bookId }: { bookId: string }) {
               setProgress(null);
             }
           });
-        try {
-          const pageResult = await fetchJson<BookReaderPageResponse>(`/books/${bookId}/pages/${manifestResult.pages[0]?.page_number ?? 1}`);
-          if (active) {
-            setFirstPageExtractionSource(pageResult.extraction?.text_source ?? null);
-          }
-        } catch {
-          if (active) {
-            setFirstPageExtractionSource(null);
-          }
-        }
-        try {
-          const analysisResult = await fetchJson<BookAnalysisSurfaceResponse>(`/analysis/${bookId}`);
-          if (active) {
-            setAnalysis(analysisResult);
-          }
-        } catch {
-          if (active) {
-            setAnalysis(null);
-            setAnalysisError("Unable to load book HSK analysis.");
-          }
-        } finally {
-          if (active) {
-            setAnalysisLoading(false);
-          }
-        }
-        try {
-          const summaryResult = await fetchJson<BookExtractionResult>(`/books/${bookId}/extractions`);
-          if (active) {
-            setSummary(summaryResult);
-          }
-        } catch {
-          if (active) {
-            setSummary(null);
-          }
-        }
+        void fetchJson<BookReaderPageResponse>(`/books/${bookId}/pages/${manifestResult.pages[0]?.page_number ?? 1}`)
+          .then((pageResult) => {
+            if (active) {
+              setFirstPageExtractionSource(pageResult.extraction?.text_source ?? null);
+            }
+          })
+          .catch(() => {
+            if (active) {
+              setFirstPageExtractionSource(null);
+            }
+          });
+        void fetchJson<BookAnalysisSurfaceResponse>(`/analysis/${bookId}`)
+          .then((analysisResult) => {
+            if (active) {
+              setAnalysis(analysisResult);
+            }
+          })
+          .catch(() => {
+            if (active) {
+              setAnalysis(null);
+              setAnalysisError("Unable to load book HSK analysis.");
+            }
+          })
+          .finally(() => {
+            if (active) {
+              setAnalysisLoading(false);
+            }
+          });
+        void fetchGeneratedArticlePromptDetails(bookId)
+          .then((generationResult) => {
+            if (active) {
+              setGenerationDetails(generationResult);
+            }
+          })
+          .catch(() => {
+            if (active) {
+              setGenerationDetails(null);
+            }
+          })
+          .finally(() => {
+            if (active) {
+              setGenerationLoading(false);
+            }
+          });
+        void fetchJson<BookExtractionResult>(`/books/${bookId}/extractions`)
+          .then((summaryResult) => {
+            if (active) {
+              setSummary(summaryResult);
+            }
+          })
+          .catch(() => {
+            if (active) {
+              setSummary(null);
+            }
+          })
+          .finally(() => {
+            if (active) {
+              setSummaryLoading(false);
+            }
+          });
       } catch (err) {
         if (!active) {
           return;
         }
         setError(err instanceof Error ? err.message : "Unable to load book.");
         setAnalysisLoading(false);
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
+        setGenerationLoading(false);
+        setSummaryLoading(false);
+        setLoading(false);
       }
     }
 
@@ -217,7 +252,9 @@ export function BookDetailView({ bookId }: { bookId: string }) {
 
           <aside className="card detail-aside">
             <h3>Extraction snapshot</h3>
-            {summary ? (
+            {summaryLoading ? (
+              <LoadingSkeleton label="Loading extraction snapshot" />
+            ) : summary ? (
               <>
                 <p className="small-copy">
                   Pages {summary.page_start} to {summary.page_end} with {summary.lexical_entries.length} unique lexical entries.
@@ -237,6 +274,13 @@ export function BookDetailView({ bookId }: { bookId: string }) {
             ) : (
               <p className="small-copy">No extraction summary is available yet for this book.</p>
             )}
+            <GeneratedArticlePromptCard
+              inventoryId="book-detail.generation-prompt-card"
+              details={generationDetails}
+              loading={generationLoading}
+              title="Generated article prompt"
+              description="This card records the exact generation request, prompt payload, and term window used for the article."
+            />
           </aside>
         </div>
       ) : null}

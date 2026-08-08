@@ -33,6 +33,10 @@ const implementationPlan: PlanStep[] = [
     description: "Keep Japanese kana/kanji handling and Arabic right-to-left, diacritic-aware handling inside the same language-pack model.",
   },
   {
+    title: "Add a Latin-script roadmap lane",
+    description: "Group French, Spanish, Italian, German, Yoruba, and related Latin-alphabet languages into one planning lane before they each get their own starter pack.",
+  },
+  {
     title: "Keep the tracker visible in the app",
     description: "Publish the status in the preview UI so the roadmap stays visible while the databases are still being assembled.",
   },
@@ -93,6 +97,15 @@ const languageTracker: LanguageTrack[] = [
     benchmark: "ACTFL-based Arabic proficiency bands",
     next: "Build the MSA starter pack around ACTFL/AAPPL topic buckets, then add segmentation, diacritics handling, and transliteration coverage.",
   },
+  {
+    code: "lat",
+    language: "Latin-script languages",
+    status: "Planned",
+    progress: 10,
+    pack: "Shared roadmap lane",
+    benchmark: "CEFR and domestic school-literacy goals",
+    next: "Split the lane into French, Spanish, Italian, German, Yoruba, and other Roman-alphabet starter packs once the shared defaults are settled.",
+  },
 ];
 
 export default function RoadmapPage() {
@@ -137,7 +150,8 @@ export default function RoadmapPage() {
             The next pass should keep Russian and Hebrew on the same sourcing and fallback contract, then carry the
             same pack model forward to Japanese and Arabic instead of creating separate code paths. Arabic should
             stay MSA-first and be staged through ACTFL/AAPPL topic buckets rather than a separate one-off lookup
-            model.
+            model. The Latin-script lane stays on the roadmap for now so French, Spanish, Italian, German, Yoruba,
+            and similar languages can share one planning branch before their own starter packs are built.
           </p>
         </article>
       </section>

@@ -10,7 +10,7 @@ Depends on: [Phase 4](FRONTEND_MIGRATION_PHASE_4.md)
 
 Phase 5 moves TextPlex from a working canonical local product to an account-owned product. Supabase Auth is the identity boundary; the FastAPI service remains the application API; book truth remains in book storage; learner truth becomes user-scoped rather than anonymous process-local state.
 
-This phase also turns the existing theme-shop prototype into a safe catalog and entitlement boundary. The browser may preview themes, but the API/database must own availability, price, purchase state, and granted themes.
+This phase also turns the existing theme-settings prototype into a safe catalog and entitlement boundary. The browser may preview themes, but the API/database must own availability, price, purchase state, and granted themes.
 
 ## Kickoff Slice
 
@@ -74,7 +74,7 @@ The first slice exposes `GET /profile/hosted`. It validates the Supabase bearer 
 - `/learning/*`, `/profile`, `/progress`, `/study`, `/activity`, and `/settings` use an account-specific local profile database when hosted auth is configured; missing credentials are rejected before route execution.
 - `GET`/`POST /profile/migration` previews and applies a `merge_non_destructive` migration from the anonymous database, records a durable SQLite marker, and never overwrites existing account rows.
 - `GET /themes/catalog` exposes server-owned prices, free status, preview status, bundles, and entitlement state; `/settings` rejects unentitled hosted theme saves.
-- The Next profile surface exposes hosted account editing and migration states; the settings and theme-shop surfaces distinguish hosted mode from local-only mode.
+- The Next profile surface exposes hosted account editing and migration states; the settings and theme-settings surfaces distinguish hosted mode from local-only mode.
 - Checkout, payment webhooks, refunds, and hosted learner-event replication remain intentionally outside this phase.
 
 ## Non-goals

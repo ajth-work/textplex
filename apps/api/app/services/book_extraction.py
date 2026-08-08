@@ -29,6 +29,7 @@ from app.services.google_translate_usage import record_google_translate_usage
 from app.services.hebrew_transliteration import transliterate_hebrew_text
 from app.services.lexicon import lookup_lexicon_entry_map, lookup_lexicon_pinyin_map
 from app.services.ocr import get_text_source_signature, resolve_page_ocr
+from app.services.translation_alignment import build_sentence_translation_alignment
 from processor import (
     build_book_extraction_result,
     build_page_extraction_result,
@@ -282,6 +283,22 @@ def _recover_page_result(page: PageExtractionResult, *, data_root: Path | None =
         page_ends_with_sentence_terminator=page_ends_with_sentence_terminator,
         token_hints=token_hints,
     )
+    original_alignments = {
+        sentence.order: sentence.translation_alignment
+        for sentence in page.sentences
+        if sentence.translation_alignment is not None
+    }
+    if original_alignments:
+        recovered_sentences = []
+        recovered_changed = False
+        for sentence in recovered.sentences:
+            alignment = original_alignments.get(sentence.order)
+            if alignment is not None and sentence.translation_alignment is None:
+                sentence = sentence.model_copy(update={"translation_alignment": alignment})
+                recovered_changed = True
+            recovered_sentences.append(sentence)
+        if recovered_changed:
+            recovered = recovered.model_copy(update={"sentences": recovered_sentences})
     if data_root is None:
         return recovered
 
@@ -562,6 +579,35 @@ def _translate_text_with_google(*, source_text: str, source_language_code: str, 
     return translated_text
 
 
+def _attach_sentence_translation_alignment(
+    page_result: PageExtractionResult,
+    *,
+    sentence_order: int,
+) -> tuple[PageExtractionResult, SentenceResult | None, str]:
+    existing_sentence = next((sentence for sentence in page_result.sentences if sentence.order == sentence_order), None)
+    if existing_sentence is None:
+        return page_result, None, "missing"
+
+    if not existing_sentence.translation:
+        return page_result, existing_sentence, "unavailable"
+
+    if existing_sentence.translation_alignment is not None:
+        return page_result, existing_sentence, "page_artifact"
+
+    alignment = build_sentence_translation_alignment(
+        existing_sentence,
+        source_language_code=page_result.language_code,
+        target_language_code="en",
+    )
+    if alignment is None:
+        return page_result, existing_sentence, "unavailable"
+
+    updated_sentence = existing_sentence.model_copy(update={"translation_alignment": alignment})
+    sentences = [updated_sentence if sentence.order == sentence_order else sentence for sentence in page_result.sentences]
+    updated_page = page_result.model_copy(update={"sentences": sentences})
+    return updated_page, updated_sentence, "openai"
+
+
 def preload_page_sentence_translations(page_result: PageExtractionResult, *, data_root: Path) -> PageExtractionResult:
     if not is_google_translate_configured():
         return page_result
@@ -592,9 +638,24 @@ def preload_page_sentence_translations(page_result: PageExtractionResult, *, dat
         )
         updated = True
 
-    if not updated:
-        return page_result
-    return page_result.model_copy(update={"sentences": sentences})
+    working_page = page_result.model_copy(update={"sentences": sentences}) if updated else page_result
+    aligned_page = working_page
+    aligned_updated = False
+    for sentence in aligned_page.sentences:
+        if not sentence.translation or sentence.translation_alignment is not None:
+            continue
+
+        next_page, next_sentence, _alignment_source = _attach_sentence_translation_alignment(
+            aligned_page,
+            sentence_order=sentence.order,
+        )
+        if next_sentence is not None and next_page is not aligned_page:
+            aligned_page = next_page
+            aligned_updated = True
+
+    if updated or aligned_updated:
+        return aligned_page
+    return page_result
 
 
 def translate_page_sentence(
@@ -608,11 +669,31 @@ def translate_page_sentence(
         return page_result, None, "missing"
 
     if existing_sentence.translation:
+        if existing_sentence.translation_alignment is None:
+            aligned_page, aligned_sentence, _alignment_source = _attach_sentence_translation_alignment(
+                page_result,
+                sentence_order=sentence_order,
+            )
+            if aligned_sentence is not None and aligned_page is not page_result:
+                if existing_sentence.translation_source == "google_translate_live":
+                    resolution_source = "google_translate_cache"
+                elif existing_sentence.translation_source:
+                    resolution_source = existing_sentence.translation_source
+                else:
+                    resolution_source = "page_artifact"
+                return aligned_page, aligned_sentence, resolution_source
+
         if existing_sentence.translation_source == "google_translate_live":
-            return page_result, existing_sentence, "google_translate_cache"
-        if existing_sentence.translation_source:
-            return page_result, existing_sentence, existing_sentence.translation_source
-        return page_result, existing_sentence, "page_artifact"
+            resolution_source = "google_translate_cache"
+        elif existing_sentence.translation_source:
+            resolution_source = existing_sentence.translation_source
+        else:
+            resolution_source = "page_artifact"
+
+        aligned_page, aligned_sentence, _alignment_source = _attach_sentence_translation_alignment(page_result, sentence_order=sentence_order)
+        if aligned_sentence is not None and aligned_page is not page_result:
+            return aligned_page, aligned_sentence, resolution_source
+        return page_result, existing_sentence, resolution_source
 
     if not is_google_translate_configured():
         return page_result, existing_sentence, "unavailable"
@@ -633,6 +714,9 @@ def translate_page_sentence(
     )
     sentences = [updated_sentence if sentence.order == sentence_order else sentence for sentence in page_result.sentences]
     updated_page = page_result.model_copy(update={"sentences": sentences})
+    aligned_page, aligned_sentence, _alignment_source = _attach_sentence_translation_alignment(updated_page, sentence_order=sentence_order)
+    if aligned_sentence is not None and aligned_page is not updated_page:
+        return aligned_page, aligned_sentence, "google_translate_live"
     return updated_page, updated_sentence, "google_translate_live"
 
 
@@ -831,6 +915,8 @@ def extract_book_text(
 
     page_start_value = pages[0].page_number
     page_end_value = pages[-1].page_number
+    total_sentences = sum(len(page.sentences) for page in pages)
+    book.total_sentences = total_sentences
     summary = build_book_extraction_result(
         book_id=book.id,
         source_path=book.source_path,

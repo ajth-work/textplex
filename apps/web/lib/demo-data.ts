@@ -7,6 +7,8 @@ import type {
   BookRecord,
   BookReaderPageResponse,
   ImportSurfaceResponse,
+  GeneratedReaderArticleResponse,
+  GeneratedReaderArticlePromptDetails,
   LearningProfileSummary,
   GoogleTranslateUsageSummary,
   LexiconEntryRecord,
@@ -30,6 +32,78 @@ import type {
 
 export const DEMO_BOOK_ID = "demo-three-body";
 export const DEMO_PAGE_COUNT = 4;
+
+type DemoStarterLevel = {
+  code: string;
+  label: string;
+  note: string;
+  items: readonly (readonly [string, string, string])[];
+};
+
+function createDemoStarterProgram(
+  languageCode: string,
+  languageLabel: string,
+  programCode: string,
+  levels: readonly DemoStarterLevel[],
+): StudySurfaceResponse["study_programs"][number] {
+  const programLabel = `${languageLabel} starter program`;
+  const programSourceLabel = "TextPlex starter curriculum";
+
+  return {
+    language_code: languageCode,
+    language_label: languageLabel,
+    program_code: programCode,
+    program_label: programLabel,
+    program_source_label: programSourceLabel,
+    level_count: levels.length,
+    levels: levels.map((level) => ({
+      level_code: level.code,
+      level_label: level.label,
+      item_count: level.items.length,
+      introduction_note: level.note,
+      items: level.items.map(([displayForm, pronunciation, definitionShort]) => ({
+        language_code: languageCode,
+        language_label: languageLabel,
+        program_code: programCode,
+        program_label: programLabel,
+        program_source_label: programSourceLabel,
+        level_code: level.code,
+        level_label: level.label,
+        lemma: displayForm,
+        display_form: displayForm,
+        pronunciation,
+        definition_short: definitionShort,
+        proficiency_level: "Starter",
+        frequency_rank: null,
+        progress_state: "new",
+        confidence_score: null,
+        saved_count: 0,
+        first_seen_at: null,
+        last_seen_at: null,
+        assessment_axes: [],
+      })),
+    })),
+  };
+}
+
+export const demoStarterPrograms = [
+  createDemoStarterProgram("he", "Hebrew", "he-starter", [
+    { code: "starter-1", label: "Starter 1", note: "Greetings and first-person essentials.", items: [["שלום", "shalom", "hello; peace"], ["תודה", "toda", "thank you"], ["אני", "ani", "I"]] },
+    { code: "starter-2", label: "Starter 2", note: "Everyday nouns for simple introductions.", items: [["אתה", "ata", "you"], ["מים", "mayim", "water"], ["ספר", "sefer", "book"]] },
+  ]),
+  createDemoStarterProgram("ar", "Arabic", "ar-starter", [
+    { code: "starter-1", label: "Starter 1", note: "Greetings and first-person essentials.", items: [["مرحبا", "marhaban", "hello"], ["شكرا", "shukran", "thank you"], ["أنا", "ana", "I"]] },
+    { code: "starter-2", label: "Starter 2", note: "Everyday nouns for simple introductions.", items: [["أنت", "anta", "you"], ["ماء", "ma'", "water"], ["كتاب", "kitab", "book"]] },
+  ]),
+  createDemoStarterProgram("ja", "Japanese", "ja-starter", [
+    { code: "starter-1", label: "Starter 1", note: "Greetings and first-person essentials.", items: [["こんにちは", "konnichiwa", "hello"], ["ありがとう", "arigatō", "thank you"], ["私", "watashi", "I"]] },
+    { code: "starter-2", label: "Starter 2", note: "Everyday nouns for simple introductions.", items: [["あなた", "anata", "you"], ["水", "mizu", "water"], ["本", "hon", "book"]] },
+  ]),
+  createDemoStarterProgram("zh", "Chinese", "zh-starter", [
+    { code: "starter-1", label: "Starter 1", note: "Greetings and first-person essentials.", items: [["你好", "nǐ hǎo", "hello"], ["谢谢", "xièxie", "thank you"], ["我", "wǒ", "I"]] },
+    { code: "starter-2", label: "Starter 2", note: "Everyday nouns for simple introductions.", items: [["你", "nǐ", "you"], ["水", "shuǐ", "water"], ["书", "shū", "book"]] },
+  ]),
+] satisfies StudySurfaceResponse["study_programs"];
 
 type TokenSpec = {
   surface_form: string;
@@ -426,6 +500,48 @@ export const demoBookRecord: BookRecord = {
   processed_at: "2026-07-09T00:00:00Z",
 };
 
+export const demoGeneratedArticlePromptDetails: GeneratedReaderArticlePromptDetails = {
+  book_id: DEMO_BOOK_ID,
+  title: "Chinese HSK 4 practice article: daily life in a city",
+  language_code: "zh",
+  language_label: "Chinese",
+  topic: "daily life in a city",
+  genre: "everyday",
+  tone: "explanatory",
+  curriculum_mode: "exam",
+  curriculum_level: "HSK 4",
+  curriculum_label: "HSK 4",
+  requested_sentence_count: 30,
+  actual_sentence_count: 30,
+  prompt_version: "reader-article-v1",
+  model: "gpt-5.4-mini",
+  generation_source: "template",
+  max_new_lemmas: 8,
+  known_lemma_limit: 12,
+  recent_lemma_limit: 10,
+  upcoming_lemma_limit: 12,
+  unknown_lemma_count: 0,
+  generated_at: "2026-07-09T12:00:00Z",
+  prompt_text:
+    "You write learner-calibrated reading passages for TextPlex.\n" +
+    "Return only valid JSON. Do not add markdown, headings, or commentary.\n" +
+    "Create one coherent article in the target language that is exactly the requested sentence count.\n" +
+    "Match the requested genre and tone, and keep vocabulary at or below the requested curriculum ceiling when one is provided.\n" +
+    "Use the known terms heavily, reuse the recent terms naturally, and introduce the upcoming terms gently.\n" +
+    "Do not exceed the new-lemma budget. Keep the wording concrete and readable.\n" +
+    "Return a JSON object with article_text, used_known_terms, used_recent_terms, used_upcoming_terms, unknown_lemma_count, and sentence_count.\n" +
+    'Request payload: {"curriculum_level":"HSK 4","curriculum_mode":"exam","genre":"everyday","known_terms":[{"term":"是","mastery_level":"mastered","confidence_score":0.91}],"language_code":"zh","language_label":"Chinese","max_new_lemmas":8,"recent_terms":[{"term":"我们","mastery_level":"review","confidence_score":0.48}],"sentence_count":30,"topic":"daily life in a city","tone":"explanatory","upcoming_terms":[{"term":"月份","mastery_level":"HSK 4","confidence_score":0.2}]}',
+  known_terms: [
+    { term: "是", pronunciation: "shì", definition_short: "to be", frequency_rank: 1, confidence_score: 0.91, mastery_level: "mastered" },
+  ],
+  recent_terms: [
+    { term: "我们", pronunciation: "wǒmen", definition_short: "we; us", frequency_rank: 3, confidence_score: 0.48, mastery_level: "review" },
+  ],
+  upcoming_terms: [
+    { term: "月份", pronunciation: "yuèfèn", definition_short: "month", frequency_rank: 84, confidence_score: 0.2, mastery_level: "HSK 4" },
+  ],
+};
+
 const demoSummary = buildSummary(demoPages);
 const demoPageArtifacts = new Map<number, BookReaderPageResponse>();
 
@@ -612,8 +728,12 @@ export const demoLearningProfileSummary: LearningProfileSummary = {
   unique_words_seen: demoSummary.lexical_entries.length,
   unique_characters_seen: 12,
   vocabulary_progress_rows: demoSummary.lexical_entries.length,
+  glossed_vocabulary_items: demoSummary.lexical_entries.length,
+  remembered_word_interactions: 8,
+  missed_word_interactions: 3,
   today_sentence_reads: 0,
   today_token_exposures: 0,
+  average_seconds_per_session: 64,
   average_seconds_per_sentence: null,
   average_seconds_per_word: null,
   average_seconds_per_character: null,
@@ -649,6 +769,10 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
 
   if (route === `/books/${DEMO_BOOK_ID}/extractions`) {
     return demoBookExtractionResult;
+  }
+
+  if (route === `/books/${DEMO_BOOK_ID}/generation`) {
+    return demoGeneratedArticlePromptDetails;
   }
 
   if (route === "/learning/profile") {
@@ -779,20 +903,22 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
           book_id: demoBookRecord.id,
           title: demoBookRecord.title,
           page_reads: 1,
+          reading_sessions: 1,
           sentence_reads: 2,
           active_seconds: 120,
           total_pages: demoBookRecord.total_pages,
           furthest_page: 1,
           resume_page: 1,
-          resume_sentence_order: 1,
-          total_sentences: demoBookExtractionResult.pages.reduce((total, page) => total + page.sentences.length, 0),
-          sentences_read: 2,
-          progress_percent: 33,
-          progress_unit: "pages" as const,
-          last_read_at: "2026-07-29T12:00:00Z",
-        },
-      ],
-    } satisfies ProgressSurfaceResponse;
+        resume_sentence_order: 1,
+        total_sentences: demoBookExtractionResult.pages.reduce((total, page) => total + page.sentences.length, 0),
+        sentences_read: 2,
+        progress_percent: 33,
+        progress_unit: "pages" as const,
+        reading_state: "in_progress" as const,
+        last_read_at: "2026-07-29T12:00:00Z",
+      },
+    ],
+  } satisfies ProgressSurfaceResponse;
   }
 
   if (route === "/profile") {
@@ -802,18 +928,20 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
         book_id: book.id,
         title: book.title,
         page_reads: index + 1,
+        reading_sessions: index + 1,
         sentence_reads: index + 2,
         active_seconds: 120 + index * 45,
         total_pages: book.total_pages,
         furthest_page: Math.min(book.total_pages, index + 1),
         resume_page: Math.min(book.total_pages, index + 1),
-        resume_sentence_order: 1,
-        total_sentences: demoBookExtractionResult.pages.reduce((total, page) => total + page.sentences.length, 0),
-        sentences_read: index + 2,
-        progress_percent: Math.round(((index + 1) / Math.max(book.total_pages, 1)) * 100),
-        progress_unit: "pages" as const,
-        last_read_at: "2026-07-29T12:00:00Z",
-      })),
+      resume_sentence_order: 1,
+      total_sentences: demoBookExtractionResult.pages.reduce((total, page) => total + page.sentences.length, 0),
+      sentences_read: index + 2,
+      progress_percent: Math.round(((index + 1) / Math.max(book.total_pages, 1)) * 100),
+      progress_unit: "pages" as const,
+      reading_state: index === 0 ? ("finished" as const) : ("in_progress" as const),
+      last_read_at: "2026-07-29T12:00:00Z",
+    })),
       settings: {
         entries: [
           { key: "theme", value: "neutral" },
@@ -849,6 +977,61 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
           manual_override: null,
           first_seen_at: "2026-07-09T12:00:00Z",
           last_seen_at: "2026-07-09T12:10:00Z",
+          origins: ["glossed", "program"],
+          assessment_axes: [
+            {
+              language_code: "zh",
+              lemma: "æˆ‘",
+              axis_key: "form_to_meaning",
+              prompt_type: "source_form",
+              response_type: "meaning",
+              stage: 3,
+              due_at: "2026-08-01T18:00:00Z",
+              last_seen_at: "2026-07-09T12:10:00Z",
+              last_result: "correct",
+              pass_count: 3,
+              fail_count: 0,
+            },
+            {
+              language_code: "zh",
+              lemma: "æˆ‘",
+              axis_key: "form_to_reading",
+              prompt_type: "source_form",
+              response_type: "reading",
+              stage: 2,
+              due_at: "2026-08-01T15:00:00Z",
+              last_seen_at: "2026-07-09T12:10:00Z",
+              last_result: "correct",
+              pass_count: 2,
+              fail_count: 0,
+            },
+            {
+              language_code: "zh",
+              lemma: "æˆ‘",
+              axis_key: "meaning_to_form",
+              prompt_type: "meaning",
+              response_type: "source_form",
+              stage: 6,
+              due_at: "2026-08-04T12:00:00Z",
+              last_seen_at: "2026-07-09T12:10:00Z",
+              last_result: "correct",
+              pass_count: 5,
+              fail_count: 1,
+            },
+            {
+              language_code: "zh",
+              lemma: "æˆ‘",
+              axis_key: "reading_to_form",
+              prompt_type: "reading",
+              response_type: "source_form",
+              stage: 3,
+              due_at: "2026-08-01T18:00:00Z",
+              last_seen_at: "2026-07-09T12:10:00Z",
+              last_result: "incorrect",
+              pass_count: 3,
+              fail_count: 1,
+            },
+          ],
         },
         {
           language_code: "zh",
@@ -864,10 +1047,95 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
           manual_override: null,
           first_seen_at: "2026-07-09T12:15:00Z",
           last_seen_at: "2026-07-09T12:15:00Z",
+          origins: ["glossed"],
+          assessment_axes: [],
         },
       ],
       study_item_count: 3,
-      study_programs: [],
+      study_programs: [
+        {
+          language_code: "ru",
+          language_label: "Russian",
+          program_code: "ru-core",
+          program_label: "Russian starter program",
+          program_source_label: "RU5000",
+          level_count: 1,
+          levels: [
+            {
+              level_code: "level-1",
+              level_label: "Level 1",
+              item_count: 3,
+              introduction_note: "Intro frequency core from RU5000.",
+              items: [
+                {
+                  language_code: "ru",
+                  language_label: "Russian",
+                  program_code: "ru-core",
+                  program_label: "Russian starter program",
+                  program_source_label: "RU5000",
+                  level_code: "level-1",
+                  level_label: "Level 1",
+                  lemma: "и",
+                  display_form: "и",
+                  pronunciation: "i",
+                  definition_short: "and",
+                  proficiency_level: "TRKI A1",
+                  frequency_rank: 2,
+                  progress_state: "new",
+                  confidence_score: null,
+                  saved_count: 0,
+                  first_seen_at: null,
+                  last_seen_at: null,
+                  assessment_axes: [],
+                },
+                {
+                  language_code: "ru",
+                  language_label: "Russian",
+                  program_code: "ru-core",
+                  program_label: "Russian starter program",
+                  program_source_label: "RU5000",
+                  level_code: "level-1",
+                  level_label: "Level 1",
+                  lemma: "в",
+                  display_form: "в",
+                  pronunciation: "v",
+                  definition_short: "in; into",
+                  proficiency_level: "TRKI A1",
+                  frequency_rank: 4,
+                  progress_state: "learning",
+                  confidence_score: 0.28,
+                  saved_count: 1,
+                  first_seen_at: "2026-07-09T12:00:00Z",
+                  last_seen_at: "2026-07-09T12:10:00Z",
+                  assessment_axes: [],
+                },
+                {
+                  language_code: "ru",
+                  language_label: "Russian",
+                  program_code: "ru-core",
+                  program_label: "Russian starter program",
+                  program_source_label: "RU5000",
+                  level_code: "level-1",
+                  level_label: "Level 1",
+                  lemma: "дом",
+                  display_form: "дом",
+                  pronunciation: "dom",
+                  definition_short: "house",
+                  proficiency_level: "TRKI A1",
+                  frequency_rank: 8,
+                  progress_state: "review",
+                  confidence_score: 0.63,
+                  saved_count: 2,
+                  first_seen_at: "2026-07-09T12:00:00Z",
+                  last_seen_at: "2026-07-09T12:10:00Z",
+                  assessment_axes: [],
+                },
+              ],
+            },
+          ],
+        },
+        ...demoStarterPrograms,
+      ],
       study_groups: [
         {
           language_code: "zh",
@@ -893,6 +1161,60 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
               click_count: 2,
               first_seen_at: "2026-07-09T12:00:00Z",
               last_seen_at: "2026-07-09T12:10:00Z",
+              assessment_axes: [
+                {
+                  language_code: "zh",
+                  lemma: "我",
+                  axis_key: "form_to_meaning",
+                  prompt_type: "source_form",
+                  response_type: "meaning",
+                  stage: 3,
+                  due_at: "2026-08-01T18:00:00Z",
+                  last_seen_at: "2026-07-09T12:10:00Z",
+                  last_result: "correct",
+                  pass_count: 3,
+                  fail_count: 0,
+                },
+                {
+                  language_code: "zh",
+                  lemma: "我",
+                  axis_key: "form_to_reading",
+                  prompt_type: "source_form",
+                  response_type: "reading",
+                  stage: 2,
+                  due_at: "2026-08-01T15:00:00Z",
+                  last_seen_at: "2026-07-09T12:10:00Z",
+                  last_result: "correct",
+                  pass_count: 2,
+                  fail_count: 0,
+                },
+                {
+                  language_code: "zh",
+                  lemma: "我",
+                  axis_key: "meaning_to_form",
+                  prompt_type: "meaning",
+                  response_type: "source_form",
+                  stage: 6,
+                  due_at: "2026-08-04T12:00:00Z",
+                  last_seen_at: "2026-07-09T12:10:00Z",
+                  last_result: "correct",
+                  pass_count: 5,
+                  fail_count: 1,
+                },
+                {
+                  language_code: "zh",
+                  lemma: "我",
+                  axis_key: "reading_to_form",
+                  prompt_type: "reading",
+                  response_type: "source_form",
+                  stage: 3,
+                  due_at: "2026-08-01T18:00:00Z",
+                  last_seen_at: "2026-07-09T12:10:00Z",
+                  last_result: "incorrect",
+                  pass_count: 3,
+                  fail_count: 1,
+                },
+              ],
             },
             {
               language_code: "zh",
@@ -913,6 +1235,60 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
               click_count: 1,
               first_seen_at: "2026-07-09T12:15:00Z",
               last_seen_at: "2026-07-09T12:15:00Z",
+              assessment_axes: [
+                {
+                  language_code: "zh",
+                  lemma: "宇宙",
+                  axis_key: "form_to_meaning",
+                  prompt_type: "source_form",
+                  response_type: "meaning",
+                  stage: 2,
+                  due_at: "2026-08-01T12:00:00Z",
+                  last_seen_at: "2026-07-09T12:15:00Z",
+                  last_result: "correct",
+                  pass_count: 2,
+                  fail_count: 0,
+                },
+                {
+                  language_code: "zh",
+                  lemma: "宇宙",
+                  axis_key: "form_to_reading",
+                  prompt_type: "source_form",
+                  response_type: "reading",
+                  stage: 4,
+                  due_at: "2026-08-02T12:00:00Z",
+                  last_seen_at: "2026-07-09T12:15:00Z",
+                  last_result: "correct",
+                  pass_count: 4,
+                  fail_count: 0,
+                },
+                {
+                  language_code: "zh",
+                  lemma: "宇宙",
+                  axis_key: "meaning_to_form",
+                  prompt_type: "meaning",
+                  response_type: "source_form",
+                  stage: 1,
+                  due_at: "2026-08-01T09:00:00Z",
+                  last_seen_at: "2026-07-09T12:15:00Z",
+                  last_result: "incorrect",
+                  pass_count: 1,
+                  fail_count: 2,
+                },
+                {
+                  language_code: "zh",
+                  lemma: "宇宙",
+                  axis_key: "reading_to_form",
+                  prompt_type: "reading",
+                  response_type: "source_form",
+                  stage: 6,
+                  due_at: "2026-08-04T12:00:00Z",
+                  last_seen_at: "2026-07-09T12:15:00Z",
+                  last_result: "correct",
+                  pass_count: 6,
+                  fail_count: 0,
+                },
+              ],
             },
           ],
         },
@@ -940,6 +1316,60 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
               click_count: 1,
               first_seen_at: "2026-07-09T12:20:00Z",
               last_seen_at: "2026-07-09T12:20:00Z",
+              assessment_axes: [
+                {
+                  language_code: "ja",
+                  lemma: "たのしい",
+                  axis_key: "form_to_meaning",
+                  prompt_type: "source_form",
+                  response_type: "meaning",
+                  stage: 5,
+                  due_at: "2026-08-03T12:00:00Z",
+                  last_seen_at: "2026-07-09T12:20:00Z",
+                  last_result: "correct",
+                  pass_count: 5,
+                  fail_count: 0,
+                },
+                {
+                  language_code: "ja",
+                  lemma: "たのしい",
+                  axis_key: "form_to_reading",
+                  prompt_type: "source_form",
+                  response_type: "reading",
+                  stage: 3,
+                  due_at: "2026-08-01T18:00:00Z",
+                  last_seen_at: "2026-07-09T12:20:00Z",
+                  last_result: "correct",
+                  pass_count: 3,
+                  fail_count: 0,
+                },
+                {
+                  language_code: "ja",
+                  lemma: "たのしい",
+                  axis_key: "meaning_to_form",
+                  prompt_type: "meaning",
+                  response_type: "source_form",
+                  stage: 2,
+                  due_at: "2026-08-01T15:00:00Z",
+                  last_seen_at: "2026-07-09T12:20:00Z",
+                  last_result: "wrong_axis",
+                  pass_count: 2,
+                  fail_count: 0,
+                },
+                {
+                  language_code: "ja",
+                  lemma: "たのしい",
+                  axis_key: "reading_to_form",
+                  prompt_type: "reading",
+                  response_type: "source_form",
+                  stage: 1,
+                  due_at: "2026-08-01T09:00:00Z",
+                  last_seen_at: "2026-07-09T12:20:00Z",
+                  last_result: "incorrect",
+                  pass_count: 1,
+                  fail_count: 1,
+                },
+              ],
             },
           ],
         },
@@ -1114,6 +1544,45 @@ export function getDemoPostResponse(pathname: string, body: unknown): unknown | 
       stage_zero_complete: true,
       axes: [],
     } satisfies VocabularyAssessmentStateRecord;
+  }
+
+  if (route === "/articles/generate") {
+    const request = body as {
+      language_code?: string;
+      topic?: string | null;
+      genre?: string | null;
+      tone?: string | null;
+      curriculum_mode?: string | null;
+      curriculum_level?: string | null;
+      sentence_count?: number;
+    } | null;
+    const languageCode = request?.language_code ?? demoBookRecord.language_code;
+    const topic = request?.topic?.trim() || {
+      travel: "travel planning",
+      news: "a local news update",
+      dialogue: "a short conversation",
+      workplace: "work tasks",
+      family: "family routine",
+      school: "school life",
+      mystery: "a small mystery",
+      science: "a simple science topic",
+      culture: "a cultural habit",
+      food: "food and cooking",
+    }[request?.genre ?? ""] || "daily life";
+    const titlePrefix = [languageCode.toUpperCase(), request?.curriculum_level?.trim() || ""].filter(Boolean).join(" ");
+    return {
+      book: demoBookRecord,
+      title: `${titlePrefix ? `${titlePrefix} ` : ""}Practice article: ${topic}`,
+      language_code: languageCode,
+      topic,
+      sentence_count: request?.sentence_count ?? 30,
+      article_text: `This is a demo practice article about ${topic}. It uses the existing sample book in demo mode.`,
+      known_terms: [],
+      recent_terms: [],
+      upcoming_terms: [],
+      unknown_lemma_count: 0,
+      generation_source: "template",
+    } satisfies GeneratedReaderArticleResponse;
   }
 
   return null;

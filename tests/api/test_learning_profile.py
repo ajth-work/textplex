@@ -39,6 +39,8 @@ def test_learning_profile_records_session_and_page_read(imported_real_scan: tupl
     assert summary["page_reads"] == 1
     assert summary["sentence_reads"] == 0
     assert summary["active_books"] == 1
+    assert summary["glossed_vocabulary_items"] >= 0
+    assert summary["average_seconds_per_session"] is not None
 
 
 def test_learning_profile_database_is_idempotent_across_multiple_sessions(
@@ -105,6 +107,8 @@ def test_learning_profile_records_sentence_read_and_exposures(imported_real_scan
     assert summary["token_exposures"] >= 3
     assert summary["word_exposures"] >= 3
     assert summary["vocabulary_progress_rows"] >= 3
+    assert summary["glossed_vocabulary_items"] >= 0
+    assert summary["average_seconds_per_session"] is not None
 
     study_response = client.get("/study")
     assert study_response.status_code == 200
@@ -137,6 +141,52 @@ def test_learning_profile_records_pronunciation_playback(imported_real_scan: tup
     assert activity_response.status_code == 200
     activity = activity_response.json()
     assert any(event["kind"] == "pronunciation_playback" for event in activity["events"])
+
+
+def test_learning_profile_records_definition_feedback(imported_real_scan: tuple[Path, BookRecord]) -> None:
+    data_root, record = imported_real_scan
+
+    app.state.data_root = data_root
+    client = TestClient(app)
+
+    remembered_response = client.post(
+        "/learning/word-interactions",
+        json={
+            "book_id": record.id,
+            "language_code": record.language_code,
+            "target_text": "ä¾‹å­",
+            "page_number": 1,
+            "interaction_type": "definition_lookup_remembered",
+            "occurred_at": "2026-07-30T13:00:00Z",
+        },
+    )
+    missed_response = client.post(
+        "/learning/word-interactions",
+        json={
+            "book_id": record.id,
+            "language_code": record.language_code,
+            "target_text": "å¤ä¹ ",
+            "page_number": 1,
+            "interaction_type": "definition_lookup_missed",
+            "occurred_at": "2026-07-30T13:05:00Z",
+        },
+    )
+    assert remembered_response.status_code == 200
+    assert missed_response.status_code == 200
+
+    summary_response = client.get("/learning/profile")
+    assert summary_response.status_code == 200
+    summary = summary_response.json()
+    assert summary["remembered_word_interactions"] == 1
+    assert summary["missed_word_interactions"] == 1
+
+    activity_response = client.get("/activity", params={"limit": 10})
+    assert activity_response.status_code == 200
+    activity = activity_response.json()
+    assert any(event["kind"] == "definition_lookup_remembered" for event in activity["events"])
+    assert any(event["kind"] == "definition_lookup_missed" for event in activity["events"])
+    assert any("Remembered:" in event["detail"] for event in activity["events"])
+    assert any("Missed:" in event["detail"] for event in activity["events"])
 
 
 def test_import_to_reader_to_profile_vertical_slice(tmp_path: Path) -> None:
@@ -195,6 +245,8 @@ def test_import_to_reader_to_profile_vertical_slice(tmp_path: Path) -> None:
     assert profile["reading_sessions"] == 1
     assert profile["sentence_reads"] == 1
     assert profile["vocabulary_progress_rows"] > 0
+    assert profile["glossed_vocabulary_items"] >= 0
+    assert profile["average_seconds_per_session"] is not None
 
     progress_response = client.get("/progress")
     assert progress_response.status_code == 200
@@ -351,6 +403,38 @@ def test_vocabulary_assessment_axes_advance_independently_after_stage_zero(tmp_p
     assert axis_incorrect_response.status_code == 200
     second_state = axis_incorrect_response.json()
     assert second_state["axes"][1]["stage"] == 0
+
+    wrong_axis_response = client.post(
+        "/learning/vocabulary-reviews",
+        json={
+            "language_code": "ru",
+            "lemma": "Ð¿Ñ€Ð¸Ð²ÐµÑ‚",
+            "axis_key": "reading_to_form",
+            "result": "wrong_axis",
+        },
+    )
+    assert wrong_axis_response.status_code == 200
+    wrong_axis_state = wrong_axis_response.json()
+    assert wrong_axis_state["axes"][3]["stage"] == 0
+    assert wrong_axis_state["axes"][3]["last_result"] == "wrong_axis"
+    assert wrong_axis_state["axes"][3]["pass_count"] == 0
+    assert wrong_axis_state["axes"][3]["fail_count"] == 0
+
+    retry_response = client.post(
+        "/learning/vocabulary-reviews",
+        json={
+            "language_code": "ru",
+            "lemma": "привет",
+            "axis_key": "reading_to_form",
+            "result": "retry",
+        },
+    )
+    assert retry_response.status_code == 200
+    retry_state = retry_response.json()
+    assert retry_state["axes"][3]["stage"] == 0
+    assert retry_state["axes"][3]["last_result"] == "retry"
+    assert retry_state["axes"][3]["pass_count"] == 0
+    assert retry_state["axes"][3]["fail_count"] == 0
 
     for axis_key in ("form_to_reading", "meaning_to_form", "reading_to_form"):
         review_response = client.post(

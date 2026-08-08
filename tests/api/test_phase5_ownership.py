@@ -87,6 +87,8 @@ def test_unconfigured_theme_catalog_is_server_defined(monkeypatch) -> None:
     assert themes["jade"]["price_cents"] == 199
     assert themes["jade"]["is_owned"] is False
     assert themes["fruit-strawberry"]["price_cents"] == 199
+    assert themes["fruit-strawberry-night"]["price_cents"] == 199
+    assert themes["fruit-strawberry-night"]["is_owned"] is False
     assert themes["vegetable-eggplant"]["is_owned"] is False
     assert themes["season-summer-citrus"]["price_cents"] == 199
     assert themes["season-summer-citrus-night"]["price_cents"] == 199
@@ -98,6 +100,8 @@ def test_unconfigured_theme_catalog_is_server_defined(monkeypatch) -> None:
     assert themes["city-st-petersburg-night"]["is_owned"] is False
     assert themes["city-kazan-daylight"]["price_cents"] == 199
     assert themes["city-kazan-night"]["is_owned"] is False
+    assert themes["city-hong-kong-daylight"]["price_cents"] == 199
+    assert themes["city-hong-kong-night"]["is_owned"] is False
     assert themes["season-fall-maple-daylight"]["price_cents"] == 199
     assert themes["season-fall-maple-night"]["is_owned"] is False
     assert themes["season-fall-pumpkin-daylight"]["price_cents"] == 199

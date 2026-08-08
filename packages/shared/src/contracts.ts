@@ -78,11 +78,34 @@ export interface LexicalEntryResult {
   last_page: number | null;
 }
 
+export interface TranslationAlignmentToken {
+  token_id: number;
+  text: string;
+  token_kind: "word" | "punctuation" | "space";
+}
+
+export interface TranslationAlignmentSegment {
+  source_token_ids: number[];
+  target_token_ids: number[];
+  confidence?: number | null;
+}
+
+export interface SentenceTranslationAlignment {
+  alignment_source: "openai" | "heuristic";
+  model?: string | null;
+  source_language_code: string;
+  target_language_code: string;
+  source_tokens: TranslationAlignmentToken[];
+  target_tokens: TranslationAlignmentToken[];
+  segments: TranslationAlignmentSegment[];
+}
+
 export interface SentenceResult {
   order: number;
   text: string;
   translation?: string | null;
   translation_source?: string | null;
+  translation_alignment?: SentenceTranslationAlignment | null;
   tokens: TokenResult[];
   grammar_patterns: string[];
 }
@@ -136,6 +159,74 @@ export interface BookReaderPageResponse {
   image_url: string;
   extraction: PageExtractionArtifact | null;
   reader_capabilities: ReaderCapabilities;
+}
+
+export interface GeneratedArticleTerm {
+  term: string;
+  pronunciation: string | null;
+  definition_short: string | null;
+  frequency_rank: number | null;
+  confidence_score: number | null;
+  mastery_level: string | null;
+}
+
+export type GeneratedReaderArticleCurriculumMode = "auto" | "study_program" | "exam";
+
+export interface GeneratedReaderArticleRequest {
+  language_code: string;
+  topic?: string | null;
+  genre?: string;
+  tone?: string;
+  style?: string;
+  curriculum_mode?: GeneratedReaderArticleCurriculumMode;
+  curriculum_level?: string | null;
+  sentence_count?: number;
+  known_lemma_limit?: number;
+  recent_lemma_limit?: number;
+  upcoming_lemma_limit?: number;
+  max_new_lemmas?: number;
+}
+
+export interface GeneratedReaderArticleResponse {
+  book: BookRecord;
+  title: string;
+  language_code: string;
+  topic: string;
+  sentence_count: number;
+  article_text: string;
+  known_terms: GeneratedArticleTerm[];
+  recent_terms: GeneratedArticleTerm[];
+  upcoming_terms: GeneratedArticleTerm[];
+  unknown_lemma_count: number;
+  generation_source: "openai" | "template";
+}
+
+export interface GeneratedReaderArticlePromptDetails {
+  book_id: string;
+  title: string;
+  language_code: string;
+  language_label: string;
+  topic: string;
+  genre: string;
+  tone: string;
+  curriculum_mode: GeneratedReaderArticleCurriculumMode;
+  curriculum_level?: string | null;
+  curriculum_label?: string | null;
+  requested_sentence_count: number;
+  actual_sentence_count: number;
+  prompt_version: string;
+  model: string;
+  generation_source: "openai" | "template";
+  max_new_lemmas: number;
+  known_lemma_limit: number;
+  recent_lemma_limit: number;
+  upcoming_lemma_limit: number;
+  unknown_lemma_count: number;
+  generated_at: string;
+  prompt_text: string;
+  known_terms: GeneratedArticleTerm[];
+  recent_terms: GeneratedArticleTerm[];
+  upcoming_terms: GeneratedArticleTerm[];
 }
 
 export type ReaderTokenDisplayMode = "word" | "character";
@@ -216,7 +307,7 @@ export type VocabularyAssessmentAxisKey =
   | "meaning_to_form"
   | "reading_to_form";
 
-export type VocabularyAssessmentResult = "correct" | "incorrect";
+export type VocabularyAssessmentResult = "correct" | "incorrect" | "wrong_axis" | "retry";
 
 export interface VocabularyAssessmentReviewRequest {
   language_code: string;
@@ -299,7 +390,12 @@ export interface LearningSyncResponse {
   last_error: string | null;
 }
 
-export type WordInteractionType = "definition_lookup" | "study_saved" | "pronunciation_playback";
+export type WordInteractionType =
+  | "definition_lookup"
+  | "study_saved"
+  | "pronunciation_playback"
+  | "definition_lookup_remembered"
+  | "definition_lookup_missed";
 
 export interface WordInteractionCreateRequest {
   book_id: string;
@@ -354,8 +450,12 @@ export interface LearningProfileSummary {
   unique_words_seen: number;
   unique_characters_seen: number;
   vocabulary_progress_rows: number;
+  glossed_vocabulary_items: number;
+  remembered_word_interactions: number;
+  missed_word_interactions: number;
   today_sentence_reads: number;
   today_token_exposures: number;
+  average_seconds_per_session: number | null;
   average_seconds_per_sentence: number | null;
   average_seconds_per_word: number | null;
   average_seconds_per_character: number | null;
@@ -537,6 +637,8 @@ export interface SearchSurfaceResponse {
   results: SearchResult[];
 }
 
+export type StudyQueueItemOrigin = "glossed" | "program";
+
 export interface StudyQueueItem {
   language_code: string;
   lemma: string;
@@ -551,6 +653,8 @@ export interface StudyQueueItem {
   manual_override: string | null;
   first_seen_at: string | null;
   last_seen_at: string | null;
+  assessment_axes: VocabularyAssessmentAxisRecord[];
+  origins: StudyQueueItemOrigin[];
 }
 
 export interface StudyVocabularyItem {
@@ -572,6 +676,7 @@ export interface StudyVocabularyItem {
   click_count: number;
   first_seen_at: string | null;
   last_seen_at: string | null;
+  assessment_axes: VocabularyAssessmentAxisRecord[];
 }
 
 export type StudyProgramItemState = "new" | "learning" | "review" | "mastered";
@@ -595,6 +700,7 @@ export interface StudyProgramItem {
   saved_count: number;
   first_seen_at: string | null;
   last_seen_at: string | null;
+  assessment_axes: VocabularyAssessmentAxisRecord[];
 }
 
 export interface StudyProgramLevel {
@@ -633,6 +739,7 @@ export interface StudySurfaceResponse {
 export interface ProgressBookSummary {
   book_id: string;
   title: string;
+  reading_sessions: number;
   page_reads: number;
   sentence_reads: number;
   active_seconds: number;
@@ -644,6 +751,7 @@ export interface ProgressBookSummary {
   sentences_read: number;
   progress_percent: number;
   progress_unit: "pages" | "sentences";
+  reading_state: "not_read" | "in_progress" | "finished";
   last_read_at: string | null;
 }
 
@@ -725,7 +833,15 @@ export interface ThemeCatalogResponse {
 }
 
 export interface ActivityEvent {
-  kind: "page_read" | "sentence_read" | "definition_lookup" | "study_vocabulary_item" | "pronunciation_playback" | "reading_session";
+  kind:
+    | "page_read"
+    | "sentence_read"
+    | "definition_lookup"
+    | "study_vocabulary_item"
+    | "pronunciation_playback"
+    | "definition_lookup_remembered"
+    | "definition_lookup_missed"
+    | "reading_session";
   occurred_at: string;
   book_id: string;
   page_number: number | null;

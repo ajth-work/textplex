@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -10,10 +10,14 @@ import { resolveAccountLabel } from "../lib/auth-display";
 import {
   fetchJson,
   formatDateTime,
+  fetchGeneratedArticlePromptDetails,
   postFormData,
   postJson,
   putJson,
+  persistReaderSpeechVoiceGender,
+  readStoredReaderSpeechVoiceGender,
   resolveReaderResumeHref,
+  resolveReaderSpeechVoiceGender,
   type ActivityEvent,
   type ActivitySurfaceResponse,
   type BookAnalysisSurfaceResponse,
@@ -21,6 +25,7 @@ import {
   type ImportSurfaceResponse,
   type HostedProfileSurfaceResponse,
   type HostedProfileUpdateRequest,
+  type GeneratedReaderArticlePromptDetails,
   type ProfileMigrationRequest,
   type ProfileMigrationResponse,
   type ProgressSurfaceResponse,
@@ -29,25 +34,34 @@ import {
   type LexiconLookupResponse,
   type SettingsSurfaceResponse,
   type SettingsUpdateRequest,
+  type ReaderSpeechVoiceGender,
   type StudySurfaceResponse,
   type ThemeCatalogResponse,
 } from "../lib/textplex";
+import { GeneratedArticlePromptCard } from "./generated-article-prompt-card";
 import {
   appThemeLabels,
   appThemeOptions,
   DEFAULT_APP_THEME_GRID_ENABLED,
   DEFAULT_APP_THEME_PATTERN_OPACITY,
+  DEFAULT_APP_THEME_PATTERN_TILING,
   INDIVIDUAL_THEME_PRICE,
   persistAppTheme,
   persistAppThemeGridEnabled,
   persistAppThemePatternOpacity,
+  persistAppThemePatternTiling,
+  persistAppThemeFollowSystem,
   readStoredAppTheme,
   readStoredAppThemeGridEnabled,
   readStoredAppThemePatternOpacity,
+  readStoredAppThemePatternTiling,
+  readStoredAppThemeFollowSystem,
   resolveAppTheme,
   resolveAppThemeFromSettings,
+  resolveAppThemeFollowSystemFromSettings,
   resolveAppThemeGridEnabledFromSettings,
   resolveAppThemePatternOpacityFromSettings,
+  resolveAppThemePatternTilingFromSettings,
   themeBundles,
   type AppTheme,
 } from "../lib/theme";
@@ -55,6 +69,7 @@ import {
   getThemeCatalogCategory,
   getThemeCatalogMode,
   getThemeWallpaperPath,
+  getThemeWallpaperThumbnailPath,
   matchesThemeCatalogFilters,
   themeCatalogCategories,
   themeCatalogCollectionDescriptions,
@@ -63,11 +78,14 @@ import {
   type ThemeCatalogMode,
 } from "../lib/theme-catalog";
 import { LoadingSkeleton } from "./loading-skeleton";
+import { InventoryInspectorToggle } from "./inventory-inspector";
+import { BuildFooterToggle } from "./build-footer";
 import { GlobalThemePicker } from "./global-theme-picker";
 import { HskSeriesChart } from "./hsk-series-chart";
 import { ReadingProgressChart } from "./reading-progress-chart";
 import { DueReviewChart } from "./due-review-chart";
 import { StudyDueLanguageGroups } from "./study-due-language-groups";
+import { StudyAxisRadarChart } from "./study-axis-radar-chart";
 
 type LexicalEntryDetail = {
   pinyin: string | null;
@@ -90,6 +108,7 @@ const importLanguageOptions: ImportLanguageOption[] = [
   { code: "ru", label: "Russian" },
   { code: "he", label: "Hebrew" },
   { code: "ar", label: "Arabic" },
+  { code: "yo", label: "Yoruba" },
 ];
 
 function formatCurrencyUsd(value: number): string {
@@ -244,6 +263,8 @@ export function ActivitySurfaceView() {
 
 export function AnalysisSurfaceView({ bookId }: { bookId: string }) {
   const [data, setData] = useState<BookAnalysisSurfaceResponse | null>(null);
+  const [generationDetails, setGenerationDetails] = useState<GeneratedReaderArticlePromptDetails | null>(null);
+  const [generationLoading, setGenerationLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lexicalEntryDetails, setLexicalEntryDetails] = useState<Record<string, LexicalEntryDetail>>({});
   const [lexicalEntryLoading, setLexicalEntryLoading] = useState(false);
@@ -259,6 +280,22 @@ export function AnalysisSurfaceView({ bookId }: { bookId: string }) {
       .catch((err) => {
         if (active) {
           setError(err instanceof Error ? err.message : "Unable to load analysis.");
+        }
+      });
+    void fetchGeneratedArticlePromptDetails(bookId)
+      .then((result) => {
+        if (active) {
+          setGenerationDetails(result);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setGenerationDetails(null);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setGenerationLoading(false);
         }
       });
     return () => {
@@ -389,6 +426,13 @@ export function AnalysisSurfaceView({ bookId }: { bookId: string }) {
               <p className="small-copy">{data.metrics.recommendation}</p>
             </article>
           </section>
+          <GeneratedArticlePromptCard
+            inventoryId="analysis.generation-prompt-card"
+            details={generationDetails}
+            loading={generationLoading}
+            title="Generated article prompt"
+            description="The saved generation request shows the exact learner-window terms and controls that produced this article."
+          />
           <section className="feature-grid" aria-label="HSK progression charts">
             <HskSeriesChart
               inventoryId="analysis.sentence-hsk-chart"
@@ -808,6 +852,7 @@ export function ProgressSurfaceView() {
                   <p className="small-copy">
                     {book.page_reads} page reads - {book.sentence_reads} sentence reads
                   </p>
+                  <p className="small-copy">State: {book.reading_state.replaceAll("_", " ")}</p>
                 </div>
               ))}
             </div>
@@ -1023,10 +1068,6 @@ export function ProfileSurfaceView() {
               <p>{selectedTrack.next_step}</p>
             </article>
           ) : null}
-          <GlobalThemePicker
-            initialTheme={resolveAppTheme(settingsMap.get("theme"))}
-            entries={data.settings.entries}
-          />
           <article className="card feature-card">
             <h2>Preferences</h2>
             <div className="surface-list">
@@ -1058,6 +1099,7 @@ export function ProfileSurfaceView() {
                     <p className="small-copy">
                       {book.page_reads} page reads • {book.sentence_reads} sentence reads
                     </p>
+                    <p className="small-copy">State: {book.reading_state.replaceAll("_", " ")}</p>
                   </div>
                 ))
               ) : (
@@ -1071,13 +1113,17 @@ export function ProfileSurfaceView() {
   );
 }
 
-export function ThemeShopSurfaceView() {
+export function ThemeSettingsSurfaceView() {
   const [data, setData] = useState<SettingsSurfaceResponse | null>(null);
   const [catalog, setCatalog] = useState<ThemeCatalogResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [theme, setTheme] = useState<AppTheme>("neutral");
+  const [followSystem, setFollowSystem] = useState(false);
+  const [gridEnabled, setGridEnabled] = useState(DEFAULT_APP_THEME_GRID_ENABLED);
+  const [patternOpacity, setPatternOpacity] = useState(DEFAULT_APP_THEME_PATTERN_OPACITY);
+  const [patternTiling, setPatternTiling] = useState(DEFAULT_APP_THEME_PATTERN_TILING);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<ThemeCatalogCategory>("all");
   const [mode, setMode] = useState<ThemeCatalogMode>("all");
@@ -1087,10 +1133,15 @@ export function ThemeShopSurfaceView() {
   const [wallpaperPositionX, setWallpaperPositionX] = useState(50);
   const [wallpaperPositionY, setWallpaperPositionY] = useState(50);
   const [wallpaperFrame, setWallpaperFrame] = useState<"2 / 3" | "9 / 16" | "1 / 1">("2 / 3");
+  const [selectedWallpaperLoaded, setSelectedWallpaperLoaded] = useState(false);
   const railRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     setTheme(readStoredAppTheme() ?? "neutral");
+    setFollowSystem(readStoredAppThemeFollowSystem() ?? false);
+    setGridEnabled(readStoredAppThemeGridEnabled() ?? DEFAULT_APP_THEME_GRID_ENABLED);
+    setPatternOpacity(readStoredAppThemePatternOpacity() ?? DEFAULT_APP_THEME_PATTERN_OPACITY);
+    setPatternTiling(readStoredAppThemePatternTiling() ?? DEFAULT_APP_THEME_PATTERN_TILING);
   }, []);
 
   useEffect(() => {
@@ -1100,11 +1151,15 @@ export function ThemeShopSurfaceView() {
         if (active) {
           setData(result);
           setTheme(resolveAppThemeFromSettings(result.entries));
+          setFollowSystem(resolveAppThemeFollowSystemFromSettings(result.entries) ?? readStoredAppThemeFollowSystem() ?? false);
+          setGridEnabled(resolveAppThemeGridEnabledFromSettings(result.entries) ?? readStoredAppThemeGridEnabled() ?? DEFAULT_APP_THEME_GRID_ENABLED);
+          setPatternOpacity(resolveAppThemePatternOpacityFromSettings(result.entries) ?? readStoredAppThemePatternOpacity() ?? DEFAULT_APP_THEME_PATTERN_OPACITY);
+          setPatternTiling(resolveAppThemePatternTilingFromSettings(result.entries) ?? readStoredAppThemePatternTiling() ?? DEFAULT_APP_THEME_PATTERN_TILING);
         }
       })
       .catch((err) => {
         if (active) {
-          setError(err instanceof Error ? err.message : "Unable to load the theme shop.");
+          setError(err instanceof Error ? err.message : "Unable to load the theme settings.");
         }
       });
     return () => {
@@ -1135,30 +1190,49 @@ export function ThemeShopSurfaceView() {
     persistAppTheme(nextTheme);
   }
 
-  async function saveTheme() {
+  async function saveThemePreferences() {
     setSaving(true);
     setSaved(false);
     setError(null);
 
     try {
       const nextEntries = [
-        ...(data?.entries ?? []).filter((entry) => entry.key !== "theme"),
-        { key: "theme", value: theme },
+        ...(data?.entries ?? []).filter((entry) => !["themeFollowSystem", "themeGridEnabled", "themePatternOpacity", "themePatternTiling"].includes(entry.key)),
+        { key: "themeFollowSystem", value: followSystem ? "on" : "off" },
+        { key: "themeGridEnabled", value: gridEnabled ? "on" : "off" },
+        { key: "themePatternOpacity", value: String(patternOpacity) },
+        { key: "themePatternTiling", value: patternTiling ? "on" : "off" },
       ];
       const result = await putJson<SettingsSurfaceResponse>("/settings", {
         entries: nextEntries,
       } satisfies SettingsUpdateRequest);
       setData(result);
-      persistAppTheme(theme);
+      persistAppThemeFollowSystem(followSystem);
+      persistAppThemeGridEnabled(gridEnabled);
+      persistAppThemePatternOpacity(patternOpacity);
+      persistAppThemePatternTiling(patternTiling);
       setSaved(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save the theme.");
+      setError(err instanceof Error ? err.message : "Unable to save the theme settings.");
     } finally {
       setSaving(false);
     }
   }
 
   const selectedOption = appThemeOptions.find((option) => option.value === theme) ?? appThemeOptions[0];
+  const selectedWallpaperPath = getThemeWallpaperPath(theme);
+  const selectedWallpaperThumbnailPath = getThemeWallpaperThumbnailPath(theme);
+  const selectedWallpaperPreviewPath = selectedWallpaperLoaded ? selectedWallpaperPath : selectedWallpaperThumbnailPath ?? selectedWallpaperPath;
+  const selectedWallpaperPreviewStyle = selectedWallpaperPreviewPath ? {
+    aspectRatio: wallpaperFrame,
+    backgroundImage: `url(${selectedWallpaperPreviewPath})`,
+    backgroundPosition: `${wallpaperPositionX}% ${wallpaperPositionY}%`,
+    backgroundRepeat: "no-repeat",
+    backgroundSize: wallpaperMode === "full" ? "contain" : wallpaperMode === "crop" ? "cover" : `${wallpaperZoom}% auto`,
+  } : undefined;
+  useLayoutEffect(() => {
+    setSelectedWallpaperLoaded(!selectedWallpaperPath);
+  }, [selectedWallpaperPath]);
   const catalogThemes = catalog?.themes ?? appThemeOptions.map((option) => ({
     id: option.value,
     title: option.title,
@@ -1216,13 +1290,13 @@ export function ThemeShopSurfaceView() {
 
   return (
     <RoutePage
-      eyebrow="Theme shop"
-      title="Find a reading atmosphere that fits"
-      description="Browse the complete visual collection for TextPlex. Pick a theme to preview it across the app, then save it to your learner profile."
+      eyebrow="Settings"
+      title="Theme settings and owned themes"
+      description="Tune the app theme and reading canvas in one place, then browse the owned and available theme catalog below."
       badge={`${catalog?.themes.length ?? appThemeOptions.length} themes`}
       links={[
-        { href: "/profile", label: "Back to Profile" },
-        { href: "/settings", label: "Settings" },
+        { href: "/settings", label: "Back to Settings" },
+        { href: "/profile", label: "Profile" },
       ]}
       metrics={[
         { label: "Collection", value: `${catalog?.themes.length ?? appThemeOptions.length} themes` },
@@ -1231,9 +1305,100 @@ export function ThemeShopSurfaceView() {
       ]}
     >
       {error ? <section className="card feature-card">{error}</section> : null}
-      {!data && !error ? <LoadingSkeleton label="Loading theme shop" /> : null}
+      {!data && !error ? <LoadingSkeleton label="Loading theme settings" /> : null}
       {data ? (
-      <section className="card feature-card theme-shop-card">
+        <>
+          <section className="feature-grid">
+            <GlobalThemePicker
+              initialTheme={theme}
+              entries={data.entries}
+              catalogHref="#theme-catalog"
+              inventoryId="theme-settings.app-theme-card"
+              onThemeChange={setTheme}
+              onSaved={setTheme}
+            />
+            <article className="card feature-card settings-preferences-card" data-inventory-id="theme-settings.behavior-card">
+              <h2>Theme behavior</h2>
+              <p className="small-copy">
+                Follow-device behavior, canvas artwork opacity, wallpaper tiling, and the background grid all live here.
+              </p>
+              <div className="settings-inspector-row" data-inventory-id="theme-settings.follow-system">
+                <label className="theme-grid-toggle">
+                  <input
+                    type="checkbox"
+                    checked={followSystem}
+                    onChange={(event) => {
+                      const nextFollowSystem = event.target.checked;
+                      setFollowSystem(nextFollowSystem);
+                      persistAppThemeFollowSystem(nextFollowSystem);
+                      setSaved(false);
+                    }}
+                  />
+                  <span>
+                    <strong>Follow device theme</strong>
+                    <small>When enabled, the app follows the phone or browser light/dark setting.</small>
+                  </span>
+                </label>
+              </div>
+              <label className="theme-opacity-slider">
+                <span className="theme-opacity-slider-head">
+                  <span>Theme artwork opacity</span>
+                  <strong>{patternOpacity}%</strong>
+                </span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={patternOpacity}
+                  onChange={(event) => {
+                    const nextOpacity = Number(event.target.value);
+                    setPatternOpacity(nextOpacity);
+                    persistAppThemePatternOpacity(nextOpacity);
+                    setSaved(false);
+                  }}
+                  aria-label="Theme artwork opacity"
+                />
+                <span className="small-copy">Controls the canvas artwork only. Cards and reading text stay fully opaque.</span>
+              </label>
+              <label className="theme-grid-toggle">
+                <input
+                  type="checkbox"
+                  checked={patternTiling}
+                  onChange={(event) => {
+                    const nextPatternTiling = event.target.checked;
+                    setPatternTiling(nextPatternTiling);
+                    persistAppThemePatternTiling(nextPatternTiling);
+                    setSaved(false);
+                  }}
+                />
+                <span>
+                  <strong>Tile wallpaper</strong>
+                  <small>Repeat the current wallpaper instead of stretching one image across the canvas.</small>
+                </span>
+              </label>
+              <label className="theme-grid-toggle">
+                <input
+                  type="checkbox"
+                  checked={gridEnabled}
+                  onChange={(event) => {
+                    const nextGridEnabled = event.target.checked;
+                    setGridEnabled(nextGridEnabled);
+                    persistAppThemeGridEnabled(nextGridEnabled);
+                    setSaved(false);
+                  }}
+                />
+                <span>
+                  <strong>Show canvas grid</strong>
+                  <small>Toggle the fixed background grid without changing wallpaper, gradients, or cards.</small>
+                </span>
+              </label>
+              <button className="button button-primary" type="button" onClick={() => void saveThemePreferences()} disabled={saving}>
+                {saving ? "Saving theme settings..." : saved ? "Theme settings saved" : "Save theme settings"}
+              </button>
+            </article>
+          </section>
+          <section className="card feature-card theme-shop-card">
           <div className="card-topline">
             <div>
               <span className="eyebrow">Your current preview</span>
@@ -1242,6 +1407,40 @@ export function ThemeShopSurfaceView() {
             <span className="pill">Live preview</span>
           </div>
           <p className="global-theme-intro">{selectedOption.description}</p>
+          <div className="theme-shop-selected-preview" data-inventory-id="theme-shop.selected-preview">
+            <div className={`theme-shop-selected-preview-frame ${selectedWallpaperPath ? "theme-shop-selected-preview-frame--wallpaper" : "theme-shop-selected-preview-frame--fallback"}`} style={selectedWallpaperPreviewStyle}>
+              {selectedWallpaperPath ? (
+                <>
+                  <img
+                    key={selectedWallpaperPath}
+                    className="theme-shop-selected-preview-loader"
+                    src={selectedWallpaperPath}
+                    alt=""
+                    aria-hidden="true"
+                    loading="eager"
+                    decoding="async"
+                    draggable={false}
+                    onContextMenu={(event) => event.preventDefault()}
+                    onDragStart={(event) => event.preventDefault()}
+                    onLoad={() => setSelectedWallpaperLoaded(true)}
+                    onError={() => setSelectedWallpaperLoaded(true)}
+                  />
+                  {!selectedWallpaperLoaded ? (
+                    <div className="theme-shop-selected-preview-loading" aria-hidden="true">
+                      <span>Loading wallpaper</span>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <span className="theme-shop-selected-preview-placeholder global-theme-swatch" data-theme={theme} aria-hidden="true" />
+              )}
+            </div>
+            <p className="small-copy theme-shop-selected-preview-copy">
+              {selectedWallpaperPath
+                ? "Thumbnails load first in the catalog. The full wallpaper swaps in when this preview finishes loading."
+                : "This theme uses a color or gradient preview instead of a wallpaper image."}
+            </p>
+          </div>
           <div className="theme-shop-store-controls" data-inventory-id="theme-shop.store-controls">
             <label className="theme-shop-search" data-inventory-id="theme-shop.search">
               <span>Search themes</span>
@@ -1422,7 +1621,7 @@ export function ThemeShopSurfaceView() {
               </>
             ) : <p className="small-copy">No collections are available yet.</p>}
           </div>
-          <section className="theme-shop-collections" data-inventory-id="theme-shop.catalog-card">
+          <section className="theme-shop-collections" id="theme-catalog" data-inventory-id="theme-shop.catalog-card">
             <div className="theme-shop-catalog-heading">
               <div>
                 <span className="eyebrow">Browse themes</span>
@@ -1447,13 +1646,7 @@ export function ThemeShopSurfaceView() {
                   const isSelected = theme === item.id;
                   const itemMode = getThemeCatalogMode(item.id);
                   const itemCategory = getThemeCatalogCategory(item.id, item.is_free);
-                  const wallpaperPath = getThemeWallpaperPath(item.id);
-                  const wallpaperStyle = wallpaperPath ? {
-                    aspectRatio: wallpaperFrame,
-                    backgroundImage: `url(${wallpaperPath})`,
-                    backgroundPosition: `${wallpaperPositionX}% ${wallpaperPositionY}%`,
-                    backgroundSize: wallpaperMode === "full" ? "contain" : wallpaperMode === "crop" ? "cover" : `${wallpaperZoom}% auto`,
-                  } : undefined;
+                  const wallpaperThumbnailPath = getThemeWallpaperThumbnailPath(item.id);
                   return (
                     <button
                       key={item.id}
@@ -1464,11 +1657,24 @@ export function ThemeShopSurfaceView() {
                       disabled={!knownOption || !item.preview_available}
                     >
                       <span
-                        className={`theme-shop-product-swatch global-theme-swatch ${wallpaperPath ? "theme-shop-product-swatch--wallpaper" : ""}`}
+                        className={`theme-shop-product-swatch global-theme-swatch ${wallpaperThumbnailPath ? "theme-shop-product-swatch--wallpaper" : ""}`}
                         data-theme={item.id}
-                        style={wallpaperStyle}
                         aria-hidden="true"
-                      />
+                      >
+                        {wallpaperThumbnailPath ? (
+                          <img
+                            className="theme-shop-product-swatch-image"
+                            src={wallpaperThumbnailPath}
+                            alt=""
+                            aria-hidden="true"
+                            loading="lazy"
+                            decoding="async"
+                            draggable={false}
+                            onContextMenu={(event) => event.preventDefault()}
+                            onDragStart={(event) => event.preventDefault()}
+                          />
+                        ) : null}
+                      </span>
                       <span className="theme-shop-product-copy">
                         <span className="theme-shop-option-meta"><span>{themeCatalogCategories.find((entry) => entry.value === itemCategory)?.label}</span>{itemMode ? <span>{itemMode === "daylight" ? "Daylight" : "Night"}</span> : null}</span>
                         <strong>{item.title}</strong>
@@ -1489,15 +1695,8 @@ export function ThemeShopSurfaceView() {
               </div>
             )}
           </section>
-          <div className="global-theme-footer">
-            <p className="small-copy">
-              Previewing <strong>{selectedOption.title}</strong>. The preview applies immediately on this device.
-            </p>
-            <button className="button button-primary" type="button" onClick={() => void saveTheme()} disabled={saving}>
-              {saving ? "Saving theme..." : saved ? "Theme saved" : "Save to profile"}
-            </button>
-          </div>
-        </section>
+          </section>
+        </>
       ) : null}
     </RoutePage>
   );
@@ -1601,16 +1800,7 @@ export function SettingsSurfaceView() {
   const { configured: authConfigured, user: authenticatedUser } = useAuth();
   const [data, setData] = useState<SettingsSurfaceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [theme, setTheme] = useState<AppTheme>("neutral");
-  const [gridEnabled, setGridEnabled] = useState(DEFAULT_APP_THEME_GRID_ENABLED);
-  const [patternOpacity, setPatternOpacity] = useState(DEFAULT_APP_THEME_PATTERN_OPACITY);
-
-  useEffect(() => {
-    setTheme(readStoredAppTheme() ?? "neutral");
-    setGridEnabled(readStoredAppThemeGridEnabled() ?? DEFAULT_APP_THEME_GRID_ENABLED);
-    setPatternOpacity(readStoredAppThemePatternOpacity() ?? DEFAULT_APP_THEME_PATTERN_OPACITY);
-  }, []);
+  const [readerSpeechVoiceGender, setReaderSpeechVoiceGender] = useState<ReaderSpeechVoiceGender>(() => readStoredReaderSpeechVoiceGender());
 
   useEffect(() => {
     let active = true;
@@ -1620,12 +1810,6 @@ export function SettingsSurfaceView() {
           return;
         }
         setData(result);
-        const nextTheme = resolveAppThemeFromSettings(result.entries);
-        const nextGridEnabled = resolveAppThemeGridEnabledFromSettings(result.entries);
-        const nextPatternOpacity = resolveAppThemePatternOpacityFromSettings(result.entries);
-        setTheme(nextTheme);
-        setGridEnabled(nextGridEnabled ?? readStoredAppThemeGridEnabled() ?? DEFAULT_APP_THEME_GRID_ENABLED);
-        setPatternOpacity(nextPatternOpacity ?? readStoredAppThemePatternOpacity() ?? DEFAULT_APP_THEME_PATTERN_OPACITY);
       })
       .catch((err) => {
         if (active) {
@@ -1637,26 +1821,34 @@ export function SettingsSurfaceView() {
     };
   }, []);
 
-  async function saveSettings() {
-    setSaving(true);
+  useEffect(() => {
+    if (!data) {
+      return;
+    }
+
+    const nextReaderSpeechVoiceGender = resolveReaderSpeechVoiceGender(
+      data.entries.find((entry) => entry.key === "readerSpeechVoiceGender")?.value ?? readStoredReaderSpeechVoiceGender(),
+    );
+    setReaderSpeechVoiceGender(nextReaderSpeechVoiceGender);
+    persistReaderSpeechVoiceGender(nextReaderSpeechVoiceGender);
+  }, [data]);
+
+  const theme: AppTheme = data ? resolveAppThemeFromSettings(data.entries) : "neutral";
+
+  async function handleSetReaderSpeechVoiceGender(nextGender: ReaderSpeechVoiceGender): Promise<void> {
+    const previousGender = readerSpeechVoiceGender;
+    setReaderSpeechVoiceGender(nextGender);
+    persistReaderSpeechVoiceGender(nextGender);
+    setError(null);
     try {
-      const payload: SettingsUpdateRequest = {
-        entries: [
-          { key: "theme", value: theme },
-          { key: "themeGridEnabled", value: gridEnabled ? "on" : "off" },
-          { key: "themePatternOpacity", value: String(patternOpacity) },
-        ],
-      };
-      const result = await putJson<SettingsSurfaceResponse>("/settings", payload);
-      setData(result);
-      persistAppTheme(theme);
-      persistAppThemeGridEnabled(gridEnabled);
-      persistAppThemePatternOpacity(patternOpacity);
-      setError(null);
+      const updated = await putJson<SettingsSurfaceResponse>("/settings", {
+        entries: [{ key: "readerSpeechVoiceGender", value: nextGender }],
+      } satisfies SettingsUpdateRequest);
+      setData(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save settings.");
-    } finally {
-      setSaving(false);
+      setReaderSpeechVoiceGender(previousGender);
+      persistReaderSpeechVoiceGender(previousGender);
+      setError(err instanceof Error ? err.message : "Unable to save the speech voice preference.");
     }
   }
 
@@ -1664,7 +1856,13 @@ export function SettingsSurfaceView() {
     <RoutePage
       eyebrow="Settings"
       title="Profile and app preferences"
-      description={authenticatedUser ? "Display preferences are stored in the authenticated hosted profile." : authConfigured ? "Sign in to load and save hosted preferences, or continue in local-only mode." : "Display preferences and local reading behavior are stored in the local profile database."}
+      description={
+        authenticatedUser
+          ? "Display preferences are stored in the authenticated hosted profile. Theme settings now live in the dedicated theme settings page."
+          : authConfigured
+            ? "Sign in to load and save hosted preferences, or continue in local-only mode. Theme settings now live in the dedicated theme settings page."
+            : "Display preferences and local reading behavior are stored in the local profile database. Theme settings now live in the dedicated theme settings page."
+      }
       badge="Live"
       links={[
         { href: "/library", label: "Library" },
@@ -1672,64 +1870,55 @@ export function SettingsSurfaceView() {
       ]}
       metrics={[
         { label: "Profile", value: authenticatedUser ? "Hosted account" : authConfigured ? "Sign-in available" : "Local first" },
-        { label: "Theme", value: data ? appThemeLabels[theme] : "Loading" },
+        { label: "Theme", value: data ? appThemeLabels[theme as AppTheme] : "Loading" },
       ]}
     >
       {error ? <section className="card feature-card">{error}</section> : null}
       {!data && !error ? <LoadingSkeleton label="Loading settings" /> : null}
-      <section className="card feature-card">
-          <h2>Preferences</h2>
-          {data ? <div className="surface-form">
-            <label>
-              App theme
-              <select className="text-input" value={theme} onChange={(event) => setTheme(resolveAppTheme(event.target.value))}>
-                {appThemeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="theme-opacity-slider">
-              <span className="theme-opacity-slider-head">
-                <span>Theme artwork opacity</span>
-                <strong>{patternOpacity}%</strong>
-              </span>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                step="1"
-                value={patternOpacity}
-                onChange={(event) => {
-                  const nextOpacity = Number(event.target.value);
-                  setPatternOpacity(nextOpacity);
-                  persistAppThemePatternOpacity(nextOpacity);
-                }}
-                aria-label="Theme artwork opacity"
-              />
-              <span className="small-copy">Controls the canvas artwork only. Cards and reading text stay fully opaque.</span>
-            </label>
-            <label className="theme-grid-toggle">
-              <input
-                type="checkbox"
-                checked={gridEnabled}
-                onChange={(event) => {
-                  const nextGridEnabled = event.target.checked;
-                  setGridEnabled(nextGridEnabled);
-                  persistAppThemeGridEnabled(nextGridEnabled);
-                }}
-              />
-              <span>
-                <strong>Show canvas grid</strong>
-                <small>Toggle the fixed background grid without changing wallpaper, gradients, or cards.</small>
-              </span>
-            </label>
-            <button className="button button-primary" type="button" onClick={() => void saveSettings()} disabled={saving}>
-              {saving ? "Saving..." : "Save settings"}
-            </button>
-          </div> : null}
-          {data ? <p className="small-copy">Stored settings: {data.entries.length}</p> : null}
+      <section className="card feature-card settings-preferences-card" data-inventory-id="settings.preferences-card">
+        <h2>Preferences</h2>
+        <p className="small-copy">
+          Theme controls now live in the dedicated theme settings page, where the app look and owned visual packs stay together.
+          Use the version footer toggle to show the current app version and last reboot/rebuild time at the bottom of every page.
+        </p>
+        <div className="settings-inspector-row" data-inventory-id="settings.inventory-labels-toggle">
+          <div>
+            <strong>Inventory labels</strong>
+            <p className="small-copy">Show route and component labels while auditing the app shell and reader surfaces.</p>
+          </div>
+          <InventoryInspectorToggle />
+        </div>
+        <div className="settings-inspector-row" data-inventory-id="settings.build-footer-toggle">
+          <div>
+            <strong>Version footer</strong>
+            <p className="small-copy">Show the current app version and last reboot/rebuild time at the bottom of every page.</p>
+          </div>
+          <BuildFooterToggle />
+        </div>
+        <div className="settings-inspector-row" data-inventory-id="settings.speech-voice-toggle">
+          <div>
+            <strong>Speech voice</strong>
+            <p className="small-copy">Prefer a male or female browser voice for reader and study audio playback.</p>
+          </div>
+          <div className="voice-gender-toggle-group" role="group" aria-label="Preferred speech voice">
+            {(["female", "male"] as const).map((gender) => (
+              <button
+                key={gender}
+                type="button"
+                className={`button button-secondary button-compact voice-gender-toggle-option ${readerSpeechVoiceGender === gender ? "is-active" : ""}`}
+                onClick={() => void handleSetReaderSpeechVoiceGender(gender)}
+                aria-pressed={readerSpeechVoiceGender === gender}
+                data-inventory-id={`settings.speech-voice-${gender}`}
+              >
+                {gender === "female" ? "Female" : "Male"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <Link className="button button-secondary" href="/profile/themes" data-inventory-id="settings.theme-settings-link">
+          Open theme settings
+        </Link>
+        {data ? <p className="small-copy">Stored settings: {data.entries.length}</p> : null}
       </section>
       <Link className="card feature-card settings-roadmap-card" href="/roadmap" data-inventory-id="settings.roadmap-card">
         <div className="card-topline">
@@ -1749,6 +1938,7 @@ export function SettingsSurfaceView() {
 export function StudySurfaceView() {
   const [data, setData] = useState<StudySurfaceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedStudyProgramItemKey, setSelectedStudyProgramItemKey] = useState<string | null>(null);
   const [selectedStudyItemKey, setSelectedStudyItemKey] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1783,6 +1973,14 @@ export function StudySurfaceView() {
     ].join(":");
   }
 
+  function getStudyProgramItemKey(
+    programCode: string,
+    levelCode: string,
+    item: NonNullable<StudySurfaceResponse["study_programs"]>[number]["levels"][number]["items"][number],
+  ): string {
+    return [programCode, levelCode, item.language_code, item.lemma].join(":");
+  }
+
   return (
     <RoutePage
       eyebrow="Study"
@@ -1805,12 +2003,12 @@ export function StudySurfaceView() {
           <section className="card feature-card" data-inventory-id="study.programs-card">
             <h2>Program introduction</h2>
             <p className="small-copy">
-              Curated level vocabulary from the active language programs. Level 1 starts from the highest-value frequency slice.
+              Curated level vocabulary from the active language programs. Starter levels provide an authored foundation, with room for later curriculum levels.
             </p>
             {data.study_programs.length ? (
               <div className="study-program-groups">
                 {data.study_programs.map((program) => (
-                  <details key={program.program_code} className="study-program-group" data-inventory-id="study.program-group" open>
+                  <details key={program.program_code} className="study-program-group" data-inventory-id="study.program-group">
                     <summary className="study-program-group-summary">
                       <div>
                         <span className="eyebrow">{program.language_label}</span>
@@ -1822,8 +2020,11 @@ export function StudySurfaceView() {
                       {program.levels.map((level, levelIndex) => {
                         const practiceHref = `/study/practice?${new URLSearchParams({
                           mode: "program",
+                          language_code: program.language_code,
                           language: program.language_code,
+                          program_code: program.program_code,
                           program: program.program_code,
+                          level_code: level.level_code,
                           level: level.level_code,
                         }).toString()}`;
 
@@ -1853,6 +2054,8 @@ export function StudySurfaceView() {
                             </summary>
                             <div className="study-program-items">
                               {level.items.map((item) => {
+                                const itemKey = getStudyProgramItemKey(program.program_code, level.level_code, item);
+                                const expanded = selectedStudyProgramItemKey === itemKey;
                                 const pronunciation = item.pronunciation ?? "-";
                                 const englishMeaning = item.definition_short ?? "-";
 
@@ -1862,19 +2065,83 @@ export function StudySurfaceView() {
                                     className="study-program-item"
                                     data-inventory-id="study.program-item"
                                   >
-                                    <div className="study-program-item-row" dir="auto">
-                                      <span className="study-program-item-term" lang={item.language_code}>
-                                        {item.display_form}
-                                      </span>
-                                      <span className="study-program-item-pronunciation">({pronunciation})</span>
-                                      <span className="study-program-item-meaning">{englishMeaning}</span>
-                                    </div>
-                                    <div className="study-program-item-meta">
-                                      <span className="eyebrow">{item.progress_state}</span>
-                                      <span className="muted">
-                                        {item.frequency_rank != null ? `#${item.frequency_rank}` : item.proficiency_level ?? "-"}
-                                      </span>
-                                    </div>
+                                    <button
+                                      type="button"
+                                      className={`study-program-item-toggle ${expanded ? "is-expanded" : ""}`}
+                                      onClick={() => {
+                                        setSelectedStudyProgramItemKey((current) => (current === itemKey ? null : itemKey));
+                                      }}
+                                      aria-expanded={expanded}
+                                      aria-controls={`study-program-item-details-${itemKey}`}
+                                      data-inventory-id="study.program-item-toggle"
+                                    >
+                                      <div className="study-program-item-row" dir="auto">
+                                        <span className="study-program-item-term" lang={item.language_code}>
+                                          {item.display_form}
+                                        </span>
+                                        <span className="study-program-item-pronunciation">({pronunciation})</span>
+                                        <span className="study-program-item-meaning">{englishMeaning}</span>
+                                      </div>
+                                      <div className="study-program-item-meta">
+                                        <span className="eyebrow">{item.progress_state}</span>
+                                        <span className="muted">
+                                          {item.frequency_rank != null ? `#${item.frequency_rank}` : item.proficiency_level ?? "-"}
+                                        </span>
+                                      </div>
+                                    </button>
+                                    {expanded ? (
+                                      <div
+                                        id={`study-program-item-details-${itemKey}`}
+                                        className="study-program-item-details"
+                                        data-inventory-id="study.program-item-details"
+                                      >
+                                        <StudyAxisRadarChart
+                                          axes={item.assessment_axes}
+                                          inventoryId="study.program-item-axis-chart"
+                                          title="Axis SRS"
+                                          description="Current SRS stage for each assessment axis on this program term."
+                                          emptyMessage="This program term has not been assessed yet."
+                                        />
+                                        <div className="study-metadata-grid">
+                                          <div>
+                                            <span className="eyebrow">Level</span>
+                                            <strong>{level.level_label}</strong>
+                                          </div>
+                                          <div>
+                                            <span className="eyebrow">Program</span>
+                                            <strong>{program.program_label}</strong>
+                                          </div>
+                                          <div>
+                                            <span className="eyebrow">Source</span>
+                                            <strong>{program.program_source_label}</strong>
+                                          </div>
+                                          <div>
+                                            <span className="eyebrow">Progress</span>
+                                            <strong>{item.progress_state}</strong>
+                                          </div>
+                                          <div>
+                                            <span className="eyebrow">Frequency</span>
+                                            <strong>{item.frequency_rank != null ? `#${item.frequency_rank}` : "-"}</strong>
+                                          </div>
+                                          <div>
+                                            <span className="eyebrow">Saved count</span>
+                                            <strong>{item.saved_count}</strong>
+                                          </div>
+                                          <div>
+                                            <span className="eyebrow">Pronunciation</span>
+                                            <strong>{item.pronunciation ?? "—"}</strong>
+                                          </div>
+                                          <div>
+                                            <span className="eyebrow">English meaning</span>
+                                            <strong>{englishMeaning}</strong>
+                                          </div>
+                                          <div>
+                                            <span className="eyebrow">Proficiency</span>
+                                            <strong>{item.proficiency_level ?? "—"}</strong>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ) : null}
                                   </article>
                                 );
                               })}
@@ -1898,24 +2165,24 @@ export function StudySurfaceView() {
               </div>
             </summary>
             <DueReviewChart items={data.queued_items} />
-            <StudyDueLanguageGroups items={data.queued_items} />
+            <StudyDueLanguageGroups items={data.queued_items} studyPrograms={data.study_programs} studyGroups={data.study_groups} />
             <div className="study-queue-actions">
               <Link className="button button-secondary" href="/study/practice?mode=review" data-inventory-id="study.review-practice-link">
                 Start review session
               </Link>
             </div>
           </details>
-      <details className="card feature-card study-saved-vocabulary-card" data-inventory-id="study.saved-vocabulary-card" open>
-        <summary className="study-saved-vocabulary-card-summary" data-inventory-id="study.saved-vocabulary-card-summary">
+      <details className="card feature-card study-saved-vocabulary-card" data-inventory-id="study.glossed-vocabulary-card" open>
+        <summary className="study-saved-vocabulary-card-summary" data-inventory-id="study.glossed-vocabulary-card-summary">
           <div>
-            <h2>Saved vocabulary</h2>
-            <p className="small-copy">Language-grouped terms saved from the reader with source metadata.</p>
+            <h2>Glossed vocabulary</h2>
+            <p className="small-copy">Language-grouped terms captured during reading sessions when a word needed help, with source metadata and axis stages.</p>
           </div>
         </summary>
         {data.study_groups.length ? (
           <div className="study-language-groups">
             {data.study_groups.map((group) => (
-              <details key={group.language_code} className="study-language-group" data-inventory-id="study.language-group">
+              <details key={group.language_code} className="study-language-group" data-inventory-id="study.glossed-vocabulary-language-group">
                 <summary className="study-language-group-summary">
                   <div>
                     <span className="eyebrow">{group.language_label}</span>
@@ -1931,7 +2198,7 @@ export function StudySurfaceView() {
                     const englishMeaning = item.definition_short ?? "—";
 
                     return (
-                      <article key={itemKey} className="surface-list-item study-saved-item" data-inventory-id="study.saved-item">
+                      <article key={itemKey} className="surface-list-item study-saved-item" data-inventory-id="study.glossed-vocabulary-item">
                         <button
                           type="button"
                           className={`study-saved-item-toggle ${expanded ? "is-expanded" : ""}`}
@@ -1940,7 +2207,7 @@ export function StudySurfaceView() {
                           }}
                           aria-expanded={expanded}
                           aria-controls={`study-item-details-${itemKey}`}
-                          data-inventory-id="study.saved-item-toggle"
+                          data-inventory-id="study.glossed-vocabulary-item-toggle"
                         >
                         <div className="study-saved-item-row" dir="auto">
                           <span className="study-saved-item-term" lang={item.language_code}>
@@ -1954,8 +2221,9 @@ export function StudySurfaceView() {
                           <div
                             id={`study-item-details-${itemKey}`}
                             className="study-saved-item-details"
-                            data-inventory-id="study.saved-item-details"
+                            data-inventory-id="study.glossed-vocabulary-item-details"
                           >
+                            <StudyAxisRadarChart axes={item.assessment_axes} />
                             <div className="study-metadata-grid">
                               <div>
                                 <span className="eyebrow">Display form</span>
@@ -2029,7 +2297,7 @@ export function StudySurfaceView() {
                             <div>
                               <span className="eyebrow">Current note</span>
                               <p className="small-copy">
-                                This is the full metadata dump for now so we can decide which fields belong in the final study view.
+                                Clicked terms can show the source metadata and axis-level SRS state before we trim this view down.
                               </p>
                             </div>
                           </div>

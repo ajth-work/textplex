@@ -20,6 +20,7 @@ The intended outcome is a readable passage that:
 - repeats recently exposed words so they reinforce memory
 - introduces a bounded number of upcoming words
 - avoids dumping too many truly new words into one passage
+- stays within an explicit curriculum ceiling when the learner asks for one
 
 ## Core Concept
 
@@ -69,6 +70,7 @@ Recommended policy:
 - avoid requiring a sentence to depend on an unknown term
 - keep named entities and idioms under tight control
 - prefer clear, concrete language over abstract style
+- let the learner choose sentence length, target language, curriculum ceiling, genre, tone, and vocabulary balance
 
 If the passage is meant to be instructional rather than factual, the prompt should say so explicitly. That reduces the risk of hallucinated real-world claims.
 
@@ -115,12 +117,14 @@ Useful metadata to preserve for each generated article:
 - source type, for example `generated`
 - generation timestamp
 - target language
+- prompt version and model
 - progression anchor or ladder ID
 - learner-window hash or snapshot ID
 - requested sentence count
 - requested novelty budget
 - actual validation stats
 - model/provider provenance
+- exact prompt text plus the known, recent, and upcoming term windows used to build it
 
 This metadata helps explain why the article exists and how it was calibrated.
 
@@ -132,12 +136,16 @@ Suggested request fields:
 {
   "language_code": "ko",
   "topic": "travel planning",
+  "genre": "travel",
+  "tone": "narrative",
   "sentence_count": 30,
   "known_word_ids": ["..."],
   "recent_word_ids": ["..."],
   "upcoming_word_ids": ["..."],
   "max_new_lemmas": 8,
   "progression_anchor": "topik",
+  "curriculum_mode": "exam",
+  "curriculum_level": "TOPIK 3",
   "style": "explanatory"
 }
 ```
