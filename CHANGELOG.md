@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-08
+
+- Fixed the Python API and processor Ruff failures by cleaning up the generated article and translation alignment services, removing stale test lint noise, and revalidating the API test suite.
+
 ## 2026-08-07
 
 - Moved the theme catalog wallpaper thumbnails inside their swatch containers so the images stay clipped instead of bleeding into neighboring foreground cards on mobile.

@@ -592,7 +592,6 @@ def _template_article(
     sentence_count: int,
     window: ArticleWindow,
 ) -> tuple[str, int]:
-    language_label = _language_label(language_code)
     separator = "。" if _normalized_language_code(language_code) in {"zh", "ja", "ko"} else "."
     seed_terms = [term.term for term in (window.known_terms + window.recent_terms + window.upcoming_terms) if term.term]
     if not seed_terms:

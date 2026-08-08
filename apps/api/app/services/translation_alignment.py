@@ -355,7 +355,7 @@ def _call_openai(prompt: str) -> dict[str, Any]:
         raise RuntimeError(f"OpenAI translation alignment failed: {exc.reason}") from exc
 
     if not isinstance(response_payload, dict):
-        raise RuntimeError("OpenAI translation alignment response was not a JSON object.")
+        raise TypeError("OpenAI translation alignment response was not a JSON object.")
     return response_payload
 
 
@@ -394,7 +394,7 @@ def build_sentence_translation_alignment(
     try:
         response_payload = _call_openai(prompt)
         response_text = _extract_response_text(response_payload)
-    except Exception as exc:  # pragma: no cover - network and model failures are best-effort
+    except (RuntimeError, TypeError, json.JSONDecodeError) as exc:  # pragma: no cover - network and model failures are best-effort
         logger.warning("OpenAI translation alignment failed: %s", exc)
         return heuristic_alignment
 

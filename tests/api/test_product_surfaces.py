@@ -4,8 +4,6 @@ from types import SimpleNamespace
 
 from app.main import app
 from app.schemas.books import BookRecord
-from app.core.paths import resolve_books_root, resolve_user_data_root
-from app.services.book_registry import load_registry
 from app.services.lexicon import ensure_lexicon_database
 from fastapi.testclient import TestClient
 from processor.contracts import (
@@ -169,7 +167,6 @@ def test_analysis_surface_exposes_chinese_hsk_metrics(tmp_path: Path) -> None:
     extraction_path.write_text(extraction.model_dump_json(), encoding="utf-8")
 
     lexicon_db = ensure_lexicon_database(data_root)
-    import sqlite3
 
     with sqlite3.connect(lexicon_db) as connection:
         connection.executemany(
