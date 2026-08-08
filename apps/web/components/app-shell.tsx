@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useParams, useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { resolveReaderResumeHref } from "../lib/textplex";
+import { READER_NAV_CONTEXT_CLEARED_EVENT, resolveReaderResumeHref } from "../lib/textplex";
 import { useAuth } from "./auth-provider";
 import { ThemeToggleButton } from "./theme-toggle-button";
 import {
@@ -28,6 +28,7 @@ const LAST_BOOK_KEY = "textplex:last-book-id";
 const LAST_PAGE_KEY = "textplex:last-page-number";
 const LAST_SEARCH_KEY = "textplex:last-search-query";
 const HOME_PATH = "/home";
+const READER_NAV_HIDE_DELAY_MS = 3200;
 
 type NavigationContext = {
   bookId: string | null;
@@ -110,6 +111,14 @@ function BrushIcon() {
   );
 }
 
+function ReaderNavRevealIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
 export function AppShell() {
   const pathname = usePathname();
   const params = useParams();
@@ -117,15 +126,46 @@ export function AppShell() {
   const router = useRouter();
   const { configured, loading, signOut, user } = useAuth();
   const [storedContext, setStoredContext] = useState<NavigationContext>({ bookId: null, pageNumber: null, searchQuery: null });
+  const [readerNavCollapsed, setReaderNavCollapsed] = useState(false);
   const moreMenuRef = useRef<HTMLDetailsElement | null>(null);
+  const readerNavHideTimerRef = useRef<number | null>(null);
 
   const routeContext = useMemo(
     () => parseRouteContext(pathname, params as Record<string, string | string[] | undefined>, searchParams),
     [pathname, params, searchParams],
   );
+  const isReaderRoute = isPathActive(pathname, "/reader");
+
+  const clearReaderNavHideTimer = useCallback(() => {
+    if (readerNavHideTimerRef.current !== null) {
+      window.clearTimeout(readerNavHideTimerRef.current);
+      readerNavHideTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleReaderNavCollapse = useCallback(() => {
+    clearReaderNavHideTimer();
+    if (!isReaderRoute) {
+      return;
+    }
+
+    readerNavHideTimerRef.current = window.setTimeout(() => {
+      setReaderNavCollapsed(true);
+      readerNavHideTimerRef.current = null;
+    }, READER_NAV_HIDE_DELAY_MS);
+  }, [clearReaderNavHideTimer, isReaderRoute]);
 
   useEffect(() => {
     setStoredContext(readStoredContext());
+  }, []);
+
+  useEffect(() => {
+    const handleReaderContextCleared = () => {
+      setStoredContext(readStoredContext());
+    };
+
+    window.addEventListener(READER_NAV_CONTEXT_CLEARED_EVENT, handleReaderContextCleared);
+    return () => window.removeEventListener(READER_NAV_CONTEXT_CLEARED_EVENT, handleReaderContextCleared);
   }, []);
 
   useEffect(() => {
@@ -149,6 +189,16 @@ export function AppShell() {
     }
   }, [pathname]);
 
+  useEffect(() => {
+    clearReaderNavHideTimer();
+    setReaderNavCollapsed(false);
+    if (isReaderRoute) {
+      scheduleReaderNavCollapse();
+    }
+
+    return clearReaderNavHideTimer;
+  }, [clearReaderNavHideTimer, isReaderRoute, pathname, scheduleReaderNavCollapse]);
+
   const activeBookId = routeContext.bookId ?? storedContext.bookId;
   const activePageNumber = routeContext.pageNumber ?? storedContext.pageNumber;
   const activeSearchQuery = routeContext.searchQuery ?? storedContext.searchQuery;
@@ -159,6 +209,7 @@ export function AppShell() {
   const searchHref = activeSearchQuery ? `/search?q=${encodeURIComponent(activeSearchQuery)}` : "/search";
   const authReturnTo = pathname === "/auth" ? HOME_PATH : `${pathname}${searchKey ? `?${searchKey}` : ""}`;
   const signInHref = `/auth?returnTo=${encodeURIComponent(authReturnTo)}`;
+  const brandHref = user ? HOME_PATH : "/";
   const hasMoreActiveRoute = ["/analysis", "/search", "/progress", "/roadmap", "/activity", "/import", "/profile", "/settings"]
     .some((href) => isPathActive(pathname, href));
 
@@ -167,6 +218,11 @@ export function AppShell() {
       moreMenuRef.current.open = false;
     }
   }
+
+  const revealReaderNav = useCallback(() => {
+    setReaderNavCollapsed(false);
+    scheduleReaderNavCollapse();
+  }, [scheduleReaderNavCollapse]);
 
   function handleBack() {
     if (window.history.length > 1 && pathname !== "/") {
@@ -177,7 +233,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="app-shell-chrome card" data-inventory-id="shell.chrome">
+    <div className={`app-shell-chrome card${isReaderRoute ? ` reader-nav-shell${readerNavCollapsed ? " is-reader-nav-collapsed" : ""}` : ""}`} data-inventory-id="shell.chrome">
       <header className="app-shell-bar app-shell-bar-top" data-inventory-id="shell.header">
         <button
           className="button button-secondary theme-toggle-button shell-icon-button app-shell-back-button"
@@ -190,8 +246,8 @@ export function AppShell() {
           <BackIcon />
           <span className="visually-hidden">Go back</span>
         </button>
-        <div className="app-shell-brand">
-          <Link className="app-shell-home" href={HOME_PATH}>
+        <div className="app-shell-brand" data-inventory-id="shell.brand">
+          <Link className="app-shell-home" href={brandHref} aria-label={user ? "Go to Home" : "Go to TextPlex start"}>
             TextPlex
           </Link>
         </div>
@@ -210,7 +266,13 @@ export function AppShell() {
         </div>
       </header>
 
-      <nav className="app-nav app-shell-bar-bottom" aria-label="Primary">
+      <nav
+        className="app-nav app-shell-bar-bottom"
+        aria-label="Primary"
+        data-inventory-id={isReaderRoute ? "shell.reader-nav" : "shell.primary-nav"}
+        onPointerEnter={isReaderRoute ? revealReaderNav : undefined}
+        onFocusCapture={isReaderRoute ? revealReaderNav : undefined}
+      >
         <Link className="button button-secondary nav-link nav-link-home" href={HOME_PATH}>
           <NavLinkContent icon={<HomeIcon />} label="Home" />
         </Link>
@@ -284,6 +346,19 @@ export function AppShell() {
             ) : null}
           </div>
         </details>
+        {isReaderRoute ? (
+          <button
+            className="reader-nav-reveal"
+            type="button"
+            onClick={revealReaderNav}
+            aria-label="Show navigation"
+            title="Show navigation"
+            data-inventory-id="shell.reader-nav-reveal"
+          >
+            <ReaderNavRevealIcon />
+            <span className="visually-hidden">Show navigation</span>
+          </button>
+        ) : null}
       </nav>
     </div>
   );

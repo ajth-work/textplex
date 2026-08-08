@@ -781,6 +781,7 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
 
   if (route === "/lexicon/google-translate/usage") {
     return {
+      scope: "account",
       month_key: "2026-07",
       request_count: 0,
       character_count: 0,

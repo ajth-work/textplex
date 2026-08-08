@@ -46,10 +46,10 @@ test("Phase 5 exposes an authenticated hosted profile read path", () => {
   assert.match(accountMenu, /Settings/);
   assert.match(accountMenu, /Sign out/);
   assert.match(appShell, /nav-link-home/);
-  assert.match(appShell, /<span>Home<\/span>/);
+  assert.match(appShell, /<span className="nav-link-label">\{label\}<\/span>/);
+  assert.match(appShell, /const brandHref = user \? HOME_PATH : "\/";/);
+  assert.match(appShell, /href=\{brandHref\}/);
   assert.match(landingPage, /useAuth/);
-  assert.match(landingPage, /AccountMenu/);
-  assert.match(landingPage, /Your Home, profile, and library are one tap away\./);
   assert.match(landingPage, /Open Home/);
   assert.match(landingPage, /Included in account/);
   assert.match(libraryView, /AccountMenu/);
@@ -61,6 +61,8 @@ test("Phase 5 exposes an authenticated hosted profile read path", () => {
   assert.match(profileSurface, /Hello,/);
   assert.match(profileSurface, /user zero/);
   assert.match(sharedContracts, /HostedProfileSurfaceResponse/);
+  assert.match(authPage, /data-inventory-id="auth\.public-return"/);
+  assert.match(authPage, /Explore TextPlex/);
 });
 
 test("Phase 5 starts from user-owned profile and settings RLS", () => {

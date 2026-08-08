@@ -20,6 +20,19 @@ test("Next reader route passes dynamic book and page parameters to the live read
   assert.match(routeSource, /export const dynamic = "force-dynamic"/);
 });
 
+test("Next reader meaning line preserves spacing and offers a complete reveal escape hatch", () => {
+  assert.match(readerSource, /readerMeaningLineRevealAllStorageKey/);
+  assert.match(readerSource, /reader\.meaning-line-reveal-all-section/);
+  assert.match(readerSource, /reader\.meaning-line-reveal-all-toggle/);
+  assert.match(readerSource, /reader\.meaning-line-reveal-all-action/);
+  assert.match(readerSource, /function addTranslationTokenSpacing\(tokens: TranslationAlignmentToken\[\]\)/);
+  assert.match(readerSource, /const sentenceRevealWordSlots/);
+  assert.match(readerSource, /new Set\(sentenceRevealWordSlots\)/);
+  assert.match(readerSource, /sentenceRevealAllActive/);
+  assert.match(readerSource, /Reveal all/);
+  assert.match(stylesheetSource, /\.reader-translation-reveal-part\.is-space\s*\{[\s\S]*display: inline-block;/);
+});
+
 test("Next reader contract keeps loading, error, extraction, lookup, and chart states", () => {
   assert.match(readerSource, /ReaderLoadingSkeleton/);
   assert.match(readerSource, /Preparing page text/);
@@ -112,9 +125,9 @@ test("Next reader expands the session summary into book-scoped stats", () => {
   assert.match(readerSource, /reader-session-pill-summary/);
     assert.match(readerSource, /reader-session-pill-details/);
     assert.match(readerSource, /reader-session-pill-stat/);
-    assert.match(readerSource, /reader-session-pill-badge/);
-    assert.match(readerSource, /Avg session/);
-    assert.match(readerSource, /New glossed/);
+  assert.match(readerSource, /reader-session-pill-badge/);
+  assert.match(readerSource, /Avg session/);
+  assert.match(readerSource, /New glossed/);
   assert.match(readerSource, /Page glossed/);
   assert.match(readerSource, /Page unglossed/);
   assert.match(readerSource, /Page ETA/);
@@ -132,6 +145,24 @@ test("Next reader expands the session summary into book-scoped stats", () => {
     assert.match(stylesheetSource, /\.reader-session-stats\s*\{[\s\S]*grid-column: 1 \/ -1;[\s\S]*width: 100%;/);
     assert.match(stylesheetSource, /\.reader-session-pill-details\s*\{[\s\S]*grid-template-columns: repeat\(auto-fit, minmax\(8\.5rem, 1fr\)\)/);
   });
+
+test("Next reader makes both desktop carousels discoverable and draggable", () => {
+  assert.match(readerSource, /formatReaderEstimatedDuration/);
+  assert.match(readerSource, /useReaderCarouselInteractions/);
+  assert.match(readerSource, /Drag or scroll to explore/);
+  assert.match(readerSource, /aria-describedby="reader-session-carousel-hint"/);
+  assert.match(readerSource, /aria-describedby="reader-progress-carousel-hint"/);
+  assert.match(stylesheetSource, /\.reader-carousel-hint\s*\{[\s\S]*display: none;/);
+  assert.match(stylesheetSource, /@media \(hover: hover\) and \(pointer: fine\)/);
+});
+
+test("Next reader uses sentence progress instead of page progress for single-page text", () => {
+  assert.match(readerSource, /const isSinglePageText = totalPages === 1;/);
+  assert.match(readerSource, /label: "Sentence progress"/);
+  assert.match(readerSource, /if \(isSinglePageText\) \{\s+return \[sentenceProgressItem\];/);
+  assert.match(readerSource, /label: "Page progress"/);
+  assert.match(readerSource, /label: "Overall sentence progress"/);
+});
 
 test("Next reader definition traces wrap long lookup paths inside the card", () => {
   assert.match(stylesheetSource, /\.definition-popover\s*\{[\s\S]*min-width: 0;[\s\S]*max-width: 100%/);

@@ -107,6 +107,20 @@ export const legacySurfaceUrl = process.env.NEXT_PUBLIC_TEXTPLEX_LEGACY_URL ?? "
 const readerLastPositionStoragePrefix = "textplex.reader-last-position:";
 const readerTokenAudioOnTapStorageKey = "textplex.readerTokenAudioOnTap";
 const readerSpeechVoiceGenderStorageKey = "textplex.readerSpeechVoiceGender";
+const readerLastBookStorageKey = "textplex:last-book-id";
+const readerLastPageStorageKey = "textplex:last-page-number";
+
+export const READER_NAV_CONTEXT_CLEARED_EVENT = "textplex:reader-context-cleared";
+
+export function clearStoredReaderNavigationContext(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(readerLastBookStorageKey);
+  window.localStorage.removeItem(readerLastPageStorageKey);
+  window.dispatchEvent(new Event(READER_NAV_CONTEXT_CLEARED_EVENT));
+}
 
 export type ReaderSpeechVoiceGender = "female" | "male";
 

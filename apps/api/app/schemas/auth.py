@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class AuthMeResponse(BaseModel):
     id: str
     email: str | None = None
     role: str = "authenticated"
+    account_role: Literal["member", "qa", "admin"] = "member"
+    permissions: list[str] = Field(default_factory=list)
     display_name: str | None = None
 
 

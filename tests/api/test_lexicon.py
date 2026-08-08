@@ -4,7 +4,10 @@ from contextlib import closing
 from pathlib import Path
 
 from app.services import google_translate
-from app.services.google_translate_usage import get_google_translate_usage_summary
+from app.services.google_translate_usage import (
+    get_google_translate_usage_summary,
+    record_google_translate_usage,
+)
 from app.services.lexicon import (
     import_lexicon_from_source,
     lookup_lexicon_entry,
@@ -474,3 +477,19 @@ def test_lookup_lexicon_entry_uses_google_translation_fallback_and_cache(tmp_pat
     assert usage_summary.request_count == 2
     assert usage_summary.character_count == len("가짜단어") * 2
     assert usage_summary.free_remaining_characters == usage_summary.free_tier_limit - len("가짜단어") * 2
+
+
+def test_google_translate_usage_is_account_scoped_without_losing_service_total(tmp_path: Path) -> None:
+    data_root = tmp_path / "data"
+    record_google_translate_usage(data_root=data_root, characters=10, owner_id="user-a")
+    record_google_translate_usage(data_root=data_root, characters=4, owner_id="user-b")
+
+    first = get_google_translate_usage_summary(data_root, owner_id="user-a")
+    second = get_google_translate_usage_summary(data_root, owner_id="user-b")
+    service = get_google_translate_usage_summary(data_root)
+
+    assert first.scope == "account"
+    assert first.character_count == 10
+    assert second.character_count == 4
+    assert service.scope == "service"
+    assert service.character_count == 14

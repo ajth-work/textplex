@@ -114,6 +114,8 @@ export interface AuthMeResponse {
   id: string;
   email: string | null;
   role: string;
+  account_role: "member" | "qa" | "admin";
+  permissions: string[];
   display_name: string | null;
 }
 
@@ -534,6 +536,7 @@ export interface LexiconLookupResponse {
 }
 
 export interface GoogleTranslateUsageSummary {
+  scope: "account" | "service";
   month_key: string;
   request_count: number;
   character_count: number;

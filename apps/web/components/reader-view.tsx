@@ -10,6 +10,7 @@ import {
   fetchJson,
   formatElapsed,
   postJson,
+  clearStoredReaderNavigationContext,
   rememberReaderPosition,
   persistReaderTokenAudioOnTap,
   readStoredReaderTokenAudioOnTap,
@@ -118,6 +119,7 @@ const readerPageBookmarksStorageKey = "textplex.readerPageBookmarks";
 const readerSentenceBookmarksStorageKey = "textplex.readerSentenceBookmarks";
 const readerGoogleTranslateFallbackStorageKey = "textplex.readerGoogleTranslateFallback";
 const readerMeaningLineEnabledStorageKey = "textplex.readerMeaningLineEnabled";
+const readerMeaningLineRevealAllStorageKey = "textplex.readerMeaningLineRevealAll";
 const readerDefinitionTraceEnabledStorageKey = "textplex.readerDefinitionTraceEnabled";
 const readerSessionGlossedCountStorageKey = (bookId: string) => `textplex.readerSessionGlossedCount:${bookId}`;
 const readerSessionSummaryLayoutStorageKey = (bookId: string) => `textplex.readerSessionSummaryLayout:${bookId}`;
@@ -1312,6 +1314,31 @@ function countTranslationRevealableWords(tokens: TranslationAlignmentToken[]): n
   return tokens.filter((token) => token.token_kind === "word").length;
 }
 
+function addTranslationTokenSpacing(tokens: TranslationAlignmentToken[]): TranslationAlignmentToken[] {
+  const spacedTokens: TranslationAlignmentToken[] = [];
+  let previousToken: TranslationAlignmentToken | null = null;
+
+  tokens.forEach((token, index) => {
+    if (
+      previousToken &&
+      previousToken.token_kind !== "space" &&
+      token.token_kind !== "space" &&
+      token.token_kind !== "punctuation"
+    ) {
+      spacedTokens.push({
+        token_id: -(index + 1),
+        text: " ",
+        token_kind: "space",
+      });
+    }
+
+    spacedTokens.push(token);
+    previousToken = token;
+  });
+
+  return spacedTokens;
+}
+
 const hskLevelColors = ["#006b35", "#1f9d45", "#a7ad12", "#e28a09", "#d84b2a", "#9f1836"];
 
 function parseHskLevel(value: string | number | null | undefined): number | null {
@@ -1406,6 +1433,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [readerTextSize, setReaderTextSize] = useState<ReaderTextSizeMode>("medium");
   const [readerGoogleTranslateFallback, setReaderGoogleTranslateFallback] = useState(false);
   const [readerMeaningLineEnabled, setReaderMeaningLineEnabled] = useState(true);
+  const [readerMeaningLineRevealAll, setReaderMeaningLineRevealAll] = useState(false);
   const [readerDefinitionTraceEnabled, setReaderDefinitionTraceEnabled] = useState(false);
   const [readerPronunciationFreshOnly, setReaderPronunciationFreshOnly] = useState(false);
   const [readerSrsColoring, setReaderSrsColoring] = useState(false);
@@ -1415,6 +1443,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [showSentenceTranslation, setShowSentenceTranslation] = useState(false);
   const [showSourceSentence, setShowSourceSentence] = useState(false);
   const [sentenceRevealSourceTokenOrders, setSentenceRevealSourceTokenOrders] = useState<number[]>([]);
+  const [sentenceRevealAll, setSentenceRevealAll] = useState(false);
   const [sentenceTranslationLoading, setSentenceTranslationLoading] = useState(false);
   const [sentenceTranslationResolutionSource, setSentenceTranslationResolutionSource] = useState<string | null>(null);
   const [sentenceAudioPlaying, setSentenceAudioPlaying] = useState(false);
@@ -1466,6 +1495,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const bookmarkToastTimerRef = useRef<number | null>(null);
   const sentenceTouchStartRef = useRef<{ x: number; y: number } | null>(null);
   const customVocabularyMenuRef = useRef<HTMLDivElement | null>(null);
+  const sessionSummaryRailRef = useRef<HTMLDivElement | null>(null);
+  const progressCarouselRef = useRef<HTMLDivElement | null>(null);
 
   const markReaderInteraction = useCallback(() => {
     lastReaderInteractionAtRef.current = Date.now();
@@ -1483,6 +1514,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     setReaderTextSize(resolveReaderTextSize(window.localStorage.getItem(readerTextSizeStorageKey)));
     setReaderGoogleTranslateFallback(window.localStorage.getItem(readerGoogleTranslateFallbackStorageKey) === "true");
     setReaderMeaningLineEnabled(window.localStorage.getItem(readerMeaningLineEnabledStorageKey) !== "false");
+    setReaderMeaningLineRevealAll(window.localStorage.getItem(readerMeaningLineRevealAllStorageKey) === "true");
     setReaderDefinitionTraceEnabled(window.localStorage.getItem(readerDefinitionTraceEnabledStorageKey) === "true");
     setReaderPronunciationFreshOnly(window.localStorage.getItem(readerPronunciationFreshOnlyStorageKey) === "true");
     setReaderSrsColoring(window.localStorage.getItem(readerSrsColoringStorageKey) === "true");
@@ -1685,6 +1717,12 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     };
   }, [bookId, pageNumber, refreshNonce]);
 
+  useEffect(() => {
+    if (error && /\(404\)/.test(error)) {
+      clearStoredReaderNavigationContext();
+    }
+  }, [error]);
+
   const averageSessionSeconds = profileSummary?.average_seconds_per_session ?? null;
 
   useEffect(() => {
@@ -1738,6 +1776,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     }
     window.localStorage.setItem(readerMeaningLineEnabledStorageKey, String(readerMeaningLineEnabled));
   }, [readerMeaningLineEnabled]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(readerMeaningLineRevealAllStorageKey, String(readerMeaningLineRevealAll));
+  }, [readerMeaningLineRevealAll]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -2205,11 +2250,26 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     };
   }, [currentPageSentenceList, pageNumber, selectedSentenceIndex, summary]);
   const sentenceTranslationTokens = useMemo(
-    () => (activeSentenceTranslationAlignment?.target_tokens.length ? activeSentenceTranslationAlignment.target_tokens : buildTranslationTokens(activeSentenceTranslationText)),
+    () => addTranslationTokenSpacing(
+      activeSentenceTranslationAlignment?.target_tokens.length
+        ? activeSentenceTranslationAlignment.target_tokens
+        : buildTranslationTokens(activeSentenceTranslationText),
+    ),
     [activeSentenceTranslationAlignment, activeSentenceTranslationText],
   );
+  const sentenceRevealWordSlots = useMemo(
+    () => sentenceTranslationTokens.filter((token) => token.token_kind === "word").map((token) => token.token_id),
+    [sentenceTranslationTokens],
+  );
+  const sentenceRevealWordSlotIds = useMemo(() => new Set(sentenceRevealWordSlots), [sentenceRevealWordSlots]);
+  const sentenceRevealAllActive = readerMeaningLineRevealAll || sentenceRevealAll;
   const sentenceTranslationRevealTokenIds = useMemo(() => {
     const revealedTokenIds = new Set<number>();
+    if (sentenceRevealAllActive) {
+      sentenceRevealWordSlots.forEach((tokenId) => revealedTokenIds.add(tokenId));
+      return revealedTokenIds;
+    }
+
     const alignedSegments = activeSentenceTranslationAlignment?.segments ?? [];
     const hasAlignment = Boolean(activeSentenceTranslationAlignment?.target_tokens.length && alignedSegments.length);
 
@@ -2224,13 +2284,14 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       }
 
       const revealSlot = sentenceRevealSlotByTokenOrder.get(sourceTokenOrder);
-      if (revealSlot !== undefined) {
-        revealedTokenIds.add(revealSlot);
+      const revealTokenId = revealSlot !== undefined ? sentenceRevealWordSlots[revealSlot - 1] : undefined;
+      if (revealTokenId !== undefined && sentenceRevealWordSlotIds.has(revealTokenId)) {
+        revealedTokenIds.add(revealTokenId);
       }
     });
 
     return revealedTokenIds;
-  }, [activeSentenceTranslationAlignment, sentenceRevealSlotByTokenOrder, sentenceRevealSourceTokenOrders]);
+  }, [activeSentenceTranslationAlignment, sentenceRevealAllActive, sentenceRevealSlotByTokenOrder, sentenceRevealSourceTokenOrders, sentenceRevealWordSlotIds, sentenceRevealWordSlots]);
   const sentenceTranslationRevealableWordCount = countTranslationRevealableWords(sentenceTranslationTokens);
   const sentenceRevealVisibleWordCount = sentenceTranslationTokens.filter(
     (token) => token.token_kind === "word" && sentenceTranslationRevealTokenIds.has(token.token_id),
@@ -2264,6 +2325,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     return countReadableTokenMetrics(summary.pages.flatMap((bookPage) => bookPage.sentences));
   }, [summary]);
   const pageProgressPercent = totalPages && totalPages > 0 ? Math.min(100, Math.round((pageNumber / totalPages) * 100)) : null;
+  const isSinglePageText = totalPages === 1;
   const currentPageSentenceProgressPercent =
     currentPageSentenceCount > 0 && currentPageSentencePosition > 0
       ? Math.min(100, Math.round((currentPageSentencePosition / currentPageSentenceCount) * 100))
@@ -2273,40 +2335,56 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       ? Math.min(100, Math.round((currentOverallSentencePosition / totalBookSentenceCount) * 100))
       : null;
   const progressStripItems = useMemo(
-    () => [
-      {
-        label: "Page progress",
-        value: totalPages && totalPages > 0 ? `P${pageNumber}/${totalPages}` : `P${pageNumber}`,
-        progress: pageProgressPercent,
-        detail: pageProgressPercent != null ? `${pageProgressPercent}% of the book` : "Book progress is loading",
-      },
-      {
-        label: "Page sentence progress",
+    () => {
+      const sentenceProgressItem = {
+        label: "Sentence progress",
         value: currentPageSentenceCount > 0 ? `S${currentPageSentencePosition}/${currentPageSentenceCount}` : "No sentences",
         progress: currentPageSentenceProgressPercent,
         detail:
           currentPageSentenceProgressPercent != null
-            ? `${currentPageSentenceProgressPercent}% of this page`
+            ? `${currentPageSentenceProgressPercent}% of this text`
             : "Sentence progress becomes available after extraction",
-      },
-      {
-        label: "Overall sentence progress",
-        value:
-          totalBookSentenceCount > 0 && currentOverallSentencePosition > 0
-            ? `S${currentOverallSentencePosition}/${totalBookSentenceCount}`
-            : "No sentence data",
-        progress: overallSentenceProgressPercent,
-        detail:
-          overallSentenceProgressPercent != null
-            ? `${overallSentenceProgressPercent}% of the imported text`
-            : "Whole-book sentence progress becomes available after extraction",
-      },
-    ],
+      };
+
+      if (isSinglePageText) {
+        return [sentenceProgressItem];
+      }
+
+      return [
+        {
+          label: "Page progress",
+          value: totalPages && totalPages > 0 ? `P${pageNumber}/${totalPages}` : `P${pageNumber}`,
+          progress: pageProgressPercent,
+          detail: pageProgressPercent != null ? `${pageProgressPercent}% of the book` : "Book progress is loading",
+        },
+        {
+          ...sentenceProgressItem,
+          label: "Page sentence progress",
+          detail:
+            currentPageSentenceProgressPercent != null
+              ? `${currentPageSentenceProgressPercent}% of this page`
+              : "Sentence progress becomes available after extraction",
+        },
+        {
+          label: "Overall sentence progress",
+          value:
+            totalBookSentenceCount > 0 && currentOverallSentencePosition > 0
+              ? `S${currentOverallSentencePosition}/${totalBookSentenceCount}`
+              : "No sentence data",
+          progress: overallSentenceProgressPercent,
+          detail:
+            overallSentenceProgressPercent != null
+              ? `${overallSentenceProgressPercent}% of the imported text`
+              : "Whole-book sentence progress becomes available after extraction",
+        },
+      ];
+    },
     [
       currentOverallSentencePosition,
       currentPageSentenceCount,
       currentPageSentencePosition,
       currentPageSentenceProgressPercent,
+      isSinglePageText,
       overallSentenceProgressPercent,
       pageNumber,
       pageProgressPercent,
@@ -2375,6 +2453,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     setShowSentenceTranslation(false);
     setShowSourceSentence(false);
     setSentenceRevealSourceTokenOrders([]);
+    setSentenceRevealAll(false);
     setSentenceTranslationResolutionSource(null);
     setSentenceTranslationLoading(false);
     setTokenPronunciationOverrides({});
@@ -2523,15 +2602,15 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const sessionSummaryItems = useMemo(
     () => [
       { id: "current-session", label: "Current session", value: formatElapsed(activeSeconds) },
-      { id: "average-session", label: "Avg session", value: formatEstimatedDuration(averageSessionLengthSeconds) },
+      { id: "average-session", label: "Avg session", value: formatReaderEstimatedDuration(averageSessionLengthSeconds) },
       { id: "new-glossed", label: "New glossed", value: String(readerSessionGlossedCount) },
       { id: "page-glossed", label: "Page glossed", value: `${currentPageGlossedCount} terms` },
       { id: "page-unglossed", label: "Page unglossed", value: pageUnglossedPercent == null ? "..." : `${pageUnglossedPercent}%` },
-      { id: "page-eta", label: "Page ETA", value: formatEstimatedDuration(pageEtaSeconds) },
+      { id: "page-eta", label: "Page ETA", value: formatReaderEstimatedDuration(pageEtaSeconds) },
       { id: "book-glossed", label: "Book glossed", value: String(bookGlossedCount) },
       { id: "language-glossed", label: "Language glossed", value: String(languageGlossedCount) },
       { id: "lifetime-glossed", label: "Lifetime glossed", value: String(lifetimeGlossedCount) },
-      { id: "book-eta", label: "Book ETA", value: formatEstimatedDuration(bookEtaSeconds) },
+      { id: "book-eta", label: "Book ETA", value: formatReaderEstimatedDuration(bookEtaSeconds) },
       { id: "book-time", label: "Book time", value: bookProgressLoading ? "..." : formatElapsed(bookProgressSummary?.active_seconds ?? 0) },
       {
         id: "resume-point",
@@ -2579,6 +2658,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     [sessionSummaryHiddenItemIdSet, sessionSummaryItems],
   );
   const readerProgressPercent = bookProgressLoading ? null : bookProgressSummary?.progress_percent ?? null;
+  useReaderCarouselInteractions(sessionSummaryRailRef);
+  useReaderCarouselInteractions(progressCarouselRef, readerProgressPercent != null);
   const canMoveToPreviousSentence = selectedSentenceIndex > 0;
 
   function handleToggleSessionSummaryEditing() {
@@ -3211,6 +3292,17 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     void saveSelectedTokenToStudyList(token, activeSentence);
   }
 
+  async function handleRevealAllMeaningLine(): Promise<void> {
+    if (!sentenceTranslationRevealReady) {
+      const loaded = await loadActiveSentenceTranslation();
+      if (!loaded) {
+        return;
+      }
+    }
+
+    setSentenceRevealAll(true);
+  }
+
   function handleBack() {
     if (window.history.length > 1) {
       router.back();
@@ -3254,7 +3346,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     focusSentence(selectedSentenceIndex + (deltaX < 0 ? 1 : -1));
   }
 
-  const readerTitle = pageData?.book.title ?? (loading ? null : "Reader unavailable");
+  const missingReader = Boolean(error && /\(404\)/.test(error));
+  const readerTitle = pageData?.book.title ?? (loading ? null : missingReader ? "Start a reading session" : "Reader unavailable");
   const readerTitleScale = resolveReaderTitleScale(readerTitle);
 
   return (
@@ -3285,7 +3378,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             {readerTitle ?? <span className="skeleton-line skeleton-line-title" aria-hidden="true" />}
           </h1>
           <p className="muted">
-            {loading ? <span className="skeleton-line skeleton-line-short" aria-hidden="true" /> : pageData?.book.author ?? "Unknown author"}
+            {loading ? <span className="skeleton-line skeleton-line-short" aria-hidden="true" /> : pageData?.book.author ?? (missingReader ? "No book is currently available" : "Unknown author")}
           </p>
           {isDemoMode ? <p className="small-copy reader-topbar-note">Demo mode is active. This reader is running from packaged sample data.</p> : null}
         </div>
@@ -3503,6 +3596,22 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     {readerMeaningLineEnabled ? "On" : "Off"}
                   </button>
                 </div>
+                <div className="reader-options-toggle-row" data-inventory-id="reader.meaning-line-reveal-all-section">
+                  <div>
+                    <strong>Reveal all meaning-line words</strong>
+                    <p className="small-copy">Show the full translation immediately, including words that are not mapped to a tapped source token.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`button button-secondary button-compact ${readerMeaningLineRevealAll ? "is-active" : ""}`}
+                    onClick={() => setReaderMeaningLineRevealAll((value) => !value)}
+                    aria-pressed={readerMeaningLineRevealAll}
+                    aria-label={readerMeaningLineRevealAll ? "Hide automatic meaning-line reveal" : "Reveal all meaning-line words automatically"}
+                    data-inventory-id="reader.meaning-line-reveal-all-toggle"
+                  >
+                    {readerMeaningLineRevealAll ? "On" : "Off"}
+                  </button>
+                </div>
                 <div className="reader-options-toggle-row" data-inventory-id="reader.definition-trace-section">
                   <div>
                     <strong>Definition trace</strong>
@@ -3591,7 +3700,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                 <div className="reader-google-translate-usage-head">
                   <div>
                     <span className="eyebrow">Usage so far</span>
-                    <h4>Current month</h4>
+                    <h4>{googleTranslateUsage?.scope === "service" ? "Service usage" : "This account"}</h4>
                   </div>
                   <span className="pill">Basic NMT</span>
                 </div>
@@ -3599,17 +3708,17 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   <div className="reader-usage-metric">
                     <span className="eyebrow">Characters</span>
                     <strong>{googleTranslateUsageLoading ? "..." : googleTranslateUsage?.character_count.toLocaleString() ?? "0"}</strong>
-                    <span className="small-copy">sent to Google this month</span>
+                    <span className="small-copy">sent to Google by this account this month</span>
                   </div>
                   <div className="reader-usage-metric">
                     <span className="eyebrow">Free left</span>
                     <strong>{googleTranslateUsageLoading ? "..." : googleTranslateUsage?.free_remaining_characters.toLocaleString() ?? "0"}</strong>
-                    <span className="small-copy">before billing starts</span>
+                    <span className="small-copy">remaining account allowance</span>
                   </div>
                   <div className="reader-usage-metric">
                     <span className="eyebrow">Requests</span>
                     <strong>{googleTranslateUsageLoading ? "..." : googleTranslateUsage?.request_count.toLocaleString() ?? "0"}</strong>
-                    <span className="small-copy">fallback lookups that reached Google</span>
+                    <span className="small-copy">fallback requests from this account</span>
                   </div>
                   <div className="reader-usage-metric">
                     <span className="eyebrow">Estimated cost</span>
@@ -3624,7 +3733,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   </div>
                 </div>
                 <p className="small-copy">
-                  Cached dictionary hits do not add to this total. Only lookups that actually reached Google are counted here.
+                  Cached dictionary hits do not add to this total. Only lookups that actually reached Google are counted for this account.
                 </p>
               </div>
             </section>
@@ -3777,7 +3886,24 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       ) : null}
 
       {loading ? <ReaderLoadingSkeleton /> : null}
-      {error ? (
+      {missingReader ? (
+        <article className="card empty-state reader-unavailable-card" data-inventory-id="reader.unavailable-state">
+          <h2>No book is ready to read</h2>
+          <p>Your library does not have a readable book at this address. Add a text or create a practice article to start reading.</p>
+          <div className="button-row">
+            <Link className="button button-primary" href="/library">
+              Open library
+            </Link>
+            <Link className="button button-secondary" href="/import">
+              Import a text
+            </Link>
+            <Link className="button button-secondary" href="/library#practice-article">
+              Generate practice text
+            </Link>
+          </div>
+        </article>
+      ) : null}
+      {error && !missingReader ? (
         <div className="card error-card" role="alert">
           <h2>Reader unavailable</h2>
           <p>{error}</p>
@@ -3878,7 +4004,16 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                 </div>
                 <div className="reader-session-stats" aria-label="Current session stats">
                   <div className="session-pill reader-session-pill reader-session-pill-carousel" data-inventory-id="reader.session-summary-toggle">
-                    <div className="reader-session-pill-rail" aria-roledescription="carousel" aria-label="Session summary carousel" id="reader-session-details" data-inventory-id="reader.session-summary-details">
+                    <div
+                      className="reader-session-pill-rail"
+                      aria-roledescription="carousel"
+                      aria-label="Session summary carousel"
+                      aria-describedby="reader-session-carousel-hint"
+                      id="reader-session-details"
+                      data-inventory-id="reader.session-summary-details"
+                      ref={sessionSummaryRailRef}
+                      tabIndex={0}
+                    >
                       <span className="reader-session-pill-lead">
                         <strong>{sessionLabel}</strong>
                       </span>
@@ -3964,6 +4099,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                         )}
                       </button>
                     </div>
+                    <span id="reader-session-carousel-hint" className="reader-carousel-hint" role="note">
+                      Drag or scroll to explore
+                    </span>
                   </div>
                 </div>
                 {readerProgressPercent != null ? (
@@ -3974,6 +4112,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       data-inventory-id="reader.reading-progress-details"
                       aria-roledescription="carousel"
                       aria-label="Reading progress carousel"
+                      aria-describedby="reader-progress-carousel-hint"
+                      ref={progressCarouselRef}
+                      tabIndex={0}
                     >
                       {progressStripItems.map((item) => (
                         <article key={item.label} className="reader-progress-card">
@@ -3995,6 +4136,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                         </article>
                       ))}
                     </div>
+                    <span id="reader-progress-carousel-hint" className="reader-carousel-hint" role="note">
+                      Drag or scroll to explore
+                    </span>
                   </div>
                 ) : null}
               </div>
@@ -4185,11 +4329,25 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                               {sentenceRevealVisibleWordCount}/{sentenceTranslationRevealableWordCount} words
                             </span>
                           ) : null}
+                          {sentenceTranslationRevealReady && sentenceTranslationRevealableWordCount > 0 && sentenceRevealVisibleWordCount < sentenceTranslationRevealableWordCount ? (
+                            <button
+                              type="button"
+                              className="button button-secondary button-compact reader-translation-reveal-all"
+                              onClick={() => void handleRevealAllMeaningLine()}
+                              aria-label="Reveal all meaning-line words"
+                              data-inventory-id="reader.meaning-line-reveal-all-action"
+                            >
+                              Reveal all
+                            </button>
+                          ) : null}
                           {sentenceRevealSourceTokenOrders.length > 0 ? (
                             <button
                               type="button"
                               className="button button-secondary button-compact reader-translation-reveal-reset"
-                              onClick={() => setSentenceRevealSourceTokenOrders([])}
+                              onClick={() => {
+                                setSentenceRevealSourceTokenOrders([]);
+                                setSentenceRevealAll(false);
+                              }}
                             >
                               Reset
                             </button>
@@ -4649,6 +4807,131 @@ function formatEstimatedDuration(seconds: number | null): string {
   }
 
   return `~${formatElapsed(Math.max(1, Math.round(seconds)))}`;
+}
+
+function formatReaderEstimatedDuration(seconds: number | null): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) {
+    return "\u2014";
+  }
+
+  return `~${formatElapsed(Math.max(1, Math.round(seconds)))}`;
+}
+
+function useReaderCarouselInteractions(carouselRef: { current: HTMLDivElement | null }, enabled = true): void {
+  const dragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startScrollLeft: number;
+    dragged: boolean;
+  } | null>(null);
+  const suppressClickRef = useRef(false);
+
+  useEffect(() => {
+    const element = carouselRef.current;
+    if (!enabled || !element) {
+      return;
+    }
+
+    const handleWheel = (event: WheelEvent) => {
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || element.scrollWidth <= element.clientWidth) {
+        return;
+      }
+
+      event.preventDefault();
+      element.scrollLeft += event.deltaY;
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse" || event.button !== 0 || element.scrollWidth <= element.clientWidth) {
+        return;
+      }
+
+      dragStateRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startScrollLeft: element.scrollLeft,
+        dragged: false,
+      };
+      element.setPointerCapture(event.pointerId);
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const dragState = dragStateRef.current;
+      if (!dragState || dragState.pointerId !== event.pointerId) {
+        return;
+      }
+
+      const deltaX = event.clientX - dragState.startX;
+      if (!dragState.dragged && Math.abs(deltaX) < 4) {
+        return;
+      }
+
+      dragState.dragged = true;
+      suppressClickRef.current = true;
+      element.classList.add("is-dragging");
+      event.preventDefault();
+      element.scrollLeft = dragState.startScrollLeft - deltaX;
+    };
+
+    const releasePointer = (event: PointerEvent) => {
+      const dragState = dragStateRef.current;
+      if (!dragState || dragState.pointerId !== event.pointerId) {
+        return;
+      }
+
+      dragStateRef.current = null;
+      element.classList.remove("is-dragging");
+      if (element.hasPointerCapture(event.pointerId)) {
+        element.releasePointerCapture(event.pointerId);
+      }
+      if (event.type === "pointercancel") {
+        suppressClickRef.current = false;
+      } else if (suppressClickRef.current) {
+        window.setTimeout(() => {
+          suppressClickRef.current = false;
+        }, 0);
+      }
+    };
+
+    const handleClick = (event: MouseEvent) => {
+      if (!suppressClickRef.current) {
+        return;
+      }
+
+      suppressClickRef.current = false;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+        return;
+      }
+
+      event.preventDefault();
+      element.scrollBy({ left: event.key === "ArrowRight" ? 96 : -96, behavior: "smooth" });
+    };
+
+    element.addEventListener("wheel", handleWheel, { passive: false });
+    element.addEventListener("pointerdown", handlePointerDown);
+    element.addEventListener("pointermove", handlePointerMove);
+    element.addEventListener("pointerup", releasePointer);
+    element.addEventListener("pointercancel", releasePointer);
+    element.addEventListener("click", handleClick, true);
+    element.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      element.removeEventListener("wheel", handleWheel);
+      element.removeEventListener("pointerdown", handlePointerDown);
+      element.removeEventListener("pointermove", handlePointerMove);
+      element.removeEventListener("pointerup", releasePointer);
+      element.removeEventListener("pointercancel", releasePointer);
+      element.removeEventListener("click", handleClick, true);
+      element.removeEventListener("keydown", handleKeyDown);
+      element.classList.remove("is-dragging");
+      dragStateRef.current = null;
+    };
+  }, [carouselRef, enabled]);
 }
 
 function formatLevelTag(value: string | number | null | undefined): string {

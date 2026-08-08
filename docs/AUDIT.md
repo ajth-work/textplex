@@ -105,6 +105,11 @@ Phase 5 implementation evidence is green for its stated scope. The migration is 
 - Unauthenticated live `/learning/sync` returned `401` as required.
 - Remaining Phase 6 scope is explicit: client retry/conflict UX, private book/page ownership, and hosted commerce fulfillment. No external Supabase or payment-provider environment was used for this local verification.
 
+## 2026-08-08 Authenticated library isolation correction
+
+- Corrected the authenticated book visibility boundary so accounts see only records whose `owner_id` matches the authenticated user. Unowned legacy records remain available only in unauthenticated local mode, preventing new accounts from inheriting another account's library.
+- Verification passed: focused Phase 6 boundary tests `5 passed`, repository-wide API/processor suite `114 passed, 2 skipped`, Ruff, 34 site tests, web lint, production web build, and `git diff --check`.
+
 ## 2026-07-22 Phase 6 exit verification
 
 - Added account ownership to imported books, filtered registry listings, and guarded book, page, image, extraction, analysis, archive, restore, delete, and learning-event routes. Legacy seed records without an owner remain public by design.

@@ -28,8 +28,15 @@ TextPlex may send limited data to third-party services when those features are u
 - Supabase for sign-in, hosted account storage, and authenticated sync
 - OpenAI for OCR, translation alignment, and generated reader articles
 - Google Cloud Translate for translation and romanization fallback
+- Cloudflare for DNS, traffic proxying, CDN, and security features
+- GoDaddy for domain registration and domain-account services
+- GitHub, GitHub Pages, and GitHub Actions for source hosting, deployment, and the public static demo
 
-See [the third-party data-flow note](./THIRD_PARTY_DATA_NOTE.md) for the current provider list and the kinds of data each provider receives.
+Cloudflare, GoDaddy, and GitHub generally process infrastructure, account, visitor,
+or deployment information rather than book or learner content. The exact data they
+receive depends on the production DNS, proxy, hosting, and deployment configuration.
+
+See [the third-party data-flow note](./THIRD_PARTY_DATA_NOTE.md) for the provider list, data categories, and configuration checks.
 
 ## Cookies and local storage
 

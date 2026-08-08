@@ -35,29 +35,29 @@ const featureCards = [
 
 const pricingTiers = [
   {
-    name: "Free",
+    name: "Open Book",
     price: "$0",
     cadence: "per month",
-    description: "Core reader, import flow, library, and baseline progress with the default look.",
-    features: ["Reader and library access", "Import and analysis", "Default theme included"],
+    description: "The essential reading loop for getting started with TextPlex.",
+    features: ["Reader and library access", "Import and exposure tracking", "Definitions and limited translation"],
     featured: false,
     tone: "amber",
   },
   {
-    name: "Reader",
+    name: "Deep Read",
     price: "$4.99",
     cadence: "per month",
-    description: "Support the app while keeping the core experience light.",
-      features: ["Everything in Free", "Saved progress history", "Theme settings access"],
+    description: "More room for regular study, explanations, and guided practice.",
+    features: ["Everything in Open Book", "Higher translation and AI allowances", "Saved progress and review tools"],
     featured: true,
     tone: "sage",
   },
   {
-    name: "Studio",
+    name: "Immersion Studio",
     price: "$9.99",
     cadence: "per month",
-    description: "The highest support tier for frequent readers.",
-    features: ["Everything in Reader", "Early access to new surfaces", "Best for heavier study"],
+    description: "Creative practice for learners who want custom material to read.",
+    features: ["Everything in Deep Read", "Custom 30-sentence narratives", "Highest fair-use allowance and priority processing"],
     featured: false,
     tone: "sky",
   },
@@ -65,10 +65,10 @@ const pricingTiers = [
 
 function getPricingTierActionLabel(tierName: string, authenticated: boolean, featured: boolean): string {
   if (authenticated) {
-    return tierName === "Free" ? "Included in account" : "Open Home";
+    return tierName === "Open Book" ? "Included in account" : "Open Home";
   }
 
-  return featured ? "Choose Reader" : tierName === "Free" ? "Start free" : "Choose Studio";
+  return featured ? "Join the beta" : tierName === "Open Book" ? "Start free" : "Join the beta";
 }
 
 const themePacks = [
@@ -110,9 +110,9 @@ const supportPanels = [
   {
     id: "subscription",
     label: "Subscription",
-    eyebrow: "Membership",
-    title: "Choose a plan that supports your reading",
-    description: "A subscription keeps the core reading workspace, saved progress, and account tools ready whenever you open TextPlex.",
+    eyebrow: "Reading plans",
+    title: "Read for free. Practice deeply. Create your own immersion.",
+    description: "Start with Open Book for the essential reading loop. During beta, everyone can explore the product while higher plans are shaped around real usage and add more room for translation and AI practice.",
     tone: "amber",
   },
   {
@@ -406,13 +406,20 @@ export function LandingPage() {
     }
   }, [authenticated, router]);
 
+  useEffect(() => {
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    if (hashParams.get("error_code") === "otp_expired") {
+      router.replace(`/auth/reset-password?error=otp_expired&returnTo=${encodeURIComponent(homePath)}`);
+    }
+  }, [router]);
+
   const landingHeroEyebrow = authenticated ? "Account overview" : "What is TextPlex?";
   const landingHeroTitle = authenticated
     ? "Welcome back. Pick up where you left off."
-    : "Read languages. Remember words.";
+    : "Read for free. Practice deeply. Create your own immersion.";
   const landingHeroLead = authenticated
     ? "Your Home, profile, and library are ready when you are."
-    : "TextPlex makes reading and studying in your next language interactive, intuitive, and insightful.";
+    : "TextPlex helps you read real books, build vocabulary exposure, and add AI practice when you want more. Core reading stays useful even when a usage allowance needs a pause.";
   const landingBadgeLabels = authenticated ? ["Signed in", "Progress synced", "Library ready"] : [];
 
   return (

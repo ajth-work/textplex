@@ -4,9 +4,11 @@ import json
 from pathlib import Path
 
 from app.main import app
+from app.schemas.auth import AuthMeResponse
 from app.schemas.learning import ReadingSessionCreateRequest
 from app.schemas.migration import ProfileMigrationRequest
 from app.services import auth as auth_service
+from app.services.auth import AuthenticatedUserContext
 from app.services.learning_profile import (
     create_reading_session,
     get_learning_profile_summary,
@@ -16,6 +18,7 @@ from app.services.profile_migration import (
     apply_profile_migration,
     preview_profile_migration,
 )
+from app.services.themes import get_theme_catalog
 from fastapi.testclient import TestClient
 from typing_extensions import Self
 
@@ -137,6 +140,24 @@ def test_unconfigured_theme_catalog_is_server_defined(monkeypatch) -> None:
         "season-fall-harvest-night",
     ]
     assert bundles["fall-editions"]["price_cents"] == 899
+
+
+def test_qa_account_can_preview_all_themes(monkeypatch) -> None:
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_PUBLISHABLE_KEY", raising=False)
+    context = AuthenticatedUserContext(
+        user=AuthMeResponse(
+            id="qa-user",
+            email="qa@textplex.co",
+            account_role="qa",
+            permissions=["account.read", "themes.preview_all"],
+        ),
+        access_token="qa-token",
+    )
+
+    catalog = get_theme_catalog(context)
+
+    assert all(theme.is_owned for theme in catalog.themes)
 
 
 def test_hosted_settings_use_token_and_server_entitlements(monkeypatch) -> None:

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 
 class GoogleTranslateUsageSummary(BaseModel):
+    scope: Literal["account", "service"]
     month_key: str
     request_count: int
     character_count: int

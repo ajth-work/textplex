@@ -150,6 +150,7 @@ def get_theme_catalog(
 ) -> ThemeCatalogResponse:
     themes, bundles = _server_catalog()
     owned_ids = _owned_theme_ids(context, data_root=data_root)
+    can_preview_all = bool(context and "themes.preview_all" in context.user.permissions)
     catalog_items = [
         ThemeCatalogItem(
             id=str(theme["id"]),
@@ -157,7 +158,7 @@ def get_theme_catalog(
             description=str(theme["description"]),
             price_cents=int(theme.get("price_cents") or 0),
             is_free=bool(theme.get("is_free")),
-            is_owned=bool(theme.get("is_free")) or str(theme["id"]) in owned_ids,
+            is_owned=bool(theme.get("is_free")) or str(theme["id"]) in owned_ids or can_preview_all,
             preview_available=bool(theme.get("preview_available", True)),
         )
         for theme in themes

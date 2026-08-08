@@ -76,13 +76,15 @@ export default function AuthPage() {
 
     setSubmitting(true);
     try {
-      const redirectTo = `${window.location.origin}/auth/callback?returnTo=${encodeURIComponent(returnTo)}`;
       if (mode === "reset") {
+        const redirectTo = `${window.location.origin}/auth/reset-password?returnTo=${encodeURIComponent(returnTo)}`;
         const result = await client.auth.resetPasswordForEmail(email, { redirectTo });
         if (result.error) throw result.error;
         setMessage("Check your email for a password reset link.");
         return;
       }
+
+      const redirectTo = `${window.location.origin}/auth/callback?returnTo=${encodeURIComponent(returnTo)}`;
 
       if (mode === "sign-up") {
         const result = await client.auth.signUp({
@@ -120,6 +122,7 @@ export default function AuthPage() {
 
   const isReset = mode === "reset";
   const isSignUp = mode === "sign-up";
+  const authPublicReturnPrompt = isReset ? "Want to return to the start?" : isSignUp ? "Not ready to create an account?" : "Not ready to sign in?";
 
   return (
     <main className="auth-shell" data-inventory-id="auth.page">
@@ -161,6 +164,13 @@ export default function AuthPage() {
           {mode !== "sign-in" ? <button type="button" className="ghost-link" onClick={() => selectMode("sign-in")}>Sign in</button> : null}
           {mode !== "sign-up" ? <button type="button" className="ghost-link" onClick={() => selectMode("sign-up")}>Create account</button> : null}
           {mode !== "reset" ? <button type="button" className="ghost-link" onClick={() => selectMode("reset")}>Forgot password?</button> : null}
+        </div>
+
+        <div className="auth-public-return" data-inventory-id="auth.public-return">
+          <p className="small-copy">{authPublicReturnPrompt}</p>
+          <Link className="button button-secondary auth-public-return-link" href="/">
+            Explore TextPlex
+          </Link>
         </div>
 
         {isSignUp ? (

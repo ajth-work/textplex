@@ -2,8 +2,32 @@
 
 ## 2026-08-08
 
+- Fixed the reader's average-session placeholder mojibake and added desktop hover guidance, mouse-wheel scrolling, keyboard arrow scrolling, and pointer dragging for the session-summary and reading-progress carousels (`reader.session-summary-details`, `reader.reading-progress-details`).
+- Fixed reader meaning-line spacing when aligned translation tokens omit explicit whitespace, corrected positional fallback reveals to target word tokens, and added both a current-sentence `Reveal all` action and a persistent reader setting for full meaning-line reveal.
+- Updated the Reader progress carousel to show sentence progress for single-page articles instead of the redundant `P1/1` page-progress card, while preserving page progress for multi-page books.
+- Added `docs/MULTILINGUAL_SUPPORT_PLAN.md`, defining separate UI, explanation, target, and content languages along with a language registry, localization strategy, language-pair-aware educational output, and phased implementation plan.
+- Clarified the change-record workflow: focused Git commits and GitHub work items carry exact technical history, while this changelog remains a growing local journal of completed repository changes.
+- Added a guided reader recovery state for missing books, with direct links to the Library, text import, and practice-article generator, and cleared stale reader resume storage so the navbar Read action returns to the Library.
+- Added `docs/VERCEL_GITHUB_DEPLOYMENT_PLAN.md`, documenting the recommended private GitHub, GitHub Actions, Vercel, backend-release, maintenance-window, and rollback workflow for commercial TextPlex hosting.
+- Added a reader-only navigation focus behavior: the shared nav stays visible briefly when a reader page opens, then folds into a small theme-aware tab that restores the full navigation on demand.
+- Updated the public landing page plan language to introduce Open Book, Deep Read, and Immersion Studio, explain beta access and fair-use allowances, and position custom 30-sentence narratives as the premium creative-practice feature.
+- Kept the shared shell back button centered on hover and keyboard focus so it no longer shifts vertically.
+- Added `docs/PWA_AND_MOBILE_APP_PATH.md`, documenting the recommended progression from mobile-responsive web app to PWA to Capacitor-based iOS and Android apps, including offline reading, synchronization, CI builds, and store-update boundaries.
+- Added a public return path for signed-out visitors: the shared TextPlex brand now opens the public start page, and the auth card offers an “Explore TextPlex” option without calling the page a landing page.
+- Added trusted TextPlex member, QA, and admin account roles with QA theme-preview permissions, account-scoped Google Translation usage, and a protected service-usage endpoint; documented QA-account bootstrap steps.
+- Added `docs/STRIPE_INTEGRATION_PLAN.md` covering Stripe readiness, authenticated theme ownership, test-mode checkout, webhook fulfillment, and launch gates.
+- Documented the TextPlex Creator Marketplace concept for community-published written content, reader themes, and hosted language programs, including shared marketplace infrastructure, differentiated creator workflows, wallpaper-assisted theme authoring, translator participation, and a recommended theme-first MVP sequence.
+- Aligned the desktop reader viewport with the centered app frame used by the other authenticated pages.
+- Documented the production/preview API environment separation concept, including storage isolation, image promotion, maintenance cutover, and rollback requirements.
+- Added a Supabase recovery-session password reset page, routed new reset emails to it, and added expired-link guidance for recovery URLs that land with `otp_expired`.
+- Added the recovery account email to the password reset screen so learners can confirm which account they are updating.
+- Updated the reset confirmation to show the account name followed by its email address.
+- Expanded the third-party service documentation to include Cloudflare, GoDaddy, GitHub Pages, and GitHub Actions alongside the existing Supabase, OpenAI, and Google Cloud Translate data flows.
+- Fixed authenticated library scoping so new accounts no longer see legacy unowned documents from another account; added API coverage for authenticated and local-mode visibility.
 - Fixed the Python API and processor Ruff failures by cleaning up the generated article and translation alignment services, removing stale test lint noise, and revalidating the API test suite.
 - Resolved the remaining CI Ruff 0.16.2 merge-check failures by sorting API imports, tightening generated-article and translation-alignment error handling, and fixing the two affected API tests.
+- Fixed theme-shop wallpaper framing and preview loading so 9:16 thumbnails no longer reveal theme gradients and selected themes visibly promote to their full-resolution wallpaper.
+- Fixed theme-shop wallpaper thumbnails overlapping card copy by keeping each thumbnail in the swatch layout instead of using an absolute fill layer.
 
 ## 2026-08-07
 
@@ -234,3 +258,154 @@
 - Added a Laptop viewport audit record under `docs/viewport-audits/` with a clean pass across the core routes.
 - Fixed the API schema export list so Ruff no longer flags `ReadingHistoryPoint` as an unused import in CI.
 - Reordered Python imports across the API, processor, and test tree to satisfy Ruff in GitHub Actions.
+
+## Recovered Git History Before 2026-07-31
+
+The entries below were recovered from the repository's local Git history and earlier changelog snapshots. Current date-grouped entries above are preserved; this appendix restores the commit-level record that was no longer visible in the working changelog.
+
+### 2026-07-23
+
+- `2e55aa5` - Merge pull request #46 from ajth-work/codex-textplex-reader-preview-split
+- `3fe8b92` - Tighten smoke retries
+- `09b7ede` - Harden smoke route checks
+- `179dc2d` - Fix import test path portability
+- `e9a0aaa` - Replace copyrighted PDF fixture
+- `c83807c` - Add lexicon packs and test samples
+
+### 2026-07-22
+
+- `05dfe08` - Complete Phase 6 sync and sandbox commerce
+- `71ceae4` - Complete frontend migration phase 5
+- `ffaab1c` - Add Phase 5 hosted profile read path
+- `7a6c75d` - Close phase 4 and start phase 5
+
+### 2026-07-21
+
+- `078ad3e` - Advance frontend migration phase 4 exit
+- `e53d369` - Add canonical Next deployment boundary
+- `e1c308d` - Define frontend migration phase 4 boundary
+
+### 2026-07-20
+
+- `48dd3b2` - Ship reader preview and app updates
+
+### 2026-07-19
+
+- `37548ee` - Merge pull request #41 from ajth-work/codex-textplex-reader-preview-split
+- `bd43173` - Complete reader preview and audit hardening
+
+### 2026-07-17
+
+- `cab48c8` - Polish reader options and tracker
+
+### 2026-07-16
+
+- `be60b41` - Add language roadmap tracker
+- `62e2f32` - Add non-Romanized language docs
+- `3f6d050` - Expand changelog with full history
+- `e69b010` - Add changelog for recent commits
+- `ce87011` - Merge pull request #32 from ajth-work/codex-textplex-reader-preview-split
+- `f5676e7` - Update static site previews and tests
+- `7cabb4c` - Add reader profile and live surfaces
+- `9de3d6d` - Add processing pipeline contracts
+
+### 2026-07-15
+
+- `4be056d` - Merge pull request #30 from ajth-work/codex-reader-token-spacing
+- `7fd7f87` - Update TextPlex previews
+
+### 2026-07-14
+
+- `86de8a4` - Clarify OCR upload options
+- `a60ef39` - Tighten reader token layout
+- `cbe4ce2` - Add OCR provider toggle
+
+### 2026-07-13
+
+- `d0a339f` - Make reader token selection dynamic
+- `23c153d` - Use canonical site and API ports
+
+### 2026-07-12
+
+- `b34dc06` - Remove preview status bars
+- `fb7c4da` - Fix home preview search filtering
+- `958b169` - Make home preview interactive
+- `8097196` - Wire global navigation shell
+- `d791541` - Isolate mock route views
+- `bd17b77` - Add live product surface routes
+- `363f860` - Add route and contract regression coverage
+- `3d04174` - Add shared contracts and route scaffolding
+
+### 2026-07-11
+
+- `312179b` - Add activity preview page
+- `98fb3a6` - Add study preview page
+- `371ec46` - Add progress preview page
+- `7fd9382` - Add search preview page
+- `1417c39` - Add library detail preview page
+- `7d03315` - Add import preview page
+- `d54d146` - Add vocabulary preview page
+- `6cc05a5` - Add reader preview page
+- `4ff3818` - Add text analysis preview page
+- `8771b77` - Add mobile home preview page
+- `7b3a81c` - Add local sentence and exposure tracking
+- `0b5bc92` - Restore pinyin in token panels
+- `b82a821` - Expose pasted-text parse endpoint
+
+### 2026-07-10
+
+- `04ec7b9` - Auto-seed lexicon for pasted text pinyin
+- `72e3a21` - Add lexicon pinyin enrichment
+- `5f71fb0` - Add archive restore actions
+- `1e8774e` - Tighten library cards and archive flow
+- `36c8281` - Fix Chinese extraction and preview URLs
+- `7f91f9b` - Parse pasted text into local sentences
+- `648d0ff` - Add pasted text library entries
+- `ecefabb` - Give selected reader token more room
+- `e276fb1` - Relax reader token highlight shape
+- `16dbfef` - Attach pinyin to reader tokens
+- `6231fc2` - Fix token pinyin placement
+- `262f615` - Tighten reader definition layout
+- `88b01c6` - Polish reader spacing and sheet
+- `e8ab858` - Tighten reader mockup layout
+- `9773390` - Set up annotated reader view
+- `4f0491e` - Add options page and themes
+- `efb9690` - Simplify token empty state copy
+- `bfd2cbd` - Tighten reader and library control rows
+- `f4fb987` - Force nav onto one row
+- `6e37d1e` - Keep nav on one row
+- `ca65435` - Compact mobile controls
+- `92e6b68` - Compact token definition grid
+- `4ee56d1` - Tighten reader spacing on mobile
+- `c4db2fd` - Switch reader to sentence-by-sentence mode
+- `f8dab84` - Add close button to token definition card
+
+### 2026-07-09
+
+- `2b28b65` - Fix mobile overflow in Pages shell
+- `3b9abc7` - Tighten header badge alignment
+- `3985f27` - Tighten TextPlex header layout
+- `1846f65` - Wire vocabulary lookup into Pages shell
+- `7b9df41` - Trim Pages header to logo and mode badge
+- `f9fd69c` - Streamline Pages copy and spacing
+- `1f9391e` - Add nav-style multi-page Pages layout
+- `080314f` - Add static Pages shell for remote processing
+- `2a818e2` - Fix GitHub Pages SWC install
+- `76d21dd` - Add demo export and reader stability fixes
+
+### 2026-07-08
+
+- `6d4b605` - Add API dev launcher and local ignores
+- `54ccb54` - Add PDF upload for library imports
+- `e45fec3` - Add bundled Alice fixture support
+- `1dfe9e9` - Add TextPlex learning and reachability checks
+- `94e7e85` - Refine reader text mode
+- `d20af66` - Add remote-access API proxy
+- `033f0a6` - Add Docker preview stack
+- `1b99a38` - Add reader vertical slice
+- `7ec74a0` - Add page text extraction pipeline
+- `4bd053a` - Sample four pages after TOC
+- `9941304` - Split imported PDFs into page assets
+- `e7bd5c4` - Add PDF import registry and endpoint
+- `40d5917` - Complete issue #1 local dev baseline
+- `2399849` - Initial TextPlex scaffold

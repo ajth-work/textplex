@@ -85,6 +85,7 @@ from app.services.auth import (
     get_hosted_settings,
     get_optional_user_context,
     get_public_user_context,
+    require_permission,
     supabase_is_configured,
     update_hosted_profile,
     update_hosted_settings,
@@ -285,7 +286,7 @@ def _book_exists(
         book = registry[book_id]
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Book not found: {book_id}") from exc
-    if context and book.owner_id and book.owner_id != context.user.id:
+    if context is not None and book.owner_id != context.user.id:
         raise HTTPException(status_code=404, detail="Book not found.")
     return book
 
@@ -294,7 +295,8 @@ def _visible_books(context: AuthenticatedUserContext | None) -> list[BookRecord]
     return [
         book
         for book in _load_book_registry().values()
-        if book.owner_id is None or (context and book.owner_id == context.user.id)
+        if (context is None and book.owner_id is None)
+        or (context is not None and book.owner_id == context.user.id)
     ]
 
 
@@ -316,6 +318,7 @@ def _extract_and_persist_book(
         force=True,
         ocr_provider=book.ocr_provider,
         data_root=_books_root(),
+        owner_id=book.owner_id,
     )
     if translation_mode == "preload":
         preload_book_sentence_translations(
@@ -323,6 +326,7 @@ def _extract_and_persist_book(
             page_start=page_start,
             page_count=page_count if page_count is not None else extracted_page_count,
             data_root=_books_root(),
+            owner_id=book.owner_id,
         )
 
     book.extraction_status = "complete"
@@ -404,6 +408,7 @@ def _start_background_extraction(book: BookRecord, *, page_start: int, page_coun
                 force=True,
                 ocr_provider=book.ocr_provider,
                 data_root=_books_root(),
+                owner_id=book.owner_id,
                 progress_callback=progress_callback,
             )
             if translation_mode == "preload":
@@ -412,6 +417,7 @@ def _start_background_extraction(book: BookRecord, *, page_start: int, page_coun
                     page_start=page_start,
                     page_count=page_count if page_count is not None else extracted_page_count,
                     data_root=_books_root(),
+                    owner_id=book.owner_id,
                 )
         except (OSError, RuntimeError, TypeError, ValueError):
             _fail_book_extraction(book)
@@ -469,12 +475,16 @@ def readiness() -> JSONResponse:
 
 
 @app.post("/texts/parse", response_model=PageExtractionArtifact)
-def parse_text(payload: TextParseRequest) -> PageExtractionArtifact:
+def parse_text(
+    payload: TextParseRequest,
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
+) -> PageExtractionArtifact:
     return parse_text_into_page_artifact(
         text=payload.text,
         language_code=payload.language_code,
         title=payload.title,
         data_root=app.state.data_root,
+        owner_id=context.user.id if context else None,
     )
 
 
@@ -676,7 +686,7 @@ def get_book_page(
     except StopIteration as exc:
         raise HTTPException(status_code=404, detail=f"Page not found: {page_number}") from exc
 
-    extraction = load_page_artifact(book_id=book_id, page_number=page_number, data_root=_books_root())
+    extraction = load_page_artifact(book_id=book_id, page_number=page_number, data_root=_books_root(), owner_id=book.owner_id)
     image_url = f"/books/{book_id}/pages/{page_number}/image"
     return BookReaderPageResponse(
         book=book,
@@ -695,7 +705,7 @@ def get_book_sentence_translation(
     context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> SentenceTranslationResponse:
     book = _book_exists(book_id, context)
-    artifact = load_page_artifact(book_id=book_id, page_number=page_number, data_root=_books_root())
+    artifact = load_page_artifact(book_id=book_id, page_number=page_number, data_root=_books_root(), owner_id=book.owner_id)
     if artifact is None:
         raise HTTPException(status_code=404, detail=f"Page artifact not found for page: {page_number}")
 
@@ -703,6 +713,7 @@ def get_book_sentence_translation(
         artifact.page,
         sentence_order=sentence_order,
         data_root=_books_root(),
+        owner_id=book.owner_id,
     )
     if sentence is None:
         raise HTTPException(status_code=404, detail=f"Sentence not found: {sentence_order}")
@@ -798,6 +809,7 @@ def extract_book(
             force=payload.force,
             ocr_provider=payload.ocr_provider or book.ocr_provider,
             data_root=_books_root(),
+            owner_id=book.owner_id,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -821,12 +833,12 @@ def get_book_extraction(
     book_id: str,
     context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookExtractionResult:
-    _book_exists(book_id, context)
+    book = _book_exists(book_id, context)
     extraction_path = _books_root() / book_id / "extractions" / "book-extraction.json"
     if not extraction_path.exists():
         raise HTTPException(status_code=404, detail=f"Extraction not found for book: {book_id}")
     extraction = BookExtractionResult.model_validate_json(extraction_path.read_text(encoding="utf-8"))
-    recovered = recover_book_extraction_result(extraction, data_root=_books_root())
+    recovered = recover_book_extraction_result(extraction, data_root=_books_root(), owner_id=book.owner_id)
     if recovered is not extraction:
         extraction_path.write_text(recovered.model_dump_json(indent=2), encoding="utf-8")
         return recovered
@@ -946,17 +958,33 @@ def import_lexicon(payload: LexiconImportRequest) -> LexiconImportSummary:
 
 
 @app.get("/lexicon/lookup", response_model=LexiconLookupResponse)
-def lookup_lexicon(language_code: str, term: str, allow_google_fallback: bool = False) -> LexiconLookupResponse:
+def lookup_lexicon(
+    language_code: str,
+    term: str,
+    allow_google_fallback: bool = False,
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
+) -> LexiconLookupResponse:
     return lookup_lexicon_entry(
         data_root=app.state.data_root,
         language_code=language_code,
         term=term,
         allow_google_fallback=allow_google_fallback,
+        owner_id=context.user.id if context else None,
     )
 
 
 @app.get("/lexicon/google-translate/usage", response_model=GoogleTranslateUsageSummary)
-def google_translate_usage() -> GoogleTranslateUsageSummary:
+def google_translate_usage(
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
+) -> GoogleTranslateUsageSummary:
+    return get_google_translate_usage_summary(app.state.data_root, owner_id=context.user.id if context else None)
+
+
+@app.get("/admin/usage/google-translate", response_model=GoogleTranslateUsageSummary)
+def admin_google_translate_usage(
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> GoogleTranslateUsageSummary:
+    require_permission(context, "usage.global.read")
     return get_google_translate_usage_summary(app.state.data_root)
 
 

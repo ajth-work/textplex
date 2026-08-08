@@ -443,6 +443,7 @@ def _lookup_google_translate_entry(
     connection: sqlite3.Connection,
     language_code: str,
     term: str,
+    owner_id: str | None = None,
 ) -> LexiconEntryRecord | None:
     cached_entry = _select_google_cache_entry(connection=connection, language_code=language_code, term=term)
     if cached_entry is not None:
@@ -456,12 +457,12 @@ def _lookup_google_translate_entry(
         return None
 
     with suppress(OSError, sqlite3.Error):
-        record_google_translate_usage(data_root=data_root, characters=len(term))
+        record_google_translate_usage(data_root=data_root, characters=len(term), owner_id=owner_id)
 
     pronunciation = romanize_text(term, source_language_code=language_code)
     if pronunciation:
         with suppress(OSError, sqlite3.Error):
-            record_google_translate_usage(data_root=data_root, characters=len(term))
+            record_google_translate_usage(data_root=data_root, characters=len(term), owner_id=owner_id)
 
     return _cache_google_translation(
         connection=connection,
@@ -745,6 +746,7 @@ def lookup_lexicon_entry(
     language_code: str,
     term: str,
     allow_google_fallback: bool = False,
+    owner_id: str | None = None,
 ) -> LexiconLookupResponse:
     normalized_language_code = _normalized_language_code(language_code)
     _ensure_seeded_lexicon_if_available(data_root, language_code=normalized_language_code)
@@ -792,6 +794,7 @@ def lookup_lexicon_entry(
                     connection=connection,
                     language_code=normalized_language_code,
                     term=term,
+                    owner_id=owner_id,
                 )
                 if google_entry is not None:
                     entries = [google_entry]

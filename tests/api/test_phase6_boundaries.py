@@ -20,6 +20,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 SOURCE_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "books" / "alice-mini"
+LEGACY_SOURCE_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "books" / "three-body-mini"
 
 
 def _context(user_id: str) -> AuthenticatedUserContext:
@@ -30,14 +31,23 @@ def _context(user_id: str) -> AuthenticatedUserContext:
 
 
 def test_private_books_are_visible_only_to_owner(tmp_path: Path) -> None:
-    record = import_book_from_path(
+    private_record = import_book_from_path(
         SOURCE_FIXTURE,
         language_code="en",
         page_count=1,
         data_root=tmp_path / "books",
         owner_id="user-a",
     )
-    assert record.owner_id == "user-a"
+    legacy_record = import_book_from_path(
+        LEGACY_SOURCE_FIXTURE,
+        language_code="en",
+        page_count=1,
+        data_root=tmp_path / "books",
+        title="Legacy shared record",
+        owner_id=None,
+    )
+    assert private_record.owner_id == "user-a"
+    assert legacy_record.owner_id is None
 
     original_root = app.state.data_root
     app.state.data_root = tmp_path
@@ -45,8 +55,30 @@ def test_private_books_are_visible_only_to_owner(tmp_path: Path) -> None:
     try:
         client = TestClient(app)
         assert client.get("/books").json() == []
-        assert client.get(f"/books/{record.id}").status_code == 404
-        assert client.get(f"/books/{record.id}/pages/1").status_code == 404
+        assert client.get(f"/books/{private_record.id}").status_code == 404
+        assert client.get(f"/books/{private_record.id}/pages/1").status_code == 404
+        assert client.get(f"/books/{legacy_record.id}").status_code == 404
+        assert client.get(f"/books/{legacy_record.id}/pages/1").status_code == 404
+    finally:
+        app.dependency_overrides.pop(get_optional_user_context, None)
+        app.state.data_root = original_root
+
+
+def test_legacy_unowned_books_remain_available_without_account_context(tmp_path: Path) -> None:
+    record = import_book_from_path(
+        SOURCE_FIXTURE,
+        language_code="en",
+        page_count=1,
+        data_root=tmp_path / "books",
+        owner_id=None,
+    )
+
+    original_root = app.state.data_root
+    app.state.data_root = tmp_path
+    app.dependency_overrides[get_optional_user_context] = lambda: None
+    try:
+        response = TestClient(app).get("/books")
+        assert [book["id"] for book in response.json()] == [record.id]
     finally:
         app.dependency_overrides.pop(get_optional_user_context, None)
         app.state.data_root = original_root
