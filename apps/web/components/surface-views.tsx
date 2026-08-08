@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import Image from "next/image";
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -1411,17 +1412,19 @@ export function ThemeSettingsSurfaceView() {
             <div className={`theme-shop-selected-preview-frame ${selectedWallpaperPath ? "theme-shop-selected-preview-frame--wallpaper" : "theme-shop-selected-preview-frame--fallback"}`} style={selectedWallpaperPreviewStyle}>
               {selectedWallpaperPath ? (
                 <>
-                  <img
+                  <Image
                     key={selectedWallpaperPath}
                     className="theme-shop-selected-preview-loader"
                     src={selectedWallpaperPath}
                     alt=""
                     aria-hidden="true"
-                    loading="eager"
+                    fill
+                    sizes="100vw"
+                    priority
                     decoding="async"
                     draggable={false}
-                    onContextMenu={(event) => event.preventDefault()}
-                    onDragStart={(event) => event.preventDefault()}
+                    onContextMenu={(event: MouseEvent<HTMLImageElement>) => event.preventDefault()}
+                    onDragStart={(event: MouseEvent<HTMLImageElement>) => event.preventDefault()}
                     onLoad={() => setSelectedWallpaperLoaded(true)}
                     onError={() => setSelectedWallpaperLoaded(true)}
                   />
@@ -1662,16 +1665,18 @@ export function ThemeSettingsSurfaceView() {
                         aria-hidden="true"
                       >
                         {wallpaperThumbnailPath ? (
-                          <img
+                          <Image
                             className="theme-shop-product-swatch-image"
                             src={wallpaperThumbnailPath}
                             alt=""
                             aria-hidden="true"
+                            fill
+                            sizes="9.4rem"
                             loading="lazy"
                             decoding="async"
                             draggable={false}
-                            onContextMenu={(event) => event.preventDefault()}
-                            onDragStart={(event) => event.preventDefault()}
+                            onContextMenu={(event: MouseEvent<HTMLImageElement>) => event.preventDefault()}
+                            onDragStart={(event: MouseEvent<HTMLImageElement>) => event.preventDefault()}
                           />
                         ) : null}
                       </span>

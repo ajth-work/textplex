@@ -103,10 +103,18 @@ function HomeLoadError({ error }: Readonly<{ error: string }>) {
 }
 
 export default async function HomePage() {
+  let data: HomeData | null = null;
+  let errorMessage: string | null = null;
+
   try {
-    const data = await loadHomeData();
-    return <HomeSurface books={data.books} progress={data.progress} />;
+    data = await loadHomeData();
   } catch (error) {
-    return <HomeLoadError error={error instanceof Error ? error.message : "Unable to load the home surface."} />;
+    errorMessage = error instanceof Error ? error.message : "Unable to load the home surface.";
   }
+
+  if (!data) {
+    return <HomeLoadError error={errorMessage ?? "Unable to load the home surface."} />;
+  }
+
+  return <HomeSurface books={data.books} progress={data.progress} />;
 }

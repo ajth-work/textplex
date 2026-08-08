@@ -1685,9 +1685,10 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     };
   }, [bookId, pageNumber, refreshNonce]);
 
+  const averageSessionSeconds = profileSummary?.average_seconds_per_session ?? null;
+
   useEffect(() => {
     const timer = window.setInterval(() => {
-      const averageSessionSeconds = profileSummary?.average_seconds_per_session ?? null;
       const isVisibleAndFocused = document.visibilityState === "visible" && document.hasFocus();
       if (!isVisibleAndFocused) {
         return;
@@ -1709,7 +1710,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     return () => {
       window.clearInterval(timer);
     };
-  }, [profileSummary?.average_seconds_per_session]);
+  }, [averageSessionSeconds]);
 
   useEffect(() => {
     activeSecondsRef.current = 0;
@@ -2123,7 +2124,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     }
     return lookup;
   }, [studySurface]);
-  const currentPageSentenceList = page?.sentences ?? [];
+  const currentPageSentenceList = useMemo(() => page?.sentences ?? [], [page?.sentences]);
   const selectedSentenceIndex = useMemo(() => {
     if (!page?.sentences.length) {
       return -1;
@@ -2410,7 +2411,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     }
 
     sentenceTimerRef.current = window.setInterval(() => {
-      const averageSessionSeconds = profileSummary?.average_seconds_per_session ?? null;
       const isVisibleAndFocused = document.visibilityState === "visible" && document.hasFocus();
       if (!isVisibleAndFocused) {
         return;
@@ -2465,7 +2465,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
         // Sentence tracking is best-effort so the reader stays usable offline.
       });
     };
-  }, [bookId, page, pageNumber, selectedSentence, selectedSentenceOrder]);
+  }, [averageSessionSeconds, bookId, page, pageNumber, selectedSentence, selectedSentenceOrder]);
 
   const tokenLabel = lexiconEntry?.surface_form ?? selectedToken?.surface_form ?? "";
   const tokenDefinition = selectedTokenEnglishMeaning;
@@ -3475,7 +3475,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                 </button>
               </div>
               <p className="small-copy">
-                When enabled, reader tokens tint from unfamiliar to mastered using the word's weakest SRS stage so studied words stand out at a glance.
+                When enabled, reader tokens tint from unfamiliar to mastered using the word&apos;s weakest SRS stage so studied words stand out at a glance.
               </p>
             </section>
             <section className="reader-options-section" data-inventory-id="reader.sentence-help-section">
