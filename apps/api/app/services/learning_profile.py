@@ -194,6 +194,7 @@ def _resolve_study_definition_short(
     *,
     language_code: str,
     candidates: tuple[str, ...],
+    owner_id: str | None = None,
 ) -> str | None:
     normalized_language_code = language_code.strip().lower()
     for candidate in candidates:
@@ -205,6 +206,7 @@ def _resolve_study_definition_short(
             language_code=normalized_language_code,
             term=term,
             allow_google_fallback=True,
+            owner_id=owner_id,
         )
         entry = lookup.entries[0] if lookup.entries else None
         definition = entry.definition.strip() if entry and entry.definition else None
@@ -918,6 +920,7 @@ def record_study_vocabulary_item(
         data_root,
         language_code=language_code,
         candidates=(lemma, display_form, source_surface_form),
+        owner_id=owner_id,
     )
 
     with _connect(data_root, owner_id) as connection:

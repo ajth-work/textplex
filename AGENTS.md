@@ -149,13 +149,17 @@ The reusable audit procedure and current audit record are in [`docs/AUDIT.md`](d
 
 - Do not close or mark an implementation issue complete while required tests are red.
 - Check for an existing issue before creating a duplicate regression or audit issue.
-- Keep `docs/ISSUE_TRACKER.md`, GitHub issues, and `CHANGELOG.md` synchronized when work changes repository or tracker state.
+- Keep `docs/ISSUE_TRACKER.md` and GitHub issues or project items synchronized when tracker state changes. Treat `CHANGELOG.md` as a growing local work journal; it should preserve the complete chronological record rather than act as a short recent-change window.
 
 ## Commit & Pull Request Guidelines
 
-Use short imperative commit messages, such as `Add reader shell scaffold` or `Define page-processing contract`. Keep commits scoped to one coherent change. When relevant, mention whether you verified the web app, API, processor tests, or data-contract assumptions.
+Use short imperative commit messages, such as `Add reader shell scaffold` or `Define page-processing contract`. Keep each commit scoped to one coherent change so the Git history is an exact, searchable record of what changed. The commit body should briefly capture the intent and relevant verification when the subject alone is not sufficient.
 
-When a request changes code, docs, tests, local data, or GitHub-tracked work, add a brief `CHANGELOG.md` note that captures the general change and date, and add a short matching comment in the related issue, kanban item, or PR when one exists.
+Staging prepares selected files; committing records the change; pushing publishes it for collaboration. Stage explicit paths and never include unrelated existing work. Create a focused local commit for completed implementation work when the changed files can be isolated safely, preferably at each coherent task or milestone rather than allowing unrelated completed work to accumulate. Do not push automatically unless the user asks for publication or the active GitHub workflow explicitly requires it.
+
+Update `CHANGELOG.md` for every completed repository change or meaningful work session, including routine refactors, test-only maintenance, formatting, dependency updates, and small internal corrections. Keep entries concise and outcome-focused. The file is append-only: never delete, truncate, rewrite, or collapse older entries to retain only recent days. Keep the newest date sections at the top, add new bullets under the existing section for the current date when possible, and create a new date section only when needed. If an older entry needs correction, preserve it and add a dated correction note rather than rewriting history.
+
+For work tied to an existing GitHub issue, project item, pull request, or release, add a concise matching update with the commit or PR reference and verification result. Use the Git commit as the detailed implementation record; do not duplicate the full change description across `CHANGELOG.md`, issues, and PRs.
 
 If a task or issue is added to the GitHub project kanban, update the matching entry in `docs/ISSUE_TRACKER.md` in the same change. If `docs/ISSUE_TRACKER.md` is updated, make the corresponding kanban change as well. Treat the two as mirrored views and keep titles, statuses, and scope aligned.
 

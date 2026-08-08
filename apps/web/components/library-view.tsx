@@ -730,6 +730,7 @@ export function LibraryView() {
         <button
           className="button button-primary library-practice-action-button"
           type="button"
+          id="practice-article"
           data-inventory-id="library.generate-article-button"
           onClick={() => void generatePracticeArticle()}
           disabled={generatingArticle}

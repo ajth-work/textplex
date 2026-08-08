@@ -40,6 +40,7 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     let active = true;
+    let recoveryDetected = false;
 
     async function finishAuthentication() {
       const client = getSupabaseClient();
@@ -51,12 +52,24 @@ export default function AuthCallbackPage() {
         throw new Error(callbackError.replaceAll("+", " "));
       }
 
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const isRecoveryHash = hashParams.get("type") === "recovery";
+      const isRecoveryQuery = searchParams.get("type") === "recovery";
+      if (isRecoveryHash || isRecoveryQuery) {
+        recoveryDetected = true;
+      }
+
       const sessionResult = await withAuthTimeout(client.auth.getSession(), "Supabase did not respond while restoring the session.");
       if (!sessionResult.data.session && code) {
         const exchangeResult = await withAuthTimeout(client.auth.exchangeCodeForSession(code), "Supabase did not respond while confirming the account.");
         if (exchangeResult.error) {
           throw exchangeResult.error;
         }
+      }
+
+      if (recoveryDetected) {
+        router.replace(`/auth/reset-password?returnTo=${encodeURIComponent(returnTo)}`);
+        return;
       }
 
       const restoredSession = await withAuthTimeout(client.auth.getSession(), "Supabase did not respond while verifying the restored session.");
@@ -69,6 +82,14 @@ export default function AuthCallbackPage() {
       router.refresh();
     }
 
+    const client = getSupabaseClient();
+    const subscription = client?.auth.onAuthStateChange((event, session) => {
+      if (active && event === "PASSWORD_RECOVERY" && session) {
+        syncAuthSessionCookie(session);
+        router.replace(`/auth/reset-password?returnTo=${encodeURIComponent(returnTo)}`);
+      }
+    });
+
     void finishAuthentication().catch((callbackFailure: unknown) => {
       if (active) {
         setError(callbackFailure instanceof Error ? callbackFailure.message : "Unable to restore the account session.");
@@ -77,8 +98,9 @@ export default function AuthCallbackPage() {
 
     return () => {
       active = false;
+      subscription?.data.subscription.unsubscribe();
     };
-  }, [callbackError, code, returnTo, router]);
+  }, [callbackError, code, returnTo, router, searchParams]);
 
   return (
     <main className="auth-shell" data-inventory-id="auth.callback-state">
@@ -86,7 +108,7 @@ export default function AuthCallbackPage() {
         <span className="eyebrow">Account</span>
         <h1>{error ? "Sign-in needs attention" : "Finishing sign-in..."}</h1>
         <p className="lede">{error ?? "Your secure session is being restored."}</p>
-        {error ? <Link className="button button-primary" href={`/auth?returnTo=${encodeURIComponent(returnTo)}`}>Return to sign in</Link> : null}
+        {error ? <Link className="button button-primary" href={error.toLowerCase().includes("expired") || error.toLowerCase().includes("otp") ? `/auth?mode=reset&returnTo=${encodeURIComponent(returnTo)}` : `/auth?returnTo=${encodeURIComponent(returnTo)}`}>{error.toLowerCase().includes("expired") || error.toLowerCase().includes("otp") ? "Request a new reset link" : "Return to sign in"}</Link> : null}
       </section>
     </main>
   );

@@ -65,9 +65,9 @@ npx supabase db push --dry-run
 ```
 
 The account route is available at `/auth`. It supports email/password sign-up,
-sign-in, email confirmation redirects, and password reset requests. The API
-identity check is available at `/auth/me` and validates the bearer token with
-Supabase Auth.
+sign-in, email confirmation redirects, password reset requests, and recovery
+password updates at `/auth/reset-password`. The API identity check is available
+at `/auth/me` and validates the bearer token with Supabase Auth.
 
 For local testing, create one Supabase Auth user that you treat as `user zero`.
 Give it a predictable dev-only password such as `password`, sign in with that
@@ -82,8 +82,11 @@ Supabase Auth URL Configuration:
 ```text
 http://192.168.192.231:3000
 http://192.168.192.231:3000/auth/callback
+http://192.168.192.231:3000/auth/reset-password
 http://localhost:3000/auth/callback
+http://localhost:3000/auth/reset-password
 http://127.0.0.1:3000/auth/callback
+http://127.0.0.1:3000/auth/reset-password
 ```
 
 If email confirmation is enabled, the account must be confirmed before

@@ -1223,10 +1223,9 @@ export function ThemeSettingsSurfaceView() {
   const selectedOption = appThemeOptions.find((option) => option.value === theme) ?? appThemeOptions[0];
   const selectedWallpaperPath = getThemeWallpaperPath(theme);
   const selectedWallpaperThumbnailPath = getThemeWallpaperThumbnailPath(theme);
-  const selectedWallpaperPreviewPath = selectedWallpaperLoaded ? selectedWallpaperPath : selectedWallpaperThumbnailPath ?? selectedWallpaperPath;
-  const selectedWallpaperPreviewStyle = selectedWallpaperPreviewPath ? {
+  const selectedWallpaperPreviewStyle = selectedWallpaperPath ? {
     aspectRatio: wallpaperFrame,
-    backgroundImage: `url(${selectedWallpaperPreviewPath})`,
+    backgroundImage: selectedWallpaperThumbnailPath ? `url(${selectedWallpaperThumbnailPath})` : undefined,
     backgroundPosition: `${wallpaperPositionX}% ${wallpaperPositionY}%`,
     backgroundRepeat: "no-repeat",
     backgroundSize: wallpaperMode === "full" ? "contain" : wallpaperMode === "crop" ? "cover" : `${wallpaperZoom}% auto`,
@@ -1414,7 +1413,7 @@ export function ThemeSettingsSurfaceView() {
                 <>
                   <Image
                     key={selectedWallpaperPath}
-                    className="theme-shop-selected-preview-loader"
+                    className="theme-shop-selected-preview-image"
                     src={selectedWallpaperPath}
                     alt=""
                     aria-hidden="true"
@@ -1422,6 +1421,12 @@ export function ThemeSettingsSurfaceView() {
                     sizes="100vw"
                     priority
                     decoding="async"
+                    style={{
+                      opacity: selectedWallpaperLoaded ? 1 : 0,
+                      objectFit: wallpaperMode === "crop" ? "cover" : "contain",
+                      objectPosition: `${wallpaperPositionX}% ${wallpaperPositionY}%`,
+                      transform: wallpaperMode === "manual" ? `scale(${wallpaperZoom / 100})` : undefined,
+                    }}
                     draggable={false}
                     onContextMenu={(event: MouseEvent<HTMLImageElement>) => event.preventDefault()}
                     onDragStart={(event: MouseEvent<HTMLImageElement>) => event.preventDefault()}
@@ -1670,8 +1675,8 @@ export function ThemeSettingsSurfaceView() {
                             src={wallpaperThumbnailPath}
                             alt=""
                             aria-hidden="true"
-                            fill
-                            sizes="9.4rem"
+                            width={304}
+                            height={540}
                             loading="lazy"
                             decoding="async"
                             draggable={false}

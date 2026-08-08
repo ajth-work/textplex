@@ -100,6 +100,7 @@ def _resolve_glossed_definition_short(
     *,
     language_code: str,
     candidates: tuple[str, ...],
+    owner_id: str | None = None,
 ) -> str | None:
     normalized_language_code = language_code.strip().lower()
     for candidate in candidates:
@@ -111,6 +112,7 @@ def _resolve_glossed_definition_short(
             language_code=normalized_language_code,
             term=term,
             allow_google_fallback=True,
+            owner_id=owner_id,
         )
         entry = lookup.entries[0] if lookup.entries else None
         definition = entry.definition.strip() if entry and entry.definition else None
@@ -401,6 +403,7 @@ def get_study_surface(
                         str(row["display_form"] or ""),
                         str(row["source_surface_form"] or ""),
                     ),
+                    owner_id=owner_id,
                 )
             definition_short = glossed_definition_cache[cache_key]
             if definition_short:

@@ -21,6 +21,7 @@ Unless a task explicitly calls for legacy or GitHub Pages compatibility work, im
 | `shell.root-layout` | region | Root layout | `apps/web/app/layout.tsx` | Global document, theme bootstrap, top-right theme toggle, and page content frame. |
 | `shell.theme-provider` | region | Theme provider | `apps/web/components/theme-provider.tsx` | Loads, applies, persists, and system-syncs the app theme. |
 | `shell.back-button` | button | Shell back button | `apps/web/components/app-shell.tsx` | Top-left shell back control that returns to the prior route or falls back to Home. |
+| `shell.brand` | region | TextPlex brand | `apps/web/components/app-shell.tsx` | Shared TextPlex logo link that opens the public start page for signed-out users and Home for signed-in users. |
 | `shell.theme-settings` | button | Theme settings button | `apps/web/components/app-shell.tsx` | Brush-style shortcut that opens the dedicated theme settings page beside the day/night toggle. |
 | `shell.theme-toggle` | button | Theme toggle | `apps/web/components/theme-toggle-button.tsx`, `apps/web/components/app-shell.tsx` | Header-row moon/sun control that switches the app between opposing day/night themes. |
 | `shell.inventory-label-toggle` | button | Inventory labels toggle | `apps/web/components/inventory-inspector.tsx`, `apps/web/components/landing-page.tsx`, `apps/web/components/app-shell.tsx` | Developer-only, content-sized toggle placed in the landing/app header row that overlays inventory IDs on tracked regions, cards, and controls for QA and code review. |
@@ -31,6 +32,8 @@ Unless a task explicitly calls for legacy or GitHub Pages compatibility work, im
 | `shell.build-footer` | region | Build footer | `apps/web/components/build-footer.tsx` | Optional bottom-of-page version footer that shows the current web app version and last reboot/rebuild time. |
 | `shell.primary-nav` | region | Primary navigation | `apps/web/components/app-shell.tsx` | Focused app destinations: Home, Library, Read, and Study. |
 | `shell.secondary-nav` | region | More navigation | `apps/web/components/app-shell.tsx` | Overflow access to Analysis, Search, Progress, Import, Activity, Roadmap, Profile, Settings, and the signed-in or signed-out account action. |
+| `shell.reader-nav` | region | Reader navigation behavior | `apps/web/components/app-shell.tsx` | Reader-only primary navigation that appears on entry, then collapses into a theme-aware reveal tab to reduce reading distraction. |
+| `shell.reader-nav-reveal` | button | Show navigation | `apps/web/components/app-shell.tsx` | Theme-aware reader tab that restores the primary navigation after it collapses. |
 | `shell.account-menu` | region | Account menu | `apps/web/components/account-menu.tsx` and route headers | Shared sign-in/profile/settings/sign-out control shown in authenticated route headers. |
 | `surface.route-hero` | region | Route hero | `apps/web/components/route-page.tsx` (`RoutePage`) | Shared eyebrow, title, description, badge, route links, and metrics for data-backed surfaces. |
 | `surface.metrics` | region | Route metrics | `apps/web/components/route-page.tsx` | Compact metric row rendered by `RoutePage`. |
@@ -46,6 +49,7 @@ Unless a task explicitly calls for legacy or GitHub Pages compatibility work, im
 | --- | --- | --- |
 | `landing` | `/` | `apps/web/components/landing-page.tsx` |
 | `auth` | `/auth` | `apps/web/app/auth/page.tsx` |
+| `auth-reset-password` | `/auth/reset-password` | `apps/web/app/auth/reset-password/page.tsx` |
 | `privacy` | `/privacy` | `apps/web/app/privacy/page.tsx` |
 | `home` | `/home` | `apps/web/app/home/page.tsx` |
 | `library` | `/library` | `apps/web/components/library-view.tsx` |
@@ -69,7 +73,7 @@ Source: `apps/web/components/landing-page.tsx` (`LandingPage`)
 
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
-| `landing.page` | page | Landing | Public discovery page with the product pitch, feature summary, monthly pricing tiers, and one-time theme framing. |
+| `landing.page` | page | Landing | Public discovery page with the product pitch, three-plan beta access model, feature summary, and one-time theme framing. |
 | `landing.hero` | region | Landing hero | Split hero with the primary call to action and the wallpaper-backed reader/study previews. |
 | `landing.hero-previews` | region | Workspace previews | Wallpaper-backed placeholder panels that show the reader and study spaces beside the landing copy. |
 | `landing.hero-reader-preview` | card | Reader preview | Wallpaper-backed placeholder tile framing the reader workspace. |
@@ -78,9 +82,9 @@ Source: `apps/web/components/landing-page.tsx` (`LandingPage`)
 | `landing.feature-card` | card | Product card | One core capability card describing the app's reading workflow or tracking model. |
 | `landing.support` | region | Ways to support | Combined subscription and theme-shop unit that lets readers swipe between support options without leaving the landing page. |
 | `landing.support-toggle` | tablist | Support toggle | Two-option tab strip that switches between subscription and theme-shop panels. |
-| `landing.support-subscription-panel` | card | Subscription panel | Subscription overview panel with the monthly tier carousel. |
+| `landing.support-subscription-panel` | card | Subscription panel | Subscription overview panel with the Open Book, Deep Read, and Immersion Studio tier carousel, including beta and fair-use guidance. |
 | `landing.support-theme-panel` | card | Theme shop panel | Theme-shop overview panel with the visual-pack carousel. |
-| `landing.pricing-tier` | card | Pricing tier | One subscription tier card with price, cadence, and feature list. |
+| `landing.pricing-tier` | card | Pricing tier | One subscription tier card with plan name, price, cadence, feature list, and the boundary between core reading and AI-heavy practice. |
 | `landing.theme-card` | card | Theme card | One visual pack card showing a one-time purchase option. |
 | `landing.cta` | card | Final CTA | Closing account-creation and Home entry call to action. |
 | `landing.footer` | region | Landing footer | Small copyright footer at the bottom of the landing page. |
@@ -95,8 +99,15 @@ Source: `apps/web/app/auth/page.tsx` (`AuthPage`) and `apps/web/app/auth/callbac
 | `auth.account-card` | card | Account form card | Bounded account form and signed-in confirmation state. |
 | `auth.policy-note` | region | Privacy note | Sign-up reminder that links to the privacy policy before the account is created. |
 | `auth.form` | region | Account form | Display name, email, password, and account action controls. |
+| `auth.public-return` | region | Public return action | Separated auth-card action that lets a visitor explore TextPlex without signing in. |
 | `auth.error-state` | card | Authentication error | Visible sign-in, sign-up, or reset failure message. |
 | `auth.callback-state` | page | Authentication callback | Session restoration state after email confirmation or password reset redirect. |
+| `auth.reset-password-page` | page | Reset password | Recovery-link destination where a signed-in recovery session can choose a new password. |
+| `auth.reset-password-card` | card | Reset password card | Bounded password update panel for a valid recovery session or an expired-link recovery path. |
+| `auth.reset-password-form` | region | Reset password form | New-password and confirmation fields plus the password update action. |
+| `auth.reset-password-account` | region | Reset password account | Email address from the recovery session identifying which account will receive the new password. |
+| `auth.reset-password-success` | region | Password reset success | Confirmation and continuation link after the password is updated. |
+| `auth.reset-password-error` | card | Password reset error | Recovery-link, session, validation, or password-update failure message. |
 
 ### `privacy` — `/privacy`
 
@@ -182,8 +193,8 @@ Source: `apps/web/components/reader-view.tsx` (`ReaderView`)
 | `reader.session-summary-details` | region | Session summary details | Swipeable subpill rail inside the reader session active bar that surfaces the current session, average session length, page/book/language/lifetime glossed counts, page coverage, ETA, and book-wide stats. |
 | `reader.session-summary-subpill` | button | Session summary subpill | Individual metric subpill inside the session detail carousel that can be hidden or restored while editing the layout. |
 | `reader.session-summary-edit-toggle` | button | Session summary edit toggle | Pencil/save subpill at the end of the session detail carousel that toggles edit mode and persists the visible layout. |
-| `reader.reading-progress-module` | region | Reading progress module | Full-width swipeable progress carousel that shows page progress, page-sentence progress, and overall sentence progress as one-card-at-a-time visual bars. |
-| `reader.reading-progress-details` | region | Reading progress details | Swipeable horizontal progress rail beneath the reader progress strip that surfaces page progress, page sentence progress, and overall sentence progress as snap-to-position visual bars. |
+| `reader.reading-progress-module` | region | Reading progress module | Full-width swipeable progress carousel that shows sentence progress for single-page text and page, page-sentence, and overall sentence progress for multi-page books as one-card-at-a-time visual bars. |
+| `reader.reading-progress-details` | region | Reading progress details | Swipeable horizontal progress rail beneath the reader progress strip that replaces the redundant `P1/1` card with sentence progress for single-page text and otherwise surfaces page progress, page sentence progress, and overall sentence progress. |
 | `reader.reading-progress-bar` | region | Reading progress | Slim reader header progress line showing current book or article completion percent. |
 | `reader.session-glossed-count` | status | Glossed words this session | Compact badge showing how many new glossed vocabulary items were added during the current reader session. |
 | `reader.speech-voice-toggle` | control | Speech voice | Reader-side male/female voice preference that applies to sentence, token, and syllable audio playback. |
@@ -198,6 +209,9 @@ Source: `apps/web/components/reader-view.tsx` (`ReaderView`)
 | `reader.sentence-help-section` | region | Sentence help | Reader options panel section for the meaning-line reveal card and token lookup trace controls. |
 | `reader.meaning-line-section` | region | Meaning line | Reader toggle that shows or hides the compact meaning-line reveal card below the sentence tools. |
 | `reader.meaning-line-toggle` | button | Meaning line toggle | Turns the meaning-line reveal card on or off in the reader settings panel. |
+| `reader.meaning-line-reveal-all-section` | region | Reveal all meaning-line words | Reader option for showing the complete meaning line when translation alignment leaves words unrevealed. |
+| `reader.meaning-line-reveal-all-toggle` | button | Reveal all meaning-line toggle | Persists automatic full meaning-line reveal in reader settings. |
+| `reader.meaning-line-reveal-all-action` | button | Reveal all meaning-line action | Reveals every target-language word in the current meaning line when token alignment leaves a remainder. |
 | `reader.definition-trace-section` | region | Definition trace | Reader toggle that shows or hides the token-inspector lookup trace for debugging fallback behavior. |
 | `reader.definition-trace-toggle` | button | Definition trace toggle | Turns the token-inspector lookup trace on or off in the reader settings panel. |
 | `reader.lookup-fallback-section` | region | Lookup fallback | Toggle for the reader's Google Cloud Translation fallback, monthly usage summary, and cost note when local lexicon lookup misses. |
@@ -230,7 +244,7 @@ Source: `apps/web/components/reader-view.tsx` (`ReaderView`)
 | `reader.book-frequency-card` | card | Book frequency | Nested book-wide frequency panel inside the collapsed reader tools drawer. |
 | `reader.dictionary-card` | card | Dictionary wiring | Nested dictionary/lexical-entry lookup status and source details inside the collapsed reader tools drawer. |
 | `reader.reading-profile-card` | card | Reading profile | Nested learner exposure, progress, and remembered/missed token feedback details inside the collapsed reader tools drawer. |
-| `reader.unavailable-state` | card | Reader unavailable | Missing page or unavailable extraction state. |
+| `reader.unavailable-state` | card | Reader unavailable | Missing page or unavailable extraction state, with direct recovery paths to the library, text import, and practice-article generator when the reader has no valid book. |
 
 ### `analysis` — `/analysis/:bookId`
 
@@ -507,8 +521,8 @@ Use this section to move from a component ID to the issue that owns its pending 
 | `analysis.*`, `reader.*` analytics regions | [#31](https://github.com/ajth-work/textplex/issues/31) | Broader reader-detail analytics work; #42 owns the difficulty/HSK metric contract. |
 | `progress.*`, `study.*`, `preview.vocabulary.*` | [#27](https://github.com/ajth-work/textplex/issues/27) | Multi-path insights dashboard and assessment-family progression. |
 | `settings.theme-settings-link`, `theme-settings.app-theme-card`, `theme-settings.behavior-card`, `theme-shop.route-hero`, `theme-shop.catalog-card`, `theme-shop.selected-preview`, `theme-shop.store-controls`, `theme-shop.search`, `theme-shop.category-nav`, `theme-shop.mode-tabs`, `theme-shop.catalog-grid`, `theme-shop.theme-option`, `theme-shop.collections-carousel`, `theme-shop.collection-slide`, `theme-shop.collection-arrows`, `theme-shop.collection-dots`, `theme-shop.collection-rail`, `theme-shop.bundle-card`, `theme-shop.preview-tuning`, `theme-shop.empty-state`, `theme-shop.save-action`, `theme-shop.loading-state`, `theme-shop.error-state` | Add theme store and commerce entitlements (Local pending) | The consolidated theme settings surface now includes the app-theme picker, theme behavior controls, the owned/full theme catalog, and the same future catalog and entitlement work for bundles, checkout, and fulfillment. |
-| `home.page`, `home.header`, `home.search`, `home.continue-reading`, `home.continue-reading-card`, `home.continue-reading-list`, `home.continue-reading-row`, `home.goals`, `home.weekly-goal`, `home.exposure-goal`, `home.empty-state`, `home.error-state`, `library.search-hero`, `library.generator-settings`, `library.generator-summary`, `library.language-filter`, `library.search`, `library.document-count`, `library.shelf`, `library.skeleton-card`, `library.book-card`, `library.book-info-button`, `library.book-open-button`, `library.empty-state`, `library.error-state`, `shell.primary-nav`, `shell.secondary-nav` | Frontend migration Phase 7 (In progress) | Canonical Next home and library parity slices now use one focused shell navigation model, with secondary routes grouped under More and the home heading kept task-oriented. |
-| `reader.header`, `reader.options-dialog`, `reader.theme-section`, `reader.theme-grid`, `reader.theme-more-button`, `reader.session-summary-toggle`, `reader.session-summary-details`, `reader.lookup-fallback-section`, `reader.page-card`, `reader.navigation-card`, `reader.sentence-tools`, `reader.token-mode-button`, `reader.source-sentence-card`, `reader.sentence-translation-card`, `reader.translation-reveal-card`, `reader.sentence-help-section`, `reader.meaning-line-toggle`, `reader.definition-trace-toggle`, `reader.tools-card`, `reader.token-inspector`, `reader.sentence-hsk-chart` | Consolidate standalone preview features into the Next.js app (Local pending) | Phase 2 reader parity slice; Next now owns the reader metadata, compact pager, moved options-panel utilities, recent-first theme picker, Google fallback usage summary, language-aware sentence tools row, session-active bar with swipeable subpill carousel, and swipeable progress carousel while standalone remains the compatibility reference. |
+| `home.page`, `home.header`, `home.search`, `home.continue-reading`, `home.continue-reading-card`, `home.continue-reading-list`, `home.continue-reading-row`, `home.goals`, `home.weekly-goal`, `home.exposure-goal`, `home.empty-state`, `home.error-state`, `library.search-hero`, `library.generator-settings`, `library.generator-summary`, `library.language-filter`, `library.search`, `library.document-count`, `library.shelf`, `library.skeleton-card`, `library.book-card`, `library.book-info-button`, `library.book-open-button`, `library.generate-article-button`, `library.empty-state`, `library.error-state`, `reader.unavailable-state`, `shell.primary-nav`, `shell.secondary-nav`, `shell.reader-nav`, `shell.reader-nav-reveal` | Frontend migration Phase 7 (In progress) | Canonical Next home, library, and reader recovery slices use one focused shell navigation model; the missing-reader state routes learners to the Library, import flow, or practice-article generator. |
+| `reader.header`, `reader.options-dialog`, `reader.theme-section`, `reader.theme-grid`, `reader.theme-more-button`, `reader.session-summary-toggle`, `reader.session-summary-details`, `reader.lookup-fallback-section`, `reader.page-card`, `reader.navigation-card`, `reader.sentence-tools`, `reader.token-mode-button`, `reader.source-sentence-card`, `reader.sentence-translation-card`, `reader.translation-reveal-card`, `reader.sentence-help-section`, `reader.meaning-line-toggle`, `reader.meaning-line-reveal-all-toggle`, `reader.meaning-line-reveal-all-action`, `reader.definition-trace-toggle`, `reader.tools-card`, `reader.token-inspector`, `reader.sentence-hsk-chart` | Consolidate standalone preview features into the Next.js app (Local pending) | Phase 2 reader parity slice; Next now owns the reader metadata, compact pager, moved options-panel utilities, recent-first theme picker, Google fallback usage summary, language-aware sentence tools row, session-active bar with swipeable subpill carousel, swipeable progress carousel, and a full-reveal escape hatch for incomplete meaning-line alignment while standalone remains the compatibility reference. |
 | `reader.word-audio-button`, `reader.definition-remembered-button`, `reader.definition-missed-button`, `reader.definition-segment`, `reader.russian-syllable-toggle`, `reader.token-audio-toggle`, `reader.reading-profile-card` | Add pronunciation freshness controls, definition feedback, and sentence audio playback (Local pending) | Selected-token playback, remembered/missed word feedback, syllable-chip audio, the Russian syllable display toggle, the reader setting that enables token-tap audio, and the local reading-profile tracker details. |
 | `import.form`, `import.translation-confirmation-card`, `import.progress-card`, `import.recent-books-card`, `import.book-item` | Consolidate standalone preview features into the Next.js app (Local pending) | Phase 2 import slice; Next now submits pasted text and PDF uploads to the API, tracks background extraction, and gates large translation preloads with a confirmation step. |
 | `analysis.difficulty-card`, `analysis.vocabulary-distribution-card`, `analysis.summary-card`, `analysis.generation-prompt-card`, `analysis.sentence-hsk-chart`, `analysis.page-hsk-chart`, `book-detail.extraction-snapshot-card`, `book-detail.generation-prompt-card`, `book-detail.page-hsk-chart`, `reader.sentence-hsk-chart` | Frontend migration Phase 3 (Local complete) | API-backed sentence/page/book HSK analytics now render in Next analysis and book-detail routes with compatibility previews retained. |
@@ -517,7 +531,10 @@ Use this section to move from a component ID to the issue that owns its pending 
 | `settings.speech-voice-toggle`, `reader.speech-voice-toggle` | Untracked | Shared male/female speech preference for browser playback across the Settings surface and reader audio controls. |
 | `profile.hosted-account-card` | Frontend migration Phase 5 (In Progress) | Authenticated read-only hosted profile hydration; local learner metrics remain the default profile source. |
 | `profile.migration-card` | Frontend migration Phase 5 (In Progress) | Explicit preview, ready, completed, empty, and error states for account migration. |
+| `shell.brand`, `auth.page`, `auth.public-return`, `auth.callback-state`, `auth.reset-password-page`, `auth.reset-password-card`, `auth.reset-password-form`, `auth.reset-password-success`, `auth.reset-password-error` | Frontend migration Phase 5 (In Progress) | Supabase email/password account flow with a public return path from the shared shell and auth card, including recovery-session password updates and expired-link recovery guidance. |
+| `auth.page`, `auth.callback-state`, `auth.reset-password-page`, `auth.reset-password-card`, `auth.reset-password-form`, `auth.reset-password-success`, `auth.reset-password-error` | Frontend migration Phase 5 (In Progress) | Supabase email/password account flow, including recovery-session password updates and expired-link recovery guidance. |
 | `privacy.page`, `privacy.summary-card`, `privacy.collection-card`, `privacy.usage-card`, `privacy.providers-card`, `privacy.controls-card`, `privacy.contact-card`, `auth.policy-note` | [#53](https://github.com/ajth-work/textplex/issues/53) | Public privacy policy page and sign-up reminder note, with mirrored draft copy and a link to the third-party data-flow note. |
+| `landing.page`, `landing.support`, `landing.support-subscription-panel`, `landing.pricing-tier`, `landing.cta` | Untracked | Beta packaging copy for the Open Book, Deep Read, and Immersion Studio plans, including fair-use language and the premium custom-narrative boundary. |
 
 ## Update rule for new UI
 

@@ -30,15 +30,8 @@ def _migration_root() -> Path:
 
 
 def _ensure_schema(connection: sqlite3.Connection) -> None:
-    row = connection.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
-        ("google_translate_monthly_usage",),
-    ).fetchone()
-    if row:
-        return
-
-    migration_path = _migration_root() / "0001_initial.sql"
-    connection.executescript(migration_path.read_text(encoding="utf-8"))
+    for migration_file in sorted(_migration_root().glob("*.sql")):
+        connection.executescript(migration_file.read_text(encoding="utf-8"))
     connection.commit()
 
 
@@ -59,7 +52,13 @@ def ensure_google_translate_usage_database(data_root: Path) -> Path:
     return db_path
 
 
-def record_google_translate_usage(*, data_root: Path, characters: int, request_count: int = 1) -> None:
+def record_google_translate_usage(
+    *,
+    data_root: Path,
+    characters: int,
+    request_count: int = 1,
+    owner_id: str | None = None,
+) -> None:
     normalized_characters = max(0, int(characters))
     normalized_requests = max(0, int(request_count))
     if normalized_characters <= 0 and normalized_requests <= 0:
@@ -87,10 +86,29 @@ def record_google_translate_usage(*, data_root: Path, characters: int, request_c
             """,
             (month_key, normalized_requests, normalized_characters, now, now),
         )
+        if owner_id:
+            connection.execute(
+                """
+                INSERT INTO google_translate_account_monthly_usage (
+                    owner_id,
+                    month_key,
+                    request_count,
+                    character_count,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(owner_id, month_key) DO UPDATE SET
+                    request_count = request_count + excluded.request_count,
+                    character_count = character_count + excluded.character_count,
+                    updated_at = excluded.updated_at
+                """,
+                (owner_id, month_key, normalized_requests, normalized_characters, now, now),
+            )
         connection.commit()
 
 
-def get_google_translate_usage_summary(data_root: Path) -> GoogleTranslateUsageSummary:
+def get_google_translate_usage_summary(data_root: Path, *, owner_id: str | None = None) -> GoogleTranslateUsageSummary:
     db_path = ensure_google_translate_usage_database(data_root)
     month_key = _current_month_key()
 
@@ -103,11 +121,22 @@ def get_google_translate_usage_summary(data_root: Path) -> GoogleTranslateUsageS
         row = connection.execute(
             """
             SELECT month_key, request_count, character_count, updated_at
-            FROM google_translate_monthly_usage
-            WHERE month_key = ?
+            FROM google_translate_account_monthly_usage
+            WHERE owner_id = ? AND month_key = ?
             """,
-            (month_key,),
+            (owner_id, month_key),
         ).fetchone()
+        scope = "account"
+        if owner_id is None:
+            row = connection.execute(
+                """
+                SELECT month_key, request_count, character_count, updated_at
+                FROM google_translate_monthly_usage
+                WHERE month_key = ?
+                """,
+                (month_key,),
+            ).fetchone()
+            scope = "service"
         if row is not None:
             request_count = int(row["request_count"] or 0)
             character_count = int(row["character_count"] or 0)
@@ -118,6 +147,7 @@ def get_google_translate_usage_summary(data_root: Path) -> GoogleTranslateUsageS
     estimated_cost_usd = round((billable_characters / 1_000_000) * GOOGLE_TRANSLATE_BASIC_RATE_PER_MILLION_USD, 2)
 
     return GoogleTranslateUsageSummary(
+        scope=scope,
         month_key=month_key,
         request_count=request_count,
         character_count=character_count,

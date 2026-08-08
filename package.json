@@ -38,5 +38,8 @@
     "check:web": "npm run test:web",
     "stack:up": "docker compose up --build",
     "stack:down": "docker compose down"
+  },
+  "dependencies": {
+    "@vercel/speed-insights": "^2.0.0"
   }
 }

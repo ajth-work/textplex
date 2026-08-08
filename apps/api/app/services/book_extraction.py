@@ -77,11 +77,16 @@ def _is_punctuation_surface(surface_form: str) -> bool:
     return bool(text) and len(text) == 1 and not text.isalnum()
 
 
-def _load_page_artifact(path: Path, *, data_root: Path | None = None) -> PageExtractionArtifact | None:
+def _load_page_artifact(
+    path: Path,
+    *,
+    data_root: Path | None = None,
+    owner_id: str | None = None,
+) -> PageExtractionArtifact | None:
     if not path.exists():
         return None
     artifact = PageExtractionArtifact.model_validate_json(path.read_text(encoding="utf-8"))
-    recovered = _recover_page_artifact(artifact, data_root=data_root)
+    recovered = _recover_page_artifact(artifact, data_root=data_root, owner_id=owner_id)
     if recovered is not artifact:
         _save_page_artifact(path, recovered)
         return recovered
@@ -210,7 +215,12 @@ def _json_list_fragment(raw_text: str, key: str) -> list[object] | None:
     return None
 
 
-def _recover_page_result(page: PageExtractionResult, *, data_root: Path | None = None) -> PageExtractionResult:
+def _recover_page_result(
+    page: PageExtractionResult,
+    *,
+    data_root: Path | None = None,
+    owner_id: str | None = None,
+) -> PageExtractionResult:
     raw_text = page.raw_text.strip()
     parsed: dict | None = None
     if raw_text.startswith("{"):
@@ -302,14 +312,19 @@ def _recover_page_result(page: PageExtractionResult, *, data_root: Path | None =
     if data_root is None:
         return recovered
 
-    enriched = _enrich_page_lexicon_metadata(recovered, data_root=_lexicon_root(data_root))
+    enriched = _enrich_page_lexicon_metadata(recovered, data_root=_lexicon_root(data_root), owner_id=owner_id)
     return enriched
 
 
-def _recover_page_artifact(artifact: PageExtractionArtifact, *, data_root: Path | None = None) -> PageExtractionArtifact:
-    rebuilt_page = _recover_page_result(artifact.page, data_root=data_root)
+def _recover_page_artifact(
+    artifact: PageExtractionArtifact,
+    *,
+    data_root: Path | None = None,
+    owner_id: str | None = None,
+) -> PageExtractionArtifact:
+    rebuilt_page = _recover_page_result(artifact.page, data_root=data_root, owner_id=owner_id)
     if data_root is not None:
-        enriched_page = _enrich_page_lexicon_metadata(rebuilt_page, data_root=_lexicon_root(data_root))
+        enriched_page = _enrich_page_lexicon_metadata(rebuilt_page, data_root=_lexicon_root(data_root), owner_id=owner_id)
         if enriched_page is not rebuilt_page:
             rebuilt_page = enriched_page
     if rebuilt_page is artifact.page:
@@ -321,13 +336,14 @@ def recover_book_extraction_result(
     extraction: BookExtractionResult,
     *,
     data_root: Path | None = None,
+    owner_id: str | None = None,
 ) -> BookExtractionResult:
-    recovered_pages = [_recover_page_result(page, data_root=data_root) for page in extraction.pages]
+    recovered_pages = [_recover_page_result(page, data_root=data_root, owner_id=owner_id) for page in extraction.pages]
     if data_root is not None:
         lexicon_root = _lexicon_root(data_root)
         enriched_pages = []
         for page in recovered_pages:
-            enriched_pages.append(_enrich_page_lexicon_metadata(page, data_root=lexicon_root))
+            enriched_pages.append(_enrich_page_lexicon_metadata(page, data_root=lexicon_root, owner_id=owner_id))
         recovered_pages = enriched_pages
 
     if all(recovered is original for recovered, original in zip(recovered_pages, extraction.pages, strict=False)):
@@ -348,9 +364,11 @@ def load_page_artifact(
     book_id: str,
     page_number: int,
     data_root: Path | None = None,
+    owner_id: str | None = None,
 ) -> PageExtractionArtifact | None:
     data_root = data_root or get_books_root()
-    return _load_page_artifact(_page_artifact_path(book_id, page_number, data_root), data_root=data_root)
+    artifact_path = _page_artifact_path(book_id, page_number, data_root)
+    return _load_page_artifact(artifact_path, data_root=data_root, owner_id=owner_id)
 
 
 def parse_text_into_page_artifact(
@@ -359,6 +377,7 @@ def parse_text_into_page_artifact(
     language_code: str,
     title: str | None = None,
     data_root: Path | None = None,
+    owner_id: str | None = None,
 ) -> PageExtractionArtifact:
     lexicon_root = data_root or get_books_root().parent
     page_result = build_page_extraction_result(
@@ -371,6 +390,7 @@ def parse_text_into_page_artifact(
     page_result = _enrich_page_lexicon_metadata(
         page_result,
         data_root=lexicon_root,
+        owner_id=owner_id,
     )
     return PageExtractionArtifact(
         source_page_sha256=page_result.source_page_sha256 or hashlib.sha256(text.encode("utf-8")).hexdigest(),
@@ -420,6 +440,7 @@ def import_text_into_book(
         force=True,
         data_root=books_root,
         ocr_provider="local",
+        owner_id=owner_id,
     )
 
     book.extraction_status = "complete"
@@ -461,7 +482,12 @@ def _page_image_hash(page_image_path: Path) -> str:
     return hashlib.sha256(page_image_path.read_bytes()).hexdigest()
 
 
-def _enrich_page_lexicon_metadata(page_result: PageExtractionResult, *, data_root: Path) -> PageExtractionResult:
+def _enrich_page_lexicon_metadata(
+    page_result: PageExtractionResult,
+    *,
+    data_root: Path,
+    owner_id: str | None = None,
+) -> PageExtractionResult:
     language_code = page_result.language_code.lower()
     if _language_root(language_code) not in {"zh", "ja", "ko", "ru", "he", "ar"}:
         return page_result
@@ -514,6 +540,7 @@ def _enrich_page_lexicon_metadata(page_result: PageExtractionResult, *, data_roo
                 record_google_translate_usage(
                     data_root=data_root,
                     characters=sum(len(term) for term in google_romanization_map),
+                    owner_id=owner_id,
                 )
 
     hebrew_romanization_map: dict[str, str] = {}
@@ -570,12 +597,18 @@ def _enrich_page_lexicon_metadata(page_result: PageExtractionResult, *, data_roo
     return page_result.model_copy(update={"sentences": sentences})
 
 
-def _translate_text_with_google(*, source_text: str, source_language_code: str, data_root: Path) -> str | None:
+def _translate_text_with_google(
+    *,
+    source_text: str,
+    source_language_code: str,
+    data_root: Path,
+    owner_id: str | None = None,
+) -> str | None:
     translated_text = translate_text(source_text, source_language_code=source_language_code)
     if not translated_text:
         return None
 
-    record_google_translate_usage(data_root=data_root, characters=len(source_text))
+    record_google_translate_usage(data_root=data_root, characters=len(source_text), owner_id=owner_id)
     return translated_text
 
 
@@ -608,7 +641,12 @@ def _attach_sentence_translation_alignment(
     return updated_page, updated_sentence, "openai"
 
 
-def preload_page_sentence_translations(page_result: PageExtractionResult, *, data_root: Path) -> PageExtractionResult:
+def preload_page_sentence_translations(
+    page_result: PageExtractionResult,
+    *,
+    data_root: Path,
+    owner_id: str | None = None,
+) -> PageExtractionResult:
     if not is_google_translate_configured():
         return page_result
 
@@ -623,6 +661,7 @@ def preload_page_sentence_translations(page_result: PageExtractionResult, *, dat
             source_text=sentence.text,
             source_language_code=page_result.language_code,
             data_root=data_root,
+            owner_id=owner_id,
         )
         if not translated:
             sentences.append(sentence)
@@ -663,6 +702,7 @@ def translate_page_sentence(
     *,
     sentence_order: int,
     data_root: Path,
+    owner_id: str | None = None,
 ) -> tuple[PageExtractionResult, SentenceResult | None, str]:
     existing_sentence = next((sentence for sentence in page_result.sentences if sentence.order == sentence_order), None)
     if existing_sentence is None:
@@ -702,6 +742,7 @@ def translate_page_sentence(
         source_text=existing_sentence.text,
         source_language_code=page_result.language_code,
         data_root=data_root,
+        owner_id=owner_id,
     )
     if not translated:
         return page_result, existing_sentence, "unavailable"
@@ -726,18 +767,20 @@ def preload_book_sentence_translations(
     page_start: int = 1,
     page_count: int | None = None,
     data_root: Path | None = None,
+    owner_id: str | None = None,
 ) -> int:
     data_root = data_root or get_books_root()
+    owner_id = owner_id or book.owner_id
     start_page = max(1, page_start)
     end_page = book.total_pages if page_count is None else min(book.total_pages, start_page + page_count - 1)
     updated_pages = 0
 
     for page_number in range(start_page, end_page + 1):
-        artifact = load_page_artifact(book_id=book.id, page_number=page_number, data_root=data_root)
+        artifact = load_page_artifact(book_id=book.id, page_number=page_number, data_root=data_root, owner_id=owner_id)
         if artifact is None:
             continue
 
-        translated_page = preload_page_sentence_translations(artifact.page, data_root=data_root)
+        translated_page = preload_page_sentence_translations(artifact.page, data_root=data_root, owner_id=owner_id)
         if translated_page is artifact.page:
             continue
 
@@ -777,9 +820,11 @@ def extract_book_pages(
     force: bool = False,
     ocr_provider: str | None = None,
     data_root: Path | None = None,
+    owner_id: str | None = None,
     progress_callback: ExtractionProgressCallback | None = None,
 ) -> tuple[PageExtractionArtifact, ...]:
     data_root = data_root or get_books_root()
+    owner_id = owner_id or book.owner_id
     lexicon_root = data_root.parent if data_root.name == "books" else data_root
     pages_root = Path(book.pages_path) if book.pages_path else data_root / book.id / "pages"
     extraction_root = _artifact_dir(book.id, data_root) / "pages"
@@ -804,7 +849,7 @@ def extract_book_pages(
         page_image_path = pages_root / f"page-{page_number:04d}.png"
         page_hash = _page_image_hash(page_image_path)
         artifact_path = _page_artifact_path(book.id, page_number, data_root)
-        existing_artifact = _load_page_artifact(artifact_path)
+        existing_artifact = _load_page_artifact(artifact_path, owner_id=owner_id)
         if (
             not force
             and existing_artifact
@@ -813,7 +858,7 @@ def extract_book_pages(
             and existing_artifact.text_source_signature == current_text_source_signature
         ):
             page_result = existing_artifact.page.model_copy(deep=True)
-            page_result = _enrich_page_lexicon_metadata(page_result, data_root=lexicon_root)
+            page_result = _enrich_page_lexicon_metadata(page_result, data_root=lexicon_root, owner_id=owner_id)
             page_results.append(page_result)
             artifact_meta.append(
                 (page_hash, existing_artifact.text_source, existing_artifact.text_source_signature, page_result)
@@ -864,7 +909,7 @@ def extract_book_pages(
             page_ends_with_sentence_terminator=page_ends,
             token_hints=token_hints,
         )
-        page_result = _enrich_page_lexicon_metadata(page_result, data_root=lexicon_root)
+        page_result = _enrich_page_lexicon_metadata(page_result, data_root=lexicon_root, owner_id=owner_id)
         page_results.append(page_result)
         artifact_meta.append((page_hash, text_source, text_source_signature, page_result))
         processed_count += 1
@@ -897,9 +942,11 @@ def extract_book_text(
     force: bool = False,
     ocr_provider: str | None = None,
     data_root: Path | None = None,
+    owner_id: str | None = None,
     progress_callback: ExtractionProgressCallback | None = None,
 ) -> tuple[Path, int]:
     data_root = data_root or get_books_root()
+    owner_id = owner_id or book.owner_id
     artifacts = extract_book_pages(
         book=book,
         page_start=page_start,
@@ -907,6 +954,7 @@ def extract_book_text(
         force=force,
         ocr_provider=ocr_provider,
         data_root=data_root,
+        owner_id=owner_id,
         progress_callback=progress_callback,
     )
     pages = [artifact.page for artifact in artifacts]

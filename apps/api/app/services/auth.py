@@ -17,6 +17,26 @@ from app.schemas.auth import (
 )
 from fastapi import Header, HTTPException
 
+ACCOUNT_ROLES = {"member", "qa", "admin"}
+ACCOUNT_ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
+    "member": ("account.read",),
+    "qa": (
+        "account.read",
+        "themes.preview_all",
+        "languages.preview_all",
+        "translation.fallback",
+    ),
+    "admin": (
+        "account.read",
+        "themes.preview_all",
+        "languages.preview_all",
+        "translation.fallback",
+        "usage.global.read",
+        "accounts.manage",
+        "entitlements.manage",
+    ),
+}
+
 
 @dataclass(frozen=True)
 class AuthenticatedUserContext:
@@ -96,12 +116,26 @@ def _load_auth_user(token: str) -> dict[str, Any]:
 def _auth_me_response(payload: dict[str, Any]) -> AuthMeResponse:
     metadata = payload.get("user_metadata")
     display_name = metadata.get("display_name") if isinstance(metadata, dict) else None
+    app_metadata = payload.get("app_metadata")
+    requested_account_role = app_metadata.get("textplex_role") if isinstance(app_metadata, dict) else None
+    account_role = requested_account_role if requested_account_role in ACCOUNT_ROLES else "member"
     return AuthMeResponse(
         id=payload["id"],
         email=payload.get("email") if isinstance(payload.get("email"), str) else None,
         role=payload.get("role") if isinstance(payload.get("role"), str) else "authenticated",
+        account_role=account_role,
+        permissions=list(ACCOUNT_ROLE_PERMISSIONS[account_role]),
         display_name=display_name if isinstance(display_name, str) else None,
     )
+
+
+def has_permission(context: AuthenticatedUserContext, permission: str) -> bool:
+    return permission in context.user.permissions
+
+
+def require_permission(context: AuthenticatedUserContext, permission: str) -> None:
+    if not has_permission(context, permission):
+        raise HTTPException(status_code=403, detail="This account does not have permission for that action.")
 
 
 def get_authenticated_user_context(
