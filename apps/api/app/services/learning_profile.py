@@ -26,6 +26,7 @@ from app.schemas.learning import (
     WordInteractionRecord,
 )
 from app.services.book_registry import load_registry
+from app.services.lexicon import lookup_lexicon_entry
 
 TRACK_DEFINITIONS: dict[str, dict[str, str]] = {
     "hsk": {
@@ -188,6 +189,30 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _resolve_study_definition_short(
+    data_root: Path,
+    *,
+    language_code: str,
+    candidates: tuple[str, ...],
+) -> str | None:
+    normalized_language_code = language_code.strip().lower()
+    for candidate in candidates:
+        term = candidate.strip()
+        if not term:
+          continue
+        lookup = lookup_lexicon_entry(
+            data_root=data_root,
+            language_code=normalized_language_code,
+            term=term,
+            allow_google_fallback=True,
+        )
+        entry = lookup.entries[0] if lookup.entries else None
+        definition = entry.definition.strip() if entry and entry.definition else None
+        if definition:
+            return definition
+    return None
+
+
 def _parse_utc(value: str | None) -> datetime:
     text = (value or "").strip()
     if not text:
@@ -322,6 +347,162 @@ def _ensure_vocabulary_progress_row(connection: sqlite3.Connection, language_cod
         """,
         (language_code, lemma),
     )
+
+
+def _ensure_book_progress_row(connection: sqlite3.Connection, book_id: str) -> None:
+    existing = connection.execute(
+        "SELECT 1 FROM book_progress WHERE book_id = ?",
+        (book_id,),
+    ).fetchone()
+    if existing is not None:
+        return
+    connection.execute(
+        """
+        INSERT INTO book_progress (
+            book_id,
+            reading_sessions,
+            page_reads,
+            sentence_reads,
+            active_seconds,
+            furthest_page,
+            resume_page,
+            resume_sentence_order,
+            total_pages,
+            total_sentences,
+            progress_percent,
+            progress_unit,
+            reading_state,
+            last_read_at,
+            completed_at
+        )
+        VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'pages', 'not_read', NULL, NULL)
+        """,
+        (book_id,),
+    )
+
+
+def _refresh_book_progress(
+    connection: sqlite3.Connection,
+    *,
+    book_id: str,
+    total_pages: int,
+    total_sentences: int,
+    reading_sessions: int,
+    page_reads: int,
+    sentence_reads: int,
+    active_seconds: int,
+    furthest_page: int,
+    resume_page: int,
+    resume_sentence_order: int,
+    last_read_at: str | None = None,
+    completed_at: str | None = None,
+) -> None:
+    _ensure_book_progress_row(connection, book_id)
+    row = connection.execute(
+        """
+        SELECT reading_sessions, page_reads, sentence_reads, active_seconds, furthest_page,
+               resume_page, resume_sentence_order, total_pages, total_sentences,
+               progress_percent, progress_unit, reading_state, last_read_at, completed_at
+        FROM book_progress
+        WHERE book_id = ?
+        """,
+        (book_id,),
+    ).fetchone()
+    if row is None:
+        raise RuntimeError(f"Failed to load book progress row for {book_id}.")
+
+    total_pages_value = max(0, int(total_pages))
+    total_sentences_value = max(0, int(total_sentences))
+    reading_sessions_value = max(0, int(reading_sessions))
+    page_reads_value = max(0, int(page_reads))
+    sentence_reads_value = max(0, int(sentence_reads))
+    active_seconds_value = max(0, int(active_seconds))
+    furthest_page_value = max(0, int(furthest_page))
+    resume_page_value = max(0, int(resume_page))
+    resume_sentence_order_value = max(0, int(resume_sentence_order))
+    progress_unit = "pages" if total_pages_value > 1 else "sentences"
+    if progress_unit == "pages":
+        numerator = furthest_page_value
+        denominator = total_pages_value
+    else:
+        numerator = sentence_reads_value
+        denominator = total_sentences_value
+    progress_percent = min(100, round((numerator / denominator) * 100)) if denominator > 0 else 0
+    if page_reads_value <= 0 and sentence_reads_value <= 0:
+        reading_state = "not_read"
+    elif progress_percent >= 100:
+        reading_state = "finished"
+    else:
+        reading_state = "in_progress"
+    existing_completed_at = str(row["completed_at"]) if row["completed_at"] else None
+    existing_last_read_at = str(row["last_read_at"]) if row["last_read_at"] else None
+    latest_read_at = last_read_at or existing_last_read_at
+    completed_value = existing_completed_at
+    if reading_state == "finished":
+        completed_value = completed_value or last_read_at or existing_last_read_at
+
+    connection.execute(
+        """
+        INSERT INTO book_progress (
+            book_id,
+            reading_sessions,
+            page_reads,
+            sentence_reads,
+            active_seconds,
+            furthest_page,
+            resume_page,
+            resume_sentence_order,
+            total_pages,
+            total_sentences,
+            progress_percent,
+            progress_unit,
+            reading_state,
+            last_read_at,
+            completed_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(book_id) DO UPDATE SET
+            reading_sessions = excluded.reading_sessions,
+            page_reads = excluded.page_reads,
+            sentence_reads = excluded.sentence_reads,
+            active_seconds = excluded.active_seconds,
+            furthest_page = excluded.furthest_page,
+            resume_page = excluded.resume_page,
+            resume_sentence_order = excluded.resume_sentence_order,
+            total_pages = excluded.total_pages,
+            total_sentences = excluded.total_sentences,
+            progress_percent = excluded.progress_percent,
+            progress_unit = excluded.progress_unit,
+            reading_state = excluded.reading_state,
+            last_read_at = excluded.last_read_at,
+            completed_at = excluded.completed_at
+        """,
+        (
+            book_id,
+            reading_sessions_value,
+            page_reads_value,
+            sentence_reads_value,
+            active_seconds_value,
+            furthest_page_value,
+            resume_page_value,
+            resume_sentence_order_value,
+            total_pages_value,
+            total_sentences_value,
+            progress_percent,
+            progress_unit,
+            reading_state,
+            latest_read_at,
+            completed_value,
+        ),
+    )
+
+
+def _book_progress_totals(data_root: Path, book_id: str) -> tuple[int, int]:
+    registry = load_registry(resolve_books_root(data_root) / "registry.json")
+    record = registry.get(book_id)
+    if record is None:
+        return 0, 0
+    return max(0, int(getattr(record, "total_pages", 0) or 0)), max(0, int(getattr(record, "total_sentences", 0) or 0))
 
 
 def _ensure_vocabulary_assessment_axes(connection: sqlite3.Connection, language_code: str, lemma: str) -> None:
@@ -504,7 +685,7 @@ def _apply_assessment_review(
     prompt_type, response_type = _assessment_axis_definition(axis_key)
     row = connection.execute(
         """
-        SELECT stage, pass_count, fail_count
+        SELECT stage, due_at, pass_count, fail_count
         FROM vocabulary_assessment_axes
         WHERE language_code = ? AND lemma = ? AND axis_key = ?
         """,
@@ -526,6 +707,8 @@ def _apply_assessment_review(
         fail_count += 1
         stage = max(1, stage - 1) if stage > 0 else 0
         due_at = _utc_from_datetime(review_time + _assessment_stage_interval(stage))
+    elif normalized_result in {"wrong_axis", "retry"}:
+        due_at = str(row["due_at"]) if row["due_at"] else None
     else:
         raise ValueError(f"Unsupported assessment result: {result}")
 
@@ -731,6 +914,11 @@ def record_study_vocabulary_item(
     display_form = payload.display_form.strip() or lemma
     source_surface_form = payload.source_surface_form.strip() or display_form
     source_sentence_text = payload.source_sentence_text.strip()
+    definition_short = payload.definition_short or _resolve_study_definition_short(
+        data_root,
+        language_code=language_code,
+        candidates=(lemma, display_form, source_surface_form),
+    )
 
     with _connect(data_root, owner_id) as connection:
         connection.execute(
@@ -782,7 +970,7 @@ def record_study_vocabulary_item(
                 source_sentence_text,
                 payload.pronunciation,
                 payload.romanization,
-                payload.definition_short,
+                definition_short,
                 payload.proficiency_level,
                 saved_at,
                 saved_at,
@@ -827,7 +1015,7 @@ def record_study_vocabulary_item(
                 "source_sentence_text": source_sentence_text,
                 "pronunciation": payload.pronunciation,
                 "romanization": payload.romanization,
-                "definition_short": payload.definition_short,
+                "definition_short": definition_short,
                 "proficiency_level": payload.proficiency_level,
                 "first_seen_at": saved_at,
                 "last_seen_at": saved_at,
@@ -976,6 +1164,7 @@ def create_reading_session(
 ) -> ReadingSessionRecord:
     started_at = payload.started_at or _utc_now()
     session_id = f"session-{uuid4().hex}"
+    total_pages, total_sentences = _book_progress_totals(data_root, payload.book_id)
     with _connect(data_root, owner_id) as connection:
         connection.execute(
             """
@@ -998,6 +1187,23 @@ def create_reading_session(
                 "active_seconds": 0,
             },
         )
+        reading_sessions = connection.execute(
+            "SELECT COUNT(*) AS count FROM reading_sessions WHERE book_id = ?",
+            (payload.book_id,),
+        ).fetchone()["count"]
+        _refresh_book_progress(
+            connection,
+            book_id=payload.book_id,
+            total_pages=total_pages,
+            total_sentences=total_sentences,
+            reading_sessions=int(reading_sessions or 0),
+            page_reads=0,
+            sentence_reads=0,
+            active_seconds=0,
+            furthest_page=0,
+            resume_page=0,
+            resume_sentence_order=0,
+        )
         connection.commit()
     return ReadingSessionRecord(
         id=session_id,
@@ -1018,6 +1224,7 @@ def record_page_read(
     estimated_seconds = max(payload.active_seconds, 30)
     completion_ratio = 0.0 if estimated_seconds <= 0 else min(payload.active_seconds / estimated_seconds, 1.0)
     counted_as_read = int(payload.active_seconds >= 15 or completion_ratio >= 0.75)
+    total_pages, total_sentences = _book_progress_totals(data_root, payload.book_id)
 
     with _connect(data_root, owner_id) as connection:
         session_row = connection.execute(
@@ -1067,6 +1274,44 @@ def record_page_read(
         ).fetchone()
         if row is None:
             raise RuntimeError("Failed to record page read.")
+        reading_sessions = connection.execute(
+            "SELECT COUNT(*) AS count FROM reading_sessions WHERE book_id = ?",
+            (payload.book_id,),
+        ).fetchone()["count"]
+        page_row = connection.execute(
+            """
+            SELECT COUNT(*) AS page_reads,
+                   COALESCE(SUM(active_seconds), 0) AS active_seconds,
+                   MAX(page_number) AS furthest_page,
+                   MAX(completed_at) AS last_read_at
+            FROM page_reads
+            WHERE book_id = ?
+            """,
+            (payload.book_id,),
+        ).fetchone()
+        sentence_row = connection.execute(
+            """
+            SELECT COUNT(*) AS sentence_reads,
+                   COALESCE(SUM(active_seconds), 0) AS active_seconds
+            FROM sentence_reads
+            WHERE book_id = ?
+            """,
+            (payload.book_id,),
+        ).fetchone()
+        _refresh_book_progress(
+            connection,
+            book_id=payload.book_id,
+            total_pages=total_pages,
+            total_sentences=total_sentences,
+            reading_sessions=int(reading_sessions or 0),
+            page_reads=int(page_row["page_reads"] or 0),
+            sentence_reads=int(sentence_row["sentence_reads"] or 0),
+            active_seconds=int(page_row["active_seconds"] or 0) + int(sentence_row["active_seconds"] or 0),
+            furthest_page=int(page_row["furthest_page"] or 0),
+            resume_page=payload.page_number,
+            resume_sentence_order=1,
+            last_read_at=str(row["completed_at"]),
+        )
         _queue_learning_event(
             connection,
             event_id=f"page-read:{uuid4().hex}",
@@ -1100,6 +1345,7 @@ def record_sentence_read(
     if book is None:
         raise KeyError(f"Book not found: {payload.book_id}")
     language_code = str(getattr(book, "language_code", None) or "local")
+    total_pages, total_sentences = _book_progress_totals(data_root, payload.book_id)
 
     with _connect(data_root, owner_id) as connection:
         session_row = connection.execute(
@@ -1243,6 +1489,45 @@ def record_sentence_read(
         ).fetchone()
         if row is None:
             raise RuntimeError("Failed to record sentence read.")
+        reading_sessions = connection.execute(
+            "SELECT COUNT(*) AS count FROM reading_sessions WHERE book_id = ?",
+            (payload.book_id,),
+        ).fetchone()["count"]
+        page_row = connection.execute(
+            """
+            SELECT COUNT(*) AS page_reads,
+                   COALESCE(SUM(active_seconds), 0) AS active_seconds,
+                   MAX(page_number) AS furthest_page,
+                   MAX(completed_at) AS last_read_at
+            FROM page_reads
+            WHERE book_id = ?
+            """,
+            (payload.book_id,),
+        ).fetchone()
+        sentence_row = connection.execute(
+            """
+            SELECT COUNT(*) AS sentence_reads,
+                   COUNT(DISTINCT CAST(page_number AS TEXT) || ':' || CAST(sentence_order AS TEXT)) AS distinct_sentence_reads,
+                   COALESCE(SUM(active_seconds), 0) AS active_seconds
+            FROM sentence_reads
+            WHERE book_id = ?
+            """,
+            (payload.book_id,),
+        ).fetchone()
+        _refresh_book_progress(
+            connection,
+            book_id=payload.book_id,
+            total_pages=total_pages,
+            total_sentences=total_sentences,
+            reading_sessions=int(reading_sessions or 0),
+            page_reads=int(page_row["page_reads"] or 0),
+            sentence_reads=int(sentence_row["distinct_sentence_reads"] or 0),
+            active_seconds=int(page_row["active_seconds"] or 0) + int(sentence_row["active_seconds"] or 0),
+            furthest_page=int(page_row["furthest_page"] or 0),
+            resume_page=payload.page_number,
+            resume_sentence_order=payload.sentence_order,
+            last_read_at=completed_at,
+        )
         _queue_learning_event(
             connection,
             event_id=f"sentence-read:{uuid4().hex}",
@@ -1322,6 +1607,9 @@ def get_learning_profile_summary(
     with sqlite3.connect(db_path) as connection:
         connection.row_factory = sqlite3.Row
         reading_sessions = connection.execute("SELECT COUNT(*) AS count FROM reading_sessions").fetchone()["count"]
+        session_seconds = connection.execute(
+            "SELECT COALESCE(SUM(active_seconds), 0) AS value FROM reading_sessions"
+        ).fetchone()["value"]
         page_reads = connection.execute("SELECT COUNT(*) AS count FROM page_reads").fetchone()["count"]
         sentence_reads = connection.execute("SELECT COUNT(*) AS count FROM sentence_reads").fetchone()["count"]
         token_exposures = connection.execute("SELECT COUNT(*) AS count FROM token_exposures").fetchone()["count"]
@@ -1335,6 +1623,13 @@ def get_learning_profile_summary(
             "SELECT COUNT(DISTINCT normalized_form) AS count FROM token_exposures WHERE token_kind = 'character'"
         ).fetchone()["count"]
         vocabulary_progress_rows = connection.execute("SELECT COUNT(*) AS count FROM vocabulary_progress").fetchone()["count"]
+        glossed_vocabulary_items = connection.execute("SELECT COUNT(*) AS count FROM study_vocabulary_items").fetchone()["count"]
+        remembered_word_interactions = connection.execute(
+            "SELECT COUNT(*) AS count FROM word_interactions WHERE interaction_type = 'definition_lookup_remembered'"
+        ).fetchone()["count"]
+        missed_word_interactions = connection.execute(
+            "SELECT COUNT(*) AS count FROM word_interactions WHERE interaction_type = 'definition_lookup_missed'"
+        ).fetchone()["count"]
         page_read_rows = connection.execute(
             """
             SELECT book_id, COUNT(*) AS page_read_count, COUNT(DISTINCT page_number) AS completed_pages, SUM(active_seconds) AS active_seconds
@@ -1465,8 +1760,12 @@ def get_learning_profile_summary(
         unique_words_seen=unique_words_seen,
         unique_characters_seen=unique_characters_seen,
         vocabulary_progress_rows=vocabulary_progress_rows,
+        glossed_vocabulary_items=glossed_vocabulary_items,
+        remembered_word_interactions=remembered_word_interactions,
+        missed_word_interactions=missed_word_interactions,
         today_sentence_reads=today_sentence_reads,
         today_token_exposures=today_token_exposures,
+        average_seconds_per_session=_average(int(session_seconds), int(reading_sessions)),
         average_seconds_per_sentence=_average(int(sentence_seconds), int(sentence_reads)),
         average_seconds_per_word=_average(int(word_seconds), int(word_exposures)),
         average_seconds_per_character=_average(int(character_seconds), int(character_exposures)),

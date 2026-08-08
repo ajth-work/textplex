@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -45,9 +47,32 @@ class SentenceResult(BaseModel):
     text: str
     translation: str | None = None
     translation_source: str | None = None
+    translation_alignment: SentenceTranslationAlignment | None = None
     tokens: list[TokenResult]
     grammar_patterns: list[str] = Field(default_factory=list)
     ends_with_sentence_terminator: bool = False
+
+
+class TranslationAlignmentToken(BaseModel):
+    token_id: int = Field(ge=1)
+    text: str
+    token_kind: Literal["word", "punctuation", "space"] = "word"
+
+
+class TranslationAlignmentSegment(BaseModel):
+    source_token_ids: list[int] = Field(default_factory=list)
+    target_token_ids: list[int] = Field(default_factory=list)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class SentenceTranslationAlignment(BaseModel):
+    alignment_source: Literal["openai", "heuristic"] = "heuristic"
+    model: str | None = None
+    source_language_code: str
+    target_language_code: str = "en"
+    source_tokens: list[TranslationAlignmentToken] = Field(default_factory=list)
+    target_tokens: list[TranslationAlignmentToken] = Field(default_factory=list)
+    segments: list[TranslationAlignmentSegment] = Field(default_factory=list)
 
 
 class PageExtractionResult(BaseModel):

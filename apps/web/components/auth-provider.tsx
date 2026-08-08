@@ -3,6 +3,7 @@
 import type { Session, User } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
+import { syncAuthSessionCookie } from "../lib/auth-session";
 import { getSupabaseClient, isSupabaseConfigured } from "../lib/supabase";
 
 type AuthContextValue = {
@@ -15,11 +16,12 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: Readonly<{ children: React.ReactNode }>) {
+export function AuthProvider({ children, initialUser = null }: Readonly<{ children: React.ReactNode; initialUser?: User | null }>) {
   const configured = isSupabaseConfigured();
   const client = useMemo(() => getSupabaseClient(), []);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(configured);
+  const [user, setUser] = useState<User | null>(initialUser);
+  const [loading, setLoading] = useState(configured && !initialUser);
 
   useEffect(() => {
     if (!client) {
@@ -31,6 +33,8 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
     void client.auth.getSession().then(({ data }) => {
       if (mounted) {
         setSession(data.session);
+        setUser(data.session?.user ?? null);
+        syncAuthSessionCookie(data.session);
         setLoading(false);
       }
     });
@@ -39,6 +43,8 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
       data: { subscription },
     } = client.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
+      setUser(nextSession?.user ?? null);
+      syncAuthSessionCookie(nextSession);
       setLoading(false);
     });
 
@@ -53,14 +59,15 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
       configured,
       loading,
       session,
-      user: session?.user ?? null,
+      user,
       signOut: async () => {
         if (client) {
           await client.auth.signOut();
         }
+        syncAuthSessionCookie(null);
       },
     }),
-    [client, configured, loading, session],
+    [client, configured, loading, session, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

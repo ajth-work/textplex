@@ -24,7 +24,7 @@ Phases 1 through 6 are complete. Phase 7 is the remaining operational readiness 
 
 - Defined Next.js as the long-term canonical product application.
 - Kept the standalone site as the GitHub Pages and compatibility shell until parity is verified.
-- Established a route ownership matrix for home, library, reader, analysis, import, search, study, progress, profile, settings, theme shop, activity, roadmap, and auth.
+- Established a route ownership matrix for home, library, reader, analysis, import, search, study, progress, profile, settings, theme settings, activity, roadmap, and auth.
 - Declared the API and shared TypeScript contracts as the source of truth for product data.
 - Separated book truth, learner truth, and preview/demo state.
 - Established browser-state keys and migration rules so the standalone shell could be retired without losing user context.
@@ -123,4 +123,3 @@ Outcome:
 - [Frontend Migration Phase 5](FRONTEND_MIGRATION_PHASE_5.md)
 - [Frontend Migration Phase 6](FRONTEND_MIGRATION_PHASE_6.md)
 - [Frontend Migration Phase 7](FRONTEND_MIGRATION_PHASE_7.md)
-

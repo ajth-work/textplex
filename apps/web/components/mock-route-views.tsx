@@ -8,21 +8,14 @@ import { RoutePage } from "./route-page";
 import {
   demoBookExtractionResult,
   demoBookRecord,
+  demoGeneratedArticlePromptDetails,
   demoLibraryBooks,
   demoLearningProfileSummary,
+  demoStarterPrograms,
 } from "../lib/demo-data";
 import {
   appThemeLabels,
-  appThemeOptions,
-  DEFAULT_APP_THEME_GRID_ENABLED,
-  DEFAULT_APP_THEME_PATTERN_OPACITY,
-  persistAppTheme,
-  persistAppThemeGridEnabled,
-  persistAppThemePatternOpacity,
   readStoredAppTheme,
-  readStoredAppThemeGridEnabled,
-  readStoredAppThemePatternOpacity,
-  resolveAppTheme,
   type AppTheme,
 } from "../lib/theme";
 import {
@@ -34,13 +27,15 @@ import type {
   ProgressSurfaceResponse,
   ProfileSurfaceResponse,
   SearchSurfaceResponse,
-  SettingsSurfaceResponse,
   StudySurfaceResponse,
 } from "../lib/textplex";
-import { GlobalThemePicker } from "./global-theme-picker";
+import { GeneratedArticlePromptCard } from "./generated-article-prompt-card";
 import { ReadingProgressChart } from "./reading-progress-chart";
 import { DueReviewChart } from "./due-review-chart";
 import { StudyDueLanguageGroups } from "./study-due-language-groups";
+import { StudyAxisRadarChart } from "./study-axis-radar-chart";
+import { InventoryInspectorToggle } from "./inventory-inspector";
+import { BuildFooterToggle } from "./build-footer";
 
 const demoReadingHistory = [
   { day_index: 1, day: "2026-07-08", pages_read: 1, cumulative_pages: 1, sentences_read: 2, cumulative_sentences: 2 },
@@ -208,6 +203,12 @@ export function MockAnalysisSurfaceView({ bookId }: { bookId: string }) {
           <p>Status: Extraction available</p>
         </article>
       </section>
+      <GeneratedArticlePromptCard
+        inventoryId="analysis.generation-prompt-card"
+        details={demoGeneratedArticlePromptDetails}
+        title="Generated article prompt"
+        description="The demo analysis surface mirrors the live prompt record so the saved generation payload stays visible in preview mode."
+      />
     </RoutePage>
   );
 }
@@ -270,6 +271,7 @@ export function MockProgressSurfaceView() {
         book_id: demoBookRecord.id,
         title: demoBookRecord.title,
         page_reads: 1,
+        reading_sessions: 1,
         sentence_reads: 2,
         active_seconds: 120,
         total_pages: demoBookRecord.total_pages,
@@ -280,6 +282,7 @@ export function MockProgressSurfaceView() {
         sentences_read: 2,
         progress_percent: 33,
         progress_unit: "pages" as const,
+        reading_state: "in_progress" as const,
         last_read_at: "2026-07-29T12:00:00Z",
       },
     ],
@@ -331,6 +334,7 @@ export function MockProgressSurfaceView() {
                 <p className="small-copy">
                   {book.page_reads} page reads - {book.sentence_reads} sentence reads
                 </p>
+                <p className="small-copy">State: {book.reading_state.replaceAll("_", " ")}</p>
               </div>
             ))}
           </div>
@@ -352,6 +356,7 @@ export function MockProfileSurfaceView() {
       book_id: book.id,
       title: book.title,
       page_reads: index + 1,
+      reading_sessions: index + 1,
       sentence_reads: index + 2,
       active_seconds: 120 + index * 45,
       total_pages: book.total_pages,
@@ -362,6 +367,7 @@ export function MockProfileSurfaceView() {
       sentences_read: index + 2,
       progress_percent: Math.round(((index + 1) / Math.max(book.total_pages, 1)) * 100),
       progress_unit: "pages" as const,
+      reading_state: "finished" as const,
       last_read_at: "2026-07-29T12:00:00Z",
     })),
     settings: {
@@ -421,7 +427,6 @@ export function MockProfileSurfaceView() {
             <p>{(data.profile.learning_tracks.find((track) => track.code === data.profile.selected_track_code) ?? data.profile.learning_tracks[0]).next_step}</p>
           </article>
           ) : null}
-          <GlobalThemePicker initialTheme={currentTheme} entries={data.settings.entries} />
           <article className="card feature-card">
           <h2>Preferences</h2>
           <div className="surface-list">
@@ -447,6 +452,7 @@ export function MockProfileSurfaceView() {
                 <p className="small-copy">
                   {book.page_reads} page reads â€¢ {book.sentence_reads} sentence reads
                 </p>
+                <p className="small-copy">State: {book.reading_state.replaceAll("_", " ")}</p>
               </div>
             ))}
           </div>
@@ -574,52 +580,14 @@ export function MockSearchSurfaceView() {
 }
 
 export function MockSettingsSurfaceView() {
-  const initialTheme: AppTheme = "neutral";
-  const [data, setData] = useState<SettingsSurfaceResponse>({
-    entries: [
-      { key: "theme", value: initialTheme },
-      { key: "themeGridEnabled", value: DEFAULT_APP_THEME_GRID_ENABLED ? "on" : "off" },
-      { key: "themePatternOpacity", value: String(DEFAULT_APP_THEME_PATTERN_OPACITY) },
-    ],
-  });
-  const [theme, setTheme] = useState<AppTheme>(initialTheme);
-  const [gridEnabled, setGridEnabled] = useState(DEFAULT_APP_THEME_GRID_ENABLED);
-  const [patternOpacity, setPatternOpacity] = useState(DEFAULT_APP_THEME_PATTERN_OPACITY);
-
-  useEffect(() => {
-    const storedTheme = readStoredAppTheme() ?? "neutral";
-    const storedGridEnabled = readStoredAppThemeGridEnabled() ?? DEFAULT_APP_THEME_GRID_ENABLED;
-    const storedPatternOpacity = readStoredAppThemePatternOpacity() ?? DEFAULT_APP_THEME_PATTERN_OPACITY;
-    setTheme(storedTheme);
-    setGridEnabled(storedGridEnabled);
-    setPatternOpacity(storedPatternOpacity);
-    setData({
-      entries: [
-        { key: "theme", value: storedTheme },
-        { key: "themeGridEnabled", value: storedGridEnabled ? "on" : "off" },
-        { key: "themePatternOpacity", value: String(storedPatternOpacity) },
-      ],
-    });
-  }, []);
-
-  function saveSettings() {
-    persistAppTheme(theme);
-    persistAppThemeGridEnabled(gridEnabled);
-    persistAppThemePatternOpacity(patternOpacity);
-    setData({
-      entries: [
-        { key: "theme", value: theme },
-        { key: "themeGridEnabled", value: gridEnabled ? "on" : "off" },
-        { key: "themePatternOpacity", value: String(patternOpacity) },
-      ],
-    });
-  }
+  const [readerSpeechVoiceGender, setReaderSpeechVoiceGender] = useState<"female" | "male">("female");
+  const theme: AppTheme = "neutral";
 
   return (
     <RoutePage
       eyebrow="Settings"
       title="Profile and app preferences"
-      description="Demo preferences for the packaged sample build."
+      description="Demo preferences for the packaged sample build. Theme settings now live on the dedicated theme settings page."
       badge="Demo"
       links={[
         { href: "/library", label: "Library" },
@@ -630,59 +598,49 @@ export function MockSettingsSurfaceView() {
         { label: "Theme", value: appThemeLabels[theme] },
       ]}
     >
-      <section className="card feature-card">
-          <h2>Preferences</h2>
-          <div className="surface-form">
-            <label>
-              App theme
-              <select className="text-input" value={theme} onChange={(event) => setTheme(resolveAppTheme(event.target.value))}>
-                {appThemeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="theme-opacity-slider">
-              <span className="theme-opacity-slider-head">
-                <span>Theme artwork opacity</span>
-                <strong>{patternOpacity}%</strong>
-              </span>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                step="1"
-                value={patternOpacity}
-                onChange={(event) => {
-                  const nextOpacity = Number(event.target.value);
-                  setPatternOpacity(nextOpacity);
-                  persistAppThemePatternOpacity(nextOpacity);
-                }}
-                aria-label="Theme artwork opacity"
-              />
-              <span className="small-copy">Controls the canvas artwork only. Cards and reading text stay fully opaque.</span>
-            </label>
-            <label className="theme-grid-toggle">
-              <input
-                type="checkbox"
-                checked={gridEnabled}
-                onChange={(event) => {
-                  const nextGridEnabled = event.target.checked;
-                  setGridEnabled(nextGridEnabled);
-                  persistAppThemeGridEnabled(nextGridEnabled);
-                }}
-              />
-              <span>
-                <strong>Show canvas grid</strong>
-                <small>Toggle the fixed background grid without changing wallpaper, gradients, or cards.</small>
-              </span>
-            </label>
-            <button className="button button-primary" type="button" onClick={saveSettings}>
-              Save settings
-            </button>
+      <section className="card feature-card settings-preferences-card" data-inventory-id="settings.preferences-card">
+        <h2>Preferences</h2>
+        <p className="small-copy">
+          Theme settings now live on the dedicated theme settings page, where the app look and owned packs stay together.
+          Use the version footer toggle to show the current app version and last reboot/rebuild time at the bottom of every page.
+        </p>
+        <div className="settings-inspector-row" data-inventory-id="settings.inventory-labels-toggle">
+          <div>
+            <strong>Inventory labels</strong>
+            <p className="small-copy">Show route and component labels while auditing the app shell and reader surfaces.</p>
           </div>
-          <p className="small-copy">Stored settings: {data.entries.length}</p>
+          <InventoryInspectorToggle />
+        </div>
+        <div className="settings-inspector-row" data-inventory-id="settings.build-footer-toggle">
+          <div>
+            <strong>Version footer</strong>
+            <p className="small-copy">Show the current app version and last reboot/rebuild time at the bottom of every page.</p>
+          </div>
+          <BuildFooterToggle />
+        </div>
+        <div className="settings-inspector-row" data-inventory-id="settings.speech-voice-toggle">
+          <div>
+            <strong>Speech voice</strong>
+            <p className="small-copy">Prefer a male or female browser voice for reader and study audio playback.</p>
+          </div>
+          <div className="voice-gender-toggle-group" role="group" aria-label="Preferred speech voice">
+            {(["female", "male"] as const).map((gender) => (
+              <button
+                key={gender}
+                type="button"
+                className={`button button-secondary button-compact voice-gender-toggle-option ${readerSpeechVoiceGender === gender ? "is-active" : ""}`}
+                onClick={() => setReaderSpeechVoiceGender(gender)}
+                aria-pressed={readerSpeechVoiceGender === gender}
+                data-inventory-id={`settings.speech-voice-${gender}`}
+              >
+                {gender === "female" ? "Female" : "Male"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <Link className="button button-secondary" href="/profile/themes" data-inventory-id="settings.theme-settings-link">
+          Open theme settings
+        </Link>
       </section>
       <Link className="card feature-card settings-roadmap-card" href="/roadmap" data-inventory-id="settings.roadmap-card">
         <div className="card-topline">
@@ -701,6 +659,7 @@ export function MockSettingsSurfaceView() {
 
 export function MockStudySurfaceView() {
   const [selectedStudyItemKey, setSelectedStudyItemKey] = useState<string | null>(null);
+  const [selectedStudyProgramItemKey, setSelectedStudyProgramItemKey] = useState<string | null>(null);
   const data = {
     queue_size: 2,
     queued_items: [
@@ -718,6 +677,61 @@ export function MockStudySurfaceView() {
         manual_override: null,
         first_seen_at: "2026-07-09T12:00:00Z",
         last_seen_at: "2026-07-09T12:10:00Z",
+        origins: ["glossed", "program"],
+        assessment_axes: [
+          {
+            language_code: "zh",
+            lemma: "æˆ‘",
+            axis_key: "form_to_meaning",
+            prompt_type: "source_form",
+            response_type: "meaning",
+            stage: 3,
+            due_at: "2026-08-01T18:00:00Z",
+            last_seen_at: "2026-07-09T12:10:00Z",
+            last_result: "correct",
+            pass_count: 3,
+            fail_count: 0,
+          },
+          {
+            language_code: "zh",
+            lemma: "æˆ‘",
+            axis_key: "form_to_reading",
+            prompt_type: "source_form",
+            response_type: "reading",
+            stage: 2,
+            due_at: "2026-08-01T15:00:00Z",
+            last_seen_at: "2026-07-09T12:10:00Z",
+            last_result: "correct",
+            pass_count: 2,
+            fail_count: 0,
+          },
+          {
+            language_code: "zh",
+            lemma: "æˆ‘",
+            axis_key: "meaning_to_form",
+            prompt_type: "meaning",
+            response_type: "source_form",
+            stage: 6,
+            due_at: "2026-08-04T12:00:00Z",
+            last_seen_at: "2026-07-09T12:10:00Z",
+            last_result: "correct",
+            pass_count: 5,
+            fail_count: 1,
+          },
+          {
+            language_code: "zh",
+            lemma: "æˆ‘",
+            axis_key: "reading_to_form",
+            prompt_type: "reading",
+            response_type: "source_form",
+            stage: 3,
+            due_at: "2026-08-01T18:00:00Z",
+            last_seen_at: "2026-07-09T12:10:00Z",
+            last_result: "incorrect",
+            pass_count: 3,
+            fail_count: 1,
+          },
+        ],
       },
       {
         language_code: "zh",
@@ -733,10 +747,65 @@ export function MockStudySurfaceView() {
         manual_override: null,
         first_seen_at: "2026-07-09T12:15:00Z",
         last_seen_at: "2026-07-09T12:15:00Z",
-        },
-      ],
-      study_item_count: 3,
-      study_programs: [
+        origins: ["glossed"],
+        assessment_axes: [
+          {
+            language_code: "zh",
+            lemma: "å®‡å®™",
+            axis_key: "form_to_meaning",
+            prompt_type: "source_form",
+            response_type: "meaning",
+            stage: 2,
+            due_at: "2026-08-01T12:00:00Z",
+            last_seen_at: "2026-07-09T12:15:00Z",
+            last_result: "correct",
+            pass_count: 2,
+            fail_count: 0,
+          },
+          {
+            language_code: "zh",
+            lemma: "å®‡å®™",
+            axis_key: "form_to_reading",
+            prompt_type: "source_form",
+            response_type: "reading",
+            stage: 4,
+            due_at: "2026-08-02T12:00:00Z",
+            last_seen_at: "2026-07-09T12:15:00Z",
+            last_result: "correct",
+            pass_count: 4,
+            fail_count: 0,
+          },
+          {
+            language_code: "zh",
+            lemma: "å®‡å®™",
+            axis_key: "meaning_to_form",
+            prompt_type: "meaning",
+            response_type: "source_form",
+            stage: 1,
+            due_at: "2026-08-01T09:00:00Z",
+            last_seen_at: "2026-07-09T12:15:00Z",
+            last_result: "incorrect",
+            pass_count: 1,
+            fail_count: 2,
+          },
+          {
+            language_code: "zh",
+            lemma: "å®‡å®™",
+            axis_key: "reading_to_form",
+            prompt_type: "reading",
+            response_type: "source_form",
+            stage: 6,
+            due_at: "2026-08-04T12:00:00Z",
+            last_seen_at: "2026-07-09T12:15:00Z",
+            last_result: "correct",
+            pass_count: 6,
+            fail_count: 0,
+          },
+        ],
+      },
+    ],
+    study_item_count: 3,
+    study_programs: [
         {
           language_code: "ru",
           language_label: "Russian",
@@ -770,6 +839,60 @@ export function MockStudySurfaceView() {
                   saved_count: 0,
                   first_seen_at: null,
                   last_seen_at: null,
+                  assessment_axes: [
+                    {
+                      language_code: "ru",
+                      lemma: "и",
+                      axis_key: "form_to_meaning",
+                      prompt_type: "source_form",
+                      response_type: "meaning",
+                      stage: 1,
+                      due_at: "2026-08-01T12:00:00Z",
+                      last_seen_at: null,
+                      last_result: "correct",
+                      pass_count: 1,
+                      fail_count: 0,
+                    },
+                    {
+                      language_code: "ru",
+                      lemma: "и",
+                      axis_key: "form_to_reading",
+                      prompt_type: "source_form",
+                      response_type: "reading",
+                      stage: 2,
+                      due_at: "2026-08-01T15:00:00Z",
+                      last_seen_at: null,
+                      last_result: "correct",
+                      pass_count: 2,
+                      fail_count: 0,
+                    },
+                    {
+                      language_code: "ru",
+                      lemma: "и",
+                      axis_key: "meaning_to_form",
+                      prompt_type: "meaning",
+                      response_type: "source_form",
+                      stage: 0,
+                      due_at: null,
+                      last_seen_at: null,
+                      last_result: "incorrect",
+                      pass_count: 0,
+                      fail_count: 1,
+                    },
+                    {
+                      language_code: "ru",
+                      lemma: "и",
+                      axis_key: "reading_to_form",
+                      prompt_type: "reading",
+                      response_type: "source_form",
+                      stage: 1,
+                      due_at: "2026-08-01T12:00:00Z",
+                      last_seen_at: null,
+                      last_result: "wrong_axis",
+                      pass_count: 1,
+                      fail_count: 0,
+                    },
+                  ],
                 },
                 {
                   language_code: "ru",
@@ -790,6 +913,60 @@ export function MockStudySurfaceView() {
                   saved_count: 1,
                   first_seen_at: "2026-07-09T12:00:00Z",
                   last_seen_at: "2026-07-09T12:10:00Z",
+                  assessment_axes: [
+                    {
+                      language_code: "ru",
+                      lemma: "в",
+                      axis_key: "form_to_meaning",
+                      prompt_type: "source_form",
+                      response_type: "meaning",
+                      stage: 2,
+                      due_at: "2026-08-01T15:00:00Z",
+                      last_seen_at: "2026-07-09T12:10:00Z",
+                      last_result: "correct",
+                      pass_count: 2,
+                      fail_count: 0,
+                    },
+                    {
+                      language_code: "ru",
+                      lemma: "в",
+                      axis_key: "form_to_reading",
+                      prompt_type: "source_form",
+                      response_type: "reading",
+                      stage: 3,
+                      due_at: "2026-08-01T18:00:00Z",
+                      last_seen_at: "2026-07-09T12:10:00Z",
+                      last_result: "correct",
+                      pass_count: 3,
+                      fail_count: 0,
+                    },
+                    {
+                      language_code: "ru",
+                      lemma: "в",
+                      axis_key: "meaning_to_form",
+                      prompt_type: "meaning",
+                      response_type: "source_form",
+                      stage: 1,
+                      due_at: "2026-08-01T09:00:00Z",
+                      last_seen_at: "2026-07-09T12:10:00Z",
+                      last_result: "incorrect",
+                      pass_count: 1,
+                      fail_count: 1,
+                    },
+                    {
+                      language_code: "ru",
+                      lemma: "в",
+                      axis_key: "reading_to_form",
+                      prompt_type: "reading",
+                      response_type: "source_form",
+                      stage: 1,
+                      due_at: "2026-08-01T09:00:00Z",
+                      last_seen_at: "2026-07-09T12:10:00Z",
+                      last_result: "correct",
+                      pass_count: 1,
+                      fail_count: 0,
+                    },
+                  ],
                 },
                 {
                   language_code: "ru",
@@ -810,11 +987,66 @@ export function MockStudySurfaceView() {
                   saved_count: 2,
                   first_seen_at: "2026-07-09T12:00:00Z",
                   last_seen_at: "2026-07-09T12:10:00Z",
+                  assessment_axes: [
+                    {
+                      language_code: "ru",
+                      lemma: "дом",
+                      axis_key: "form_to_meaning",
+                      prompt_type: "source_form",
+                      response_type: "meaning",
+                      stage: 4,
+                      due_at: "2026-08-02T12:00:00Z",
+                      last_seen_at: "2026-07-09T12:10:00Z",
+                      last_result: "correct",
+                      pass_count: 4,
+                      fail_count: 0,
+                    },
+                    {
+                      language_code: "ru",
+                      lemma: "дом",
+                      axis_key: "form_to_reading",
+                      prompt_type: "source_form",
+                      response_type: "reading",
+                      stage: 4,
+                      due_at: "2026-08-02T12:00:00Z",
+                      last_seen_at: "2026-07-09T12:10:00Z",
+                      last_result: "correct",
+                      pass_count: 4,
+                      fail_count: 0,
+                    },
+                    {
+                      language_code: "ru",
+                      lemma: "дом",
+                      axis_key: "meaning_to_form",
+                      prompt_type: "meaning",
+                      response_type: "source_form",
+                      stage: 2,
+                      due_at: "2026-08-01T15:00:00Z",
+                      last_seen_at: "2026-07-09T12:10:00Z",
+                      last_result: "wrong_axis",
+                      pass_count: 2,
+                      fail_count: 0,
+                    },
+                    {
+                      language_code: "ru",
+                      lemma: "дом",
+                      axis_key: "reading_to_form",
+                      prompt_type: "reading",
+                      response_type: "source_form",
+                      stage: 3,
+                      due_at: "2026-08-01T18:00:00Z",
+                      last_seen_at: "2026-07-09T12:10:00Z",
+                      last_result: "correct",
+                      pass_count: 3,
+                      fail_count: 0,
+                    },
+                  ],
                 },
               ],
             },
           ],
         },
+        ...demoStarterPrograms,
       ],
       study_groups: [
         {
@@ -841,6 +1073,60 @@ export function MockStudySurfaceView() {
               click_count: 2,
               first_seen_at: "2026-07-09T12:00:00Z",
               last_seen_at: "2026-07-09T12:10:00Z",
+              assessment_axes: [
+                {
+                  language_code: "zh",
+                  lemma: "我",
+                  axis_key: "form_to_meaning",
+                  prompt_type: "source_form",
+                  response_type: "meaning",
+                  stage: 3,
+                  due_at: "2026-08-01T18:00:00Z",
+                  last_seen_at: "2026-07-09T12:10:00Z",
+                  last_result: "correct",
+                  pass_count: 3,
+                  fail_count: 0,
+                },
+                {
+                  language_code: "zh",
+                  lemma: "我",
+                  axis_key: "form_to_reading",
+                  prompt_type: "source_form",
+                  response_type: "reading",
+                  stage: 2,
+                  due_at: "2026-08-01T15:00:00Z",
+                  last_seen_at: "2026-07-09T12:10:00Z",
+                  last_result: "correct",
+                  pass_count: 2,
+                  fail_count: 0,
+                },
+                {
+                  language_code: "zh",
+                  lemma: "我",
+                  axis_key: "meaning_to_form",
+                  prompt_type: "meaning",
+                  response_type: "source_form",
+                  stage: 6,
+                  due_at: "2026-08-04T12:00:00Z",
+                  last_seen_at: "2026-07-09T12:10:00Z",
+                  last_result: "correct",
+                  pass_count: 5,
+                  fail_count: 1,
+                },
+                {
+                  language_code: "zh",
+                  lemma: "我",
+                  axis_key: "reading_to_form",
+                  prompt_type: "reading",
+                  response_type: "source_form",
+                  stage: 3,
+                  due_at: "2026-08-01T18:00:00Z",
+                  last_seen_at: "2026-07-09T12:10:00Z",
+                  last_result: "incorrect",
+                  pass_count: 3,
+                  fail_count: 1,
+                },
+              ],
             },
             {
               language_code: "zh",
@@ -861,6 +1147,60 @@ export function MockStudySurfaceView() {
               click_count: 1,
               first_seen_at: "2026-07-09T12:15:00Z",
               last_seen_at: "2026-07-09T12:15:00Z",
+              assessment_axes: [
+                {
+                  language_code: "zh",
+                  lemma: "宇宙",
+                  axis_key: "form_to_meaning",
+                  prompt_type: "source_form",
+                  response_type: "meaning",
+                  stage: 2,
+                  due_at: "2026-08-01T12:00:00Z",
+                  last_seen_at: "2026-07-09T12:15:00Z",
+                  last_result: "correct",
+                  pass_count: 2,
+                  fail_count: 0,
+                },
+                {
+                  language_code: "zh",
+                  lemma: "宇宙",
+                  axis_key: "form_to_reading",
+                  prompt_type: "source_form",
+                  response_type: "reading",
+                  stage: 4,
+                  due_at: "2026-08-02T12:00:00Z",
+                  last_seen_at: "2026-07-09T12:15:00Z",
+                  last_result: "correct",
+                  pass_count: 4,
+                  fail_count: 0,
+                },
+                {
+                  language_code: "zh",
+                  lemma: "宇宙",
+                  axis_key: "meaning_to_form",
+                  prompt_type: "meaning",
+                  response_type: "source_form",
+                  stage: 1,
+                  due_at: "2026-08-01T09:00:00Z",
+                  last_seen_at: "2026-07-09T12:15:00Z",
+                  last_result: "incorrect",
+                  pass_count: 1,
+                  fail_count: 2,
+                },
+                {
+                  language_code: "zh",
+                  lemma: "宇宙",
+                  axis_key: "reading_to_form",
+                  prompt_type: "reading",
+                  response_type: "source_form",
+                  stage: 6,
+                  due_at: "2026-08-04T12:00:00Z",
+                  last_seen_at: "2026-07-09T12:15:00Z",
+                  last_result: "correct",
+                  pass_count: 6,
+                  fail_count: 0,
+                },
+              ],
             },
           ],
         },
@@ -888,6 +1228,60 @@ export function MockStudySurfaceView() {
               click_count: 1,
               first_seen_at: "2026-07-09T12:20:00Z",
               last_seen_at: "2026-07-09T12:20:00Z",
+              assessment_axes: [
+                {
+                  language_code: "ja",
+                  lemma: "たのしい",
+                  axis_key: "form_to_meaning",
+                  prompt_type: "source_form",
+                  response_type: "meaning",
+                  stage: 5,
+                  due_at: "2026-08-03T12:00:00Z",
+                  last_seen_at: "2026-07-09T12:20:00Z",
+                  last_result: "correct",
+                  pass_count: 5,
+                  fail_count: 0,
+                },
+                {
+                  language_code: "ja",
+                  lemma: "たのしい",
+                  axis_key: "form_to_reading",
+                  prompt_type: "source_form",
+                  response_type: "reading",
+                  stage: 3,
+                  due_at: "2026-08-01T18:00:00Z",
+                  last_seen_at: "2026-07-09T12:20:00Z",
+                  last_result: "correct",
+                  pass_count: 3,
+                  fail_count: 0,
+                },
+                {
+                  language_code: "ja",
+                  lemma: "たのしい",
+                  axis_key: "meaning_to_form",
+                  prompt_type: "meaning",
+                  response_type: "source_form",
+                  stage: 2,
+                  due_at: "2026-08-01T15:00:00Z",
+                  last_seen_at: "2026-07-09T12:20:00Z",
+                  last_result: "wrong_axis",
+                  pass_count: 2,
+                  fail_count: 0,
+                },
+                {
+                  language_code: "ja",
+                  lemma: "たのしい",
+                  axis_key: "reading_to_form",
+                  prompt_type: "reading",
+                  response_type: "source_form",
+                  stage: 1,
+                  due_at: "2026-08-01T09:00:00Z",
+                  last_seen_at: "2026-07-09T12:20:00Z",
+                  last_result: "incorrect",
+                  pass_count: 1,
+                  fail_count: 1,
+                },
+              ],
             },
           ],
         },
@@ -905,6 +1299,10 @@ export function MockStudySurfaceView() {
       item.source_sentence_order,
       item.source_token_order,
     ].join(":");
+  }
+
+  function getStudyProgramItemKey(programCode: string, levelCode: string, item: (typeof data.study_programs)[number]["levels"][number]["items"][number]): string {
+    return [programCode, levelCode, item.lemma].join(":");
   }
 
   return (
@@ -925,11 +1323,11 @@ export function MockStudySurfaceView() {
       <section className="card feature-card" data-inventory-id="study.programs-card">
         <h2>Program introduction</h2>
         <p className="small-copy">
-          Curated level vocabulary from the active language programs. Level 1 starts from the highest-value frequency slice.
+          Curated level vocabulary from the active language programs. Starter levels provide an authored foundation, with room for later curriculum levels.
         </p>
         <div className="study-program-groups">
           {data.study_programs.map((program) => (
-            <details key={program.program_code} className="study-program-group" data-inventory-id="study.program-group" open>
+            <details key={program.program_code} className="study-program-group" data-inventory-id="study.program-group">
               <summary className="study-program-group-summary">
                 <div>
                   <span className="eyebrow">{program.language_label}</span>
@@ -941,8 +1339,11 @@ export function MockStudySurfaceView() {
                 {program.levels.map((level, levelIndex) => {
                   const practiceHref = `/study/practice?${new URLSearchParams({
                     mode: "program",
+                    language_code: program.language_code,
                     language: program.language_code,
+                    program_code: program.program_code,
                     program: program.program_code,
+                    level_code: level.level_code,
                     level: level.level_code,
                   }).toString()}`;
 
@@ -970,16 +1371,28 @@ export function MockStudySurfaceView() {
                           </Link>
                         </div>
                       </summary>
-                      <div className="study-program-items">
-                        {level.items.map((item) => {
-                          const pronunciation = item.pronunciation ?? "-";
-                          const englishMeaning = item.definition_short ?? "-";
+                    <div className="study-program-items">
+                      {level.items.map((item) => {
+                        const itemKey = getStudyProgramItemKey(program.program_code, level.level_code, item);
+                        const expanded = selectedStudyProgramItemKey === itemKey;
+                        const pronunciation = item.pronunciation ?? "-";
+                        const englishMeaning = item.definition_short ?? "-";
 
-                          return (
-                            <article
-                              key={`${program.program_code}-${level.level_code}-${item.lemma}`}
-                              className="study-program-item"
-                              data-inventory-id="study.program-item"
+                        return (
+                          <article
+                            key={`${program.program_code}-${level.level_code}-${item.lemma}`}
+                            className="study-program-item"
+                            data-inventory-id="study.program-item"
+                          >
+                            <button
+                              type="button"
+                              className={`study-program-item-toggle ${expanded ? "is-expanded" : ""}`}
+                              onClick={() => {
+                                setSelectedStudyProgramItemKey((current) => (current === itemKey ? null : itemKey));
+                              }}
+                              aria-expanded={expanded}
+                              aria-controls={`study-program-item-details-${itemKey}`}
+                              data-inventory-id="study.program-item-toggle"
                             >
                               <div className="study-program-item-row" dir="auto">
                                 <span className="study-program-item-term" lang={item.language_code}>
@@ -994,10 +1407,64 @@ export function MockStudySurfaceView() {
                                   {item.frequency_rank != null ? `#${item.frequency_rank}` : item.proficiency_level ?? "-"}
                                 </span>
                               </div>
-                            </article>
-                          );
-                        })}
-                      </div>
+                            </button>
+                            {expanded ? (
+                              <div
+                                id={`study-program-item-details-${itemKey}`}
+                                className="study-program-item-details"
+                                data-inventory-id="study.program-item-details"
+                              >
+                                <StudyAxisRadarChart
+                                  axes={item.assessment_axes}
+                                  inventoryId="study.program-item-axis-chart"
+                                  title="Axis SRS"
+                                  description="Current SRS stage for each assessment axis on this program term."
+                                  emptyMessage="This program term has not been assessed yet."
+                                />
+                                <div className="study-metadata-grid">
+                                  <div>
+                                    <span className="eyebrow">Level</span>
+                                    <strong>{item.level_label}</strong>
+                                  </div>
+                                  <div>
+                                    <span className="eyebrow">Program</span>
+                                    <strong>{item.program_label}</strong>
+                                  </div>
+                                  <div>
+                                    <span className="eyebrow">Source</span>
+                                    <strong>{item.program_source_label}</strong>
+                                  </div>
+                                  <div>
+                                    <span className="eyebrow">Progress</span>
+                                    <strong>{item.progress_state}</strong>
+                                  </div>
+                                  <div>
+                                    <span className="eyebrow">Frequency</span>
+                                    <strong>{item.frequency_rank != null ? `#${item.frequency_rank}` : "-"}</strong>
+                                  </div>
+                                  <div>
+                                    <span className="eyebrow">Saved count</span>
+                                    <strong>{item.saved_count}</strong>
+                                  </div>
+                                  <div>
+                                    <span className="eyebrow">Pronunciation</span>
+                                    <strong>{pronunciation}</strong>
+                                  </div>
+                                  <div>
+                                    <span className="eyebrow">English meaning</span>
+                                    <strong>{englishMeaning}</strong>
+                                  </div>
+                                  <div>
+                                    <span className="eyebrow">Proficiency</span>
+                                    <strong>{item.proficiency_level}</strong>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : null}
+                          </article>
+                        );
+                      })}
+                    </div>
                     </details>
                   );
                 })}
@@ -1014,23 +1481,23 @@ export function MockStudySurfaceView() {
           </div>
         </summary>
         <DueReviewChart items={data.queued_items} />
-        <StudyDueLanguageGroups items={data.queued_items} />
+        <StudyDueLanguageGroups items={data.queued_items} studyPrograms={data.study_programs} studyGroups={data.study_groups} />
         <div className="study-queue-actions">
           <Link className="button button-secondary" href="/study/practice?mode=review" data-inventory-id="study.review-practice-link">
             Start review session
           </Link>
         </div>
       </details>
-      <details className="card feature-card study-saved-vocabulary-card" data-inventory-id="study.saved-vocabulary-card" open>
-        <summary className="study-saved-vocabulary-card-summary" data-inventory-id="study.saved-vocabulary-card-summary">
+      <details className="card feature-card study-saved-vocabulary-card" data-inventory-id="study.glossed-vocabulary-card" open>
+        <summary className="study-saved-vocabulary-card-summary" data-inventory-id="study.glossed-vocabulary-card-summary">
           <div>
-            <h2>Saved vocabulary</h2>
-            <p className="small-copy">Language-grouped terms saved from the reader with source metadata.</p>
+            <h2>Glossed vocabulary</h2>
+            <p className="small-copy">Language-grouped terms captured during reading sessions when a word needed help, with source metadata and axis stages.</p>
           </div>
         </summary>
         <div className="study-language-groups">
           {data.study_groups.map((group) => (
-            <details key={group.language_code} className="study-language-group" data-inventory-id="study.language-group">
+            <details key={group.language_code} className="study-language-group" data-inventory-id="study.glossed-vocabulary-language-group">
               <summary className="study-language-group-summary">
                 <div>
                   <span className="eyebrow">{group.language_label}</span>
@@ -1046,7 +1513,7 @@ export function MockStudySurfaceView() {
                   const englishMeaning = item.definition_short ?? "—";
 
                   return (
-                    <article key={itemKey} className="surface-list-item study-saved-item" data-inventory-id="study.saved-item">
+                    <article key={itemKey} className="surface-list-item study-saved-item" data-inventory-id="study.glossed-vocabulary-item">
                       <button
                         type="button"
                         className={`study-saved-item-toggle ${expanded ? "is-expanded" : ""}`}
@@ -1055,7 +1522,7 @@ export function MockStudySurfaceView() {
                         }}
                         aria-expanded={expanded}
                         aria-controls={`study-item-details-${itemKey}`}
-                        data-inventory-id="study.saved-item-toggle"
+                        data-inventory-id="study.glossed-vocabulary-item-toggle"
                       >
                         <div className="study-saved-item-row" dir="auto">
                           <span className="study-saved-item-term" lang={item.language_code}>
@@ -1069,8 +1536,9 @@ export function MockStudySurfaceView() {
                         <div
                           id={`study-item-details-${itemKey}`}
                           className="study-saved-item-details"
-                          data-inventory-id="study.saved-item-details"
+                          data-inventory-id="study.glossed-vocabulary-item-details"
                         >
+                          <StudyAxisRadarChart axes={item.assessment_axes} />
                           <div className="study-metadata-grid">
                             <div>
                               <span className="eyebrow">Display form</span>
@@ -1144,7 +1612,7 @@ export function MockStudySurfaceView() {
                           <div>
                             <span className="eyebrow">Current note</span>
                             <p className="small-copy">
-                              Demo metadata dump for the study surface. We can simplify this once we see which fields are actually useful.
+                              Demo metadata and axis-state dump for the study surface. We can simplify this once we see which fields are actually useful.
                             </p>
                           </div>
                         </div>

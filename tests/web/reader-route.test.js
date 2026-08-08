@@ -9,6 +9,8 @@ const routeSource = fs.readFileSync(
   "utf8",
 );
 const readerSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "reader-view.tsx"), "utf8");
+const appShellSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "app-shell.tsx"), "utf8");
+const themeSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "lib", "theme.ts"), "utf8");
 const stylesheetSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "app", "globals.css"), "utf8");
 const landingSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "landing-page.tsx"), "utf8");
 const inventoryToggleStyles = stylesheetSource.match(/\.inventory-inspector-toggle\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
@@ -32,9 +34,20 @@ test("Next reader contract keeps loading, error, extraction, lookup, and chart s
   assert.match(readerSource, /ReaderHskChart/);
   assert.match(readerSource, /reader-sentence-tools/);
   assert.match(readerSource, /reader-sentence-tool-button/);
+  assert.match(readerSource, /injectSentencePunctuation/);
+  assert.match(readerSource, /createPunctuationToken/);
+  assert.match(readerSource, /sentenceText\?: string \| null/);
   assert.match(readerSource, /readerPronunciationFreshOnlyStorageKey/);
   assert.match(readerSource, /readStoredReaderTokenAudioOnTap/);
   assert.match(readerSource, /persistReaderTokenAudioOnTap/);
+  assert.match(readerSource, /reader\.theme-section/);
+  assert.match(readerSource, /reader\.theme-grid/);
+  assert.match(readerSource, /reader\.theme-more-button/);
+  assert.match(readerSource, /readerThemeRecents/);
+  assert.match(readerSource, /readerThemeVisibleOptions/);
+  assert.match(readerSource, /readerThemeCanExpand/);
+  assert.match(readerSource, /More themes/);
+  assert.match(readerSource, /Show less/);
   assert.match(readerSource, /readerTokenAudioOnTap/);
   assert.match(readerSource, /readerRussianSyllableDisplayModeStorageKey/);
   assert.match(readerSource, /readStoredRussianSyllableDisplayMode/);
@@ -43,6 +56,9 @@ test("Next reader contract keeps loading, error, extraction, lookup, and chart s
   assert.match(readerSource, /data-inventory-id="reader\.token-audio-toggle"/);
   assert.match(readerSource, /reader\.pronunciation-visibility-section/);
   assert.match(readerSource, /reader\.pronunciation-visibility-toggle/);
+  assert.match(readerSource, /reader\.speech-voice-toggle/);
+  assert.match(readerSource, /readerSpeechVoiceGender/);
+  assert.match(readerSource, /voice-gender-toggle-group/);
   assert.match(readerSource, /reader\.sentence-audio-button/);
   assert.match(readerSource, /reader\.sentence-audio-speed/);
   assert.match(readerSource, /sentenceAudioRateOptions/);
@@ -63,6 +79,9 @@ test("Next reader contract keeps loading, error, extraction, lookup, and chart s
   assert.match(readerSource, /reader-source-sentence-card/);
   assert.match(readerSource, /reader-sentence-translation-card/);
   assert.match(readerSource, /match_confidence/);
+  assert.match(readerSource, /sentenceRevealSlotByTokenOrder/);
+  assert.match(readerSource, /sentenceRevealWordSlots/);
+  assert.match(readerSource, /new Set\(sentenceRevealWordSlots\)/);
 });
 
 test("Next reader keeps settings in the title row", () => {
@@ -70,6 +89,49 @@ test("Next reader keeps settings in the title row", () => {
   assert.match(readerHeader, /<div className="reader-topbar-actions">[\s\S]*AccountMenu[\s\S]*<\/div>\s*<button[\s\S]*reader-settings-button/);
   assert.match(stylesheetSource, /\.reader-settings-button\s*\{[\s\S]*grid-area: settings/);
 });
+
+test("Next reader expands the session summary into book-scoped stats", () => {
+  assert.match(readerSource, /bookProgressSummary/);
+  assert.match(readerSource, /showSessionDetails/);
+  assert.match(readerSource, /sessionSummaryItems/);
+  assert.match(readerSource, /reader\.session-summary-toggle/);
+  assert.match(readerSource, /reader\.session-summary-details/);
+  assert.match(readerSource, /readerSessionGlossedCountStorageKey/);
+  assert.match(readerSource, /readerSessionGlossedCount/);
+  assert.match(readerSource, /average_seconds_per_session/);
+  assert.match(readerSource, /lastReaderInteractionAtRef/);
+  assert.match(readerSource, /markReaderInteraction/);
+  assert.match(readerSource, /onPointerDownCapture=\{markReaderInteraction\}/);
+  assert.match(readerSource, /onClickCapture=\{markReaderInteraction\}/);
+  assert.match(readerSource, /onTouchStartCapture=\{markReaderInteraction\}/);
+  assert.match(readerSource, /document\.hasFocus\(\)/);
+  assert.match(readerSource, /currentPageGlossedCount/);
+  assert.match(readerSource, /pageUnglossedPercent/);
+  assert.match(readerSource, /pageEtaSeconds/);
+  assert.match(readerSource, /bookEtaSeconds/);
+  assert.match(readerSource, /reader-session-pill-summary/);
+    assert.match(readerSource, /reader-session-pill-details/);
+    assert.match(readerSource, /reader-session-pill-stat/);
+    assert.match(readerSource, /reader-session-pill-badge/);
+    assert.match(readerSource, /Avg session/);
+    assert.match(readerSource, /New glossed/);
+  assert.match(readerSource, /Page glossed/);
+  assert.match(readerSource, /Page unglossed/);
+  assert.match(readerSource, /Page ETA/);
+  assert.match(readerSource, /Book glossed/);
+  assert.match(readerSource, /Language glossed/);
+  assert.match(readerSource, /Lifetime glossed/);
+  assert.match(readerSource, /Book ETA/);
+    assert.match(readerSource, /Book time/);
+    assert.match(readerSource, /Resume point/);
+    assert.match(readerSource, /Progress/);
+    assert.match(readerSource, /reader\.reading-progress-bar/);
+    assert.match(readerSource, /reader-progress-strip/);
+    assert.match(stylesheetSource, /\.reader-progress-strip\s*\{[\s\S]*grid-column: 1 \/ -1;[\s\S]*display: grid;/);
+    assert.match(stylesheetSource, /\.reader-progress-strip-track\s*\{[\s\S]*height: 0\.42rem;/);
+    assert.match(stylesheetSource, /\.reader-session-stats\s*\{[\s\S]*grid-column: 1 \/ -1;[\s\S]*width: 100%;/);
+    assert.match(stylesheetSource, /\.reader-session-pill-details\s*\{[\s\S]*grid-template-columns: repeat\(auto-fit, minmax\(8\.5rem, 1fr\)\)/);
+  });
 
 test("Next reader definition traces wrap long lookup paths inside the card", () => {
   assert.match(stylesheetSource, /\.definition-popover\s*\{[\s\S]*min-width: 0;[\s\S]*max-width: 100%/);
@@ -79,7 +141,8 @@ test("Next reader definition traces wrap long lookup paths inside the card", () 
 test("Next reader keeps a small themed canvas inset without a full-viewport reader overlay", () => {
   assert.match(stylesheetSource, /\.app-frame:has\(\.reader-shell\)\s*\{[\s\S]*padding: 0\.75rem;[\s\S]*gap: 0/);
   assert.match(stylesheetSource, /\.app-frame:has\(\.reader-shell\) \.reader-shell\s*\{[\s\S]*min-height: calc\(100vh - 1\.5rem\);[\s\S]*border-radius/);
-  assert.match(stylesheetSource, /\.reader-canvas::before\s*\{[\s\S]*position: absolute;[\s\S]*background-image/);
+  assert.match(stylesheetSource, /body::before\s*\{[\s\S]*position: fixed;[\s\S]*background-image/);
+  assert.doesNotMatch(stylesheetSource, /\.reader-canvas::before\s*\{/);
   assert.doesNotMatch(stylesheetSource, /body:has\(\.reader-shell\)::before\s*\{[\s\S]*display: none/);
 });
 
@@ -96,17 +159,24 @@ test("Next reader definition card stays compact and exposes the save action", ()
   assert.match(readerSource, /data-inventory-id="reader\.token-inspector"/);
   assert.match(readerSource, /className=\{`definition-save/);
   assert.match(readerSource, /data-inventory-id="reader\.study-save-button"/);
+  assert.match(readerSource, /data-inventory-id="reader\.definition-remembered-button"/);
+  assert.match(readerSource, /data-inventory-id="reader\.definition-missed-button"/);
   assert.match(readerSource, /\/learning\/study-items/);
+  assert.match(readerSource, /\/learning\/word-interactions/);
   assert.match(readerSource, /selectedTokenEnglishMeaning/);
   assert.match(readerSource, /definition_short: selectedTokenEnglishMeaning \?\? token\.definition_short \?\? null/);
   assert.match(readerSource, /Saved to study list/);
+  assert.match(readerSource, /Mark word as remembered/);
+  assert.match(readerSource, /Mark word as missed/);
   assert.match(readerSource, /definition-trace/);
   assert.match(readerSource, /Definition trace/);
   assert.doesNotMatch(readerSource, /<dl className="definition-grid">/);
   assert.doesNotMatch(readerSource, />\s*Clear\s*<\/button>/);
-  assert.match(stylesheetSource, /\.definition-save,\s*\.definition-audio\s*\{[\s\S]*width: auto;[\s\S]*padding-inline: 0\.8rem;[\s\S]*white-space: nowrap;/);
+  assert.match(stylesheetSource, /\.definition-save,\s*\.definition-audio,\s*\.definition-feedback-button\s*\{[\s\S]*width: auto;[\s\S]*padding-inline: 0\.8rem;[\s\S]*white-space: nowrap;/);
   assert.match(stylesheetSource, /\.definition-segment-toggle\s*\{[\s\S]*text-transform: uppercase;/);
   assert.match(stylesheetSource, /\.definition-segment\.is-audio-active\s*\{/);
+  assert.match(stylesheetSource, /\.definition-feedback-remembered\s*\{[\s\S]*color: #117a3c;/);
+  assert.match(stylesheetSource, /\.definition-feedback-missed\s*\{[\s\S]*color: #b42318;/);
 });
 
 test("Next reader romanizes Korean token readings instead of falling back to Hangul", () => {
@@ -158,6 +228,10 @@ test("Next reader romanizes Korean token readings instead of falling back to Han
   assert.match(readerSource, /const tokenPinyin = selectedTokenReadingParts\.length/);
   assert.match(readerSource, /const selectedTokenPronunciationLine = selectedTokenReadingParts\.map\(\(part\) => part\.text\)\.join\(" "\);/);
   assert.match(readerSource, /Google Translate \(live\)/);
+  assert.match(themeSource, /APP_THEME_RECENT_STORAGE_KEY/);
+  assert.match(themeSource, /APP_THEME_RECENTS_CHANGE_EVENT/);
+  assert.match(themeSource, /readStoredAppThemeRecents/);
+  assert.match(themeSource, /persistAppThemeRecents/);
 });
 
 test("Next reader separates page and sentence bookmarks with confirmation feedback", () => {
@@ -219,9 +293,10 @@ test("Next reader adapts long titles to a balanced two-line header", () => {
   assert.match(stylesheetSource, /text-wrap: balance/);
 });
 
-test("Inventory label toggle stays inline with the landing and app header rows", () => {
-  assert.match(landingSource, /className="landing-brand-row"/);
-  assert.match(landingSource, /<InventoryInspectorToggle \/>/);
+test("Inventory label toggle now lives in settings instead of the landing and shell headers", () => {
+  assert.doesNotMatch(landingSource, /InventoryInspectorToggle/);
+  assert.doesNotMatch(appShellSource, /InventoryInspectorToggle/);
+  assert.doesNotMatch(appShellSource, /isDemoMode/);
   assert.match(inventoryToggleStyles, /position: static;/);
   assert.match(inventoryToggleStyles, /width: max-content;/);
   assert.doesNotMatch(inventoryToggleStyles, /position: fixed;/);

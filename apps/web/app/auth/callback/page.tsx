@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { syncAuthSessionCookie } from "../../../lib/auth-session";
 import { getSupabaseClient } from "../../../lib/supabase";
 
-const DEFAULT_RETURN_TO = "/portal";
+const DEFAULT_RETURN_TO = "/home";
 
 function normalizeReturnTo(value: string | null): string {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
@@ -63,6 +64,7 @@ export default function AuthCallbackPage() {
         throw new Error("The confirmation link did not restore a session. Check that this app URL is allowed in Supabase Auth.");
       }
 
+      syncAuthSessionCookie(restoredSession.data.session);
       router.replace(returnTo);
       router.refresh();
     }

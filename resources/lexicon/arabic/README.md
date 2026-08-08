@@ -1,5 +1,7 @@
 # Arabic Lexicon Pack
 
+The bundled `lexicon.csv` contains the two Study starter levels. It is a deliberately small, canonical MSA on-ramp; future levels should extend the source pack and program definition rather than add UI-only terms.
+
 This directory is the starter location for the Arabic vocabulary database. The first pass should stay focused on a Modern Standard Arabic starter pack that supports the reader before any dialect expansion.
 
 ## Intended Sources
@@ -57,6 +59,10 @@ ACTFL proficiency bands should be used as the prioritization anchor, not as a pu
    - media and simple opinion
 6. Record whether each entry came from a dictionary export, a frequency list, or a corpus pass so the reader can distinguish canonical lookup coverage from later enrichment.
 7. Keep transliteration in sync with the reader pronunciation guide so romanization and source-script display stay aligned.
+
+## Included Starter Pack
+
+`lexicon.csv` now supplies the ten Modern Standard Arabic terms used by the two Study starter levels. It follows the canonical import layout, including transliteration, short English glosses, and a stable starter rank. Expand this local pack before adding another program level.
 
 ## Pack Goal
 

@@ -29,7 +29,7 @@ The API and shared TypeScript contracts are canonical for product data. The stan
 | Progress | `/progress` | `progress-preview.html` | Next | Use `ProgressSurfaceResponse`; preserve track selection UX. |
 | Profile | `/profile` | `profile-preview.html` | Next | Preserve local-first settings and authenticated profile behavior. |
 | Settings | `/settings` | `profile-preview.html` settings region | Next | Consolidate processor, OCR, theme, reader, and library settings. |
-| Theme shop | `/profile/themes` | `theme-shop-preview.html` | Next | Preserve the prototype while separating catalog state from theme preference state. |
+| Theme settings | `/profile/themes` | `theme-shop-preview.html` | Next | Preserve the prototype while separating catalog state from theme preference state. |
 | Activity | `/activity` | `activity-preview.html` | Next | Use `ActivitySurfaceResponse`. |
 | Roadmap | `/roadmap` | `roadmap-preview.html` | Next | Both surfaces now expose the same roadmap scope. |
 | Authentication | `/auth` and callback | None | Next | No standalone equivalent; do not add auth to the static compatibility shell in this phase. |

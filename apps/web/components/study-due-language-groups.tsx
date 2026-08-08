@@ -1,12 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
-import type { StudyQueueItem } from "../lib/textplex";
+import type { StudyProgramGroup, StudyQueueItem, StudyVocabularyGroup } from "../lib/textplex";
+import { StudyAxisRadarChart } from "./study-axis-radar-chart";
 
 type StudyDueLanguageGroupsProps = {
   items: StudyQueueItem[];
+  studyPrograms?: StudyProgramGroup[];
+  studyGroups?: StudyVocabularyGroup[];
   inventoryId?: string;
 };
 
@@ -20,6 +23,7 @@ const languageLabels: Record<string, string> = {
   ko: "Korean",
   local: "Local",
   ru: "Russian",
+  yo: "Yoruba",
   zh: "Chinese",
 };
 
@@ -50,6 +54,28 @@ type StudyLanguageQueueGroup = {
   futureItems: StudyLanguageQueueItem[];
   nextDueTime: number | null;
 };
+
+type StudySourceAction = "program" | "glossed" | "both";
+
+function termOriginLabel(origins: StudyQueueItem["origins"]): string {
+  if (origins.includes("glossed") && origins.includes("program")) {
+    return "Glossed and program term";
+  }
+  if (origins.includes("program")) {
+    return "Program term";
+  }
+  return "Glossed term";
+}
+
+function termOriginClassName(origins: StudyQueueItem["origins"]): string {
+  if (origins.includes("glossed") && origins.includes("program")) {
+    return "study-language-term-pill--both";
+  }
+  if (origins.includes("program")) {
+    return "study-language-term-pill--program";
+  }
+  return "study-language-term-pill--glossed";
+}
 
 function buildGroups(items: StudyQueueItem[], now: number | null): StudyLanguageQueueGroup[] {
   const groups = new Map<string, StudyLanguageQueueGroup>();
@@ -116,15 +142,77 @@ function buildGroups(items: StudyQueueItem[], now: number | null): StudyLanguage
     }));
 }
 
-export function StudyDueLanguageGroups({ items, inventoryId = "study.queue-language-groups" }: StudyDueLanguageGroupsProps) {
+function countProgramTerms(studyPrograms: StudyProgramGroup[] | undefined, languageCode: string): number {
+  return studyPrograms
+    ?.filter((program) => program.language_code === languageCode)
+    .reduce(
+      (total: number, program) =>
+        total + program.levels.reduce((levelTotal: number, level: { item_count: number }) => levelTotal + level.item_count, 0),
+      0,
+    ) ?? 0;
+}
+
+function countGlossedTerms(studyGroups: StudyVocabularyGroup[] | undefined, languageCode: string): number {
+  return studyGroups?.find((group) => group.language_code === languageCode)?.item_count ?? 0;
+}
+
+export function StudyDueLanguageGroups({
+  items,
+  studyPrograms,
+  studyGroups,
+  inventoryId = "study.queue-language-groups",
+}: StudyDueLanguageGroupsProps) {
+  const router = useRouter();
   const [now, setNow] = useState<number | null>(null);
   const [requestedNotifyMap, setRequestedNotifyMap] = useState<Record<string, boolean>>({});
+  const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setNow(Date.now());
   }, []);
 
+  useEffect(() => {
+    if (!toastMessage) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setToastMessage(null);
+    }, 2600);
+    return () => window.clearTimeout(timeoutId);
+  }, [toastMessage]);
+
   const groups = useMemo(() => buildGroups(items, now), [items, now]);
+
+  function showSourceToast(message: string): void {
+    setToastMessage(message);
+  }
+
+  function startStudySession(languageCode: string, languageLabel: string, action: StudySourceAction, programCount: number, glossedCount: number): void {
+    if (action === "program") {
+      if (programCount <= 0) {
+        showSourceToast(`No program words yet for ${languageLabel}.`);
+        return;
+      }
+      router.push(`/study/practice?mode=program&language_code=${encodeURIComponent(languageCode)}`);
+      return;
+    }
+
+    if (action === "glossed") {
+      if (glossedCount <= 0) {
+        showSourceToast(`No glossed terms yet for ${languageLabel}.`);
+        return;
+      }
+      router.push(`/study/practice?mode=glossed&language_code=${encodeURIComponent(languageCode)}`);
+      return;
+    }
+
+    if (programCount <= 0 || glossedCount <= 0) {
+      showSourceToast(`No program and glossed terms yet for ${languageLabel}.`);
+      return;
+    }
+    router.push(`/study/practice?mode=both&language_code=${encodeURIComponent(languageCode)}`);
+  }
 
   return (
     <div className="study-language-queue-groups" data-inventory-id={inventoryId}>
@@ -133,6 +221,9 @@ export function StudyDueLanguageGroups({ items, inventoryId = "study.queue-langu
         const upcomingCount = group.futureItems.length;
         const nextDueLabel = group.nextDueTime != null ? formatReviewStamp(group.nextDueTime) : null;
         const notifyRequested = requestedNotifyMap[group.languageCode] ?? false;
+        const programCount = countProgramTerms(studyPrograms, group.languageCode);
+        const glossedCount = countGlossedTerms(studyGroups, group.languageCode);
+        const selectedItem = group.dueItems.find((item) => `${item.language_code}:${item.lemma}:${item.next_due_at ?? "now"}` === selectedItemKey) ?? null;
 
         return (
           <details
@@ -154,25 +245,120 @@ export function StudyDueLanguageGroups({ items, inventoryId = "study.queue-langu
             <div className="study-language-queue-group-details" data-inventory-id="study.queue-language-group-details">
               {dueCount > 0 ? (
                 <>
+                  <div className="study-language-source-actions" data-inventory-id="study.queue-language-source-actions">
+                    <button
+                      type="button"
+                      className={`button button-secondary button-compact study-language-source-action ${programCount <= 0 ? "is-disabled" : ""}`}
+                      onClick={() => startStudySession(group.languageCode, group.languageLabel, "program", programCount, glossedCount)}
+                      aria-disabled={programCount <= 0}
+                      data-inventory-id="study.queue-language-program"
+                    >
+                      <span>Study program words</span>
+                      <span className="study-language-source-action-count">{programCount}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`button button-secondary button-compact study-language-source-action ${glossedCount <= 0 ? "is-disabled" : ""}`}
+                      onClick={() => startStudySession(group.languageCode, group.languageLabel, "glossed", programCount, glossedCount)}
+                      aria-disabled={glossedCount <= 0}
+                      data-inventory-id="study.queue-language-glossed"
+                    >
+                      <span>Study glossed words</span>
+                      <span className="study-language-source-action-count">{glossedCount}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`button button-secondary button-compact study-language-source-action ${programCount <= 0 || glossedCount <= 0 ? "is-disabled" : ""}`}
+                      onClick={() => startStudySession(group.languageCode, group.languageLabel, "both", programCount, glossedCount)}
+                      aria-disabled={programCount <= 0 || glossedCount <= 0}
+                      data-inventory-id="study.queue-language-both"
+                    >
+                      <span>Study both</span>
+                      <span className="study-language-source-action-count">{programCount + glossedCount}</span>
+                    </button>
+                  </div>
+                  <div
+                    className="study-language-term-origin-legend"
+                    data-inventory-id="study.queue-language-term-origin-legend"
+                    aria-label="Term origins"
+                  >
+                    <span className="small-copy">Term origins</span>
+                    <span className="study-language-term-origin-key study-language-term-pill--glossed">Glossed</span>
+                    <span className="study-language-term-origin-key study-language-term-pill--program">Program</span>
+                  </div>
                   <div className="study-language-term-pills">
                     {group.dueItems.map((item) => (
-                      <span
+                      <button
                         key={`${item.language_code}-${item.lemma}-${item.next_due_at ?? "now"}`}
-                        className="pill study-language-term-pill"
+                        type="button"
+                        className={`pill study-language-term-pill ${termOriginClassName(item.origins)} ${selectedItemKey === `${item.language_code}:${item.lemma}:${item.next_due_at ?? "now"}` ? "is-selected" : ""}`}
                         data-inventory-id="study.queue-language-term-pill"
                         lang={item.language_code}
+                        aria-label={`${item.lemma}: ${termOriginLabel(item.origins)}`}
+                        title={termOriginLabel(item.origins)}
+                        aria-pressed={selectedItemKey === `${item.language_code}:${item.lemma}:${item.next_due_at ?? "now"}`}
+                        onClick={() => {
+                          const nextKey = `${item.language_code}:${item.lemma}:${item.next_due_at ?? "now"}`;
+                          setSelectedItemKey((current) => (current === nextKey ? null : nextKey));
+                        }}
                       >
                         {item.lemma}
-                      </span>
+                      </button>
                     ))}
                   </div>
-                  <Link
-                    className="button button-secondary button-compact study-language-start-now"
-                    href={`/study/practice?mode=review&language_code=${encodeURIComponent(group.languageCode)}`}
-                    data-inventory-id="study.queue-language-start-now"
-                  >
-                    Start now
-                  </Link>
+                  {selectedItem ? (
+                    <div className="study-language-term-details" data-inventory-id="study.queue-language-term-details">
+                      <StudyAxisRadarChart
+                        axes={selectedItem.assessment_axes}
+                        inventoryId="study.queue-language-term-axis-chart"
+                        title="Axis SRS"
+                        description="Current SRS stage for each assessment axis on this ready-now term."
+                        emptyMessage="This ready-now term has not been assessed yet."
+                      />
+                      <div className="study-metadata-grid">
+                        <div>
+                          <span className="eyebrow">Term</span>
+                          <strong>{selectedItem.lemma}</strong>
+                        </div>
+                        <div>
+                          <span className="eyebrow">Language</span>
+                          <strong>{group.languageLabel}</strong>
+                        </div>
+                        <div>
+                          <span className="eyebrow">State</span>
+                          <strong>{selectedItem.state}</strong>
+                        </div>
+                        <div>
+                          <span className="eyebrow">Raw exposures</span>
+                          <strong>{selectedItem.raw_exposures}</strong>
+                        </div>
+                        <div>
+                          <span className="eyebrow">Weighted exposure</span>
+                          <strong>{selectedItem.weighted_exposure.toFixed(1)}</strong>
+                        </div>
+                        <div>
+                          <span className="eyebrow">Pages</span>
+                          <strong>{selectedItem.unique_pages}</strong>
+                        </div>
+                        <div>
+                          <span className="eyebrow">Books</span>
+                          <strong>{selectedItem.unique_books}</strong>
+                        </div>
+                        <div>
+                          <span className="eyebrow">Help requests</span>
+                          <strong>{selectedItem.help_requests}</strong>
+                        </div>
+                        <div>
+                          <span className="eyebrow">Confidence</span>
+                          <strong>{selectedItem.confidence_score.toFixed(2)}</strong>
+                        </div>
+                        <div>
+                          <span className="eyebrow">Next due</span>
+                          <strong>{selectedItem.dueTime != null ? formatReviewStamp(selectedItem.dueTime) : "—"}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                   {upcomingCount > 0 && nextDueLabel ? (
                     <p className="small-copy">More {group.languageLabel} items are scheduled for {nextDueLabel}.</p>
                   ) : null}
@@ -205,6 +391,11 @@ export function StudyDueLanguageGroups({ items, inventoryId = "study.queue-langu
           </details>
         );
       })}
+      {toastMessage ? (
+        <p className="study-source-toast" role="status" aria-live="polite">
+          {toastMessage}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -9,6 +9,7 @@ The focus is on respectful audience definition, learner journey mapping, and mes
 - [Audience segments](./audience-segments.md)
 - [Learner journeys](./journey-map.md)
 - [Onboarding and profile intake](./onboarding-profile-intake.md)
+- [Russian reader sample](./russian-reader-sample.md)
 - [Layout density and presentation modes](./layout-density.md)
 - [Messaging guardrails](./messaging-guardrails.md)
 

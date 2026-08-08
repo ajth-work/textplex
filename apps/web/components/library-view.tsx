@@ -5,7 +5,17 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
 
 import { AccountMenu } from "./account-menu";
-import { fetchJson, formatDateTime, resolveReaderResumeHref, type BookRecord, type ProgressSurfaceResponse } from "../lib/textplex";
+import {
+  fetchJson,
+  formatDateTime,
+  generateReaderArticle,
+  resolveReaderResumeHref,
+  type BookRecord,
+  type ProgressBookSummary,
+  type ProgressSurfaceResponse,
+  type StudyProgramGroup,
+  type StudySurfaceResponse,
+} from "../lib/textplex";
 
 type LibraryLanguageOption = {
   code: string;
@@ -20,7 +30,98 @@ const libraryLanguageOptions: LibraryLanguageOption[] = [
   { code: "ru", label: "Russian" },
   { code: "he", label: "Hebrew" },
   { code: "ar", label: "Arabic" },
+  { code: "yo", label: "Yoruba" },
 ];
+
+type GeneratorCurriculumMode = "auto" | "study_program" | "exam";
+type GeneratorWindowBias = "safe" | "balanced" | "stretch";
+
+const generatorSentenceOptions = [15, 30, 45, 60] as const;
+
+const generatorGenreOptions = [
+  { value: "everyday", label: "Everyday life" },
+  { value: "travel", label: "Travel" },
+  { value: "news", label: "News" },
+  { value: "dialogue", label: "Dialogue" },
+  { value: "workplace", label: "Workplace" },
+  { value: "family", label: "Family" },
+  { value: "school", label: "School" },
+  { value: "mystery", label: "Mystery" },
+  { value: "science", label: "Science" },
+  { value: "culture", label: "Culture" },
+  { value: "food", label: "Food" },
+] as const;
+
+const generatorToneOptions = [
+  { value: "explanatory", label: "Explanatory" },
+  { value: "narrative", label: "Narrative" },
+  { value: "journalistic", label: "Journalistic" },
+  { value: "conversational", label: "Conversational" },
+  { value: "reflective", label: "Reflective" },
+] as const;
+
+const generatorCurriculumModeOptions = [
+  { value: "auto", label: "Auto" },
+  { value: "study_program", label: "Study program" },
+  { value: "exam", label: "Exam ladder" },
+] as const;
+
+const generatorBiasOptions = [
+  { value: "safe", label: "Safe", description: "Keep the article heavy on known words and light on novelty." },
+  { value: "balanced", label: "Balanced", description: "Mix known, recent, and upcoming words in the default ratio." },
+  { value: "stretch", label: "Stretch", description: "Push a little harder with more upcoming vocabulary." },
+] as const;
+
+const examLevelOptionsByLanguage: Record<string, readonly { value: string; label: string }[]> = {
+  zh: [
+    { value: "HSK 1", label: "HSK 1" },
+    { value: "HSK 2", label: "HSK 2" },
+    { value: "HSK 3", label: "HSK 3" },
+    { value: "HSK 4", label: "HSK 4" },
+    { value: "HSK 5", label: "HSK 5" },
+    { value: "HSK 6", label: "HSK 6" },
+  ],
+  ja: [
+    { value: "JLPT N5", label: "JLPT N5" },
+    { value: "JLPT N4", label: "JLPT N4" },
+    { value: "JLPT N3", label: "JLPT N3" },
+    { value: "JLPT N2", label: "JLPT N2" },
+    { value: "JLPT N1", label: "JLPT N1" },
+  ],
+  ko: [
+    { value: "TOPIK 1", label: "TOPIK 1" },
+    { value: "TOPIK 2", label: "TOPIK 2" },
+    { value: "TOPIK 3", label: "TOPIK 3" },
+    { value: "TOPIK 4", label: "TOPIK 4" },
+    { value: "TOPIK 5", label: "TOPIK 5" },
+    { value: "TOPIK 6", label: "TOPIK 6" },
+  ],
+  ru: [
+    { value: "TRKI A1", label: "TRKI A1" },
+    { value: "TRKI A2", label: "TRKI A2" },
+    { value: "TRKI B1", label: "TRKI B1" },
+    { value: "TRKI B2", label: "TRKI B2" },
+    { value: "TRKI C1", label: "TRKI C1" },
+    { value: "TRKI C2", label: "TRKI C2" },
+  ],
+  ar: [
+    { value: "ACTFL Novice Low", label: "ACTFL Novice Low" },
+    { value: "ACTFL Novice Mid", label: "ACTFL Novice Mid" },
+    { value: "ACTFL Novice High", label: "ACTFL Novice High" },
+    { value: "ACTFL Intermediate Low", label: "ACTFL Intermediate Low" },
+    { value: "ACTFL Intermediate Mid", label: "ACTFL Intermediate Mid" },
+    { value: "ACTFL Intermediate High", label: "ACTFL Intermediate High" },
+    { value: "ACTFL Advanced Low", label: "ACTFL Advanced Low" },
+    { value: "ACTFL Advanced Mid", label: "ACTFL Advanced Mid" },
+    { value: "ACTFL Advanced High", label: "ACTFL Advanced High" },
+  ],
+};
+
+const generatorBiasLimits: Record<GeneratorWindowBias, { known: number; recent: number; upcoming: number; newLemmaLimit: number }> = {
+  safe: { known: 16, recent: 8, upcoming: 6, newLemmaLimit: 4 },
+  balanced: { known: 12, recent: 10, upcoming: 12, newLemmaLimit: 8 },
+  stretch: { known: 10, recent: 10, upcoming: 16, newLemmaLimit: 12 },
+};
 
 function bookFormatLabel(book: BookRecord): string {
   const suffix = book.source_filename.split(".").pop()?.trim();
@@ -38,6 +139,16 @@ function bookStatusLabel(book: BookRecord): string {
     return "Queued";
   }
   return "Local";
+}
+
+function readingStateLabel(progress: ProgressBookSummary | null): string {
+  if (!progress || progress.reading_state === "not_read") {
+    return "Not read";
+  }
+  if (progress.reading_state === "finished") {
+    return "Finished";
+  }
+  return "In progress";
 }
 
 function bookSubtitle(book: BookRecord): string {
@@ -86,6 +197,60 @@ function matchesLibraryLanguage(book: BookRecord, languageCode: string): boolean
   return languageCode === "all" || book.language_code === languageCode;
 }
 
+function generatorLanguageLabel(languageCode: string): string {
+  return libraryLanguageOptions.find((option) => option.code === languageCode)?.label ?? languageCode.toUpperCase();
+}
+
+function generatorOptionLabel(options: readonly { value: string; label: string }[], value: string): string {
+  return options.find((option) => option.value === value)?.label ?? value;
+}
+
+function getGeneratorLevelOptions(
+  languageCode: string,
+  curriculumMode: GeneratorCurriculumMode,
+  studyPrograms: StudyProgramGroup[],
+): Array<{ value: string; label: string }> {
+  if (curriculumMode === "auto") {
+    return [];
+  }
+
+  if (curriculumMode === "study_program") {
+    const languageProgram = studyPrograms.find((program) => program.language_code === languageCode);
+    if (!languageProgram) {
+      return [];
+    }
+    return languageProgram.levels.map((level) => ({
+      value: `${languageProgram.program_code}:${level.level_code}`,
+      label: level.level_label,
+    }));
+  }
+
+  return [...(examLevelOptionsByLanguage[languageCode] ?? [])];
+}
+
+function summarizeGeneratorSettings(
+  languageCode: string,
+  sentenceCount: number,
+  curriculumMode: GeneratorCurriculumMode,
+  curriculumLevel: string,
+  genre: string,
+  tone: string,
+  windowBias: GeneratorWindowBias,
+): string {
+  const curriculumParts = curriculumMode === "auto"
+    ? ["Auto"]
+    : [generatorOptionLabel(generatorCurriculumModeOptions, curriculumMode), curriculumLevel || "Ceiling off"];
+  const parts = [
+    `${sentenceCount} sentences`,
+    generatorLanguageLabel(languageCode),
+    ...curriculumParts,
+    generatorOptionLabel(generatorGenreOptions, genre),
+    generatorOptionLabel(generatorToneOptions, tone),
+    generatorOptionLabel(generatorBiasOptions, windowBias),
+  ];
+  return parts.filter(Boolean).join(" · ");
+}
+
 function LibrarySkeletonCard() {
   return (
     <article className="library-skeleton-card" aria-label="Loading library book" role="status">
@@ -99,8 +264,9 @@ function LibrarySkeletonCard() {
   );
 }
 
-function LibraryCard({ book, onOpenInfo, onOpenReader }: {
+function LibraryCard({ book, progress, onOpenInfo, onOpenReader }: {
   book: BookRecord;
+  progress: ProgressBookSummary | null;
   onOpenInfo: (bookId: string) => void;
   onOpenReader: (bookId: string) => void;
 }) {
@@ -142,7 +308,10 @@ function LibraryCard({ book, onOpenInfo, onOpenReader }: {
         <p className="library-author">{bookSubtitle(book)}</p>
         <p className="library-summary">{bookMetaSummary(book)}</p>
         <div className="library-actions">
-          <span className="library-tag library-status">{bookStatusLabel(book)}</span>
+          <div className="library-tag-row">
+            <span className="library-tag library-status">{bookStatusLabel(book)}</span>
+            <span className="library-tag library-read-state">{readingStateLabel(progress)}</span>
+          </div>
           <div className="library-action-buttons">
             <button
               className="button button-secondary library-action-button library-action-button-info"
@@ -189,10 +358,23 @@ export function LibraryView() {
   const router = useRouter();
   const [books, setBooks] = useState<BookRecord[]>([]);
   const [progress, setProgress] = useState<ProgressSurfaceResponse | null>(null);
+  const [study, setStudy] = useState<StudySurfaceResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [languageCode, setLanguageCode] = useState("all");
+  const [generatingArticle, setGeneratingArticle] = useState(false);
+  const [generationMessage, setGenerationMessage] = useState<string | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [generatorLanguageCode, setGeneratorLanguageCode] = useState("zh");
+  const [generatorSentenceCount, setGeneratorSentenceCount] = useState<(typeof generatorSentenceOptions)[number]>(30);
+  const [generatorCurriculumMode, setGeneratorCurriculumMode] = useState<GeneratorCurriculumMode>("auto");
+  const [generatorCurriculumLevel, setGeneratorCurriculumLevel] = useState("");
+  const [generatorGenre, setGeneratorGenre] = useState("everyday");
+  const [generatorTone, setGeneratorTone] = useState("explanatory");
+  const [generatorWindowBias, setGeneratorWindowBias] = useState<GeneratorWindowBias>("balanced");
+  const [generatorTopic, setGeneratorTopic] = useState("");
+  const [generatorLanguageTouched, setGeneratorLanguageTouched] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -213,6 +395,26 @@ export function LibraryView() {
       .finally(() => {
         if (active) {
           setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    void fetchJson<StudySurfaceResponse>("/study")
+      .then((result) => {
+        if (active) {
+          setStudy(result);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setStudy(null);
         }
       });
 
@@ -245,6 +447,7 @@ export function LibraryView() {
     const normalizedQuery = normalizeQuery(query);
     return books.filter((book) => matchesBook(book, normalizedQuery) && matchesLibraryLanguage(book, languageCode));
   }, [books, languageCode, query]);
+  const progressByBookId = useMemo(() => new Map((progress?.books ?? []).map((item) => [item.book_id, item])), [progress]);
 
   function openInfo(bookId: string) {
     router.push(`/books/${bookId}`);
@@ -252,6 +455,96 @@ export function LibraryView() {
 
   function openReader(bookId: string) {
     router.push(resolveReaderResumeHref(bookId, progress));
+  }
+
+  function resolveGeneratedLanguageCode(): string {
+    if (generatorLanguageCode) {
+      return generatorLanguageCode;
+    }
+    if (languageCode !== "all") {
+      return languageCode;
+    }
+    const selectedTrackCode = progress?.profile.selected_track_code;
+    const selectedTrack = selectedTrackCode ? progress?.profile.learning_tracks.find((track) => track.code === selectedTrackCode) : null;
+    if (selectedTrack?.language_code) {
+      return selectedTrack.language_code;
+    }
+    return books[0]?.language_code ?? "zh";
+  }
+
+  const generatorLanguage = resolveGeneratedLanguageCode();
+  const generatorCurriculumLevelOptions = useMemo(
+    () => getGeneratorLevelOptions(generatorLanguage, generatorCurriculumMode, study?.study_programs ?? []),
+    [generatorCurriculumMode, generatorLanguage, study],
+  );
+  const generatorBiasLimitsForSelection = generatorBiasLimits[generatorWindowBias];
+  const generatorSettingsSummary = summarizeGeneratorSettings(
+    generatorLanguage,
+    generatorSentenceCount,
+    generatorCurriculumMode,
+    generatorCurriculumLevel,
+    generatorGenre,
+    generatorTone,
+    generatorWindowBias,
+  );
+  const generatorTopicValue = generatorTopic.trim();
+
+  useEffect(() => {
+    if (!generatorLanguageTouched) {
+      const selectedTrackCode = progress?.profile.selected_track_code;
+      const selectedTrack = selectedTrackCode ? progress?.profile.learning_tracks.find((track) => track.code === selectedTrackCode) : null;
+      const preferredLanguage = languageCode !== "all" ? languageCode : selectedTrack?.language_code ?? books[0]?.language_code ?? null;
+      if (preferredLanguage && preferredLanguage !== generatorLanguageCode) {
+        setGeneratorLanguageCode(preferredLanguage);
+      }
+    }
+
+    if (generatorCurriculumMode === "auto") {
+      if (generatorCurriculumLevel) {
+        setGeneratorCurriculumLevel("");
+      }
+      return;
+    }
+
+    if (!generatorCurriculumLevel) {
+      return;
+    }
+
+    const validValues = new Set(generatorCurriculumLevelOptions.map((option) => option.value));
+    if (!validValues.has(generatorCurriculumLevel)) {
+      setGeneratorCurriculumLevel("");
+    }
+  }, [books, generatorCurriculumLevel, generatorCurriculumLevelOptions, generatorCurriculumMode, generatorLanguageCode, generatorLanguageTouched, languageCode, progress]);
+
+  async function generatePracticeArticle() {
+    const generatedLanguageCode = resolveGeneratedLanguageCode();
+    const limits = generatorBiasLimitsForSelection;
+    setGeneratingArticle(true);
+    setGenerationMessage(null);
+    setGenerationError(null);
+
+    try {
+      const result = await generateReaderArticle({
+        language_code: generatedLanguageCode,
+        topic: generatorTopicValue || null,
+        genre: generatorGenre,
+        tone: generatorTone,
+        style: generatorTone,
+        curriculum_mode: generatorCurriculumMode,
+        curriculum_level: generatorCurriculumLevel || null,
+        sentence_count: generatorSentenceCount,
+        known_lemma_limit: limits.known,
+        recent_lemma_limit: limits.recent,
+        upcoming_lemma_limit: limits.upcoming,
+        max_new_lemmas: limits.newLemmaLimit,
+      });
+      setGenerationMessage(`Generated ${result.title}. Opening it in the reader.`);
+      router.push(`/reader/${result.book.id}/1`);
+    } catch (reason: unknown) {
+      setGenerationError(reason instanceof Error ? reason.message : "Unable to generate a practice article.");
+    } finally {
+      setGeneratingArticle(false);
+    }
   }
 
   function retryLoad() {
@@ -275,17 +568,10 @@ export function LibraryView() {
 
   return (
     <section className="library-page">
-      <header className="library-topbar" data-inventory-id="library.page-header">
-        <Link className="library-back-link" href="/" aria-label="Back to home">
-          <span aria-hidden="true">←</span>
-        </Link>
-        <h1 className="library-brand">TextPlex</h1>
-        <AccountMenu returnTo="/library" compact className="library-account-menu" />
-      </header>
-
       <header className="library-hero card" data-inventory-id="library.search-hero">
         <div className="library-hero-head">
           <p className="eyebrow">Search</p>
+          <AccountMenu returnTo="/library" compact className="library-account-menu" />
         </div>
 
         <div className="library-controls">
@@ -331,6 +617,130 @@ export function LibraryView() {
             ))}
           </div>
         </div>
+
+        <div className="library-practice-action">
+          <div className="library-practice-copy">
+            <p className="library-practice-kicker">Practice article</p>
+            <p className="library-practice-text">Generate a controlled reader article from your current learner window and open it immediately.</p>
+          </div>
+        </div>
+        <details className="library-generator-settings" data-inventory-id="library.generator-settings" open={false}>
+          <summary className="library-generator-summary" data-inventory-id="library.generator-summary">
+            <span>Generator settings</span>
+            <span className="library-generator-summary-meta">{generatorSettingsSummary}</span>
+          </summary>
+          <div className="library-generator-grid">
+            <label className="library-generator-field">
+              <span>Target language</span>
+              <select
+                value={generatorLanguageCode}
+                onChange={(event) => {
+                  setGeneratorLanguageTouched(true);
+                  setGeneratorLanguageCode(event.target.value);
+                }}
+              >
+                {libraryLanguageOptions
+                  .filter((option) => option.code !== "all")
+                  .map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.label}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="library-generator-field">
+              <span>Length</span>
+              <select value={String(generatorSentenceCount)} onChange={(event) => setGeneratorSentenceCount(Number(event.target.value) as (typeof generatorSentenceOptions)[number])}>
+                {generatorSentenceOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option} sentences
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="library-generator-field">
+              <span>Curriculum ceiling</span>
+              <select value={generatorCurriculumMode} onChange={(event) => setGeneratorCurriculumMode(event.target.value as GeneratorCurriculumMode)}>
+                {generatorCurriculumModeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="library-generator-field">
+              <span>Level</span>
+              <select
+                value={generatorCurriculumLevel}
+                onChange={(event) => setGeneratorCurriculumLevel(event.target.value)}
+                disabled={generatorCurriculumMode === "auto"}
+              >
+                <option value="">{generatorCurriculumMode === "study_program" ? "Use program levels" : "Auto"}</option>
+                {generatorCurriculumLevelOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="library-generator-field">
+              <span>Genre</span>
+              <select value={generatorGenre} onChange={(event) => setGeneratorGenre(event.target.value)}>
+                {generatorGenreOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="library-generator-field">
+              <span>Tone</span>
+              <select value={generatorTone} onChange={(event) => setGeneratorTone(event.target.value)}>
+                {generatorToneOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="library-generator-field">
+              <span>Vocabulary balance</span>
+              <select value={generatorWindowBias} onChange={(event) => setGeneratorWindowBias(event.target.value as GeneratorWindowBias)}>
+                {generatorBiasOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="library-generator-field library-generator-field-topic">
+              <span>Topic</span>
+              <input
+                type="text"
+                value={generatorTopic}
+                onChange={(event) => setGeneratorTopic(event.target.value)}
+                placeholder="travel planning, museum visit, school day..."
+              />
+            </label>
+            <p className="library-generator-note">
+              The level ceiling is applied where TextPlex has a matching study program or proficiency ladder; otherwise the prompt still carries the selected ceiling as guidance.
+            </p>
+          </div>
+        </details>
+        <button
+          className="button button-primary library-practice-action-button"
+          type="button"
+          data-inventory-id="library.generate-article-button"
+          onClick={() => void generatePracticeArticle()}
+          disabled={generatingArticle}
+        >
+          {generatingArticle ? "Generating..." : "Generate practice article"}
+        </button>
+        {generationMessage || generationError ? (
+          <p className={`library-practice-status ${generationError ? "is-error" : ""}`.trim()} aria-live="polite">
+            {generationError || generationMessage}
+          </p>
+        ) : null}
       </header>
 
       <section className="library-shell card">
@@ -353,7 +763,7 @@ export function LibraryView() {
         {!error && !loading && visibleBooks.length > 0 ? (
           <div className="library-shelf" aria-live="polite" data-inventory-id="library.shelf">
             {visibleBooks.map((book) => (
-              <LibraryCard key={book.id} book={book} onOpenInfo={openInfo} onOpenReader={openReader} />
+              <LibraryCard key={book.id} book={book} progress={progressByBookId.get(book.id) ?? null} onOpenInfo={openInfo} onOpenReader={openReader} />
             ))}
           </div>
         ) : null}

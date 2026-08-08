@@ -4,6 +4,8 @@ const assert = require("node:assert/strict");
 const { test } = require("node:test");
 
 const repoRoot = path.join(__dirname, "..", "..");
+const homeRouteSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "app", "home", "page.tsx"), "utf8");
+const legacyPortalRouteSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "app", "portal", "page.tsx"), "utf8");
 const homeSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "home-surface.tsx"), "utf8");
 const librarySource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "library-view.tsx"), "utf8");
 const bookDetailSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "book-detail-view.tsx"), "utf8");
@@ -13,6 +15,9 @@ const progressContract = fs.readFileSync(path.join(repoRoot, "packages", "shared
 const inventorySource = fs.readFileSync(path.join(repoRoot, "docs", "COMPONENTS_INVENTORY.md"), "utf8");
 
 test("home continuation uses learner reading progress instead of extraction analysis", () => {
+  assert.match(homeRouteSource, /export default function HomePage\(\)/);
+  assert.match(homeRouteSource, /<HomeSurface \/>/);
+  assert.match(legacyPortalRouteSource, /redirect\("\/home"\)/);
   assert.match(homeSource, /fetchJson<ProgressSurfaceResponse>\("\/progress"\)/);
   assert.match(homeSource, /home\.continue-reading-card/);
   assert.match(homeSource, /home\.continue-reading-list/);
@@ -21,6 +26,7 @@ test("home continuation uses learner reading progress instead of extraction anal
   assert.match(homeSource, /progress\.progress_percent/);
   assert.match(homeSource, /progress\.furthest_page/);
   assert.match(homeSource, /progress\.sentences_read/);
+  assert.match(homeSource, /progress\.reading_state === "not_read"/);
   assert.doesNotMatch(homeSource, /Recent Analyses|recent-analyses|\/analysis\/\$\{book\.id\}/);
   assert.doesNotMatch(homeSource, /extracted_page_count/);
 });
@@ -30,9 +36,11 @@ test("progress contract exposes furthest learner position and its unit", () => {
   assert.match(progressContract, /total_sentences: number;/);
   assert.match(progressContract, /progress_percent: number;/);
   assert.match(progressContract, /progress_unit: "pages" \| "sentences";/);
+  assert.match(progressContract, /reading_state: "not_read" \| "in_progress" \| "finished";/);
   assert.match(progressContract, /last_read_at: string \| null;/);
   assert.match(inventorySource, /`home\.continue-reading-list`/);
   assert.match(inventorySource, /`home\.continue-reading-row`/);
+  assert.match(inventorySource, /`reader\.completion-summary-card`/);
 });
 
 test("reader entry points resume the last sentence for the selected book", () => {
@@ -41,7 +49,10 @@ test("reader entry points resume the last sentence for the selected book", () =>
   assert.match(textplexSource, /\?sentence=\$\{position\.sentenceOrder\}/);
   assert.match(readerSource, /rememberReaderPosition\(bookId, pageNumber, selectedSentenceOrder\)/);
   assert.match(readerSource, /resolveReaderResumePosition\(bookId, null, pageNumber\)/);
+  assert.match(readerSource, /reader\.completion-summary-card/);
+  assert.match(readerSource, /Mark as read and return to library/);
   assert.match(librarySource, /fetchJson<ProgressSurfaceResponse>\("\/progress"\)/);
   assert.match(librarySource, /resolveReaderResumeHref\(bookId, progress\)/);
+  assert.match(librarySource, /library-read-state/);
   assert.match(bookDetailSource, /resolveReaderResumeHref\(bookId, progress, firstPageNumber\)/);
 });

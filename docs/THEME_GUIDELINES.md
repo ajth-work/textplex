@@ -2,7 +2,7 @@
 
 Status: active product guideline  
 Scope: every user-facing screen, card, control, state, and reading surface  
-Current theme packs: Neutral, Warm Sepia, Dark Ink, Pitch Black, Jade, Ceramic, Crimson Gold, NES, Famicom, SNES, Super Famicom, Fruit Stand, Garden Harvest, Summer Editions, Fall Editions, International City: Moscow, International City: St. Petersburg, International City: Kazan
+Current theme packs: Neutral, Warm Sepia, Dark Ink, Pitch Black, Jade, Ceramic, Crimson Gold, NES, Famicom, SNES, Super Famicom, Fruit Stand, Garden Harvest, Summer Editions, Fall Editions, International City: Moscow, International City: St. Petersburg, International City: Kazan, International City: Hong Kong
 
 ## Purpose
 
@@ -13,6 +13,15 @@ The priorities are:
 1. Reading clarity and functional visibility.
 2. Consistent theme expression across every route.
 3. Clear hierarchy between the app canvas, cards, controls, and reading content.
+
+## Wallpaper Testing Controls
+
+- Wallpaper artwork defaults to one fixed cover image with no repeat so supplied illustrations remain stationary and do not introduce edge seams.
+- Settings exposes a persisted `Tile wallpaper` toggle for comparing repeat-friendly artwork. Tiling uses a fixed-size image repeat and must never change card or reader-surface opacity.
+- Settings also includes `Test Wallpaper`, a local-only orchard asset for validating opacity, stationary positioning, and tile behavior. It is not a shop product or paid catalog entitlement.
+- Any wallpaper used for testing must preserve readable text, controls, focus rings, and cards at the configured artwork opacity.
+- Use [`WALLPAPER_GENERATION_PROMPT.md`](WALLPAPER_GENERATION_PROMPT.md) when creating new wallpaper assets; choose the fixed-cover or tile-test addendum deliberately.
+- Wallpaper assets use explicit versions: the first approved generation is `v1`, revisions increment to `v2`, `v3`, and so on; the active latest path is maintained in the wallpaper manifest.
 4. Calm, purposeful color rather than decoration for its own sake.
 
 The global theme is selected from Profile under Appearance > Global theme. Reader typography, density, token mode, and text size remain reader controls, but the reader still inherits the global palette unless a reader-specific surface intentionally needs a local treatment.
@@ -227,6 +236,14 @@ Suggested bundle title: `Fruit Stand` — bright, fresh, and market-inspired wit
 | `fruit-watermelon` | Watermelon | Pale rind green with a cool blush transition | Cream cards; deep rind-green text and slate metadata | Watermelon coral-pink with rind-green support | Keep coral and green in separate roles; do not checkerboard them. |
 | `fruit-grape` | Grape | Muted lavender, dusty mauve, and soft ink | Pale lilac cards; deep plum text and cool slate metadata | Grape purple with a rose-lavender focus state | Avoid neon purple and purple text on dark purple. |
 
+Strawberry now has a paired low-light variant. The existing `fruit-strawberry` ID remains the daylight listing for backwards compatibility; `fruit-strawberry-night` is its separate `$1.99` night product and uses the supplied PNG wallpaper.
+
+| ID | Theme | Canvas / surface direction | Card / text direction | Accent direction | Guardrail |
+| --- | --- | --- | --- | --- | --- |
+| `fruit-strawberry-night` | Strawberry - Night | Deep berry-black canvas, dusky blossom pink, and muted leaf detail | Deep plum cards; warm ivory text with softened blush metadata | Strawberry red for actions; pale blossom focus ring | Never use red or muted leaf tones as long-form text on the dark canvas. |
+
+Catalog metadata: `fruit-strawberry` is the `daylight` member of the Strawberry family; `fruit-strawberry-night` is the `night` member. Both are individual `$1.99` products. The existing six-theme `Fruit Stand` bundle remains unchanged until the collection is intentionally expanded.
+
 #### Garden Harvest
 
 Suggested bundle title: `Garden Harvest` — grounded, botanical, and slightly more muted than Fruit Stand.
@@ -242,13 +259,33 @@ Suggested bundle title: `Garden Harvest` — grounded, botanical, and slightly m
 
 #### Summer Editions
 
-Suggested bundle title: `Summer Editions` — three illustrated seasonal atmospheres priced at `$1.99` individually or `$4.99` as a pack.
+Bundle title: `Summer Editions` — six illustrated seasonal atmospheres priced at `$1.99` individually or `$8.99` as a pack, saving `$2.95`.
 
 | ID | Theme | Canvas / surface direction | Card / text direction | Accent direction | Guardrail |
 | --- | --- | --- | --- | --- | --- |
 | `season-summer-citrus` | Citrus Grove | Warm cream, lemon yellow, orange, and botanical green | Cream cards; espresso text with orange and leaf-green metadata | Citrus orange with botanical green support | Keep yellow as a fill or highlight, never small body text. |
 | `season-summer-meadow` | Sunlit Meadow | Pale sky blue, cream, sunflower yellow, and meadow green | Soft white cards; deep green text with slate metadata | Sunflower yellow with meadow-green positive states | Preserve enough blue-white separation for skeletons and muted copy. |
 | `season-summer-seaside` | Seaside Garden | Aqua, sand, coral, and deep teal | Porcelain cards; deep teal text with soft coral metadata | Coral for action emphasis and teal for support | Keep coral out of long-form text and avoid aqua-on-white collapse. |
+
+Night variants use supplied dark wallpaper artwork and are separate `$1.99` products in the same family:
+
+| ID | Theme | Canvas / surface direction | Card / text direction | Accent direction | Contrast risk |
+| --- | --- | --- | --- | --- | --- |
+| `season-summer-citrus-night` | Citrus Grove - Night | Deep botanical green, citrus amber, and blossom light | Dark green cards with warm ivory text and softened leaf metadata | Amber for actions and focus | Do not use green or amber as small text on the dark canvas; keep body copy warm ivory. |
+| `season-summer-meadow-night` | Sunlit Meadow - Night | Midnight blue, dusk wildflowers, soft gold, and meadow detail | Deep blue cards with pale neutral text and muted floral metadata | Soft gold for actions; lavender for focus | Keep blue and purple out of long-form text; preserve pale text for reading copy. |
+| `season-summer-seaside-night` | Seaside Garden - Night | Deep ocean blue, moonlit shells, cool botanicals, and restrained stars | Ocean-blue cards with cool ivory text and softened aqua metadata | Coral for actions; aqua for focus | Do not use ocean blue as text on the night canvas; keep coral out of small body copy. |
+
+Motifs and rationale:
+
+- Citrus night uses lemons, oranges, blossom branches, dark leaves, moonlight, and small warm points for a quiet orchard-after-dark atmosphere.
+- Meadow night uses wildflowers, grasses, butterflies, moonlight, and sparse stars while keeping the reading surface calm.
+- Seaside night uses shells, stones, sea grass, flowers, and moonlit water tones for a low-light coastal garden mood.
+
+Catalog metadata:
+
+- `season-summer-citrus-night`: display title `Citrus Grove - Night`, variant `night`, collection `Summer Editions`, cultural thread `citrus grove at night`, price `$1.99`.
+- `season-summer-meadow-night`: display title `Sunlit Meadow - Night`, variant `night`, collection `Summer Editions`, cultural thread `wildflower meadow at night`, price `$1.99`.
+- `season-summer-seaside-night`: display title `Seaside Garden - Night`, variant `night`, collection `Summer Editions`, cultural thread `seaside garden at night`, price `$1.99`.
 
 #### Fall Editions: Maple Walk
 
@@ -378,6 +415,27 @@ Catalog metadata:
 - `city-kazan-daylight`: display title `Kazan — Daylight`, variant `daylight`, language collection `Russian`, region `Kazan, Russia`, cultural thread `architecture + botanicals + ornament`, price `$1.99`.
 - `city-kazan-night`: display title `Kazan — Night`, variant `night`, language collection `Russian`, region `Kazan, Russia`, cultural thread `architecture + botanicals + ornament`, price `$1.99`.
 - Inspired by Kazan mosque domes, minarets, historic towers, pale stone architecture, botanical branches, restrained ornamental motifs, and northern night-sky details.
+
+#### International City: Hong Kong
+
+Theme family ID: `international-hong-kong`. These two `$1.99` Chinese-city variants use a shared harbor, hillside, ferry, and vertical-city thread. The artwork focuses on Hong Kong-specific public-space and skyline cues without using flags, maps, logos, or claiming to represent all of China or Chinese culture.
+
+| ID | Theme | Variant / region | Canvas / surface direction | Card / text direction | Accent direction | Contrast risk |
+| --- | --- | --- | --- | --- | --- |
+| `city-hong-kong-daylight` | Hong Kong — Daylight | Daylight / Hong Kong, China | Pale harbor blue, misted stone, soft white, and ferry green | Warm white cards with deep blue-teal text and slate metadata | Harbor teal for actions; warm stone gold for focus and progress | Keep pale blue, teal, and gold out of small text on white; use deep blue-teal for all reading copy. |
+| `city-hong-kong-night` | Hong Kong — Night | Night / Hong Kong, China | Deep harbor navy, reflected tower light, and cool hillside blue | Deep blue raised cards with soft neutral text and warm muted metadata | Tower-light gold for actions; harbor blue for focus | Never use navy or muted blue as text on the night canvas; reserve gold for short emphasis and keep body copy soft ivory. |
+
+Motifs and rationale:
+
+- Harbor water, hillside contours, ferries, piers, and vertical tower geometry provide the primary Hong Kong-specific visual thread.
+- The Daylight asset uses pale harbor blue with calm architectural silhouettes and generous negative space for reading content.
+- The Night asset is independently composed in deep navy with reflected windows, ferry light, hillside glow, and restrained harbor detail; it is not an inverted Daylight asset.
+
+Catalog metadata:
+
+- `city-hong-kong-daylight`: display title `Hong Kong — Daylight`, variant `daylight`, language collection `Chinese`, region `Hong Kong`, cultural thread `harbor + hillside city geometry + ferries`, price `$1.99`.
+- `city-hong-kong-night`: display title `Hong Kong — Night`, variant `night`, language collection `Chinese`, region `Hong Kong`, cultural thread `harbor + hillside city geometry + ferries`, price `$1.99`.
+- Inspired by harbor water, Star Ferry forms, public piers, hillside contours, angular tower silhouettes, and restrained reflected city light.
 
 Implementation order: define the semantic token blocks and swatches first, then add the individual catalog entries, then add any bundle cards and entitlement IDs. Verify each collection in Profile, Theme Shop, Settings, Home, Library, and Reader at the mobile and desktop acceptance sizes before expanding the catalog.
 

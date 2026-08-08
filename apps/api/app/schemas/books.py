@@ -64,6 +64,28 @@ class BookPageManifest(BaseModel):
     pages: list[PageRecord]
 
 
+class TranslationAlignmentToken(BaseModel):
+    token_id: int = Field(ge=1)
+    text: str
+    token_kind: Literal["word", "punctuation", "space"] = "word"
+
+
+class TranslationAlignmentSegment(BaseModel):
+    source_token_ids: list[int] = Field(default_factory=list)
+    target_token_ids: list[int] = Field(default_factory=list)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class SentenceTranslationAlignment(BaseModel):
+    alignment_source: Literal["openai", "heuristic"] = "heuristic"
+    model: str | None = None
+    source_language_code: str
+    target_language_code: str = "en"
+    source_tokens: list[TranslationAlignmentToken] = Field(default_factory=list)
+    target_tokens: list[TranslationAlignmentToken] = Field(default_factory=list)
+    segments: list[TranslationAlignmentSegment] = Field(default_factory=list)
+
+
 class BookRecord(BaseModel):
     id: str
     owner_id: str | None = None
@@ -75,6 +97,7 @@ class BookRecord(BaseModel):
     source_path: str
     source_sha256: str
     total_pages: int
+    total_sentences: int = 0
     status: str
     page_split_status: str = "not_started"
     page_image_count: int = 0
@@ -113,3 +136,4 @@ class SentenceTranslationResponse(BaseModel):
     translation: str | None = None
     translation_source: str | None = None
     resolution_source: str
+    translation_alignment: SentenceTranslationAlignment | None = None

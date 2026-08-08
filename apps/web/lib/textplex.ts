@@ -2,7 +2,12 @@ import { getDemoFetchResponse, getDemoPostResponse } from "./demo-data";
 import type {
   BookExtractionTriggerRequest,
   BookExtractionTriggerResponse,
+  GeneratedArticleTerm,
+  GeneratedReaderArticleRequest,
+  GeneratedReaderArticlePromptDetails,
+  GeneratedReaderArticleResponse,
   LearningSyncResponse,
+  VocabularyAssessmentAxisRecord,
   VocabularyAssessmentStateRecord,
   ThemeCheckoutRequest,
   ThemeCheckoutResponse,
@@ -38,9 +43,14 @@ export type {
   BookReaderPageResponse,
   BookRecord,
   BoundingBox,
+  GeneratedArticleTerm,
+  GeneratedReaderArticleRequest,
+  GeneratedReaderArticlePromptDetails,
+  GeneratedReaderArticleResponse,
   LearningProfileSummary,
   LearningSyncResponse,
   VocabularyAssessmentAxisKey,
+  VocabularyAssessmentAxisRecord,
   VocabularyAssessmentResult,
   VocabularyAssessmentReviewRequest,
   VocabularyAssessmentStateRecord,
@@ -71,6 +81,7 @@ export type {
   StudyVocabularyItemRecord,
   StudyQueueItem,
   StudySurfaceResponse,
+  StudyProgramGroup,
   StudyVocabularyGroup,
   StudyVocabularyItem,
   WordInteractionCreateRequest,
@@ -78,7 +89,10 @@ export type {
   SentenceReadCreateRequest,
   SentenceReadRecord,
   SentenceReadTokenInput,
+  SentenceTranslationAlignment,
   SentenceResult,
+  TranslationAlignmentSegment,
+  TranslationAlignmentToken,
   TokenOccurrenceResult,
   TokenResult,
   ThemeCheckoutRequest,
@@ -92,6 +106,9 @@ export const legacySurfaceUrl = process.env.NEXT_PUBLIC_TEXTPLEX_LEGACY_URL ?? "
 
 const readerLastPositionStoragePrefix = "textplex.reader-last-position:";
 const readerTokenAudioOnTapStorageKey = "textplex.readerTokenAudioOnTap";
+const readerSpeechVoiceGenderStorageKey = "textplex.readerSpeechVoiceGender";
+
+export type ReaderSpeechVoiceGender = "female" | "male";
 
 export type ReaderResumePosition = {
   pageNumber: number;
@@ -135,6 +152,154 @@ export function persistReaderTokenAudioOnTap(enabled: boolean): void {
   }
 
   window.localStorage.setItem(readerTokenAudioOnTapStorageKey, String(enabled));
+}
+
+export function resolveReaderSpeechVoiceGender(value: string | null | undefined): ReaderSpeechVoiceGender {
+  return value === "male" ? "male" : "female";
+}
+
+export function readStoredReaderSpeechVoiceGender(): ReaderSpeechVoiceGender {
+  if (typeof window === "undefined") {
+    return "female";
+  }
+
+  return resolveReaderSpeechVoiceGender(window.localStorage.getItem(readerSpeechVoiceGenderStorageKey));
+}
+
+export function persistReaderSpeechVoiceGender(value: ReaderSpeechVoiceGender): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(readerSpeechVoiceGenderStorageKey, value);
+}
+
+export function getSpeechLanguage(languageCode?: string | null): string {
+  if (!languageCode) {
+    return "en-US";
+  }
+  if (languageCode.startsWith("zh")) {
+    return "zh-CN";
+  }
+  if (languageCode.startsWith("ja")) {
+    return "ja-JP";
+  }
+  if (languageCode.startsWith("ko")) {
+    return "ko-KR";
+  }
+  if (languageCode.startsWith("ru")) {
+    return "ru-RU";
+  }
+  if (languageCode.startsWith("he")) {
+    return "he-IL";
+  }
+  if (languageCode.startsWith("ar")) {
+    return "ar-SA";
+  }
+  return "en-US";
+}
+
+function voiceNameMatchesPreference(name: string, preference: ReaderSpeechVoiceGender): boolean {
+  const lower = name.toLowerCase();
+  if (preference === "female") {
+    return [
+      "female",
+      "woman",
+      "zira",
+      "samantha",
+      "susan",
+      "karen",
+      "tessa",
+      "victoria",
+      "moira",
+      "aura",
+      "salli",
+      "alice",
+    ].some((term) => lower.includes(term));
+  }
+
+  return [
+    "male",
+    "man",
+    "david",
+    "mark",
+    "george",
+    "daniel",
+    "fred",
+    "thomas",
+    "ryan",
+    "alex",
+    "nathan",
+    "james",
+  ].some((term) => lower.includes(term));
+}
+
+function scoreSpeechVoice(voice: SpeechSynthesisVoice, languageCode: string | null | undefined, preference: ReaderSpeechVoiceGender): number {
+  let score = voice.default ? 10 : 0;
+  const voiceLang = voice.lang?.toLowerCase() ?? "";
+  const targetLang = getSpeechLanguage(languageCode).toLowerCase();
+  const targetPrefix = targetLang.split("-")[0] ?? targetLang;
+  const isExactLanguageMatch = voiceLang === targetLang;
+  const isLanguageFamilyMatch = voiceLang.startsWith(targetPrefix);
+
+  if (isExactLanguageMatch) {
+    score += 40;
+  } else if (isLanguageFamilyMatch) {
+    score += 25;
+  } else {
+    score -= 100;
+  }
+
+  if (isExactLanguageMatch || isLanguageFamilyMatch) {
+    if (voiceNameMatchesPreference(voice.name, preference)) {
+      score += 30;
+    }
+
+    if (preference === "female" && /male/i.test(voice.name)) {
+      score -= 15;
+    }
+    if (preference === "male" && /female/i.test(voice.name)) {
+      score -= 15;
+    }
+  }
+
+  return score;
+}
+
+export function pickSpeechVoice(languageCode: string | null | undefined, preference: ReaderSpeechVoiceGender): SpeechSynthesisVoice | null {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+    return null;
+  }
+
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) {
+    return null;
+  }
+
+  let bestVoice: SpeechSynthesisVoice | null = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (const voice of voices) {
+    const score = scoreSpeechVoice(voice, languageCode, preference);
+    if (score > bestScore) {
+      bestScore = score;
+      bestVoice = voice;
+    }
+  }
+
+  return bestVoice;
+}
+
+export function applyPreferredSpeechVoice(
+  utterance: SpeechSynthesisUtterance,
+  languageCode: string | null | undefined,
+  preference: ReaderSpeechVoiceGender,
+): void {
+  const voice = pickSpeechVoice(languageCode, preference);
+  utterance.lang = voice?.lang || getSpeechLanguage(languageCode);
+  if (voice) {
+    utterance.voice = voice;
+  }
 }
 
 function readRememberedReaderPosition(bookId: string): ReaderResumePosition | null {
@@ -330,6 +495,16 @@ export async function createThemeCheckout(
   request: ThemeCheckoutRequest,
 ): Promise<ThemeCheckoutResponse> {
   return postJson<ThemeCheckoutResponse>("/themes/checkout", request);
+}
+
+export async function generateReaderArticle(
+  request: GeneratedReaderArticleRequest,
+): Promise<GeneratedReaderArticleResponse> {
+  return postJson<GeneratedReaderArticleResponse>("/articles/generate", request);
+}
+
+export async function fetchGeneratedArticlePromptDetails(bookId: string): Promise<GeneratedReaderArticlePromptDetails> {
+  return fetchJson<GeneratedReaderArticlePromptDetails>(`/books/${bookId}/generation`);
 }
 
 export async function fetchThemeEntitlements(): Promise<ThemeEntitlementResponse> {

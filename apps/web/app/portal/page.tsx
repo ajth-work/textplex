@@ -1,5 +1,5 @@
-import { HomeSurface } from "../../components/home-surface";
+import { redirect } from "next/navigation";
 
 export default function PortalPage() {
-  return <HomeSurface />;
+  redirect("/home");
 }

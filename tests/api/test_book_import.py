@@ -13,6 +13,7 @@ def test_import_book_from_path_registers_alice_mini_fixture(imported_real_scan: 
     assert record.title == "Alice Mini Fixture"
     assert record.author == "Lewis Carroll"
     assert record.total_pages == 3
+    assert record.total_sentences == 0
     assert record.page_split_status == "complete"
     assert record.page_image_count == 3
     assert record.status == "pages_split"
@@ -49,6 +50,7 @@ def test_import_book_endpoint_registers_alice_mini_fixture(
     assert data["language_code"] == "en"
     assert data["title"] == "Alice Mini Fixture"
     assert data["total_pages"] == 3
+    assert data["total_sentences"] > 0
     assert data["page_split_status"] == "complete"
     assert data["page_image_count"] == 3
     assert data["status"] == "extracted"

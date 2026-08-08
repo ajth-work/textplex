@@ -55,12 +55,14 @@ def test_extract_book_text_persists_structured_page_artifacts(imported_real_scan
     assert updated_book.extraction_status == "complete"
     assert updated_book.extracted_page_count == 3
     assert updated_book.status == "extracted"
+    assert updated_book.total_sentences > 0
 
     summary_response = client.get(f"/books/{record.id}/extractions")
     assert summary_response.status_code == 200
     summary = summary_response.json()
     assert summary["page_start"] == 1
     assert summary["page_end"] == 3
+    assert summary["pages"]
     assert len(summary["lexical_entries"]) > 0
     assert len(summary["token_occurrences"]) > 0
     assert len(summary["pages"]) == 3

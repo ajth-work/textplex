@@ -125,6 +125,7 @@ Stage 0 is the shared introduction gate:
 - a correct axis moves forward on its own ladder
 - an incorrect axis moves back one stage, but never below stage 1 after introduction
 - an incorrect axis stays at stage 0 only while it is still in the introduction gate
+- a wrong-axis response records a valid alternate form and leaves the prompted axis stage unchanged
 - when one axis is due, the item is due
 
 When the learner reviews a Russian word after stage 0, only the axis that was actually prompted should advance or regress.

@@ -28,7 +28,7 @@ export function AppFrame({ children }: Readonly<{ children: ReactNode }>) {
     router.replace(`/auth?returnTo=${encodeURIComponent(returnTo)}`);
   }, [loading, protectedRoute, returnTo, router, user]);
 
-  if (!protectedRoute || user) {
+  if (!protectedRoute || loading || user) {
     return <>{children}</>;
   }
 

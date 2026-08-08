@@ -85,6 +85,7 @@ Stage 0 should behave as the shared introduction gate:
 - a correct axis moves forward on its own ladder
 - a failed axis moves back one step, but never below stage 1 after introduction
 - a failed axis stays at stage 0 only while it is still in the introduction gate
+- a wrong-axis response records a valid alternate form without advancing or regressing the prompted axis
 - the item is considered due whenever any active axis is due
 
 ## 5. Study Pathway

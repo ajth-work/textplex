@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { RoutePage } from "./route-page";
@@ -13,8 +14,10 @@ import {
   type VocabularyAssessmentAxisKey,
   type VocabularyAssessmentStateRecord,
 } from "../lib/textplex";
+import { StudyPronunciationGuide } from "./study-pronunciation-guide";
 
-type PracticeMode = "program" | "review";
+type PracticeMode = "program" | "review" | "glossed" | "both";
+type PracticeCardSource = "program" | "review" | "glossed";
 
 type StudyPracticeViewProps = {
   initialMode?: PracticeMode;
@@ -29,7 +32,15 @@ type PracticeDetailRow = {
   value: string;
 };
 
-type AnswerResult = "idle" | "correct" | "incorrect";
+type AnswerResult = "idle" | "correct" | "incorrect" | "wrong_axis" | "retry";
+type PracticeCardPhase = "intro" | "assessment";
+
+type PracticeCardAttemptState = {
+  answerDraft: string;
+  answerResult: AnswerResult;
+  revealed: boolean;
+  assessmentError: string | null;
+};
 
 const INTRODUCTION_CHUNK_SIZE = 5;
 const INTRODUCTION_AXIS_ORDER: VocabularyAssessmentAxisKey[] = [
@@ -49,11 +60,13 @@ const introductionProgressStoragePrefix = "textplex.study-introduction:";
 
 type PracticeCard = {
   key: string;
-  kind: PracticeMode;
+  kind: PracticeCardSource;
+  phase: PracticeCardPhase;
   languageCode: string;
   languageLabel: string;
   term: string;
   pronunciation: string | null;
+  romanization: string | null;
   meaning: string | null;
   sourceLabel: string;
   title: string;
@@ -62,7 +75,18 @@ type PracticeCard = {
   detailRows: PracticeDetailRow[];
   lookupLanguageCode: string;
   lookupTerm: string;
-  assessmentAxisKey: VocabularyAssessmentAxisKey;
+  assessmentAxisKey: VocabularyAssessmentAxisKey | null;
+};
+
+type PracticeProgramSelection = {
+  selectedProgram: StudySurfaceResponse["study_programs"][number] | null;
+  selectedLevel: StudySurfaceResponse["study_programs"][number]["levels"][number] | null;
+  chunkItems: StudySurfaceResponse["study_programs"][number]["levels"][number]["items"];
+};
+
+type PracticeGlossedSelection = {
+  selectedGroup: StudySurfaceResponse["study_groups"][number] | null;
+  chunkItems: StudySurfaceResponse["study_groups"][number]["items"];
 };
 
 function normalizeAssessmentAxisKey(value: string | null | undefined): VocabularyAssessmentAxisKey {
@@ -100,8 +124,23 @@ function languageLabel(languageCode: string): string {
       return "Hebrew";
     case "ar":
       return "Arabic";
+    case "yo":
+      return "Yoruba";
     default:
       return languageCode.toUpperCase();
+  }
+}
+
+function practiceModeLabel(mode: PracticeMode): string {
+  switch (mode) {
+    case "review":
+      return "Review";
+    case "glossed":
+      return "Glossed";
+    case "both":
+      return "Combined study";
+    default:
+      return "Program";
   }
 }
 
@@ -112,6 +151,81 @@ function normalizePracticeAnswer(value: string): string {
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim()
     .replace(/\s+/g, " ");
+}
+
+const RETRY_SIMILARITY_THRESHOLD = 0.75;
+
+function levenshteinDistance(left: string, right: string): number {
+  const leftCharacters = Array.from(left);
+  const rightCharacters = Array.from(right);
+
+  if (leftCharacters.length === 0) {
+    return rightCharacters.length;
+  }
+  if (rightCharacters.length === 0) {
+    return leftCharacters.length;
+  }
+
+  let previousRow = Array.from({ length: rightCharacters.length + 1 }, (_, index) => index);
+  for (let leftIndex = 0; leftIndex < leftCharacters.length; leftIndex += 1) {
+    const currentRow = [leftIndex + 1];
+    for (let rightIndex = 0; rightIndex < rightCharacters.length; rightIndex += 1) {
+      const substitutionCost = leftCharacters[leftIndex] === rightCharacters[rightIndex] ? 0 : 1;
+      currentRow[rightIndex + 1] = Math.min(
+        currentRow[rightIndex] + 1,
+        previousRow[rightIndex + 1] + 1,
+        previousRow[rightIndex] + substitutionCost,
+      );
+    }
+    previousRow = currentRow;
+  }
+
+  return previousRow[rightCharacters.length] ?? 0;
+}
+
+function answerSimilarityRatio(submittedAnswer: string, expectedAnswer: string): number {
+  const normalizedSubmittedAnswer = normalizePracticeAnswer(submittedAnswer);
+  const normalizedExpectedAnswer = normalizePracticeAnswer(expectedAnswer);
+  if (!normalizedSubmittedAnswer.length || !normalizedExpectedAnswer.length) {
+    return 0;
+  }
+  if (normalizedSubmittedAnswer === normalizedExpectedAnswer) {
+    return 1;
+  }
+
+  const distance = levenshteinDistance(normalizedSubmittedAnswer, normalizedExpectedAnswer);
+  const longestLength = Math.max(Array.from(normalizedSubmittedAnswer).length, Array.from(normalizedExpectedAnswer).length);
+  return longestLength <= 0 ? 0 : Math.max(0, 1 - distance / longestLength);
+}
+
+function classifyPracticeResult(
+  submittedAnswer: string,
+  expectedAnswer: string | null,
+  promptText: string | null,
+  alternateAnswers: Array<string | null>,
+): AnswerResult {
+  const normalizedSubmittedAnswer = normalizePracticeAnswer(submittedAnswer);
+  const normalizedExpectedAnswer = normalizePracticeAnswer(expectedAnswer ?? "");
+  const normalizedPromptText = normalizePracticeAnswer(promptText ?? "");
+  if (normalizedSubmittedAnswer.length > 0 && normalizedExpectedAnswer.length > 0 && normalizedSubmittedAnswer === normalizedExpectedAnswer) {
+    return "correct";
+  }
+
+  const wrongAxisMatches = alternateAnswers
+    .map((candidate) => normalizePracticeAnswer(candidate ?? ""))
+    .filter((candidate) => candidate.length > 0)
+    .filter((candidate) => candidate !== normalizedExpectedAnswer)
+    .filter((candidate) => candidate !== normalizedPromptText);
+
+  if (wrongAxisMatches.includes(normalizedSubmittedAnswer)) {
+    return "wrong_axis";
+  }
+
+  if (answerSimilarityRatio(normalizedSubmittedAnswer, normalizedExpectedAnswer) >= RETRY_SIMILARITY_THRESHOLD) {
+    return "retry";
+  }
+
+  return "incorrect";
 }
 
 function introductionProgressStorageKey(mode: PracticeMode, languageCode: string | null, programCode: string | null, levelCode: string | null): string {
@@ -136,6 +250,64 @@ function shuffleWithSeed<T>(items: T[], seed: number): T[] {
     [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
   }
   return shuffled;
+}
+
+function selectPracticeProgramLevel(
+  data: StudySurfaceResponse,
+  languageCode: string | null,
+  programCode: string | null,
+  levelCode: string | null,
+  chunkIndex: number,
+): PracticeProgramSelection {
+  const selectedProgram =
+    (programCode ? data.study_programs.find((program) => program.program_code === programCode) : null) ??
+    data.study_programs.find((program) => !languageCode || program.language_code === languageCode) ??
+    null;
+  if (!selectedProgram) {
+    return {
+      selectedProgram: null,
+      selectedLevel: null,
+      chunkItems: [],
+    };
+  }
+
+  const selectedLevels = levelCode ? selectedProgram.levels.filter((level) => level.level_code === levelCode) : selectedProgram.levels.slice(0, 1);
+  const selectedLevel = (selectedLevels.length ? selectedLevels : selectedProgram.levels.slice(0, 1))[0] ?? null;
+  if (!selectedLevel) {
+    return {
+      selectedProgram,
+      selectedLevel: null,
+      chunkItems: [],
+    };
+  }
+
+  return {
+    selectedProgram,
+    selectedLevel,
+    chunkItems: selectedLevel.items.slice(
+      chunkIndex * INTRODUCTION_CHUNK_SIZE,
+      (chunkIndex + 1) * INTRODUCTION_CHUNK_SIZE,
+    ),
+  };
+}
+
+function selectPracticeGlossedGroup(data: StudySurfaceResponse, languageCode: string | null, chunkIndex: number): PracticeGlossedSelection {
+  const matchingGroups = data.study_groups.filter((group) => !languageCode || group.language_code === languageCode);
+  const selectedGroup = matchingGroups[0] ?? null;
+  if (!selectedGroup) {
+    return {
+      selectedGroup: null,
+      chunkItems: [],
+    };
+  }
+
+  return {
+    selectedGroup,
+    chunkItems: selectedGroup.items.slice(
+      chunkIndex * INTRODUCTION_CHUNK_SIZE,
+      (chunkIndex + 1) * INTRODUCTION_CHUNK_SIZE,
+    ),
+  };
 }
 
 function readIntroductionProgress(storageKey: string): IntroductionProgress | null {
@@ -195,12 +367,12 @@ function assessmentAxisLabel(axisKey: VocabularyAssessmentAxisKey): string {
 }
 
 type PracticePrompt = {
-  label: string;
   prompt: string | null;
   promptLanguage: string;
   answer: string | null;
   answerLanguage: string;
   placeholder: string;
+  inputLanguage: string;
 };
 
 function buildPracticePrompt(
@@ -208,44 +380,54 @@ function buildPracticePrompt(
   meaning: string | null,
   pronunciation: string | null,
 ): PracticePrompt {
+  const sourceTermLabel = `Type the ${card.languageLabel} term`;
   switch (card.assessmentAxisKey) {
     case "form_to_reading":
       return {
-        label: "Type the pronunciation or reading",
         prompt: card.term,
         promptLanguage: card.languageCode,
         answer: pronunciation,
-        answerLanguage: card.languageCode,
-        placeholder: "Pronunciation or reading",
+        answerLanguage: "en",
+        placeholder: "Type the romanization",
+        inputLanguage: "en",
       };
     case "meaning_to_form":
       return {
-        label: "Type the target-language form",
         prompt: meaning,
         promptLanguage: "en",
         answer: card.term,
         answerLanguage: card.languageCode,
-        placeholder: "Target-language form",
+        placeholder: sourceTermLabel,
+        inputLanguage: card.languageCode,
       };
     case "reading_to_form":
       return {
-        label: "Type the target-language form",
         prompt: pronunciation,
         promptLanguage: "en",
         answer: card.term,
         answerLanguage: card.languageCode,
-        placeholder: "Target-language form",
+        placeholder: sourceTermLabel,
+        inputLanguage: card.languageCode,
       };
     default:
       return {
-        label: "Type the English meaning",
         prompt: card.term,
         promptLanguage: card.languageCode,
         answer: meaning,
         answerLanguage: "en",
-        placeholder: "English meaning",
+        placeholder: "Type the English meaning",
+        inputLanguage: "en",
       };
   }
+}
+
+function createDefaultPracticeAttemptState(): PracticeCardAttemptState {
+  return {
+    answerDraft: "",
+    answerResult: "idle",
+    revealed: false,
+    assessmentError: null,
+  };
 }
 
 function buildProgramCards(
@@ -256,44 +438,143 @@ function buildProgramCards(
   chunkIndex: number,
   shuffleSeed: number,
 ): PracticeCard[] {
-  const matchingPrograms = data.study_programs.filter((program) => !languageCode || program.language_code === languageCode);
-  const selectedProgram = (programCode ? matchingPrograms.find((program) => program.program_code === programCode) : null) ?? matchingPrograms[0] ?? null;
-  if (!selectedProgram) {
+  const selection = selectPracticeProgramLevel(data, languageCode, programCode, levelCode, chunkIndex);
+  if (!selection.selectedProgram || !selection.selectedLevel) {
     return [];
   }
 
-  const selectedLevels = levelCode
-    ? selectedProgram.levels.filter((level) => level.level_code === levelCode)
-    : selectedProgram.levels.slice(0, 1);
-  const levels = selectedLevels.length ? selectedLevels : selectedProgram.levels.slice(0, 1);
+  const { selectedProgram, selectedLevel, chunkItems } = selection;
+  const introCards = chunkItems.map((item, itemIndex) => ({
+    key: `${selectedProgram.program_code}:${selectedLevel.level_code}:${item.lemma}:intro:${itemIndex}`,
+    kind: "program" as const,
+    phase: "intro" as const,
+    languageCode: item.language_code,
+    languageLabel: item.language_label,
+    term: item.display_form,
+    pronunciation: item.pronunciation ?? null,
+    romanization: item.pronunciation ?? null,
+    meaning: item.definition_short ?? null,
+    sourceLabel: `${selectedProgram.program_source_label} - ${selectedLevel.level_label}`,
+    title: selectedProgram.program_label,
+    subtitle: selectedLevel.introduction_note,
+    progressLabel: `Word ${itemIndex + 1}/${chunkItems.length}`,
+    detailRows: [
+      { label: "Level", value: selectedLevel.level_label },
+      { label: "Chunk", value: `${itemIndex + 1}/${chunkItems.length}` },
+      { label: "Frequency", value: item.frequency_rank != null ? `#${item.frequency_rank}` : "-" },
+      { label: "Saved", value: String(item.saved_count) },
+      { label: "Confidence", value: item.confidence_score != null ? item.confidence_score.toFixed(2) : "-" },
+    ],
+    lookupLanguageCode: item.language_code,
+    lookupTerm: item.lemma,
+    assessmentAxisKey: null,
+  }));
 
-  return levels.flatMap((level) =>
-    shuffleWithSeed(level.items, shuffleSeed)
-      .slice(chunkIndex * INTRODUCTION_CHUNK_SIZE, (chunkIndex + 1) * INTRODUCTION_CHUNK_SIZE)
-      .flatMap((item, itemIndex) => INTRODUCTION_AXIS_ORDER.map((assessmentAxisKey, axisIndex) => ({
-      key: `${selectedProgram.program_code}:${level.level_code}:${item.lemma}:${itemIndex}:${axisIndex}`,
-      kind: "program" as const,
-      languageCode: item.language_code,
-      languageLabel: item.language_label,
-      term: item.display_form,
-      pronunciation: item.pronunciation ?? null,
-      meaning: item.definition_short ?? null,
-      sourceLabel: `${selectedProgram.program_source_label} - ${level.level_label}`,
-      title: selectedProgram.program_label,
-      subtitle: level.introduction_note,
-      progressLabel: assessmentAxisLabel(assessmentAxisKey),
-      detailRows: [
-        { label: "Level", value: level.level_label },
-        { label: "Review axis", value: assessmentAxisLabel(assessmentAxisKey) },
-        { label: "Frequency", value: item.frequency_rank != null ? `#${item.frequency_rank}` : "-" },
-        { label: "Saved", value: String(item.saved_count) },
-        { label: "Confidence", value: item.confidence_score != null ? item.confidence_score.toFixed(2) : "-" },
-      ],
-      lookupLanguageCode: item.language_code,
-      lookupTerm: item.lemma,
-      assessmentAxisKey,
-    }))),
+  const assessmentCards = shuffleWithSeed(
+    chunkItems.flatMap((item, itemIndex) =>
+      INTRODUCTION_AXIS_ORDER.map((assessmentAxisKey, axisIndex) => ({
+        key: `${selectedProgram.program_code}:${selectedLevel.level_code}:${item.lemma}:${itemIndex}:${axisIndex}`,
+        kind: "program" as const,
+        phase: "assessment" as const,
+        languageCode: item.language_code,
+        languageLabel: item.language_label,
+        term: item.display_form,
+        pronunciation: item.pronunciation ?? null,
+        romanization: item.pronunciation ?? null,
+        meaning: item.definition_short ?? null,
+        sourceLabel: `${selectedProgram.program_source_label} - ${selectedLevel.level_label}`,
+        title: selectedProgram.program_label,
+        subtitle: selectedLevel.introduction_note,
+        progressLabel: assessmentAxisLabel(assessmentAxisKey),
+        detailRows: [
+          { label: "Level", value: selectedLevel.level_label },
+          { label: "Review axis", value: assessmentAxisLabel(assessmentAxisKey) },
+          { label: "Frequency", value: item.frequency_rank != null ? `#${item.frequency_rank}` : "-" },
+          { label: "Saved", value: String(item.saved_count) },
+          { label: "Confidence", value: item.confidence_score != null ? item.confidence_score.toFixed(2) : "-" },
+        ],
+        lookupLanguageCode: item.language_code,
+        lookupTerm: item.lemma,
+        assessmentAxisKey,
+      })),
+    ),
+    shuffleSeed,
   );
+
+  return [...introCards, ...assessmentCards];
+}
+
+function buildGlossedCards(
+  data: StudySurfaceResponse,
+  languageCode: string | null,
+  chunkIndex: number,
+  shuffleSeed: number,
+): PracticeCard[] {
+  const selection = selectPracticeGlossedGroup(data, languageCode, chunkIndex);
+  if (!selection.selectedGroup) {
+    return [];
+  }
+
+  const { selectedGroup, chunkItems } = selection;
+  const introCards = chunkItems.map((item, itemIndex) => ({
+    key: `${selectedGroup.language_code}:${item.lemma}:intro:${itemIndex}`,
+    kind: "glossed" as const,
+    phase: "intro" as const,
+    languageCode: item.language_code,
+    languageLabel: item.language_label,
+    term: item.display_form,
+    pronunciation: item.pronunciation ?? item.romanization ?? null,
+    romanization: item.romanization ?? item.pronunciation ?? null,
+    meaning: item.definition_short ?? null,
+    sourceLabel: "Glossed vocabulary",
+    title: "Glossed vocabulary study",
+    subtitle: "Words saved from reading get one introduction before stage 0 practice.",
+    progressLabel: `Word ${itemIndex + 1}/${chunkItems.length}`,
+    detailRows: [
+      { label: "Language", value: item.language_label },
+      { label: "Chunk", value: `${itemIndex + 1}/${chunkItems.length}` },
+      { label: "Book", value: item.source_book_title ?? item.source_book_id },
+      { label: "Page", value: String(item.source_page_number) },
+      { label: "Sentence", value: String(item.source_sentence_order) },
+      { label: "Token", value: String(item.source_token_order) },
+    ],
+    lookupLanguageCode: item.language_code,
+    lookupTerm: item.lemma,
+    assessmentAxisKey: null,
+  }));
+
+  const assessmentCards = shuffleWithSeed(
+    chunkItems.flatMap((item, itemIndex) =>
+      INTRODUCTION_AXIS_ORDER.map((assessmentAxisKey, axisIndex) => ({
+        key: `${selectedGroup.language_code}:${item.lemma}:${itemIndex}:${axisIndex}`,
+        kind: "glossed" as const,
+        phase: "assessment" as const,
+        languageCode: item.language_code,
+        languageLabel: item.language_label,
+        term: item.display_form,
+        pronunciation: item.pronunciation ?? item.romanization ?? null,
+        romanization: item.romanization ?? item.pronunciation ?? null,
+        meaning: item.definition_short ?? null,
+        sourceLabel: item.source_book_title ?? item.source_book_id,
+        title: "Glossed vocabulary study",
+        subtitle: "Words saved from reading get one introduction before stage 0 practice.",
+        progressLabel: assessmentAxisLabel(assessmentAxisKey),
+        detailRows: [
+          { label: "Book", value: item.source_book_title ?? item.source_book_id },
+          { label: "Page", value: String(item.source_page_number) },
+          { label: "Sentence", value: String(item.source_sentence_order) },
+          { label: "Token", value: String(item.source_token_order) },
+          { label: "Click count", value: String(item.click_count) },
+        ],
+        lookupLanguageCode: item.language_code,
+        lookupTerm: item.lemma,
+        assessmentAxisKey,
+      })),
+    ),
+    shuffleSeed,
+  );
+
+  return [...introCards, ...assessmentCards];
 }
 
 function buildReviewCards(data: StudySurfaceResponse, languageCode: string | null, assessmentAxisKey: VocabularyAssessmentAxisKey): PracticeCard[] {
@@ -302,10 +583,12 @@ function buildReviewCards(data: StudySurfaceResponse, languageCode: string | nul
     return queuedItems.map((item, index) => ({
       key: `${item.language_code}:queue:${item.lemma}:${index}`,
       kind: "review" as const,
+      phase: "assessment" as const,
       languageCode: item.language_code,
       languageLabel: languageLabel(item.language_code),
       term: item.lemma,
       pronunciation: null,
+      romanization: null,
       meaning: null,
       sourceLabel: "Due item",
       title: "Review queue",
@@ -331,10 +614,12 @@ function buildReviewCards(data: StudySurfaceResponse, languageCode: string | nul
       group.items.map((item, index) => ({
         key: `${group.language_code}:saved:${item.lemma}:${index}`,
         kind: "review" as const,
+        phase: "assessment" as const,
         languageCode: item.language_code,
         languageLabel: item.language_label,
         term: item.display_form,
         pronunciation: item.pronunciation ?? item.romanization ?? null,
+        romanization: item.romanization ?? item.pronunciation ?? null,
         meaning: item.definition_short ?? null,
         sourceLabel: item.source_book_title ?? item.source_book_id,
         title: "Saved vocabulary review",
@@ -365,9 +650,20 @@ function buildPracticeCards(
   assessmentAxisKey: VocabularyAssessmentAxisKey,
   shuffleSeed: number,
 ): PracticeCard[] {
-  return mode === "review"
-    ? buildReviewCards(data, languageCode, assessmentAxisKey)
-    : buildProgramCards(data, languageCode, programCode, levelCode, chunkIndex, shuffleSeed);
+  if (mode === "review") {
+    return buildReviewCards(data, languageCode, assessmentAxisKey);
+  }
+
+  const programCards =
+    mode === "program" || mode === "both"
+      ? buildProgramCards(data, languageCode, programCode, levelCode, chunkIndex, shuffleSeed)
+      : [];
+  const glossedCards =
+    mode === "glossed" || mode === "both"
+      ? buildGlossedCards(data, languageCode, chunkIndex, shuffleSeed)
+      : [];
+
+  return [...programCards, ...glossedCards];
 }
 
 export function StudyPracticeView({
@@ -377,24 +673,35 @@ export function StudyPracticeView({
   initialLevelCode = null,
   initialAssessmentAxisKey = null,
 }: StudyPracticeViewProps) {
+  const routeSearchParams = useSearchParams();
   const [data, setData] = useState<StudySurfaceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [introductionChunkIndex, setIntroductionChunkIndex] = useState(0);
   const [introductionShuffleSeed, setIntroductionShuffleSeed] = useState<number | null>(null);
   const [introductionProgressHydrated, setIntroductionProgressHydrated] = useState(initialMode !== "program");
-  const [revealed, setRevealed] = useState(false);
-  const [answerDraft, setAnswerDraft] = useState("");
-  const [answerResult, setAnswerResult] = useState<AnswerResult>("idle");
+  const [attemptsByCardKey, setAttemptsByCardKey] = useState<Record<string, PracticeCardAttemptState>>({});
   const [assessmentPending, setAssessmentPending] = useState(false);
-  const [assessmentError, setAssessmentError] = useState<string | null>(null);
   const [lookup, setLookup] = useState<LexiconLookupResponse | null>(null);
   const answerInputRef = useRef<HTMLInputElement>(null);
 
-  const normalizedLanguageCode = normalizeLanguageCode(initialLanguageCode);
-  const assessmentAxisKey = normalizeAssessmentAxisKey(initialAssessmentAxisKey);
-  const mode = initialMode;
-  const introductionProgressKey = introductionProgressStorageKey(mode, normalizedLanguageCode, initialProgramCode, initialLevelCode);
+  const routeModeValue = routeSearchParams.get("mode");
+  const routeMode = routeModeValue === "review" || routeModeValue === "glossed" || routeModeValue === "both" ? routeModeValue : null;
+  const routeLanguageCode = routeSearchParams.get("language_code") ?? routeSearchParams.get("language");
+  const routeProgramCode = routeSearchParams.get("program_code") ?? routeSearchParams.get("program");
+  const routeLevelCode = routeSearchParams.get("level_code") ?? routeSearchParams.get("level");
+  const routeAssessmentAxisKey = routeSearchParams.get("axis_key");
+
+  const effectiveMode = routeMode ?? initialMode;
+  const effectiveLanguageCode = routeLanguageCode ?? initialLanguageCode;
+  const effectiveProgramCode = routeProgramCode ?? initialProgramCode;
+  const effectiveLevelCode = routeLevelCode ?? initialLevelCode;
+  const effectiveAssessmentAxisKey = routeAssessmentAxisKey ?? initialAssessmentAxisKey;
+
+  const normalizedLanguageCode = normalizeLanguageCode(effectiveLanguageCode);
+  const assessmentAxisKey = normalizeAssessmentAxisKey(effectiveAssessmentAxisKey);
+  const mode = effectiveMode;
+  const introductionProgressKey = introductionProgressStorageKey(mode, normalizedLanguageCode, effectiveProgramCode, effectiveLevelCode);
 
   useEffect(() => {
     let active = true;
@@ -406,10 +713,7 @@ export function StudyPracticeView({
           setData(result);
           setSelectedIndex(0);
           setIntroductionChunkIndex(0);
-          setRevealed(false);
-          setAnswerDraft("");
-          setAnswerResult("idle");
-          setAssessmentError(null);
+          setAttemptsByCardKey({});
         }
       })
       .catch((err) => {
@@ -424,24 +728,36 @@ export function StudyPracticeView({
   }, [normalizedLanguageCode]);
 
   const practiceCards = useMemo(
-    () => (data ? buildPracticeCards(data, mode, normalizedLanguageCode, initialProgramCode, initialLevelCode, introductionChunkIndex, assessmentAxisKey, introductionShuffleSeed ?? 1) : []),
-    [data, mode, normalizedLanguageCode, initialProgramCode, initialLevelCode, introductionChunkIndex, assessmentAxisKey, introductionShuffleSeed],
+    () => (data ? buildPracticeCards(data, mode, normalizedLanguageCode, effectiveProgramCode, effectiveLevelCode, introductionChunkIndex, assessmentAxisKey, introductionShuffleSeed ?? 1) : []),
+    [data, mode, normalizedLanguageCode, effectiveProgramCode, effectiveLevelCode, introductionChunkIndex, assessmentAxisKey, introductionShuffleSeed],
   );
 
-  const introductionItemCount = useMemo(() => {
-    if (!data || mode !== "program") {
+  const programIntroductionItemCount = useMemo(() => {
+    if (!data) {
       return 0;
     }
-    const matchingPrograms = data.study_programs.filter((program) => !normalizedLanguageCode || program.language_code === normalizedLanguageCode);
-    const selectedProgram = (initialProgramCode ? matchingPrograms.find((program) => program.program_code === initialProgramCode) : null) ?? matchingPrograms[0] ?? null;
-    if (!selectedProgram) {
+    const selection = selectPracticeProgramLevel(data, normalizedLanguageCode, effectiveProgramCode, effectiveLevelCode, 0);
+    if (!selection.selectedProgram || !selection.selectedLevel) {
       return 0;
     }
-    const selectedLevel = (initialLevelCode ? selectedProgram.levels.find((level) => level.level_code === initialLevelCode) : null) ?? selectedProgram.levels[0] ?? null;
-    return selectedLevel?.items.length ?? 0;
-  }, [data, mode, normalizedLanguageCode, initialProgramCode, initialLevelCode]);
+    return selection.selectedLevel.items.length ?? 0;
+  }, [data, normalizedLanguageCode, effectiveProgramCode, effectiveLevelCode]);
 
+  const glossedIntroductionItemCount = useMemo(() => {
+    if (!data) {
+      return 0;
+    }
+    const selection = selectPracticeGlossedGroup(data, normalizedLanguageCode, 0);
+    if (!selection.selectedGroup) {
+      return 0;
+    }
+    return selection.selectedGroup.items.length ?? 0;
+  }, [data, normalizedLanguageCode]);
+
+  const introductionItemCount = mode === "glossed" ? glossedIntroductionItemCount : programIntroductionItemCount;
   const introductionChunkCount = Math.max(1, Math.ceil(introductionItemCount / INTRODUCTION_CHUNK_SIZE));
+  const glossedChunkCount = Math.max(1, Math.ceil(glossedIntroductionItemCount / INTRODUCTION_CHUNK_SIZE));
+  const practiceChunkCount = mode === "both" ? Math.max(introductionChunkCount, glossedChunkCount) : mode === "glossed" ? glossedChunkCount : introductionChunkCount;
 
   useEffect(() => {
     if (!data) {
@@ -458,7 +774,7 @@ export function StudyPracticeView({
       INTRODUCTION_CHUNK_SIZE,
       Math.max(0, introductionItemCount - nextChunkIndex * INTRODUCTION_CHUNK_SIZE),
     );
-    const cardsInChunk = Math.max(1, itemsInChunk * INTRODUCTION_AXIS_ORDER.length);
+    const cardsInChunk = Math.max(1, itemsInChunk * (INTRODUCTION_AXIS_ORDER.length + 1));
     setIntroductionShuffleSeed(savedProgress?.shuffleSeed ?? createIntroductionShuffleSeed());
     setIntroductionChunkIndex(nextChunkIndex);
     setSelectedIndex(savedProgress ? Math.min(savedProgress.selectedIndex, cardsInChunk - 1) : 0);
@@ -479,21 +795,17 @@ export function StudyPracticeView({
   useEffect(() => {
     if (selectedIndex >= practiceCards.length) {
       setSelectedIndex(0);
-      setRevealed(false);
-      setAnswerDraft("");
-      setAnswerResult("idle");
     }
   }, [practiceCards.length, selectedIndex]);
 
   const currentCard = practiceCards[selectedIndex] ?? null;
+  const currentAttempt = currentCard ? attemptsByCardKey[currentCard.key] ?? createDefaultPracticeAttemptState() : createDefaultPracticeAttemptState();
 
   useEffect(() => {
-    setAnswerDraft("");
-    setAnswerResult("idle");
-    setRevealed(false);
-    setAssessmentError(null);
-    answerInputRef.current?.focus();
-  }, [currentCard?.key]);
+    if (currentCard?.phase === "assessment") {
+      answerInputRef.current?.focus();
+    }
+  }, [currentCard?.key, currentCard?.phase]);
 
   useEffect(() => {
     let active = true;
@@ -535,22 +847,41 @@ export function StudyPracticeView({
   const currentLookupEntry = lookup?.entries[0] ?? null;
   const resolvedMeaning = currentCard?.meaning ?? currentLookupEntry?.definition ?? null;
   const resolvedPronunciation = currentCard?.pronunciation ?? currentLookupEntry?.pronunciation ?? currentLookupEntry?.pinyin ?? null;
-  const currentPrompt = currentCard ? buildPracticePrompt(currentCard, resolvedMeaning, resolvedPronunciation) : null;
+  const resolvedSyllableText = currentCard?.romanization ?? currentLookupEntry?.pinyin ?? currentLookupEntry?.pronunciation ?? resolvedPronunciation;
+  const currentPrompt = currentCard && currentCard.phase === "assessment" ? buildPracticePrompt(currentCard, resolvedMeaning, resolvedPronunciation) : null;
+  const showPronunciationGuide = Boolean(currentCard && currentCard.phase === "intro" && resolvedPronunciation);
+  const introAdvanceCard = currentCard?.phase === "intro" ? practiceCards[selectedIndex + 1] ?? null : null;
 
-  function resetAttemptState(): void {
-    setRevealed(false);
-    setAnswerDraft("");
-    setAnswerResult("idle");
-    setAssessmentError(null);
+  function updateCurrentAttempt(updater: (current: PracticeCardAttemptState) => PracticeCardAttemptState): void {
+    if (!currentCard) {
+      return;
+    }
+
+    setAttemptsByCardKey((current) => {
+      const previous = current[currentCard.key] ?? createDefaultPracticeAttemptState();
+      const next = updater(previous);
+      if (
+        previous.answerDraft === next.answerDraft &&
+        previous.answerResult === next.answerResult &&
+        previous.revealed === next.revealed &&
+        previous.assessmentError === next.assessmentError
+      ) {
+        return current;
+      }
+      return {
+        ...current,
+        [currentCard.key]: next,
+      };
+    });
   }
 
   async function handleNotSure(): Promise<void> {
-    if (!currentCard || revealed || assessmentPending) {
+    if (!currentCard || currentCard.phase !== "assessment" || !currentCard.assessmentAxisKey || currentAttempt.revealed || assessmentPending) {
       return;
     }
 
     setAssessmentPending(true);
-    setAssessmentError(null);
+    updateCurrentAttempt((current) => ({ ...current, assessmentError: null }));
     try {
       await postJson<VocabularyAssessmentStateRecord>("/learning/vocabulary-reviews", {
         language_code: currentCard.languageCode,
@@ -558,9 +889,14 @@ export function StudyPracticeView({
         axis_key: currentCard.assessmentAxisKey,
         result: "incorrect",
       });
-      setRevealed(true);
+      updateCurrentAttempt((current) => ({
+        ...current,
+        answerResult: "incorrect",
+        revealed: true,
+        assessmentError: null,
+      }));
     } catch {
-      setAssessmentError("Could not save this review. Try again.");
+      updateCurrentAttempt((current) => ({ ...current, assessmentError: "Could not save this review. Try again." }));
     } finally {
       setAssessmentPending(false);
     }
@@ -569,27 +905,35 @@ export function StudyPracticeView({
   async function handleAnswerSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
 
-    if (!currentCard || !currentPrompt || assessmentPending) {
+    if (!currentCard || currentCard.phase !== "assessment" || !currentCard.assessmentAxisKey || !currentPrompt || assessmentPending) {
       return;
     }
 
-    const submittedAnswer = normalizePracticeAnswer(answerDraft);
-    const expectedAnswer = normalizePracticeAnswer(currentPrompt.answer ?? "");
-    const isCorrect = submittedAnswer.length > 0 && expectedAnswer.length > 0 && submittedAnswer === expectedAnswer;
+    const answerResult = classifyPracticeResult(
+      currentAttempt.answerDraft,
+      currentPrompt.answer,
+      currentPrompt.prompt,
+      [currentCard.term, resolvedMeaning, resolvedPronunciation],
+    );
 
     setAssessmentPending(true);
-    setAssessmentError(null);
+    updateCurrentAttempt((current) => ({ ...current, assessmentError: null }));
     try {
       await postJson<VocabularyAssessmentStateRecord>("/learning/vocabulary-reviews", {
         language_code: currentCard.languageCode,
         lemma: currentCard.lookupTerm,
         axis_key: currentCard.assessmentAxisKey,
-        result: isCorrect ? "correct" : "incorrect",
+        result: answerResult,
       });
-      setAnswerResult(isCorrect ? "correct" : "incorrect");
-      setRevealed(true);
+      updateCurrentAttempt((current) => ({
+        ...current,
+        answerResult,
+        revealed: answerResult === "correct" || answerResult === "incorrect",
+        answerDraft: answerResult === "wrong_axis" || answerResult === "retry" ? "" : current.answerDraft,
+        assessmentError: null,
+      }));
     } catch {
-      setAssessmentError("Could not save this review. Try again.");
+      updateCurrentAttempt((current) => ({ ...current, assessmentError: "Could not save this review. Try again." }));
     } finally {
       setAssessmentPending(false);
     }
@@ -598,9 +942,12 @@ export function StudyPracticeView({
   const practiceSourceLabel =
     mode === "review"
       ? "Review queue"
+      : mode === "both"
+        ? "Combined study"
       : currentCard
-        ? `${currentCard.title} - ${currentCard.sourceLabel}`
+        ? currentCard.title
         : "Practice session";
+  const practiceModeText = practiceModeLabel(mode);
 
   return (
     <RoutePage
@@ -610,10 +957,10 @@ export function StudyPracticeView({
       badge={data ? `${practiceCards.length} items` : "Live"}
       links={[{ href: "/study", label: "Study" }]}
       metrics={[
-        { label: "Mode", value: mode === "review" ? "Review" : "Program" },
+        { label: "Mode", value: practiceModeText },
         { label: "Items", value: data ? String(practiceCards.length) : "Loading" },
         { label: "Step", value: practiceCards.length ? `${selectedIndex + 1}/${practiceCards.length}` : "0/0" },
-        ...(mode === "program" && introductionItemCount > 0
+        ...(mode === "program" && programIntroductionItemCount > 0
           ? [{ label: "Introduction chunk", value: `${introductionChunkIndex + 1}/${introductionChunkCount}` }]
           : []),
       ]}
@@ -636,62 +983,168 @@ export function StudyPracticeView({
               <div className="study-practice-stage">
                 <div className="study-practice-stage-topline">
                   <span className="pill">{currentCard.sourceLabel}</span>
-                  <span className="pill">{assessmentAxisLabel(currentCard.assessmentAxisKey)}</span>
+                  <span className="pill">{currentCard.phase === "assessment" ? assessmentAxisLabel(currentCard.assessmentAxisKey ?? "form_to_meaning") : "Introduction"}</span>
                 </div>
 
-                <p className="eyebrow">{currentPrompt ? currentPrompt.label : "Review prompt"}</p>
                 <p className="study-practice-term" lang={currentPrompt?.promptLanguage ?? currentCard.languageCode}>
-                  {currentPrompt?.prompt ?? "Prompt unavailable."}
+                  {currentCard.phase === "intro" ? currentCard.term : currentPrompt?.prompt ?? "Prompt unavailable."}
                 </p>
-                {currentCard.assessmentAxisKey === "form_to_meaning" && resolvedPronunciation ? (
-                  <p className="study-practice-pronunciation">({resolvedPronunciation})</p>
+                {currentCard.phase === "intro" && currentCard.meaning ? (
+                  <div className="study-practice-intro-meaning">
+                    <span className="eyebrow">Meaning</span>
+                    <p className="study-practice-meaning" lang="en">
+                      {currentCard.meaning}
+                    </p>
+                  </div>
                 ) : null}
-                {revealed ? (
-                  <p className="study-practice-meaning" lang={currentPrompt?.answerLanguage ?? "en"}>
+                {showPronunciationGuide ? (
+                  <StudyPronunciationGuide
+                    languageCode={currentCard.languageCode}
+                    pronunciationText={resolvedPronunciation}
+                    syllableText={resolvedSyllableText}
+                    audioText={currentCard.term}
+                    inventoryId="study.practice-pronunciation-guide"
+                  />
+                ) : null}
+                {currentCard.phase === "intro" ? (
+                  <p className="study-practice-intro-copy">
+                    Learn this word before we move into the randomized axis checks for this chunk.
+                  </p>
+                ) : currentAttempt.revealed && currentAttempt.answerResult !== "correct" ? (
+                  <p
+                    className={`study-practice-meaning ${
+                      currentAttempt.answerResult === "incorrect"
+                        ? "is-incorrect"
+                        : currentAttempt.answerResult === "wrong_axis"
+                          ? "is-wrong-axis"
+                          : ""
+                    }`}
+                    lang={currentPrompt?.answerLanguage ?? "en"}
+                  >
                     {currentPrompt?.answer ?? "Answer unavailable."}
                   </p>
                 ) : null}
 
-                {answerResult !== "idle" ? (
+                {currentCard.phase === "assessment" && currentAttempt.answerResult !== "idle" ? (
                   <div
-                    className={`study-practice-answer-status ${answerResult === "correct" ? "is-correct" : "is-incorrect"}`}
+                    className={`study-practice-answer-status ${
+                      currentAttempt.answerResult === "correct"
+                        ? "is-correct"
+                        : currentAttempt.answerResult === "retry"
+                          ? "is-retry"
+                        : currentAttempt.answerResult === "wrong_axis"
+                          ? "is-wrong-axis"
+                          : "is-incorrect"
+                    }`}
                     data-inventory-id="study.practice-answer-feedback"
                     role="status"
                     aria-live="polite"
                   >
-                    <strong>{answerResult === "correct" ? "Correct" : "Incorrect"}</strong>
+                    <strong>
+                      {currentAttempt.answerResult === "correct"
+                        ? "Correct"
+                        : currentAttempt.answerResult === "retry"
+                          ? "Try again"
+                          : currentAttempt.answerResult === "wrong_axis"
+                            ? "Oops, wrong axis"
+                            : "Incorrect"}
+                    </strong>
                   </div>
                 ) : null}
 
-                <form className="study-practice-answer" data-inventory-id="study.practice-answer" onSubmit={handleAnswerSubmit}>
-                  <label className="study-practice-answer-label" htmlFor={`study-practice-answer-${currentCard.key}`}>
-                    {currentPrompt?.label ?? "Type your answer"}
-                  </label>
-                  <div className="study-practice-answer-row">
-                    <input
-                      ref={answerInputRef}
-                      id={`study-practice-answer-${currentCard.key}`}
-                      className="text-input"
-                      data-inventory-id="study.practice-answer-input"
-                      value={answerDraft}
-                      onChange={(event) => {
-                        setAnswerDraft(event.target.value);
-                        if (answerResult !== "idle") {
-                          setAnswerResult("idle");
+                {currentCard.phase === "assessment" ? (
+                  <form className="study-practice-answer" data-inventory-id="study.practice-answer" onSubmit={handleAnswerSubmit}>
+                    <div className="study-practice-answer-row">
+                      <input
+                        ref={answerInputRef}
+                        key={currentCard.key}
+                        id={`study-practice-answer-${currentCard.key}`}
+                        className="text-input"
+                        data-inventory-id="study.practice-answer-input"
+                        value={currentAttempt.answerDraft}
+                        lang={currentPrompt?.inputLanguage ?? currentCard.languageCode}
+                        inputMode="text"
+                        autoCapitalize="off"
+                        autoCorrect="off"
+                        aria-label={currentPrompt?.placeholder ?? "Your answer"}
+                        onChange={(event) => {
+                          updateCurrentAttempt((current) => ({
+                            ...current,
+                            answerDraft: event.target.value,
+                            answerResult:
+                              current.answerResult === "wrong_axis" || current.answerResult === "retry"
+                                ? "idle"
+                                : current.answerResult,
+                          }));
+                        }}
+                        placeholder={currentPrompt?.placeholder ?? "Your answer"}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
+                    <div className="study-practice-controls" data-inventory-id="study.practice-navigation">
+                      <button
+                        type="button"
+                        className="button button-secondary study-practice-arrow"
+                        onClick={() => {
+                          setSelectedIndex((current) => (current - 1 + practiceCards.length) % practiceCards.length);
+                        }}
+                        disabled={practiceCards.length <= 1}
+                        aria-label="Previous term"
+                        title="Previous term"
+                        data-inventory-id="study.practice-previous"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="m15 18-6-6 6-6" />
+                        </svg>
+                      </button>
+                      <button type="submit" className="button button-primary study-practice-check" disabled={assessmentPending} data-inventory-id="study.practice-answer-submit">
+                        {assessmentPending ? "Saving..." : "Check answer"}
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-secondary study-practice-arrow"
+                        onClick={() => {
+                          if (mode !== "review" && selectedIndex === practiceCards.length - 1 && practiceChunkCount > 1) {
+                            setIntroductionChunkIndex((current) => (current + 1) % practiceChunkCount);
+                            setSelectedIndex(0);
+                            return;
+                          }
+                          setSelectedIndex((current) => (current + 1) % practiceCards.length);
+                        }}
+                        disabled={
+                          practiceCards.length <= 1 ||
+                          (!currentAttempt.revealed &&
+                            (currentAttempt.answerResult === "idle" ||
+                              currentAttempt.answerResult === "wrong_axis" ||
+                              currentAttempt.answerResult === "retry"))
                         }
-                      }}
-                      placeholder={currentPrompt?.placeholder ?? "Your answer"}
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                  </div>
-                  <div className="study-practice-controls" data-inventory-id="study.practice-navigation">
+                        aria-label="Next term"
+                        title={
+                          !currentAttempt.revealed &&
+                          (currentAttempt.answerResult === "idle" ||
+                            currentAttempt.answerResult === "wrong_axis" ||
+                            currentAttempt.answerResult === "retry")
+                            ? "Check your answer before continuing"
+                            : mode !== "review" && selectedIndex === practiceCards.length - 1 && practiceChunkCount > 1
+                              ? "Next practice chunk"
+                              : "Next review"
+                        }
+                        data-inventory-id="study.practice-next"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="m9 18 6-6-6-6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="study-practice-controls study-practice-controls--intro" data-inventory-id="study.practice-navigation">
                     <button
                       type="button"
                       className="button button-secondary study-practice-arrow"
                       onClick={() => {
                         setSelectedIndex((current) => (current - 1 + practiceCards.length) % practiceCards.length);
-                        resetAttemptState();
                       }}
                       disabled={practiceCards.length <= 1}
                       aria-label="Previous term"
@@ -702,35 +1155,41 @@ export function StudyPracticeView({
                         <path d="m15 18-6-6 6-6" />
                       </svg>
                     </button>
-                    <button type="submit" className="button button-primary study-practice-check" disabled={assessmentPending} data-inventory-id="study.practice-answer-submit">
-                      {assessmentPending ? "Saving..." : "Check answer"}
+                    <button
+                      type="button"
+                      className="button button-primary study-practice-check"
+                      onClick={() => {
+                        if (mode !== "review" && selectedIndex === practiceCards.length - 1 && practiceChunkCount > 1) {
+                          setIntroductionChunkIndex((current) => (current + 1) % practiceChunkCount);
+                          setSelectedIndex(0);
+                          return;
+                        }
+                        setSelectedIndex((current) => (current + 1) % practiceCards.length);
+                      }}
+                      aria-label="Next word"
+                      title={introAdvanceCard?.phase === "assessment" ? "Start randomized axis practice" : "Next word"}
+                      data-inventory-id="study.practice-next"
+                    >
+                      {introAdvanceCard?.phase === "assessment" ? "Start practice" : "Next word"}
                     </button>
                     <button
                       type="button"
                       className="button button-secondary study-practice-arrow"
                       onClick={() => {
-                        if (mode === "program" && selectedIndex === practiceCards.length - 1 && introductionChunkCount > 1) {
-                          setIntroductionChunkIndex((current) => (current + 1) % introductionChunkCount);
-                          setSelectedIndex(0);
-                          resetAttemptState();
-                          return;
-                        }
                         setSelectedIndex((current) => (current + 1) % practiceCards.length);
-                        resetAttemptState();
                       }}
-                      disabled={practiceCards.length <= 1 || (!revealed && answerResult === "idle")}
+                      disabled={practiceCards.length <= 1}
                       aria-label="Next term"
-                      title={!revealed && answerResult === "idle" ? "Check your answer before continuing" : mode === "program" && selectedIndex === practiceCards.length - 1 ? "Next introduction chunk" : "Next review"}
-                      data-inventory-id="study.practice-next"
+                      title={introAdvanceCard?.phase === "assessment" ? "Start randomized axis practice" : "Next term"}
                     >
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="m9 18 6-6-6-6" />
                       </svg>
                     </button>
                   </div>
-                </form>
+                )}
 
-                {revealed ? (
+                {currentCard.phase === "intro" || currentAttempt.revealed ? (
                   <div className="study-practice-meta">
                     {currentCard.detailRows.map((row) => (
                       <div key={`${currentCard.key}-${row.label}`}>
@@ -742,17 +1201,21 @@ export function StudyPracticeView({
                 ) : null}
               </div>
 
-              <button
-                type="button"
-                className="button button-secondary study-practice-not-sure"
-                onClick={() => void handleNotSure()}
-                disabled={revealed || assessmentPending}
-                aria-label="Show the answer when you are not sure"
-                data-inventory-id="study.practice-not-sure"
-              >
-                {assessmentPending ? "Saving..." : "Not sure?"}
-              </button>
-              {assessmentError ? <p className="small-copy" role="alert">{assessmentError}</p> : null}
+              {currentCard.phase === "assessment" ? (
+                <>
+                  <button
+                    type="button"
+                    className="button button-secondary study-practice-not-sure"
+                    onClick={() => void handleNotSure()}
+                    disabled={currentAttempt.revealed || assessmentPending}
+                    aria-label="Show the answer when you are not sure"
+                    data-inventory-id="study.practice-not-sure"
+                  >
+                    {assessmentPending ? "Saving..." : "Not sure?"}
+                  </button>
+                  {currentAttempt.assessmentError ? <p className="small-copy" role="alert">{currentAttempt.assessmentError}</p> : null}
+                </>
+              ) : null}
             </article>
           ) : (
             <section className="card feature-card">

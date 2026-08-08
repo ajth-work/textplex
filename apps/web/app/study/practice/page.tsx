@@ -1,4 +1,8 @@
+import { Suspense } from "react";
+
 import { StudyPracticeView } from "../../../components/study-practice-view";
+
+export const dynamic = "force-dynamic";
 
 type StudyPracticePageProps = {
   searchParams?: Record<string, string | string[] | undefined>;
@@ -9,19 +13,22 @@ function firstSearchParam(value: string | string[] | undefined): string | undefi
 }
 
 export default function StudyPracticePage({ searchParams = {} }: StudyPracticePageProps) {
-  const mode = firstSearchParam(searchParams.mode) === "review" ? "review" : "program";
+  const modeValue = firstSearchParam(searchParams.mode);
+  const mode = modeValue === "review" || modeValue === "glossed" || modeValue === "both" ? modeValue : "program";
   const languageCode = firstSearchParam(searchParams.language_code) ?? firstSearchParam(searchParams.language);
-  const programCode = firstSearchParam(searchParams.program) ?? null;
-  const levelCode = firstSearchParam(searchParams.level) ?? null;
+  const programCode = firstSearchParam(searchParams.program_code) ?? firstSearchParam(searchParams.program) ?? null;
+  const levelCode = firstSearchParam(searchParams.level_code) ?? firstSearchParam(searchParams.level) ?? null;
   const assessmentAxisKey = firstSearchParam(searchParams.axis_key) ?? null;
 
   return (
-    <StudyPracticeView
-      initialMode={mode}
-      initialLanguageCode={languageCode ?? null}
-      initialProgramCode={programCode}
-      initialLevelCode={levelCode}
-      initialAssessmentAxisKey={assessmentAxisKey}
-    />
+    <Suspense fallback={<section className="card feature-card">Loading practice session...</section>}>
+      <StudyPracticeView
+        initialMode={mode}
+        initialLanguageCode={languageCode ?? null}
+        initialProgramCode={programCode}
+        initialLevelCode={levelCode}
+        initialAssessmentAxisKey={assessmentAxisKey}
+      />
+    </Suspense>
   );
 }

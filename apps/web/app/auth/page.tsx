@@ -5,12 +5,13 @@ import { FormEvent, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useAuth } from "../../components/auth-provider";
+import { SignOutButton } from "../../components/sign-out-button";
 import { resolveAccountLabel } from "../../lib/auth-display";
 import { getSupabaseClient, isSupabaseConfigured } from "../../lib/supabase";
 
 type AuthMode = "sign-in" | "sign-up" | "reset";
 
-const DEFAULT_RETURN_TO = "/portal";
+const DEFAULT_RETURN_TO = "/home";
 
 function normalizeReturnTo(value: string | null): string {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
@@ -42,11 +43,14 @@ export default function AuthPage() {
           <p className="lede">{user.email ?? user.id}</p>
           <div className="button-row">
             <Link className="button button-primary" href={returnTo}>
-              Open portal
+              Open Home
             </Link>
             <Link className="button button-secondary" href="/library">
               Open library
             </Link>
+            <SignOutButton className="button button-secondary" redirectTo="/">
+              Sign out
+            </SignOutButton>
           </div>
         </section>
       </main>
@@ -158,6 +162,12 @@ export default function AuthPage() {
           {mode !== "sign-up" ? <button type="button" className="ghost-link" onClick={() => selectMode("sign-up")}>Create account</button> : null}
           {mode !== "reset" ? <button type="button" className="ghost-link" onClick={() => selectMode("reset")}>Forgot password?</button> : null}
         </div>
+
+        {isSignUp ? (
+          <p className="small-copy auth-policy-note" data-inventory-id="auth.policy-note">
+            Review the <Link href="/privacy">Privacy policy</Link> before creating your account.
+          </p>
+        ) : null}
       </section>
     </main>
   );

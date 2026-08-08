@@ -210,6 +210,7 @@ Stage 0 is the shared introduction gate for the item:
 - after that, axis rows advance independently
 - correct responses advance only the prompted axis row
 - incorrect responses regress only the prompted axis row, down to stage 0 if needed
+- wrong-axis responses record that the learner answered a valid alternate form, but leave the prompted axis row unchanged
 - the item is due whenever any axis row is due
 
 ### vocabulary_progress

@@ -39,6 +39,7 @@ data/uploads/*
 site/.test-results/*
 artifacts/
 docs/PRIVATE_*.md
+docs/PRIVATE_*.tsv
 tests/fixtures/books/three-body-mini/
 tests/processor/test_chinese_fixture.py
 
