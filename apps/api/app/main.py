@@ -30,6 +30,11 @@ from app.schemas.books import (
     TextImportRequest,
     TextParseRequest,
 )
+from app.schemas.feedback import (
+    FeedbackCreateRequest,
+    FeedbackListResponse,
+    FeedbackRecord,
+)
 from app.schemas.generated_articles import (
     GeneratedReaderArticlePromptDetails,
     GeneratedReaderArticleRequest,
@@ -111,6 +116,7 @@ from app.services.commerce import (
     get_entitlements,
     verify_sandbox_signature,
 )
+from app.services.feedback import create_feedback, list_feedback
 from app.services.generated_articles import (
     generate_reader_article,
     load_generated_article_prompt_details,
@@ -472,6 +478,27 @@ def readiness() -> JSONResponse:
         status_code=200 if ready else 503,
         content={"status": "ready" if ready else "not_ready", "checks": checks},
     )
+
+
+@app.post("/feedback", response_model=FeedbackRecord)
+def submit_feedback(
+    payload: FeedbackCreateRequest,
+    context: AuthenticatedUserContext | None = PUBLIC_USER_CONTEXT,
+) -> FeedbackRecord:
+    return create_feedback(
+        app.state.data_root,
+        payload.original_text,
+        payload.context,
+        user_id=context.user.id if context else None,
+    )
+
+
+@app.get("/feedback", response_model=FeedbackListResponse)
+def get_feedback(
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> FeedbackListResponse:
+    require_permission(context, "accounts.manage")
+    return FeedbackListResponse(records=list_feedback(app.state.data_root))
 
 
 @app.post("/texts/parse", response_model=PageExtractionArtifact)

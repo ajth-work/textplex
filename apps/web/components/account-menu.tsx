@@ -87,7 +87,6 @@ export function AccountMenu({ className, compact = false, returnTo }: Readonly<A
         onClick={() => setOpen((value) => !value)}
       >
         <span className="account-menu-trigger-copy">
-          <span className="account-menu-eyebrow">Account</span>
           <strong>{accountLabel}</strong>
         </span>
         <span className="account-menu-chevron" aria-hidden="true">

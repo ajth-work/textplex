@@ -4,6 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import {
+  appThemeLabels,
+  INDIVIDUAL_THEME_PRICE,
+  persistAppTheme,
+  readStoredAppTheme,
+  type AppTheme,
+} from "../lib/theme";
+import { getThemeWallpaperThumbnailPath } from "../lib/theme-catalog";
 import { useAuth } from "./auth-provider";
 
 const homePath = "/home";
@@ -73,19 +81,59 @@ function getPricingTierActionLabel(tierName: string, authenticated: boolean, fea
 
 const themePacks = [
   {
-    name: "Classic Consoles",
-    note: "Retro contrast with sharp UI edges.",
+    id: "core-opposites",
+    name: "Neutral / Pitch Black",
+    note: "Crisp white reading by day, near-black focus at night.",
+    modes: [
+      { label: "Day", theme: "neutral" as AppTheme },
+      { label: "Night", theme: "black" as AppTheme },
+    ],
+    price: null,
     tone: "amber",
   },
   {
-    name: "Warm Paper",
-    note: "Warm, low-glare tones for longer reads.",
+    id: "ink-jade",
+    name: "Dark Ink / Jade",
+    note: "Soft charcoal and deep green for a richer reading mood.",
+    modes: [
+      { label: "Ink", theme: "ink" as AppTheme },
+      { label: "Jade", theme: "jade" as AppTheme },
+    ],
+    price: INDIVIDUAL_THEME_PRICE,
     tone: "sage",
   },
   {
-    name: "Night Studio",
-    note: "Dark, focused reading with softer contrast.",
+    id: "fruit-stand",
+    name: "Fruit Stand",
+    note: "Strawberry color and market warmth, with a quieter night variant.",
+    modes: [
+      { label: "Day", theme: "fruit-strawberry" as AppTheme },
+      { label: "Night", theme: "fruit-strawberry-night" as AppTheme },
+    ],
+    price: INDIVIDUAL_THEME_PRICE,
     tone: "sky",
+  },
+  {
+    id: "summer-meadow",
+    name: "Sunlit Meadow",
+    note: "Pale sky, wildflowers, and soft meadow green across the day.",
+    modes: [
+      { label: "Day", theme: "season-summer-meadow" as AppTheme },
+      { label: "Night", theme: "season-summer-meadow-night" as AppTheme },
+    ],
+    price: INDIVIDUAL_THEME_PRICE,
+    tone: "rose",
+  },
+  {
+    id: "hong-kong",
+    name: "Hong Kong",
+    note: "Harbor water, hillside contours, and city light after dark.",
+    modes: [
+      { label: "Day", theme: "city-hong-kong-daylight" as AppTheme },
+      { label: "Night", theme: "city-hong-kong-night" as AppTheme },
+    ],
+    price: INDIVIDUAL_THEME_PRICE,
+    tone: "amber",
   },
 ];
 
@@ -95,14 +143,12 @@ const landingHeroPreviews = [
     title: "Reading",
     description: "TextPlex defines and tracks unfamiliar terms with a simple tap, keeping you focused on the story.",
     wallpaperPath: "/themes/fruit-mango-v1.jpg",
-    tone: "sage",
   },
   {
     id: "study",
     title: "Studying",
     description: "TextPlex analyzes reading sessions, turns them into memory regimens, and supports you with a curriculum.",
     wallpaperPath: "/themes/season-summer-meadow-v1.jpg",
-    tone: "sky",
   },
 ] as const;
 
@@ -118,9 +164,9 @@ const supportPanels = [
   {
     id: "theme-shop",
     label: "Theme shop",
-    eyebrow: "Styling",
-    title: "Keep reading free. Pay only for styling.",
-    description: "Use TextPlex without a subscription, then buy a visual pack only if you want to personalize the workspace.",
+    eyebrow: "Styling previews",
+    title: "Try five reading atmospheres before you choose one.",
+    description: "Tap a thumbnail to apply it to this page, then switch between day and night variants. Premium themes show a planned price, but every preview is open during beta.",
     tone: "sage",
   },
 ] as const;
@@ -218,6 +264,92 @@ function Carousel<T>({ ariaLabel, items, renderItem, trackClassName }: CarouselP
         ))}
       </div>
     </div>
+  );
+}
+
+function LandingThemePreviewCarousel() {
+  const [selectedTheme, setSelectedTheme] = useState<AppTheme>(() => readStoredAppTheme() ?? "neutral");
+
+  useEffect(() => {
+    const handleThemeChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{ theme?: string }>;
+      const nextTheme = customEvent.detail?.theme;
+      if (nextTheme && themePacks.some((pack) => pack.modes.some((mode) => mode.theme === nextTheme))) {
+        setSelectedTheme(nextTheme as AppTheme);
+      }
+    };
+
+    window.addEventListener("textplex-theme-change", handleThemeChange);
+    return () => window.removeEventListener("textplex-theme-change", handleThemeChange);
+  }, []);
+
+  function applyPreview(theme: AppTheme) {
+    setSelectedTheme(theme);
+    persistAppTheme(theme);
+  }
+
+  return (
+    <Carousel
+      ariaLabel="Theme preview carousel"
+      items={themePacks}
+      trackClassName="landing-theme-track"
+      renderItem={(pack) => {
+        const selectedMode = pack.modes.find((mode) => mode.theme === selectedTheme) ?? pack.modes[0];
+        const thumbnailPath = getThemeWallpaperThumbnailPath(selectedMode.theme);
+
+        return (
+          <article
+            className={`landing-theme-card landing-theme-preview-card card landing-tone-${pack.tone}`}
+            key={pack.id}
+            data-inventory-id="landing.theme-card"
+          >
+            <button
+              className={`landing-theme-preview-art${thumbnailPath ? " is-wallpaper" : " global-theme-swatch"}`}
+              type="button"
+              data-theme={selectedMode.theme}
+              style={thumbnailPath ? { backgroundImage: `url("${thumbnailPath}")` } : undefined}
+              aria-label={`Preview ${appThemeLabels[selectedMode.theme]} theme`}
+              data-inventory-id="landing.theme-preview-art"
+              onClick={() => applyPreview(selectedMode.theme)}
+            >
+              <span className="landing-theme-preview-art-overlay" aria-hidden="true" />
+              <span className="landing-theme-preview-art-label">{selectedMode.label}</span>
+            </button>
+            <div className="landing-theme-card-topline">
+              <div>
+                <span className="eyebrow">Theme preview</span>
+                <h3>{pack.name}</h3>
+              </div>
+              {pack.price ? (
+                <span className="landing-theme-price" aria-label={`Planned price $${pack.price.toFixed(2)}, preview available now`}>
+                  <s>${pack.price.toFixed(2)}</s>
+                  <strong>Preview</strong>
+                </span>
+              ) : (
+                <span className="pill">Included</span>
+              )}
+            </div>
+            <p>{pack.note}</p>
+            <div className="landing-theme-mode-toggle" role="group" aria-label={`${pack.name} theme variants`} data-inventory-id="landing.theme-mode-toggle">
+              {pack.modes.map((mode) => (
+                <button
+                  className={`landing-theme-mode-button${selectedMode.theme === mode.theme ? " is-active" : ""}`}
+                  key={mode.theme}
+                  type="button"
+                  aria-pressed={selectedMode.theme === mode.theme}
+                  onClick={() => applyPreview(mode.theme)}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+            <span className="small-copy landing-theme-preview-status">
+              {selectedMode.theme === selectedTheme ? `${appThemeLabels[selectedTheme]} applied to this page` : "Tap to preview this theme"}
+            </span>
+          </article>
+        );
+      }}
+    />
   );
 }
 
@@ -376,19 +508,8 @@ function SupportSwitcher({ authenticated }: { authenticated: boolean }) {
             <h3>{supportPanels[1].title}</h3>
             <p>{supportPanels[1].description}</p>
           </div>
-          <div className="landing-theme-carousel" aria-label="Theme packs carousel">
-            <Carousel
-              ariaLabel="Theme packs carousel"
-              items={themePacks}
-              trackClassName="landing-theme-track"
-              renderItem={(pack) => (
-                <article className={`landing-theme-card card landing-tone-${pack.tone}`} key={pack.name}>
-                  <span className="pill">One-time purchase</span>
-                  <h3>{pack.name}</h3>
-                  <p>{pack.note}</p>
-                </article>
-              )}
-            />
+          <div className="landing-theme-carousel" aria-label="Theme preview carousel">
+            <LandingThemePreviewCarousel />
           </div>
         </article>
       </div>
@@ -466,7 +587,7 @@ export function LandingPage() {
         <div className="landing-hero-previews" aria-label="Workspace previews" data-inventory-id="landing.hero-previews" role="region">
           {landingHeroPreviews.map((preview) => (
             <article
-              className={`landing-hero-preview card landing-tone-${preview.tone}`}
+              className="landing-hero-preview card"
               key={preview.id}
               aria-labelledby={`landing-hero-preview-${preview.id}-title`}
               data-inventory-id={preview.id === "reader" ? "landing.hero-reader-preview" : "landing.hero-study-preview"}
@@ -545,12 +666,6 @@ export function LandingPage() {
           )}
         </div>
       </section>
-      <footer className="landing-footer" aria-label="TextPlex copyright" data-inventory-id="landing.footer">
-        <span className="landing-footer-copy">
-          Use only books and materials you own, license, or are otherwise authorized to use.
-        </span>
-        <span className="landing-footer-mark">© 2026 TextPlex</span>
-      </footer>
     </main>
   );
 }

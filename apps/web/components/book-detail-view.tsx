@@ -22,6 +22,50 @@ import { GeneratedArticlePromptCard } from "./generated-article-prompt-card";
 import { LoadingSkeleton } from "./loading-skeleton";
 import { HskSeriesChart } from "./hsk-series-chart";
 
+function languageLabel(languageCode: string): string {
+  const labels: Record<string, string> = {
+    ar: "Arabic",
+    he: "Hebrew",
+    ja: "Japanese",
+    ko: "Korean",
+    ru: "Russian",
+    zh: "Chinese",
+  };
+  return labels[languageCode.toLowerCase().split("-", 1)[0]] ?? languageCode.toUpperCase();
+}
+
+function titleCaseTopic(topic: string): string {
+  const trimmedTopic = topic.trim();
+  return trimmedTopic ? `${trimmedTopic.charAt(0).toUpperCase()}${trimmedTopic.slice(1)}` : "Practice article";
+}
+
+function isPdfBook(book: BookRecord): boolean {
+  return book.source_filename.toLowerCase().endsWith(".pdf");
+}
+
+function contentTypeLabel(book: BookRecord, generationDetails: GeneratedReaderArticlePromptDetails | null): string {
+  if (generationDetails) {
+    return `${generationDetails.language_label} practice article`;
+  }
+  return isPdfBook(book) ? "Book" : `${languageLabel(book.language_code)} article`;
+}
+
+function detailTitle(book: BookRecord, generationDetails: GeneratedReaderArticlePromptDetails | null): string {
+  return generationDetails ? titleCaseTopic(generationDetails.topic) : book.title;
+}
+
+function detailSummary(book: BookRecord, generationDetails: GeneratedReaderArticlePromptDetails | null): string {
+  if (generationDetails) {
+    const level = generationDetails.curriculum_label ?? "your current reading level";
+    const genre = generationDetails.genre.replaceAll("_", " ");
+    return `A concise ${genre} practice article about ${generationDetails.topic}. It is calibrated for ${level} with a controlled vocabulary window for focused reading practice.`;
+  }
+  if (!isPdfBook(book)) {
+    return `A ${languageLabel(book.language_code)} reading article prepared for your local library and reader study tools.`;
+  }
+  return `A local reading copy${book.author ? ` by ${book.author}` : ""}, with its source pages, prepared images, and extracted reader data kept together for reading practice.`;
+}
+
 export function BookDetailView({ bookId }: { bookId: string }) {
   const [book, setBook] = useState<BookRecord | null>(null);
   const [manifest, setManifest] = useState<BookPageManifest | null>(null);
@@ -180,21 +224,23 @@ export function BookDetailView({ bookId }: { bookId: string }) {
   const resumeReaderHref = resolveReaderResumeHref(bookId, progress, firstPageNumber);
   const needsExtraction = (book?.extracted_page_count ?? 0) <= 0;
   const extractionSourceLabel = firstPageExtractionSource ? firstPageExtractionSource.toUpperCase() : "UNAVAILABLE";
+  const typeLabel = book ? contentTypeLabel(book, generationDetails) : "Reading item";
+  const heroTitle = book ? detailTitle(book, generationDetails) : null;
+  const heroSummary = book ? detailSummary(book, generationDetails) : null;
+  const pageCountLabel = book && !isPdfBook(book) ? "Reader pages" : "Total pages in the source PDF";
 
   return (
     <section className="app-shell">
       <header className="page-hero">
-        <div>
-          <span className="eyebrow">Book detail</span>
-            <h1>{book?.title ?? (loading ? <span className="skeleton-line skeleton-line-title" aria-hidden="true" /> : "Book unavailable")}</h1>
-          <p className="lede">
-            This screen keeps the source scan, the prepared page set, and the extracted reader data in one place before you enter the page view.
-          </p>
+        <div className="detail-hero-copy" data-inventory-id="book-detail.page-hero">
+          <span className="pill detail-type-pill">{book ? typeLabel : "Reading item"}</span>
+          <h1>{heroTitle ?? (loading ? <span className="skeleton-line skeleton-line-title" aria-hidden="true" /> : "Book unavailable")}</h1>
+          <p className="lede detail-hero-summary">{heroSummary ?? "Open a local reading item to see its summary and page data."}</p>
           {isDemoMode ? <p className="small-copy">Demo mode is active. This is the packaged GitHub Pages reader sample.</p> : null}
         </div>
         <div className="hero-meta card">
           <strong>{loading ? <span className="skeleton-line skeleton-line-short" aria-hidden="true" /> : book?.total_pages ?? 0}</strong>
-          <span>Total pages in the source PDF</span>
+          <span>{pageCountLabel}</span>
         </div>
       </header>
 

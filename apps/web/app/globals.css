@@ -2503,27 +2503,45 @@ main {
   z-index: 2;
 }
 
+.reader-nav-shell .app-shell-bar-top {
+  max-height: 5rem;
+  overflow: hidden;
+}
+
 .reader-nav-shell .app-nav {
   max-height: 4rem;
   overflow: hidden;
   transition: max-height 420ms ease, padding 420ms ease;
 }
 
-.reader-nav-shell .app-nav > *:not(.reader-nav-reveal) {
-  transition: opacity 260ms ease, transform 420ms ease, visibility 0s linear 0s;
+.reader-nav-shell .app-shell-bar-top,
+.reader-nav-shell .app-nav {
+  transition: max-height 420ms ease, opacity 260ms ease, padding 420ms ease, visibility 0s linear 0s;
 }
 
+.reader-nav-shell.is-reader-nav-collapsed {
+  height: 0;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.reader-nav-shell.is-reader-nav-collapsed::before {
+  display: none;
+}
+
+.reader-nav-shell.is-reader-nav-collapsed .app-shell-bar-top,
 .reader-nav-shell.is-reader-nav-collapsed .app-nav {
-  max-height: 1.35rem;
+  max-height: 0;
   padding-top: 0;
   padding-bottom: 0;
-}
-
-.reader-nav-shell.is-reader-nav-collapsed .app-nav > *:not(.reader-nav-reveal) {
   opacity: 0;
-  transform: translateY(calc(-100% - 0.45rem));
   visibility: hidden;
-  transition-delay: 0s, 0s, 420ms;
+  transition-delay: 0s, 0s, 0s, 420ms;
 }
 
 .reader-nav-reveal {
@@ -2566,7 +2584,7 @@ main {
 
 @media (prefers-reduced-motion: reduce) {
   .reader-nav-shell .app-nav,
-  .reader-nav-shell .app-nav > *:not(.reader-nav-reveal) {
+  .reader-nav-shell .app-shell-bar-top {
     transition: none;
   }
 }
@@ -2718,6 +2736,144 @@ main {
   width: 100%;
   max-width: 1180px;
   align-self: center;
+}
+
+.app-account-footer {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  width: min(100%, 1180px);
+  margin-top: auto;
+  padding: 0.8rem 0.15rem 0.25rem;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.app-account-footer-account {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  width: 100%;
+}
+
+.app-account-footer-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.app-account-footer-copy {
+  max-width: 42rem;
+  line-height: 1.45;
+  text-transform: none;
+  letter-spacing: 0.01em;
+}
+
+.app-account-footer-mark {
+  color: var(--ink);
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  font-size: 1.05rem;
+  letter-spacing: -0.03em;
+  text-transform: none;
+}
+
+.app-feedback-footer {
+  display: flex;
+  justify-content: center;
+  width: min(100%, 1180px);
+  margin: 0 auto;
+}
+
+.app-feedback-button {
+  align-self: center;
+  gap: 0.45rem;
+  margin-top: 0.25rem;
+}
+
+.app-feedback-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(7, 10, 14, 0.52);
+}
+
+.app-feedback-dialog {
+  width: min(100%, 38rem);
+  max-height: min(90vh, 46rem);
+  overflow: auto;
+  padding: clamp(1rem, 4vw, 1.6rem);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+}
+
+.app-feedback-dialog-header,
+.app-feedback-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.app-feedback-dialog h2 {
+  margin: 0.2rem 0 0;
+}
+
+.app-feedback-dialog-header .eyebrow {
+  white-space: nowrap;
+}
+
+.app-feedback-close-button {
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.app-feedback-form {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.1rem;
+}
+
+.app-feedback-form textarea {
+  width: 100%;
+  min-height: 10rem;
+  resize: vertical;
+}
+
+.app-feedback-dialog-actions {
+  justify-content: flex-end;
+  margin-top: 0.2rem;
+}
+
+.app-feedback-success {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 1.1rem;
+}
+
+.app-feedback-success p,
+.app-feedback-form .small-copy {
+  margin: 0;
+}
+
+.app-feedback-error {
+  margin: 0;
+  color: #a51f2d;
+  font-weight: 700;
+}
+
+.app-account-footer .account-menu-panel {
+  top: auto;
+  bottom: calc(100% + 0.55rem);
 }
 
 .app-shell-content > .landing-shell {
@@ -3695,38 +3851,6 @@ html[data-inventory-labels="on"] [data-inventory-id]::before {
   margin-top: 0.15rem;
 }
 
-.landing-footer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  margin-top: 0.75rem;
-  padding: 0.65rem 0.15rem 0.25rem;
-  color: var(--ink-soft);
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  text-align: center;
-  margin-top: auto;
-}
-
-.landing-footer-mark {
-  color: var(--ink);
-  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
-  font-size: 1.05rem;
-  letter-spacing: -0.03em;
-  text-transform: none;
-}
-
-.landing-footer-copy {
-  max-width: 42rem;
-  line-height: 1.45;
-  text-align: center;
-  text-transform: none;
-  letter-spacing: 0.01em;
-}
-
 .landing-carousel-shell,
 .landing-feature-carousel,
 .landing-pricing-carousel,
@@ -3865,6 +3989,128 @@ html[data-inventory-labels="on"] [data-inventory-id]::before {
   gap: 0.6rem;
   align-content: start;
   padding: clamp(1rem, 1.7vw, 1.35rem);
+}
+
+.landing-theme-preview-card {
+  gap: 0.8rem;
+}
+
+.landing-shell .landing-theme-preview-art {
+  position: relative;
+  display: grid;
+  place-items: end start;
+  width: 100%;
+  min-height: 13rem;
+  overflow: hidden;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius-xl) - 0.2rem);
+  background-color: var(--surface-soft);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.landing-shell .landing-theme-preview-art:hover,
+.landing-shell .landing-theme-preview-art:focus-visible {
+  border-color: var(--accent-strong);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.16);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.landing-theme-preview-art-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(8, 10, 15, 0.04), rgba(8, 10, 15, 0.58));
+  pointer-events: none;
+}
+
+.landing-theme-preview-art-label {
+  position: relative;
+  z-index: 1;
+  padding: 0.28rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 999px;
+  background: rgba(8, 10, 15, 0.32);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.landing-theme-card-topline {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.landing-theme-card-topline > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.landing-theme-price {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 0.08rem;
+  justify-items: end;
+  color: var(--accent-strong);
+  font-size: 0.75rem;
+  line-height: 1.1;
+  text-align: right;
+}
+
+.landing-theme-price s {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
+.landing-theme-price strong {
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.landing-theme-mode-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+}
+
+.landing-theme-mode-button {
+  min-width: 0;
+  padding: 0.38rem 0.55rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.landing-theme-mode-button:hover,
+.landing-theme-mode-button:focus-visible,
+.landing-theme-mode-button.is-active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  outline: none;
+}
+
+.landing-theme-preview-status {
+  min-height: 1.1rem;
+  color: var(--accent-strong);
 }
 
 .landing-theme-track {
@@ -4085,6 +4331,16 @@ html[data-inventory-labels="on"] [data-inventory-id]::before {
   margin-bottom: 1.25rem;
 }
 
+.detail-hero-copy {
+  min-width: 0;
+}
+
+.detail-type-pill {
+  margin-bottom: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
 .page-hero h1,
 .home-hero h1 {
   margin: 0;
@@ -4096,6 +4352,11 @@ html[data-inventory-labels="on"] [data-inventory-id]::before {
 
 .page-hero h1 {
   font-size: clamp(2.4rem, 4vw, 4rem);
+}
+
+.detail-hero-summary {
+  max-width: 58ch;
+  margin-bottom: 0;
 }
 
 .lede {
@@ -4222,14 +4483,6 @@ html[data-app-theme="nes"] .button-primary {
   min-width: 0;
   display: grid;
   gap: 0.05rem;
-}
-
-.account-menu-eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  font-size: 0.62rem;
-  color: var(--ink-soft);
-  line-height: 1;
 }
 
 .account-menu-trigger strong {
@@ -6282,6 +6535,11 @@ html[data-app-theme="season-fall-harvest-night"] {
   background: linear-gradient(135deg, #111923 0 42%, #c66a4d 42% 58%, #2c3032 58% 100%);
 }
 
+/* Gradient swatches are reused at two sizes; only the large landing preview needs a non-repeating background. */
+.landing-shell .landing-theme-preview-art.global-theme-swatch {
+  background-repeat: no-repeat;
+}
+
 .global-theme-option-copy {
   display: grid;
   gap: 0.2rem;
@@ -7351,9 +7609,7 @@ html[data-app-theme="season-fall-harvest-night"] {
 .reader-topbar {
   display: grid;
   grid-template-columns: minmax(2.45rem, 1fr) minmax(0, 4fr) minmax(2.45rem, 1fr);
-  grid-template-areas:
-    "back copy settings"
-    "actions actions actions";
+  grid-template-areas: "back copy settings";
   align-items: start;
   gap: 0.65rem 0.95rem;
   padding: 0.35rem 0.2rem 0.75rem;
@@ -7434,20 +7690,6 @@ html[data-app-theme="season-fall-harvest-night"] {
   margin: 0.15rem 0 0;
 }
 
-.reader-topbar-actions {
-  grid-area: actions;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  margin-left: calc(2.45rem + 0.95rem);
-  overflow: visible;
-}
-
-.reader-topbar-actions .button {
-  width: auto;
-}
-
 .timer-chip {
   padding: 0.6rem 0.9rem;
   border-radius: 999px;
@@ -7486,18 +7728,6 @@ html[data-app-theme="season-fall-harvest-night"] {
 .reader-shell .button-secondary.is-active {
   border-color: var(--accent);
   background: var(--accent-soft);
-}
-
-.reader-shell .reader-topbar-actions .reader-icon-toggle,
-.reader-shell .reader-topbar-actions .reader-icon-toggle:hover,
-.reader-shell .reader-topbar-actions .reader-icon-toggle:focus-visible {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-}
-
-.reader-shell .reader-topbar-actions .reader-icon-toggle.is-active {
-  color: var(--accent-strong);
 }
 
 .reader-shell[data-reader-theme="jade"] .reader-topbar h1,
@@ -8504,8 +8734,33 @@ html[data-app-theme="season-fall-harvest-night"] {
 }
 
 .definition-copy,
-.definition-loading {
+.definition-meaning-row .definition-loading {
   order: 2;
+}
+
+.definition-meaning-row .definition-loading {
+  display: grid;
+  flex: 1 1 12rem;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: min(100%, 12rem);
+  min-height: 0;
+  padding: 0.2rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.definition-loading .skeleton-line-wide {
+  width: min(100%, 18rem);
+}
+
+.definition-loading .skeleton-line-medium {
+  width: min(78%, 14rem);
+}
+
+.definition-loading .skeleton-line-short {
+  width: min(42%, 8rem);
 }
 
 .definition-segments {
@@ -8868,7 +9123,7 @@ html[data-app-theme="season-fall-harvest-night"] {
 
 .reader-page-text {
   display: grid;
-  gap: 0.8rem;
+  gap: 0.45rem;
   font-size: 1.12rem;
   line-height: 1.65;
   font-family: var(--reader-body-font);
@@ -8884,14 +9139,14 @@ html[data-app-theme="season-fall-harvest-night"] {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.35rem;
   min-width: 0;
 }
 
 .reader-sentence-pager .reader-pager-button {
-  width: 2.55rem;
-  min-width: 2.55rem;
-  height: 2.55rem;
+  width: 2.25rem;
+  min-width: 2.25rem;
+  height: 2.25rem;
   padding-inline: 0;
   border-radius: 999px;
 }
@@ -8904,8 +9159,8 @@ html[data-app-theme="season-fall-harvest-night"] {
   align-items: center;
   justify-content: stretch;
   gap: 0.35rem;
-  min-height: 2.55rem;
-  padding-block: 0.3rem;
+  min-height: 2.25rem;
+  padding-block: 0.12rem;
 }
 
 .reader-bookmark-segment {
@@ -8961,7 +9216,7 @@ html[data-app-theme="season-fall-harvest-night"] {
   grid-column: 1 / -1;
   width: 100%;
   display: grid;
-  gap: 0.55rem;
+  gap: 0.25rem;
 }
 
 .reader-session-stats .session-pill {
@@ -8971,9 +9226,9 @@ html[data-app-theme="season-fall-harvest-night"] {
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  gap: 0.5rem;
-  border-radius: 1.15rem;
-  padding: 0.8rem 0.95rem;
+  gap: 0.25rem;
+  border-radius: 0.9rem;
+  padding: 0.35rem 0.45rem;
   min-height: 2rem;
   min-width: 0;
   white-space: normal;
@@ -8989,40 +9244,11 @@ html[data-app-theme="season-fall-harvest-night"] {
   overflow: visible;
 }
 
-.reader-progress-stack {
-  position: relative;
-  grid-column: 1 / -1;
-  display: grid;
-  gap: 0.35rem;
-  margin-top: -0.1rem;
-}
-
-.reader-progress-carousel {
-  width: 100%;
-  display: flex;
-  gap: 0.45rem;
-  overflow-x: auto;
-  overflow-y: hidden;
-  width: 100%;
-  min-width: 0;
-  padding-top: 0.15rem;
-  padding-bottom: 0.15rem;
-  scroll-snap-type: x mandatory;
-  scroll-padding-inline: 0.25rem;
-  overscroll-behavior-x: contain;
-  touch-action: pan-x;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-
-.reader-progress-carousel:focus-visible,
 .reader-session-pill-rail:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.reader-progress-carousel:hover,
-.reader-progress-carousel:focus-within,
 .reader-session-pill-rail:hover,
 .reader-session-pill-rail:focus-within {
   background: color-mix(in srgb, var(--accent) 5%, transparent);
@@ -9033,14 +9259,12 @@ html[data-app-theme="season-fall-harvest-night"] {
   display: none;
 }
 
-.reader-progress-carousel.is-dragging,
 .reader-session-pill-rail.is-dragging {
   cursor: grabbing;
   user-select: none;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .reader-progress-carousel,
   .reader-session-pill-rail {
     cursor: grab;
   }
@@ -9069,75 +9293,10 @@ html[data-app-theme="season-fall-harvest-night"] {
   }
 
   .reader-session-pill-carousel:hover .reader-carousel-hint,
-  .reader-session-pill-carousel:focus-within .reader-carousel-hint,
-  .reader-progress-stack:hover .reader-carousel-hint,
-  .reader-progress-stack:focus-within .reader-carousel-hint {
+  .reader-session-pill-carousel:focus-within .reader-carousel-hint {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-.reader-progress-carousel::-webkit-scrollbar {
-  display: none;
-}
-
-.reader-progress-card {
-  display: grid;
-  flex: 0 0 100%;
-  gap: 0.35rem;
-  width: 100%;
-  min-width: 100%;
-  min-height: 4.55rem;
-  box-sizing: border-box;
-  padding: 0.7rem 0.8rem 0.76rem;
-  border-radius: 0.95rem;
-  border: 1px solid color-mix(in srgb, var(--line) 66%, transparent);
-  background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-}
-
-.reader-progress-card-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.reader-progress-card-head span {
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.reader-progress-card-head strong {
-  color: var(--ink);
-  font-size: 0.95rem;
-  font-weight: 800;
-}
-
-.reader-progress-card-track {
-  overflow: hidden;
-  height: 0.48rem;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
-  background: color-mix(in srgb, var(--surface-soft) 82%, transparent);
-}
-
-.reader-progress-card-track > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
-}
-
-.reader-progress-card em {
-  color: var(--ink-soft);
-  font-size: 0.72rem;
-  font-style: normal;
-  line-height: 1.35;
 }
 
 .reader-session-pill-summary {
@@ -9182,12 +9341,12 @@ html[data-app-theme="season-fall-harvest-night"] {
 .reader-session-pill-rail {
   display: flex;
   align-items: stretch;
-  gap: 0.35rem;
+  gap: 0.25rem;
   width: 100%;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  padding-bottom: 0.15rem;
+  padding-bottom: 0.05rem;
   scrollbar-width: none;
   scroll-snap-type: x proximity;
   scroll-padding-inline: 0.25rem;
@@ -9210,9 +9369,9 @@ html[data-app-theme="season-fall-harvest-night"] {
   min-width: max-content;
   display: inline-flex;
   align-items: center;
-  gap: 0.42rem;
-  padding: 0.58rem 0.72rem;
-  border-radius: 0.9rem;
+  gap: 0.3rem;
+  padding: 0.38rem 0.52rem;
+  border-radius: 0.72rem;
   background: color-mix(in srgb, var(--surface-soft) 88%, transparent);
   border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
   scroll-snap-align: start;
@@ -9223,13 +9382,13 @@ html[data-app-theme="season-fall-harvest-night"] {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  padding: 0.58rem 0.75rem;
-  border-radius: 0.9rem;
+  padding: 0.38rem 0.55rem;
+  border-radius: 0.72rem;
   border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
   background: color-mix(in srgb, var(--surface-soft) 88%, transparent);
   color: var(--ink);
   font-family: var(--reader-display-font);
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   white-space: nowrap;
@@ -9238,7 +9397,7 @@ html[data-app-theme="season-fall-harvest-night"] {
 
 .reader-session-pill-stat > span {
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -9247,7 +9406,7 @@ html[data-app-theme="season-fall-harvest-night"] {
 
 .reader-session-pill-stat > strong {
   color: var(--ink);
-  font-size: 0.92rem;
+  font-size: 0.82rem;
   line-height: 1.15;
   white-space: nowrap;
 }
@@ -9318,13 +9477,13 @@ html[data-app-theme="season-fall-harvest-night"] {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.52rem 0.72rem;
+  gap: 0.25rem;
+  padding: 0.36rem 0.52rem;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
   background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
   color: var(--accent-strong);
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.06em;
   line-height: 1;
@@ -9347,15 +9506,57 @@ html[data-app-theme="season-fall-harvest-night"] {
   letter-spacing: 0.01em;
 }
 
+.reader-progress-compact {
+  display: grid;
+  gap: 0.2rem;
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 0.08rem 0.15rem 0.1rem;
+}
+
+.reader-progress-compact-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.reader-progress-compact-head strong {
+  color: var(--ink);
+  font-size: 0.74rem;
+}
+
+.reader-progress-compact-track {
+  height: 0.24rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 68%, var(--surface-soft));
+}
+
+.reader-progress-compact-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+}
+
 .reader-sentence-tools {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(5.2rem, 1.4fr);
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.3rem;
+  min-width: 0;
+  width: 100%;
 }
 
 .reader-sentence-tools.has-token-mode {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(5.2rem, 1.4fr);
 }
 
 .reader-sentence-tool-button {
@@ -9380,52 +9581,85 @@ html[data-app-theme="season-fall-harvest-night"] {
 }
 
 .reader-audio-speed-control {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 0.65rem;
+  gap: 0.35rem;
   min-width: 0;
-  padding: 0.1rem 0.1rem 0;
+  height: 2.3rem;
+  min-height: 2.3rem;
+  padding: 0.15rem 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 88%, var(--surface-strong));
 }
 
 .reader-audio-speed-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;
 }
 
-.reader-audio-speed-options {
+.reader-audio-speed-stepper {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  flex: 1;
-  gap: 0.28rem;
+  grid-template-columns: 1.2rem minmax(2.1rem, 1fr) 1.2rem;
+  align-items: center;
+  gap: 0.15rem;
   min-width: 0;
-  max-width: 16rem;
 }
 
-.reader-audio-speed-option {
-  min-width: 0;
-  padding: 0.35rem 0.45rem;
+.reader-audio-speed-button {
+  display: inline-grid;
+  width: 1.2rem;
+  height: 1.2rem;
+  place-items: center;
+  padding: 0;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 50%;
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 0.76rem;
+  font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
 }
 
-.reader-audio-speed-option:hover,
-.reader-audio-speed-option:focus-visible,
-.reader-audio-speed-option.is-active {
+.reader-audio-speed-button:hover,
+.reader-audio-speed-button:focus-visible {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--ink);
   outline: none;
+}
+
+.reader-audio-speed-button:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.reader-audio-speed-value {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.reader-token-mode-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1rem;
+  font-family: var(--reader-body-font);
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .reader-sentence-source-pill {
@@ -9510,8 +9744,13 @@ html[data-app-theme="season-fall-harvest-night"] {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 0.45rem;
+}
+
+.reader-translation-reveal-actions .button {
+  width: auto;
+  flex: 0 0 auto;
 }
 
 .reader-translation-reveal-pill {
@@ -9570,7 +9809,9 @@ html[data-app-theme="season-fall-harvest-night"] {
   line-height: 1.65;
 }
 
-.reader-bookmark-toast {
+.reader-bookmark-toast,
+.reader-token-audio-toast,
+.reader-audio-speed-toast {
   position: fixed;
   left: 50%;
   bottom: 1.25rem;
@@ -9670,7 +9911,9 @@ html[data-app-theme="season-fall-harvest-night"] {
     font-size: 0.88rem;
   }
 
-  .reader-bookmark-toast {
+  .reader-bookmark-toast,
+  .reader-token-audio-toast,
+  .reader-audio-speed-toast {
     bottom: max(1rem, env(safe-area-inset-bottom));
     width: calc(100vw - 2rem);
   }
@@ -9802,6 +10045,17 @@ html[data-app-theme="season-fall-harvest-night"] {
 
 .token-inline.is-punct .token-surface {
   font-size: calc(1.12em * var(--reader-text-scale));
+}
+
+.token-inline.is-punct {
+  cursor: default;
+}
+
+.token-inline.is-punct:hover,
+.token-inline.is-punct:focus-visible {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .token-inline.is-study-colored {
@@ -10248,12 +10502,6 @@ code {
     grid-template-columns: 1fr;
   }
 
-  .reader-topbar,
-  .reader-topbar-actions {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
   .reader-theme-grid {
     grid-template-columns: repeat(auto-fit, minmax(8.75rem, 1fr));
     gap: 0.45rem;
@@ -10287,13 +10535,53 @@ code {
     padding: 1rem;
   }
 
-  .landing-footer {
+  .app-account-footer {
     align-items: center;
     padding-inline: 0.05rem;
   }
 }
 
 @media (max-width: 640px) {
+  .reader-sentence-tools {
+    gap: 0.25rem;
+  }
+
+  .reader-sentence-tools.has-token-mode {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(5.2rem, 1.4fr);
+  }
+
+  .reader-sentence-tool-button {
+    gap: 0.25rem;
+    padding-inline: 0.35rem;
+    font-size: clamp(0.68rem, 1.7vw, 0.82rem);
+  }
+
+  .reader-audio-speed-control {
+    gap: 0.2rem;
+    padding-inline: 0.2rem;
+  }
+
+  .reader-audio-speed-label {
+    gap: 0.15rem;
+    font-size: 0.64rem;
+    letter-spacing: 0.04em;
+  }
+
+  .reader-audio-speed-stepper {
+    grid-template-columns: 1.05rem minmax(1.7rem, 1fr) 1.05rem;
+    gap: 0.08rem;
+  }
+
+  .reader-audio-speed-button {
+    width: 1.05rem;
+    height: 1.05rem;
+    font-size: 0.86rem;
+  }
+
+  .reader-audio-speed-value {
+    font-size: 0.68rem;
+  }
+
   .home-shell,
   .app-frame,
   .landing-shell,
@@ -10415,27 +10703,6 @@ code {
     min-width: 0;
   }
 
-  .reader-topbar-actions {
-    margin-left: 0;
-    width: 100%;
-    display: grid;
-    grid-template-columns: auto;
-    justify-content: start;
-    gap: 0.45rem;
-  }
-
-  .reader-topbar-actions .button {
-    width: auto;
-    min-height: 2.35rem;
-    padding-inline: 0.7rem;
-    font-size: 0.88rem;
-  }
-
-  .reader-topbar-actions .reader-icon-toggle {
-    width: 2.45rem;
-    min-width: 2.45rem;
-  }
-
   .reader-options-panel {
     inset: 0.75rem auto auto 50%;
     max-height: calc(100dvh - 1.5rem);
@@ -10545,12 +10812,6 @@ code {
 .library-page {
   display: grid;
   gap: 1rem;
-}
-
-.library-account-menu {
-  position: relative;
-  z-index: 130;
-  justify-self: end;
 }
 
 .library-hero,
@@ -11190,5 +11451,38 @@ code {
   .hsk-series-legend {
     gap: 0.45rem 0.65rem;
     font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .reader-tool-label {
+    display: none;
+  }
+
+  .reader-sentence-tools.has-token-mode {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(4.9rem, 1.4fr);
+  }
+
+  .reader-audio-speed-label {
+    font-size: 0;
+  }
+
+  .reader-audio-speed-label svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .reader-audio-speed-stepper {
+    grid-template-columns: 1rem minmax(1.55rem, 1fr) 1rem;
+  }
+
+  .reader-audio-speed-button {
+    width: 1rem;
+    height: 1rem;
+    font-size: 0.8rem;
+  }
+
+  .reader-audio-speed-value {
+    font-size: 0.64rem;
   }
 }
