@@ -20,7 +20,6 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 SOURCE_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "books" / "alice-mini"
-LEGACY_SOURCE_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "books" / "three-body-mini"
 
 
 def _context(user_id: str) -> AuthenticatedUserContext:
@@ -39,7 +38,7 @@ def test_private_books_are_visible_only_to_owner(tmp_path: Path) -> None:
         owner_id="user-a",
     )
     legacy_record = import_book_from_path(
-        LEGACY_SOURCE_FIXTURE,
+        SOURCE_FIXTURE,
         language_code="en",
         page_count=1,
         data_root=tmp_path / "books",
