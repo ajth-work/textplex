@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-08-09
+
+- Added a token-safe weekly GitHub access routine: a PowerShell `gh`/project check, optional Windows Task Scheduler registration, and a scheduled GitHub Actions App-token smoke test with an operations runbook.
+- Confirmed that TextPlex tracking belongs on the user-owned TextPlex Feature Board project #2 and documented the exact board URL, keeping BinoCart project #1 out of the workflow.
+- Created and added GitHub issues #57-#78 to TextPlex Feature Board #2 for the production-candidate concept notes, active local tracker items, language-pack work, audit follow-up, commerce direction, and future platform plans; synchronized their Todo/In Progress states into `docs/ISSUE_TRACKER.md`.
+
+- Removed the CI-only dependency on the ignored `three-body-mini` fixture; phase-6 ownership tests now reuse the tracked `alice-mini` sample while preserving the legacy unowned-record case.
+- Added feedback lifecycle operations: richer AI implementation plans, server-backed tester notifications with a feedback bell, an admin feedback console at `/admin/feedback`, protected status transitions with resolution notes, optional GitHub issue creation, and GitHub Project status synchronization hooks.
+- Organized feedback records under submitting-user and workflow-status folders, added `in_progress`, `completed`, and `acknowledged` workflow states with status history, and added an admin-only status transition endpoint.
+- Added a Reader settings slider for the app-shell navigation hide delay, persisted locally from 1 to 15 seconds and applied immediately to the reader shell (`reader.navigation-hide-delay-section`, `reader.navigation-hide-delay-slider`, `shell.reader-nav`).
+- Tightened the meaning-line disclosure header by placing the Meaning line label and chevron on the same centered row.
+
 ## 2026-08-08
 
 - Replaced the feedback modal’s text Close action with an accessible icon-only X and kept the Help improve TextPlex eyebrow on one line at phone widths (`shell.feedback-dialog`).
