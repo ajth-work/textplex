@@ -5,7 +5,6 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type TouchEvent } from "react";
 
-import { AccountMenu } from "./account-menu";
 import {
   fetchJson,
   formatElapsed,
@@ -121,6 +120,7 @@ const readerGoogleTranslateFallbackStorageKey = "textplex.readerGoogleTranslateF
 const readerMeaningLineEnabledStorageKey = "textplex.readerMeaningLineEnabled";
 const readerMeaningLineRevealAllStorageKey = "textplex.readerMeaningLineRevealAll";
 const readerDefinitionTraceEnabledStorageKey = "textplex.readerDefinitionTraceEnabled";
+const readerTokenAudioIntroSeenStorageKey = "textplex.readerTokenAudioIntroSeen";
 const readerSessionGlossedCountStorageKey = (bookId: string) => `textplex.readerSessionGlossedCount:${bookId}`;
 const readerSessionSummaryLayoutStorageKey = (bookId: string) => `textplex.readerSessionSummaryLayout:${bookId}`;
 const readerCustomVocabularyListsStorageKey = "textplex.readerCustomVocabularyLists";
@@ -690,7 +690,11 @@ function buildTokenReadingParts(
   }
 
   const reading = normalizeDisplayReading(
-    readingOverride ?? token.romanization ?? pronunciationOverride ?? token.pronunciation ?? (languageCode?.startsWith("ko") ? surface : ""),
+    readingOverride?.trim() ||
+      token.romanization?.trim() ||
+      pronunciationOverride?.trim() ||
+      token.pronunciation?.trim() ||
+      (languageCode?.startsWith("ko") ? surface : ""),
   );
 
   if (languageCode?.startsWith("ru") || isRussianText(surface)) {
@@ -1284,20 +1288,57 @@ function buildTranslationTokens(translation: string | null | undefined): Transla
 
   const parts = trimmed.match(/\s+|\S+/g) ?? [];
   return parts.flatMap((part, index) => {
-    const tokenKind = isTranslationWhitespace(part) ? "space" : isTranslationPunctuation(part) ? "punctuation" : "word";
-    const text = tokenKind === "space" ? part : part.trim();
-    if (!text) {
-      return [];
+    if (isTranslationWhitespace(part)) {
+      return [{ token_id: index + 1, text: part, token_kind: "space" as const }];
     }
 
-    return [
-      {
-        token_id: index + 1,
-        text,
-        token_kind: tokenKind,
-      },
-    ];
+    return splitAttachedTranslationPunctuation({
+      token_id: index + 1,
+      text: part.trim(),
+      token_kind: isTranslationPunctuation(part) ? "punctuation" : "word",
+    });
   });
+}
+
+function splitAttachedTranslationPunctuation(token: TranslationAlignmentToken): TranslationAlignmentToken[] {
+  if (token.token_kind !== "word") {
+    return [token];
+  }
+
+  const text = token.text.trim();
+  if (!text || isTranslationPunctuation(text)) {
+    return [{ ...token, text, token_kind: "punctuation" }];
+  }
+
+  const leadingMatch = text.match(/^[\p{P}\p{S}]+(?=[\p{L}\p{N}])/u);
+  const trailingMatch = text.match(/(?<=[\p{L}\p{N}])[\p{P}\p{S}]+$/u);
+  const leading = leadingMatch?.[0] ?? "";
+  const trailing = trailingMatch?.[0] ?? "";
+  const word = text.slice(leading.length, trailing ? text.length - trailing.length : undefined);
+  if (!leading && !trailing) {
+    return [token];
+  }
+
+  const punctuationToken = (surface: string, offset: number): TranslationAlignmentToken => ({
+    token_id: -(Math.abs(token.token_id) * 100 + offset),
+    text: surface,
+    token_kind: "punctuation",
+  });
+  const splitTokens: TranslationAlignmentToken[] = [];
+  if (leading) {
+    splitTokens.push(punctuationToken(leading, 1));
+  }
+  if (word) {
+    splitTokens.push({ ...token, text: word });
+  }
+  if (trailing) {
+    splitTokens.push(punctuationToken(trailing, 2));
+  }
+  return splitTokens;
+}
+
+function normalizeTranslationPunctuation(tokens: TranslationAlignmentToken[]): TranslationAlignmentToken[] {
+  return tokens.flatMap(splitAttachedTranslationPunctuation);
 }
 
 function buildTranslationRevealTokens(
@@ -1437,7 +1478,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [readerDefinitionTraceEnabled, setReaderDefinitionTraceEnabled] = useState(false);
   const [readerPronunciationFreshOnly, setReaderPronunciationFreshOnly] = useState(false);
   const [readerSrsColoring, setReaderSrsColoring] = useState(false);
-  const [readerTokenAudioOnTap, setReaderTokenAudioOnTap] = useState(false);
+  const [readerTokenAudioOnTap, setReaderTokenAudioOnTap] = useState(() => readStoredReaderTokenAudioOnTap());
   const [readerSpeechVoiceGender, setReaderSpeechVoiceGender] = useState<"female" | "male">("female");
   const [readerRussianSyllableDisplayMode, setReaderRussianSyllableDisplayMode] = useState<RussianSyllableDisplayMode>("romanization");
   const [showSentenceTranslation, setShowSentenceTranslation] = useState(false);
@@ -1447,7 +1488,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [sentenceTranslationLoading, setSentenceTranslationLoading] = useState(false);
   const [sentenceTranslationResolutionSource, setSentenceTranslationResolutionSource] = useState<string | null>(null);
   const [sentenceAudioPlaying, setSentenceAudioPlaying] = useState(false);
-  const [sentenceAudioRate, setSentenceAudioRate] = useState<SentenceAudioRate>(1);
+  const [sentenceAudioRate, setSentenceAudioRate] = useState<SentenceAudioRate>(0.75);
   const [sentenceAudioTokenOrder, setSentenceAudioTokenOrder] = useState<number | null>(null);
   const [selectedTokenAudioPlaying, setSelectedTokenAudioPlaying] = useState(false);
   const [selectedTokenSegmentAudioText, setSelectedTokenSegmentAudioText] = useState<string | null>(null);
@@ -1455,6 +1496,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [readerPageBookmarked, setReaderPageBookmarked] = useState(false);
   const [readerSentenceBookmarked, setReaderSentenceBookmarked] = useState(false);
   const [bookmarkToast, setBookmarkToast] = useState<string | null>(null);
+  const [tokenAudioToast, setTokenAudioToast] = useState<string | null>(null);
+  const [audioSpeedToast, setAudioSpeedToast] = useState<string | null>(null);
   const [showCompletionSummary, setShowCompletionSummary] = useState(false);
   const [completionSaving, setCompletionSaving] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
@@ -1493,10 +1536,12 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const lastReaderInteractionAtRef = useRef<number>(Date.now());
   const sentenceTimerRef = useRef<number | null>(null);
   const bookmarkToastTimerRef = useRef<number | null>(null);
+  const tokenAudioToastTimerRef = useRef<number | null>(null);
+  const audioSpeedToastTimerRef = useRef<number | null>(null);
+  const readerTokenAudioIntroSeenRef = useRef(false);
   const sentenceTouchStartRef = useRef<{ x: number; y: number } | null>(null);
   const customVocabularyMenuRef = useRef<HTMLDivElement | null>(null);
   const sessionSummaryRailRef = useRef<HTMLDivElement | null>(null);
-  const progressCarouselRef = useRef<HTMLDivElement | null>(null);
 
   const markReaderInteraction = useCallback(() => {
     lastReaderInteractionAtRef.current = Date.now();
@@ -1519,6 +1564,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     setReaderPronunciationFreshOnly(window.localStorage.getItem(readerPronunciationFreshOnlyStorageKey) === "true");
     setReaderSrsColoring(window.localStorage.getItem(readerSrsColoringStorageKey) === "true");
     setReaderTokenAudioOnTap(readStoredReaderTokenAudioOnTap());
+    readerTokenAudioIntroSeenRef.current = window.localStorage.getItem(readerTokenAudioIntroSeenStorageKey) === "true";
     setReaderSpeechVoiceGender(readStoredReaderSpeechVoiceGender());
     setReaderRussianSyllableDisplayMode(readStoredRussianSyllableDisplayMode());
     const pageBookmarkId = `${bookId}:${pageNumber}`;
@@ -1611,6 +1657,12 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     return () => {
       if (bookmarkToastTimerRef.current !== null) {
         window.clearTimeout(bookmarkToastTimerRef.current);
+      }
+      if (tokenAudioToastTimerRef.current !== null) {
+        window.clearTimeout(tokenAudioToastTimerRef.current);
+      }
+      if (audioSpeedToastTimerRef.current !== null) {
+        window.clearTimeout(audioSpeedToastTimerRef.current);
       }
     };
   }, []);
@@ -1848,6 +1900,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     let active = true;
     const languageCode = pageData?.book.language_code ?? null;
 
+    if (typeof window !== "undefined" && pageData?.book) {
+      window.localStorage.setItem("textplex:last-language-code", pageData.book.language_code);
+      window.localStorage.setItem("textplex:last-book-title", pageData.book.title);
+    }
+
     if (!languageCode) {
       setStudySurface(null);
       setStudySurfaceLoading(true);
@@ -1878,7 +1935,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     return () => {
       active = false;
     };
-  }, [pageData?.book.language_code]);
+  }, [pageData?.book, pageData?.book.language_code]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
@@ -2210,32 +2267,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     () => countReadableTokenMetrics(currentPageSentenceList.slice(Math.max(0, selectedSentenceIndex))),
     [currentPageSentenceList, selectedSentenceIndex],
   );
-  const currentPageSentencePosition = selectedSentencePosition > 0 ? selectedSentencePosition : currentPageSentenceList.length > 0 ? 1 : 0;
-  const currentPageSentenceCount = currentPageSentenceList.length;
-  const totalBookSentenceCount = useMemo(
-    () => summary?.pages.reduce((total, bookPage) => total + bookPage.sentences.length, 0) ?? 0,
-    [summary],
-  );
-  const currentOverallSentencePosition = useMemo(() => {
-    if (!summary?.pages.length || currentPageSentencePosition <= 0) {
-      return 0;
-    }
-
-    let position = 0;
-    for (const bookPage of summary.pages) {
-      if (bookPage.page_number < pageNumber) {
-        position += bookPage.sentences.length;
-        continue;
-      }
-
-      if (bookPage.page_number === pageNumber) {
-        position += currentPageSentencePosition;
-      }
-      break;
-    }
-
-    return position;
-  }, [currentPageSentencePosition, pageNumber, summary]);
   const currentBookReadableMetrics = useMemo(() => {
     if (!summary?.pages.length) {
       return { words: 0, characters: 0 };
@@ -2251,9 +2282,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   }, [currentPageSentenceList, pageNumber, selectedSentenceIndex, summary]);
   const sentenceTranslationTokens = useMemo(
     () => addTranslationTokenSpacing(
-      activeSentenceTranslationAlignment?.target_tokens.length
-        ? activeSentenceTranslationAlignment.target_tokens
-        : buildTranslationTokens(activeSentenceTranslationText),
+      normalizeTranslationPunctuation(
+        activeSentenceTranslationAlignment?.target_tokens.length
+          ? activeSentenceTranslationAlignment.target_tokens
+          : buildTranslationTokens(activeSentenceTranslationText),
+      ),
     ),
     [activeSentenceTranslationAlignment, activeSentenceTranslationText],
   );
@@ -2324,74 +2357,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
     return countReadableTokenMetrics(summary.pages.flatMap((bookPage) => bookPage.sentences));
   }, [summary]);
-  const pageProgressPercent = totalPages && totalPages > 0 ? Math.min(100, Math.round((pageNumber / totalPages) * 100)) : null;
-  const isSinglePageText = totalPages === 1;
-  const currentPageSentenceProgressPercent =
-    currentPageSentenceCount > 0 && currentPageSentencePosition > 0
-      ? Math.min(100, Math.round((currentPageSentencePosition / currentPageSentenceCount) * 100))
-      : null;
-  const overallSentenceProgressPercent =
-    totalBookSentenceCount > 0 && currentOverallSentencePosition > 0
-      ? Math.min(100, Math.round((currentOverallSentencePosition / totalBookSentenceCount) * 100))
-      : null;
-  const progressStripItems = useMemo(
-    () => {
-      const sentenceProgressItem = {
-        label: "Sentence progress",
-        value: currentPageSentenceCount > 0 ? `S${currentPageSentencePosition}/${currentPageSentenceCount}` : "No sentences",
-        progress: currentPageSentenceProgressPercent,
-        detail:
-          currentPageSentenceProgressPercent != null
-            ? `${currentPageSentenceProgressPercent}% of this text`
-            : "Sentence progress becomes available after extraction",
-      };
-
-      if (isSinglePageText) {
-        return [sentenceProgressItem];
-      }
-
-      return [
-        {
-          label: "Page progress",
-          value: totalPages && totalPages > 0 ? `P${pageNumber}/${totalPages}` : `P${pageNumber}`,
-          progress: pageProgressPercent,
-          detail: pageProgressPercent != null ? `${pageProgressPercent}% of the book` : "Book progress is loading",
-        },
-        {
-          ...sentenceProgressItem,
-          label: "Page sentence progress",
-          detail:
-            currentPageSentenceProgressPercent != null
-              ? `${currentPageSentenceProgressPercent}% of this page`
-              : "Sentence progress becomes available after extraction",
-        },
-        {
-          label: "Overall sentence progress",
-          value:
-            totalBookSentenceCount > 0 && currentOverallSentencePosition > 0
-              ? `S${currentOverallSentencePosition}/${totalBookSentenceCount}`
-              : "No sentence data",
-          progress: overallSentenceProgressPercent,
-          detail:
-            overallSentenceProgressPercent != null
-              ? `${overallSentenceProgressPercent}% of the imported text`
-              : "Whole-book sentence progress becomes available after extraction",
-        },
-      ];
-    },
-    [
-      currentOverallSentencePosition,
-      currentPageSentenceCount,
-      currentPageSentencePosition,
-      currentPageSentenceProgressPercent,
-      isSinglePageText,
-      overallSentenceProgressPercent,
-      pageNumber,
-      pageProgressPercent,
-      totalBookSentenceCount,
-      totalPages,
-    ],
-  );
   const bookCoveragePercent =
     currentBookTotalMetrics.words > 0 ? Math.max(0, Math.round(((currentBookTotalMetrics.words - bookGlossedCount) / currentBookTotalMetrics.words) * 100)) : null;
   const languageGlossedCount = studySurface?.study_item_count ?? 0;
@@ -2597,6 +2562,28 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const selectedSentenceSecondsPerToken = selectedSentenceTokenCount > 0 ? sentenceActiveSeconds / selectedSentenceTokenCount : null;
   const pagePillLabel = totalPages ? `P${pageNumber}/${totalPages}` : `P${pageNumber}`;
   const sentencePillLabel = `S${selectedSentencePosition || 1}/${page?.sentences.length ?? 0}`;
+  const readerVisualProgress = useMemo(() => {
+    const sentenceCount = page?.sentences.length ?? 0;
+    if (totalPages === 1 && sentenceCount > 0) {
+      const sentencePosition = Math.max(1, selectedSentencePosition || 1);
+      const percent = Math.min(100, Math.round((sentencePosition / sentenceCount) * 100));
+      return {
+        label: "Sentence progress",
+        value: `S${sentencePosition}/${sentenceCount}`,
+        percent,
+      };
+    }
+
+    if (totalPages && totalPages > 0) {
+      return {
+        label: "Page progress",
+        value: pagePillLabel,
+        percent: Math.min(100, Math.round((pageNumber / totalPages) * 100)),
+      };
+    }
+
+    return null;
+  }, [page?.sentences.length, pageNumber, pagePillLabel, selectedSentencePosition, totalPages]);
   const sessionLabel = sessionReady ? "Session active" : "Session starting";
   const averageSessionLengthSeconds = profileSummary?.average_seconds_per_session ?? null;
   const sessionSummaryItems = useMemo(
@@ -2628,7 +2615,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             ? "..."
             : `${bookProgressSummary.progress_percent}% ${bookProgressSummary.progress_unit}`,
       },
-    ],
+    ].filter((item) => item.id !== "resume-point"),
     [
       activeSeconds,
       averageSessionLengthSeconds,
@@ -2657,9 +2644,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     () => sessionSummaryItems.filter((item) => sessionSummaryHiddenItemIdSet.has(item.id)),
     [sessionSummaryHiddenItemIdSet, sessionSummaryItems],
   );
-  const readerProgressPercent = bookProgressLoading ? null : bookProgressSummary?.progress_percent ?? null;
   useReaderCarouselInteractions(sessionSummaryRailRef);
-  useReaderCarouselInteractions(progressCarouselRef, readerProgressPercent != null);
   const canMoveToPreviousSentence = selectedSentenceIndex > 0;
 
   function handleToggleSessionSummaryEditing() {
@@ -2798,6 +2783,63 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     }, 2600);
   }
 
+  function showTokenAudioIntroToast(): void {
+    if (typeof window === "undefined" || readerTokenAudioIntroSeenRef.current) {
+      return;
+    }
+
+    readerTokenAudioIntroSeenRef.current = true;
+    window.localStorage.setItem(readerTokenAudioIntroSeenStorageKey, "true");
+    setTokenAudioToast("Token audio is on by default. You can turn it off in Reader settings.");
+    if (tokenAudioToastTimerRef.current !== null) {
+      window.clearTimeout(tokenAudioToastTimerRef.current);
+    }
+    tokenAudioToastTimerRef.current = window.setTimeout(() => {
+      setTokenAudioToast(null);
+      tokenAudioToastTimerRef.current = null;
+    }, 3600);
+  }
+
+  function formatSentenceAudioRate(rate: SentenceAudioRate): string {
+    return `${rate}x`;
+  }
+
+  function describeSentenceAudioRate(rate: SentenceAudioRate): string {
+    if (rate === 0.25) {
+      return "slowest";
+    }
+    if (rate === 0.5) {
+      return "slower";
+    }
+    if (rate === 1) {
+      return "faster";
+    }
+    return "default";
+  }
+
+  function showAudioSpeedToast(rate: SentenceAudioRate): void {
+    setAudioSpeedToast(`Audio speed: ${formatSentenceAudioRate(rate)} — ${describeSentenceAudioRate(rate)}.`);
+    if (audioSpeedToastTimerRef.current !== null) {
+      window.clearTimeout(audioSpeedToastTimerRef.current);
+    }
+    audioSpeedToastTimerRef.current = window.setTimeout(() => {
+      setAudioSpeedToast(null);
+      audioSpeedToastTimerRef.current = null;
+    }, 2200);
+  }
+
+  function adjustSentenceAudioRate(direction: -1 | 1): void {
+    const currentIndex = sentenceAudioRateOptions.indexOf(sentenceAudioRate);
+    const nextIndex = Math.max(0, Math.min(sentenceAudioRateOptions.length - 1, currentIndex + direction));
+    const nextRate = sentenceAudioRateOptions[nextIndex];
+    if (nextRate === undefined || nextRate === sentenceAudioRate) {
+      return;
+    }
+
+    setSentenceAudioRate(nextRate);
+    showAudioSpeedToast(nextRate);
+  }
+
   function handleTogglePageBookmark() {
     const nextSaved = !readerPageBookmarked;
     setReaderPageBookmarked(nextSaved);
@@ -2893,7 +2935,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   }
 
   async function handleSentenceTokenTap(token: TokenResult): Promise<void> {
-    if (!pageData) {
+    if (!pageData || isSentencePunctuation(token.surface_form)) {
       return;
     }
 
@@ -2911,6 +2953,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     }
 
     if (readerTokenAudioOnTap && !isSentencePunctuation(token.surface_form)) {
+      showTokenAudioIntroToast();
       playWordAudio(token);
     }
 
@@ -3381,9 +3424,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             {loading ? <span className="skeleton-line skeleton-line-short" aria-hidden="true" /> : pageData?.book.author ?? (missingReader ? "No book is currently available" : "Unknown author")}
           </p>
           {isDemoMode ? <p className="small-copy reader-topbar-note">Demo mode is active. This reader is running from packaged sample data.</p> : null}
-        </div>
-        <div className="reader-topbar-actions">
-          <AccountMenu returnTo={pathname} compact className="reader-account-menu" />
         </div>
         <button
           type="button"
@@ -4104,45 +4144,26 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     </span>
                   </div>
                 </div>
-                {readerProgressPercent != null ? (
-                  <div className="reader-progress-stack" data-inventory-id="reader.reading-progress-module">
-                    <div
-                      id="reader-progress-details"
-                      className="reader-progress-carousel"
-                      data-inventory-id="reader.reading-progress-details"
-                      aria-roledescription="carousel"
-                      aria-label="Reading progress carousel"
-                      aria-describedby="reader-progress-carousel-hint"
-                      ref={progressCarouselRef}
-                      tabIndex={0}
-                    >
-                      {progressStripItems.map((item) => (
-                        <article key={item.label} className="reader-progress-card">
-                          <div className="reader-progress-card-head">
-                            <span>{item.label}</span>
-                            <strong>{item.value}</strong>
-                          </div>
-                          <div
-                            className="reader-progress-card-track"
-                            role="progressbar"
-                            aria-label={item.label}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-valuenow={item.progress ?? 0}
-                          >
-                            <span style={{ width: `${item.progress ?? 0}%` }} />
-                          </div>
-                          <em>{item.detail}</em>
-                        </article>
-                      ))}
+                {readerVisualProgress ? (
+                  <div className="reader-progress-compact" data-inventory-id="reader.reading-progress-module" aria-label="Reading progress">
+                    <div className="reader-progress-compact-head">
+                      <span>{readerVisualProgress.label}</span>
+                      <strong>{readerVisualProgress.value}</strong>
                     </div>
-                    <span id="reader-progress-carousel-hint" className="reader-carousel-hint" role="note">
-                      Drag or scroll to explore
-                    </span>
+                    <div
+                      className="reader-progress-compact-track"
+                      role="progressbar"
+                      aria-label={readerVisualProgress.label}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={readerVisualProgress.percent}
+                    >
+                      <span style={{ width: `${readerVisualProgress.percent}%` }} />
+                    </div>
                   </div>
                 ) : null}
               </div>
-                <div className={`reader-sentence-tools ${readerSupportsCharacterMode ? "has-token-mode" : ""}`} aria-label="Sentence display, translation, and source controls">
+                <div className={`reader-sentence-tools ${readerSupportsCharacterMode ? "has-token-mode" : ""}`} aria-label="Sentence display, translation, source, and speed controls">
                   {readerSupportsCharacterMode ? (
                     <button
                       type="button"
@@ -4154,7 +4175,10 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       title={effectiveReaderTokenMode === "character" ? "Switch to word mode" : "Switch to character mode"}
                       data-inventory-id="reader.token-mode-button"
                     >
-                      {effectiveReaderTokenMode === "character" ? "Char" : "Word"}
+                      <span className="reader-token-mode-glyph" aria-hidden="true">
+                        {effectiveReaderTokenMode === "character" ? "字" : "文"}
+                      </span>
+                      <span className="reader-tool-label">{effectiveReaderTokenMode === "character" ? "Char" : "Word"}</span>
                     </button>
                   ) : null}
                   <button
@@ -4172,7 +4196,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       <path d="M16 9a4 4 0 0 1 0 6" />
                       <path d="M19 6a8 8 0 0 1 0 12" />
                     </svg>
-                    <span>{sentenceAudioPlaying ? "Stop" : "Audio"}</span>
+                    <span className="reader-tool-label">{sentenceAudioPlaying ? "Stop" : "Audio"}</span>
                   </button>
                   <button
                     type="button"
@@ -4189,7 +4213,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       <path d="M4 16h8" />
                       <path d="M14 4l6 6-6 6" />
                     </svg>
-                    <span>{sentenceTranslationLoading ? "Loading..." : "Translation"}</span>
+                    <span className="reader-tool-label">{sentenceTranslationLoading ? "Loading..." : "Translation"}</span>
                   </button>
                   <button
                     type="button"
@@ -4203,24 +4227,43 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       <path d="M6 3h9l3 3v15H6z" />
                       <path d="M15 3v3h3" />
                     </svg>
-                    <span>Source</span>
+                    <span className="reader-tool-label">Source</span>
                   </button>
-                </div>
                 <div className="reader-audio-speed-control" data-inventory-id="reader.sentence-audio-speed">
-                  <span className="reader-audio-speed-label">Audio speed</span>
-                  <div className="reader-audio-speed-options" role="group" aria-label="Sentence audio speed">
-                    {sentenceAudioRateOptions.map((rate) => (
-                      <button
-                        key={rate}
-                        type="button"
-                        className={`reader-audio-speed-option ${sentenceAudioRate === rate ? "is-active" : ""}`}
-                        onClick={() => setSentenceAudioRate(rate)}
-                        aria-pressed={sentenceAudioRate === rate}
-                      >
-                        {rate}x
-                      </button>
-                      ))}
+                  <span className="reader-audio-speed-label">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4.5 16a8 8 0 1 1 15 0" />
+                      <path d="m12 12 3.5-3.5" />
+                      <path d="M7 19h10" />
+                    </svg>
+                    <span className="reader-tool-label">Speed</span>
+                  </span>
+                  <div className="reader-audio-speed-stepper" role="group" aria-label="Sentence audio speed">
+                    <button
+                      type="button"
+                      className="reader-audio-speed-button"
+                      onClick={() => adjustSentenceAudioRate(-1)}
+                      disabled={sentenceAudioRate === sentenceAudioRateOptions[0]}
+                      aria-label="Decrease sentence audio speed"
+                      title="Decrease sentence audio speed"
+                    >
+                      -
+                    </button>
+                    <span className="reader-audio-speed-value" aria-live="polite">
+                      {formatSentenceAudioRate(sentenceAudioRate)}
+                    </span>
+                    <button
+                      type="button"
+                      className="reader-audio-speed-button"
+                      onClick={() => adjustSentenceAudioRate(1)}
+                      disabled={sentenceAudioRate === sentenceAudioRateOptions[sentenceAudioRateOptions.length - 1]}
+                      aria-label="Increase sentence audio speed"
+                      title="Increase sentence audio speed"
+                    >
+                      +
+                    </button>
                   </div>
+                </div>
                 </div>
                 <div
                   className="sentence-row"
@@ -4257,7 +4300,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                           void handleSentenceTokenTap(token);
                         }
                       }}
-                      aria-label={`Inspect ${token.surface_form}${isAudioActive ? " (currently speaking)" : ""}`}
+                      disabled={isPunctuation}
+                      aria-label={isPunctuation ? `Punctuation ${token.surface_form}` : `Inspect ${token.surface_form}${isAudioActive ? " (currently speaking)" : ""}`}
                       aria-current={isAudioActive ? "true" : undefined}
                       title={tokenStudyStage !== null ? `SRS stage ${tokenStudyStage} of 12` : undefined}
                       style={tokenStyle}
@@ -4313,46 +4357,14 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       </svg>
                     </summary>
                     <div className="reader-translation-reveal-body">
-                      <div className="reader-translation-reveal-meta">
-                        <div className="reader-translation-reveal-heading">
-                          <h3>
-                            {sentenceTranslationLoading
-                              ? "Loading translation..."
-                              : sentenceTranslationRevealableWordCount > 0
-                                ? "Tap words to reveal the sentence"
-                                : "Waiting on translation"}
-                          </h3>
-                        </div>
-                        <div className="reader-translation-reveal-actions">
-                          {sentenceTranslationRevealReady && sentenceTranslationRevealableWordCount > 0 ? (
-                            <span className="pill reader-translation-reveal-pill">
-                              {sentenceRevealVisibleWordCount}/{sentenceTranslationRevealableWordCount} words
-                            </span>
-                          ) : null}
-                          {sentenceTranslationRevealReady && sentenceTranslationRevealableWordCount > 0 && sentenceRevealVisibleWordCount < sentenceTranslationRevealableWordCount ? (
-                            <button
-                              type="button"
-                              className="button button-secondary button-compact reader-translation-reveal-all"
-                              onClick={() => void handleRevealAllMeaningLine()}
-                              aria-label="Reveal all meaning-line words"
-                              data-inventory-id="reader.meaning-line-reveal-all-action"
-                            >
-                              Reveal all
-                            </button>
-                          ) : null}
-                          {sentenceRevealSourceTokenOrders.length > 0 ? (
-                            <button
-                              type="button"
-                              className="button button-secondary button-compact reader-translation-reveal-reset"
-                              onClick={() => {
-                                setSentenceRevealSourceTokenOrders([]);
-                                setSentenceRevealAll(false);
-                              }}
-                            >
-                              Reset
-                            </button>
-                          ) : null}
-                        </div>
+                      <div className="reader-translation-reveal-heading">
+                        <h3>
+                          {sentenceTranslationLoading
+                            ? "Loading translation..."
+                            : sentenceTranslationRevealableWordCount > 0
+                              ? "Tap words to reveal the sentence"
+                              : "Waiting on translation"}
+                        </h3>
                       </div>
                       {sentenceTranslationRevealReady && sentenceTranslationRevealableWordCount > 0 ? (
                         <p className="reader-translation-reveal-text" aria-label={`${sentenceRevealVisibleWordCount} of ${sentenceTranslationRevealableWordCount} words revealed`}>
@@ -4371,6 +4383,34 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       ) : (
                         <p className="reader-translation-reveal-hint">Tap a word to load the sentence translation and start filling the blank line.</p>
                       )}
+                      {sentenceTranslationRevealReady && sentenceTranslationRevealableWordCount > 0 ? (
+                        <div className="reader-translation-reveal-actions">
+                          <span className="pill reader-translation-reveal-pill">
+                            {sentenceRevealVisibleWordCount}/{sentenceTranslationRevealableWordCount} words
+                          </span>
+                          {sentenceRevealVisibleWordCount < sentenceTranslationRevealableWordCount ? (
+                            <button
+                              type="button"
+                              className="button button-secondary button-compact reader-translation-reveal-all"
+                              onClick={() => void handleRevealAllMeaningLine()}
+                              aria-label="Reveal all meaning-line words"
+                              data-inventory-id="reader.meaning-line-reveal-all-action"
+                            >
+                              Reveal all
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="button button-secondary button-compact reader-translation-reveal-reset"
+                            onClick={() => {
+                              setSentenceRevealSourceTokenOrders([]);
+                              setSentenceRevealAll(false);
+                            }}
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   </details>
                 ) : null}
@@ -4749,6 +4789,16 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
           {bookmarkToast}
         </div>
       ) : null}
+      {tokenAudioToast ? (
+        <div className="reader-token-audio-toast" role="status" aria-live="polite" data-inventory-id="reader.token-audio-toast">
+          {tokenAudioToast}
+        </div>
+      ) : null}
+      {audioSpeedToast ? (
+        <div className="reader-audio-speed-toast" role="status" aria-live="polite" data-inventory-id="reader.audio-speed-toast">
+          {audioSpeedToast}
+        </div>
+      ) : null}
       </div>
     </section>
   );
@@ -4811,7 +4861,7 @@ function formatEstimatedDuration(seconds: number | null): string {
 
 function formatReaderEstimatedDuration(seconds: number | null): string {
   if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) {
-    return "\u2014";
+    return "Unavailable";
   }
 
   return `~${formatElapsed(Math.max(1, Math.round(seconds)))}`;
@@ -4833,12 +4883,19 @@ function useReaderCarouselInteractions(carouselRef: { current: HTMLDivElement | 
     }
 
     const handleWheel = (event: WheelEvent) => {
-      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || element.scrollWidth <= element.clientWidth) {
+      if (element.scrollWidth <= element.clientWidth) {
+        return;
+      }
+
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      const maxScrollLeft = element.scrollWidth - element.clientWidth;
+      const canScroll = delta < 0 ? element.scrollLeft > 0 : element.scrollLeft < maxScrollLeft;
+      if (!delta || !canScroll) {
         return;
       }
 
       event.preventDefault();
-      element.scrollLeft += event.deltaY;
+      element.scrollLeft = Math.max(0, Math.min(maxScrollLeft, element.scrollLeft + delta));
     };
 
     const handlePointerDown = (event: PointerEvent) => {
@@ -4908,8 +4965,22 @@ function useReaderCarouselInteractions(carouselRef: { current: HTMLDivElement | 
         return;
       }
 
+      const items = Array.from(element.children).filter((child): child is HTMLElement => child instanceof HTMLElement);
+      if (items.length === 0 || element.scrollWidth <= element.clientWidth) {
+        return;
+      }
+
+      const direction = event.key === "ArrowRight" ? 1 : -1;
+      const currentScrollLeft = element.scrollLeft;
+      const targetItem = direction > 0
+        ? items.find((item) => item.offsetLeft > currentScrollLeft + 8)
+        : [...items].reverse().find((item) => item.offsetLeft < currentScrollLeft - 8);
+      if (!targetItem) {
+        return;
+      }
+
       event.preventDefault();
-      element.scrollBy({ left: event.key === "ArrowRight" ? 96 : -96, behavior: "smooth" });
+      element.scrollTo({ left: targetItem.offsetLeft, behavior: "smooth" });
     };
 
     element.addEventListener("wheel", handleWheel, { passive: false });

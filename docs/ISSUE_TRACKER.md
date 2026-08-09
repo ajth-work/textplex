@@ -1,6 +1,6 @@
 # Issue Tracker
 
-This file mirrors the current GitHub issue board state that is visible from this workspace. Keep it updated when a board item changes. If GitHub write access is unavailable, mark the item here as `Local pending` until the remote board can be updated.
+This file mirrors the current GitHub issue board state that is visible from this workspace. Keep it updated when a board item changes. Production-candidate concept, plan, roadmap, and product-direction notes in `docs/` must have a corresponding row here and a matching issue on the `TextPlex Feature Board`; if GitHub write access is unavailable, mark the row as `Local pending` and record the synchronization limitation until the remote board can be updated.
 
 Last updated: 2026-08-07
 

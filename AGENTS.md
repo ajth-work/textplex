@@ -151,6 +151,18 @@ The reusable audit procedure and current audit record are in [`docs/AUDIT.md`](d
 - Check for an existing issue before creating a duplicate regression or audit issue.
 - Keep `docs/ISSUE_TRACKER.md` and GitHub issues or project items synchronized when tracker state changes. Treat `CHANGELOG.md` as a growing local work journal; it should preserve the complete chronological record rather than act as a short recent-change window.
 
+### Concept-document tracking
+
+- Treat a new `docs/*.md` concept, plan, roadmap, draft, or product-direction note as a production candidate when it describes a future user-facing capability, workflow, policy, integration, or platform surface. A concept document is not documentation-only work if its stated purpose is to guide a later production feature.
+- When creating or materially expanding a production-candidate concept document, complete the local and global tracking steps in the same work session:
+  1. Check `docs/ISSUE_TRACKER.md` and the GitHub repository for an existing matching issue before creating a duplicate.
+  2. Create or reuse one GitHub issue for the concept, then add it to the `TextPlex Feature Board` in the appropriate initial column (normally `Todo` or `Backlog`). Do not mark it `Done` merely because the concept note exists.
+  3. Add or update the corresponding row in `docs/ISSUE_TRACKER.md` with the issue number, board status, document path, and a concise scope/next-step note. Keep the local row and remote issue title/scope aligned.
+  4. If GitHub write access is unavailable, record the row as `Local pending`, explain the synchronization limitation, and leave a clear follow-up for adding the issue to the board. Reconcile every `Local pending` concept row before treating the tracking work as complete.
+  5. Add a concise entry to `CHANGELOG.md` for the concept and tracking work. Keep private/local-only drafts out of the public board unless the user explicitly asks to track them globally.
+- If a concept later becomes implementation work, keep the same issue as the parent tracker unless the scope splits into separately deliverable child issues; link child issues back to the parent and preserve the document path in the local tracker.
+- A markdown file that only records implementation details for an already tracked issue does not need a new issue, but its tracker row and issue notes should link to the file when the document becomes a durable project reference.
+
 ## Commit & Pull Request Guidelines
 
 Use short imperative commit messages, such as `Add reader shell scaffold` or `Define page-processing contract`. Keep each commit scoped to one coherent change so the Git history is an exact, searchable record of what changed. The commit body should briefly capture the intent and relevant verification when the subject alone is not sufficient.

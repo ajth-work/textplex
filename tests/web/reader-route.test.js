@@ -9,6 +9,8 @@ const routeSource = fs.readFileSync(
   "utf8",
 );
 const readerSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "reader-view.tsx"), "utf8");
+const accountFooterSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "account-footer.tsx"), "utf8");
+const layoutSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "app", "layout.tsx"), "utf8");
 const appShellSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "app-shell.tsx"), "utf8");
 const themeSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "lib", "theme.ts"), "utf8");
 const stylesheetSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "app", "globals.css"), "utf8");
@@ -20,7 +22,7 @@ test("Next reader route passes dynamic book and page parameters to the live read
   assert.match(routeSource, /export const dynamic = "force-dynamic"/);
 });
 
-test("Next reader meaning line preserves spacing and offers a complete reveal escape hatch", () => {
+test("Next reader meaning line preserves spacing, offers a complete reveal escape hatch, and handles punctuation", () => {
   assert.match(readerSource, /readerMeaningLineRevealAllStorageKey/);
   assert.match(readerSource, /reader\.meaning-line-reveal-all-section/);
   assert.match(readerSource, /reader\.meaning-line-reveal-all-toggle/);
@@ -30,7 +32,15 @@ test("Next reader meaning line preserves spacing and offers a complete reveal es
   assert.match(readerSource, /new Set\(sentenceRevealWordSlots\)/);
   assert.match(readerSource, /sentenceRevealAllActive/);
   assert.match(readerSource, /Reveal all/);
+  assert.match(readerSource, /function splitAttachedTranslationPunctuation\(token: TranslationAlignmentToken\)/);
+  assert.match(readerSource, /normalizeTranslationPunctuation/);
+  assert.match(readerSource, /if \(!pageData \|\| isSentencePunctuation\(token\.surface_form\)\)/);
+  assert.match(readerSource, /disabled=\{isPunctuation\}/);
+  assert.match(readerSource, /Punctuation \$\{token\.surface_form\}/);
+  assert.match(readerSource, /reader-translation-reveal-heading[\s\S]*reader-translation-reveal-text[\s\S]*reader-translation-reveal-actions/);
   assert.match(stylesheetSource, /\.reader-translation-reveal-part\.is-space\s*\{[\s\S]*display: inline-block;/);
+  assert.match(stylesheetSource, /\.reader-translation-reveal-actions \.button\s*\{[\s\S]*width: auto;/);
+  assert.match(stylesheetSource, /\.token-inline\.is-punct:hover,[\s\S]*box-shadow: none;/);
 });
 
 test("Next reader contract keeps loading, error, extraction, lookup, and chart states", () => {
@@ -62,6 +72,9 @@ test("Next reader contract keeps loading, error, extraction, lookup, and chart s
   assert.match(readerSource, /More themes/);
   assert.match(readerSource, /Show less/);
   assert.match(readerSource, /readerTokenAudioOnTap/);
+  assert.match(readerSource, /readerTokenAudioIntroSeenStorageKey/);
+  assert.match(readerSource, /reader\.token-audio-toast/);
+  assert.match(readerSource, /Token audio is on by default/);
   assert.match(readerSource, /readerRussianSyllableDisplayModeStorageKey/);
   assert.match(readerSource, /readStoredRussianSyllableDisplayMode/);
   assert.match(readerSource, /persistRussianSyllableDisplayMode/);
@@ -75,6 +88,12 @@ test("Next reader contract keeps loading, error, extraction, lookup, and chart s
   assert.match(readerSource, /reader\.sentence-audio-button/);
   assert.match(readerSource, /reader\.sentence-audio-speed/);
   assert.match(readerSource, /sentenceAudioRateOptions/);
+  assert.match(readerSource, /useState<SentenceAudioRate>\(0\.75\)/);
+  assert.match(readerSource, /adjustSentenceAudioRate/);
+  assert.match(readerSource, /reader-audio-speed-stepper/);
+  assert.match(readerSource, /reader-audio-speed-button/);
+  assert.match(readerSource, /reader\.audio-speed-toast/);
+  assert.match(readerSource, /Audio speed:/);
   assert.match(readerSource, /utterance\.onboundary/);
   assert.match(readerSource, /sentenceAudioTokenOrder/);
   assert.match(readerSource, /selectedTokenAudioPlaying/);
@@ -97,15 +116,26 @@ test("Next reader contract keeps loading, error, extraction, lookup, and chart s
   assert.match(readerSource, /new Set\(sentenceRevealWordSlots\)/);
 });
 
-test("Next reader keeps settings in the title row", () => {
+test("Next reader defaults token audio on without overriding an explicit off choice", () => {
+  assert.match(readerSource, /useState\(\(\) => readStoredReaderTokenAudioOnTap\(\)\)/);
+  const textplexSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "lib", "textplex.ts"), "utf8");
+  assert.match(textplexSource, /getItem\(readerTokenAudioOnTapStorageKey\) !== "false"/);
+  assert.match(readerSource, /You can turn it off in Reader settings/);
+});
+
+test("Next reader keeps settings in the title row while account access lives in the shared footer", () => {
   const readerHeader = readerSource.match(/<header className="reader-topbar"[\s\S]*?<\/header>/)?.[0] ?? "";
-  assert.match(readerHeader, /<div className="reader-topbar-actions">[\s\S]*AccountMenu[\s\S]*<\/div>\s*<button[\s\S]*reader-settings-button/);
+  assert.doesNotMatch(readerHeader, /AccountMenu/);
+  assert.doesNotMatch(readerSource, /AccountMenu/);
+  assert.match(layoutSource, /<AccountFooter \/>/);
+  assert.match(accountFooterSource, /data-inventory-id="shell\.footer"/);
+  assert.match(accountFooterSource, /data-inventory-id="shell\.account-menu"[\s\S]*AccountMenu/);
+  assert.match(stylesheetSource, /\.app-account-footer \.account-menu-panel\s*\{[\s\S]*bottom: calc\(100% \+ 0\.55rem\)/);
   assert.match(stylesheetSource, /\.reader-settings-button\s*\{[\s\S]*grid-area: settings/);
 });
 
 test("Next reader expands the session summary into book-scoped stats", () => {
   assert.match(readerSource, /bookProgressSummary/);
-  assert.match(readerSource, /showSessionDetails/);
   assert.match(readerSource, /sessionSummaryItems/);
   assert.match(readerSource, /reader\.session-summary-toggle/);
   assert.match(readerSource, /reader\.session-summary-details/);
@@ -122,8 +152,7 @@ test("Next reader expands the session summary into book-scoped stats", () => {
   assert.match(readerSource, /pageUnglossedPercent/);
   assert.match(readerSource, /pageEtaSeconds/);
   assert.match(readerSource, /bookEtaSeconds/);
-  assert.match(readerSource, /reader-session-pill-summary/);
-    assert.match(readerSource, /reader-session-pill-details/);
+  assert.match(readerSource, /reader-session-pill-rail/);
     assert.match(readerSource, /reader-session-pill-stat/);
   assert.match(readerSource, /reader-session-pill-badge/);
   assert.match(readerSource, /Avg session/);
@@ -138,30 +167,28 @@ test("Next reader expands the session summary into book-scoped stats", () => {
     assert.match(readerSource, /Book time/);
     assert.match(readerSource, /Resume point/);
     assert.match(readerSource, /Progress/);
-    assert.match(readerSource, /reader\.reading-progress-bar/);
-    assert.match(readerSource, /reader-progress-strip/);
-    assert.match(stylesheetSource, /\.reader-progress-strip\s*\{[\s\S]*grid-column: 1 \/ -1;[\s\S]*display: grid;/);
-    assert.match(stylesheetSource, /\.reader-progress-strip-track\s*\{[\s\S]*height: 0\.42rem;/);
     assert.match(stylesheetSource, /\.reader-session-stats\s*\{[\s\S]*grid-column: 1 \/ -1;[\s\S]*width: 100%;/);
-    assert.match(stylesheetSource, /\.reader-session-pill-details\s*\{[\s\S]*grid-template-columns: repeat\(auto-fit, minmax\(8\.5rem, 1fr\)\)/);
+    assert.match(stylesheetSource, /\.reader-session-pill-rail\s*\{[\s\S]*overflow-x: auto/);
   });
 
-test("Next reader makes both desktop carousels discoverable and draggable", () => {
+test("Next reader makes the desktop session rail discoverable and draggable", () => {
   assert.match(readerSource, /formatReaderEstimatedDuration/);
+  assert.match(readerSource, /return "Unavailable"/);
   assert.match(readerSource, /useReaderCarouselInteractions/);
+  assert.match(readerSource, /element\.scrollTo\(\{ left: targetItem\.offsetLeft, behavior: "smooth" \}\)/);
+  assert.match(readerSource, /event\.preventDefault\(\);\s+element\.scrollLeft = Math\.max\(0, Math\.min\(maxScrollLeft/);
   assert.match(readerSource, /Drag or scroll to explore/);
   assert.match(readerSource, /aria-describedby="reader-session-carousel-hint"/);
-  assert.match(readerSource, /aria-describedby="reader-progress-carousel-hint"/);
   assert.match(stylesheetSource, /\.reader-carousel-hint\s*\{[\s\S]*display: none;/);
   assert.match(stylesheetSource, /@media \(hover: hover\) and \(pointer: fine\)/);
 });
 
-test("Next reader uses sentence progress instead of page progress for single-page text", () => {
-  assert.match(readerSource, /const isSinglePageText = totalPages === 1;/);
-  assert.match(readerSource, /label: "Sentence progress"/);
-  assert.match(readerSource, /if \(isSinglePageText\) \{\s+return \[sentenceProgressItem\];/);
-  assert.match(readerSource, /label: "Page progress"/);
-  assert.match(readerSource, /label: "Overall sentence progress"/);
+test("Next reader keeps the compact pager as the primary progress signal", () => {
+  assert.match(readerSource, /className="reader-sentence-pager"/);
+  assert.match(readerSource, /const pagePillLabel = totalPages/);
+  assert.match(readerSource, /reader\.reading-progress-module/);
+  assert.match(readerSource, /reader-progress-compact/);
+  assert.doesNotMatch(readerSource, /reader-progress-card/);
 });
 
 test("Next reader definition traces wrap long lookup paths inside the card", () => {
@@ -170,7 +197,7 @@ test("Next reader definition traces wrap long lookup paths inside the card", () 
 });
 
 test("Next reader keeps a small themed canvas inset without a full-viewport reader overlay", () => {
-  assert.match(stylesheetSource, /\.app-frame:has\(\.reader-shell\)\s*\{[\s\S]*padding: 0\.75rem;[\s\S]*gap: 0/);
+  assert.match(stylesheetSource, /\.app-frame:has\(\.reader-shell\) \.app-shell-content\s*\{[\s\S]*gap: 0/);
   assert.match(stylesheetSource, /\.app-frame:has\(\.reader-shell\) \.reader-shell\s*\{[\s\S]*min-height: calc\(100vh - 1\.5rem\);[\s\S]*border-radius/);
   assert.match(stylesheetSource, /body::before\s*\{[\s\S]*position: fixed;[\s\S]*background-image/);
   assert.doesNotMatch(stylesheetSource, /\.reader-canvas::before\s*\{/);
@@ -196,7 +223,7 @@ test("Next reader definition card stays compact and exposes the save action", ()
   assert.match(readerSource, /\/learning\/word-interactions/);
   assert.match(readerSource, /selectedTokenEnglishMeaning/);
   assert.match(readerSource, /definition_short: selectedTokenEnglishMeaning \?\? token\.definition_short \?\? null/);
-  assert.match(readerSource, /Saved to study list/);
+  assert.match(readerSource, /Saved to default list/);
   assert.match(readerSource, /Mark word as remembered/);
   assert.match(readerSource, /Mark word as missed/);
   assert.match(readerSource, /definition-trace/);
@@ -214,17 +241,17 @@ test("Next reader romanizes Korean token readings instead of falling back to Han
   assert.match(readerSource, /function romanizeHangulText\(text: string\): string/);
   assert.match(readerSource, /function splitKoreanParticleChain\(surface: string\): string\[\]/);
   assert.match(readerSource, /function buildTokenReadingParts\([\s\S]*languageCode\?: string \| null,/);
-  assert.match(readerSource, /function getKoreanLexiconSourceLabel\(/);
+  assert.match(readerSource, /readingOverride\?\.trim\(\) \|\|[\s\S]*token\.romanization\?\.trim\(\)/);
+  assert.match(readerSource, /function getLexiconTraceSource\(/);
   assert.match(readerSource, /function isRussianText\(value: string\): boolean/);
   assert.match(readerSource, /function splitRussianTransliterationIntoParts\(reading: string\): string\[\]/);
-  assert.match(readerSource, /resolutionSource\?: LexiconLookupResponse\["resolution_source"\] \| null,/);
+  assert.match(readerSource, /resolutionSource\?: LexiconLookupResponse\["resolution_source"\] \| null\): string/);
   assert.match(readerSource, /const lookupTerms = selectedToken/);
   assert.match(readerSource, /selectedToken\.lemma \?\? ""/);
   assert.match(readerSource, /const selectedTokenReadingParts = selectedToken[\s\S]*buildTokenReadingParts/);
   assert.match(readerSource, /const selectedTokenReading = normalizeDisplayReading\(/);
   assert.match(readerSource, /const selectedTokenReadingDisplayParts = selectedToken/);
-  assert.match(readerSource, /const tokenEntry = resolveEntry\(/);
-  assert.match(readerSource, /pageData\?\.book\.language_code\?\.startsWith\("ko"\)/);
+  assert.match(readerSource, /const lexiconEntry = lexiconResult\?\.entries\[0\] \?\? null/);
   assert.match(readerSource, /const tokenSurfaceParts = languageCode\?\.startsWith\("ko"\) \? splitKoreanParticleChain\(token\.surface_form\) : \[\];/);
   assert.match(readerSource, /const tokenReadingParts = buildTokenReadingParts\(/);
   assert.match(readerSource, /const isTokenPronunciationMuted =/);
@@ -239,9 +266,7 @@ test("Next reader romanizes Korean token readings instead of falling back to Han
   assert.match(readerSource, /Show original Cyrillic syllables/);
   assert.match(readerSource, /Show romanized syllables/);
   assert.match(readerSource, /Play syllable audio for/);
-  assert.match(readerSource, /definition-source-pill/);
   assert.match(readerSource, /Russian reading breakdown/);
-  assert.match(readerSource, /Russian lexicon/);
   assert.match(readerSource, /reader\.word-audio-button/);
   assert.match(readerSource, /Play word audio/);
   assert.match(readerSource, /Stop word audio/);
@@ -289,16 +314,19 @@ test("Next reader supports horizontal sentence swipes without blocking vertical 
   assert.match(stylesheetSource, /\.reader-sentence-tools[\s\S]*\.reader-source-sentence-card/);
 });
 
-test("Next reader groups word mode, translation, and source controls beneath the session summary", () => {
-  const sentenceTools = readerSource.match(/<div className=\{`reader-sentence-tools[\s\S]*?<div className="sentence-row"/)?.[0] ?? "";
+test("Next reader groups word mode, translation, source, and speed controls beneath the session summary", () => {
+  const sentenceTools = readerSource.match(/<div className=\{`reader-sentence-tools[\s\S]*?<div[\s\S]*?className="sentence-row"/)?.[0] ?? "";
   assert.match(readerSource, /reader_capabilities/);
   assert.match(readerSource, /readerSupportsCharacterMode/);
   assert.match(readerSource, /reader-sentence-tools \$\{readerSupportsCharacterMode \? "has-token-mode" : ""\}/);
   assert.match(sentenceTools, /data-inventory-id="reader\.token-mode-button"/);
   assert.match(sentenceTools, /data-inventory-id="reader\.sentence-audio-button"/);
+  assert.match(sentenceTools, /data-inventory-id="reader\.sentence-audio-speed"/);
   assert.match(sentenceTools, /token-mode-toggle/);
-  assert.match(stylesheetSource, /\.reader-sentence-tools\s*\{[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
-  assert.match(stylesheetSource, /\.reader-sentence-tools\.has-token-mode\s*\{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(stylesheetSource, /\.reader-sentence-tools\s*\{[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\) minmax\(5\.2rem, 1\.4fr\)/);
+  assert.match(stylesheetSource, /\.reader-sentence-tools\.has-token-mode\s*\{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\) minmax\(5\.2rem, 1\.4fr\)/);
+  assert.match(readerSource, /reader-token-mode-glyph/);
+  assert.match(readerSource, /reader-tool-label/);
   assert.match(readerSource, /reader-sentence-translation-card[\s\S]*reader-sentence-source-pill/);
   assert.match(stylesheetSource, /\.reader-sentence-translation-meta\s*\{[\s\S]*display: flex;/);
 });
@@ -307,11 +335,11 @@ test("Next reader illuminates translation and source tools only while their card
   assert.match(readerSource, /reader-sentence-tool-button \$\{showSentenceTranslation \? "is-active" : ""\}/);
   assert.match(readerSource, /aria-label="Toggle sentence translation"/);
   assert.match(readerSource, /aria-label="Toggle source sentence"/);
-  assert.match(readerSource, /sentenceTranslationLoading \? "Loading…" : "Translation"/);
-  assert.match(readerSource, /<span>Source<\/span>/);
+  assert.match(readerSource, /sentenceTranslationLoading \? "Loading\.\.\." : "Translation"/);
+  assert.match(readerSource, /<span className="reader-tool-label">Source<\/span>/);
   assert.doesNotMatch(readerSource, /Hide translation/);
   assert.doesNotMatch(readerSource, /Hide source/);
-  assert.match(stylesheetSource, /\.reader-audio-speed-options\s*\{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(stylesheetSource, /\.reader-audio-speed-stepper\s*\{[\s\S]*grid-template-columns: 1\.2rem minmax\(2\.1rem, 1fr\) 1\.2rem/);
   assert.match(stylesheetSource, /\.token-inline\.is-audio-active\s*\{/);
   assert.match(stylesheetSource, /\.reader-shell \.reader-sentence-tool-button:not\(\.is-active\):hover/);
   assert.match(stylesheetSource, /\.reader-sentence-tool-button:not\(\.is-active\):focus-visible[\s\S]*outline-color: var\(--line\)/);

@@ -104,6 +104,40 @@ export const apiBaseUrl = process.env.NEXT_PUBLIC_TEXTPLEX_API_URL ?? "/api";
 export const isDemoMode = process.env.NEXT_PUBLIC_TEXTPLEX_DEMO_MODE === "true";
 export const legacySurfaceUrl = process.env.NEXT_PUBLIC_TEXTPLEX_LEGACY_URL ?? "http://127.0.0.1:8200/legacy/index.html";
 
+export type FeedbackContext = {
+  route: string;
+  page_title?: string | null;
+  language_code?: string | null;
+  book_id?: string | null;
+  book_title?: string | null;
+  page_number?: number | null;
+  sentence_order?: number | null;
+  app_version: string;
+  viewport_width?: number | null;
+  viewport_height?: number | null;
+  user_agent?: string | null;
+};
+
+export type FeedbackRecord = {
+  id: string;
+  submitted_at: string;
+  original_text: string;
+  context: FeedbackContext;
+  triage: {
+    title: string;
+    summary: string;
+    category: string;
+    severity: string;
+    affected_area: string;
+    reproduction_notes?: string | null;
+    suggested_action?: string | null;
+    tags: string[];
+  };
+  triage_source: "openai" | "fallback";
+  status: "needs_review" | "accepted" | "dismissed";
+  user_id?: string | null;
+};
+
 const readerLastPositionStoragePrefix = "textplex.reader-last-position:";
 const readerTokenAudioOnTapStorageKey = "textplex.readerTokenAudioOnTap";
 const readerSpeechVoiceGenderStorageKey = "textplex.readerSpeechVoiceGender";
@@ -157,7 +191,7 @@ export function readStoredReaderTokenAudioOnTap(): boolean {
     return false;
   }
 
-  return window.localStorage.getItem(readerTokenAudioOnTapStorageKey) === "true";
+  return window.localStorage.getItem(readerTokenAudioOnTapStorageKey) !== "false";
 }
 
 export function persistReaderTokenAudioOnTap(enabled: boolean): void {
@@ -441,6 +475,13 @@ export async function postJson<T>(pathname: string, body: unknown): Promise<T> {
     throw new Error(`Request failed (${response.status}) for ${pathname}`);
   }
   return (await response.json()) as T;
+}
+
+export async function submitFeedback(
+  originalText: string,
+  context: FeedbackContext,
+): Promise<FeedbackRecord> {
+  return postJson<FeedbackRecord>("/feedback", { original_text: originalText, context });
 }
 
 export async function putJson<T>(pathname: string, body: unknown): Promise<T> {

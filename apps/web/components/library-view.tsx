@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
 
-import { AccountMenu } from "./account-menu";
 import {
   fetchJson,
   formatDateTime,
@@ -571,7 +570,6 @@ export function LibraryView() {
       <header className="library-hero card" data-inventory-id="library.search-hero">
         <div className="library-hero-head">
           <p className="eyebrow">Search</p>
-          <AccountMenu returnTo="/library" compact className="library-account-menu" />
         </div>
 
         <div className="library-controls">

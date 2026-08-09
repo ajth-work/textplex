@@ -233,7 +233,11 @@ export function AppShell() {
   }
 
   return (
-    <div className={`app-shell-chrome card${isReaderRoute ? ` reader-nav-shell${readerNavCollapsed ? " is-reader-nav-collapsed" : ""}` : ""}`} data-inventory-id="shell.chrome">
+    <div
+      id="textplex-app-shell"
+      className={`app-shell-chrome card${isReaderRoute ? ` reader-nav-shell${readerNavCollapsed ? " is-reader-nav-collapsed" : ""}` : ""}`}
+      data-inventory-id="shell.chrome"
+    >
       <header className="app-shell-bar app-shell-bar-top" data-inventory-id="shell.header">
         <button
           className="button button-secondary theme-toggle-button shell-icon-button app-shell-back-button"
@@ -346,20 +350,22 @@ export function AppShell() {
             ) : null}
           </div>
         </details>
-        {isReaderRoute ? (
-          <button
-            className="reader-nav-reveal"
-            type="button"
-            onClick={revealReaderNav}
-            aria-label="Show navigation"
-            title="Show navigation"
-            data-inventory-id="shell.reader-nav-reveal"
-          >
-            <ReaderNavRevealIcon />
-            <span className="visually-hidden">Show navigation</span>
-          </button>
-        ) : null}
       </nav>
+      {isReaderRoute ? (
+        <button
+          className="reader-nav-reveal"
+          type="button"
+          onClick={revealReaderNav}
+          aria-label="Show app shell"
+          aria-controls="textplex-app-shell"
+          aria-expanded={!readerNavCollapsed}
+          title="Show app shell"
+          data-inventory-id="shell.reader-nav-reveal"
+        >
+          <ReaderNavRevealIcon />
+          <span className="visually-hidden">Show app shell</span>
+        </button>
+      ) : null}
     </div>
   );
 }

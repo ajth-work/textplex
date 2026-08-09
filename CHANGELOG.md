@@ -2,6 +2,30 @@
 
 ## 2026-08-08
 
+- Replaced the feedback modal’s text Close action with an accessible icon-only X and kept the Help improve TextPlex eyebrow on one line at phone widths (`shell.feedback-dialog`).
+- Moved the shared feedback footer above the account footer so `Send feedback` appears immediately before the account control on mobile and desktop (`shell.feedback-footer`, `shell.footer`).
+- Added the shared feedback capture flow (`shell.feedback-button`, `shell.feedback-dialog`) with route/build/reading-context metadata, server-side original-text retention, AI-assisted triage with a deterministic fallback, protected admin listing, and API coverage.
+- Reworked the book-detail hero so generated practice articles show a content-type pill, topic-first title, concise reading-focus summary, and article-aware page label; PDF books retain their title and local source-data explanation (`book-detail.page-hero`).
+- Reordered the meaning-line reveal card so its instruction comes first, the blanks sit beneath it, and the compact progress, Reveal all, and Reset controls share the next row instead of expanding into full-width buttons on mobile.
+- Fixed tapped-word pronunciation fallback so an empty dictionary pronunciation no longer hides the token's romanization in the definition card (`reader.token-inspector`).
+
+- Added an explicit concept-document tracking workflow to `AGENTS.md` and `docs/ISSUE_TRACKER.md`, requiring production-candidate notes to map to a local tracker row and a matching TextPlex Feature Board issue, with a `Local pending` fallback when GitHub access is unavailable.
+
+- Normalized the landing-page Reading and Studying previews to the standard card treatment and stopped large core-theme swatches from repeating edge fragments over the pack colors (`landing.hero-reader-preview`, `landing.hero-study-preview`, `landing.theme-card`).
+
+- Kept the reader Audio/Translation/Source/Speed controls on one line at phone widths, matched the speed pill height to the other controls, and added responsive 文/字 word-mode glyphs with icon-only labels when space is tight.
+- Collapsed the entire reader app shell after the idle delay, including the TextPlex brand, back control, theme actions, and primary navigation; the reveal tab now restores the full shell (`shell.chrome`, `shell.header`, `shell.reader-nav`, `shell.reader-nav-reveal`).
+- Made reader punctuation non-interactive and immediately revealed in meaning lines, including punctuation attached to translated words, so periods and similar marks no longer trigger dictionary lookups or count as revealable tokens.
+- Reduced reader pre-content density by removing the redundant progress-card carousel, keeping the compact page/sentence pager as the primary progress signal, hiding the duplicate resume-point stat, and replacing the average-session mojibake fallback with plain `Unavailable` text (`reader.header`, `reader.session-summary-details`).
+- Reintroduced page/sentence visual progress as a slim reader strip and tightened pager, session rail, tool row, and audio-speed spacing so essential controls remain visible without pushing the reading body down the page (`reader.header`, `reader.session-summary-details`, `reader.reading-progress-module`).
+- Fixed the reader definition card's dictionary loading state so it shows compact animated shimmer lines instead of a tall empty outlined pill (`reader.token-inspector`).
+- Simplified the shared footer account pill so it shows the username and dropdown arrow without repeating the `Account` label inside the pill.
+- Consolidated the account pill into the shared footer so signed-in pages show Profile, Settings, and Sign out above the authorization/usage note and copyright mark instead of inside individual route headers.
+- Moved the reader account pill below the reading surface so profile, settings, and sign-out remain available without competing with the reading header (`reader.account-menu`).
+- Set reader audio to start at 0.75x, moved speed into the Audio/Translation/Source tool row, added minus/plus stepping through 0.25x–1x, and added a speed confirmation toast (`reader.sentence-audio-speed`, `reader.audio-speed-toast`).
+- Replaced the barren landing-page theme-shop cards with five interactive theme previews using real core, premium, fruit, seasonal, and Hong Kong theme assets; visitors can switch variants and apply a preview to the landing page, while planned prices are shown as crossed-out preview labels.
+- Defaulted reader token audio to On for new readers, preserved explicit Off choices, and added a one-time first-tap notice pointing to Reader settings (`reader.token-audio-toggle`, `reader.token-audio-toast`).
+- Corrected reader carousel input handling so wheel gestures stay within horizontally scrollable rails and arrow keys advance to the next or previous pill/card instead of moving by individual text pixels.
 - Fixed the reader's average-session placeholder mojibake and added desktop hover guidance, mouse-wheel scrolling, keyboard arrow scrolling, and pointer dragging for the session-summary and reading-progress carousels (`reader.session-summary-details`, `reader.reading-progress-details`).
 - Fixed reader meaning-line spacing when aligned translation tokens omit explicit whitespace, corrected positional fallback reveals to target word tokens, and added both a current-sentence `Reveal all` action and a persistent reader setting for full meaning-line reveal.
 - Updated the Reader progress carousel to show sentence progress for single-page articles instead of the redundant `P1/1` page-progress card, while preserving page progress for multi-page books.

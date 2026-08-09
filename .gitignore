@@ -27,6 +27,7 @@ wake-helper.err
 
 # Codex attachments
 .codex-remote-attachments/
+.codex/environments/
 .gh/
 
 # Generated/private data
@@ -34,6 +35,8 @@ data/books/*
 !data/books/.gitkeep
 data/user/*
 !data/user/.gitkeep
+data/feedback/*
+!data/feedback/.gitkeep
 data/lexicon/*
 data/uploads/*
 site/.test-results/*

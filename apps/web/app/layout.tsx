@@ -6,10 +6,12 @@ import "./globals.css";
 import { AppFrame } from "../components/app-frame";
 import { AppShell } from "../components/app-shell";
 import { BuildFooter } from "../components/build-footer";
+import { AccountFooter } from "../components/account-footer";
 import { AuthProvider } from "../components/auth-provider";
 import { AUTH_SESSION_COOKIE_KEY, parseAuthSessionCookie } from "../lib/auth-session";
 import { appVersion } from "../lib/build-info";
 import { ThemeProvider } from "../components/theme-provider";
+import { FeedbackWidget } from "../components/feedback-widget";
 import { APP_THEME_COOKIE_KEY, appThemeBrowserColors, isDarkAppTheme, resolveAppTheme } from "../lib/theme";
 import { getThemeWallpaperThumbnailPath } from "../lib/theme-catalog";
 
@@ -146,6 +148,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                   <AppShell />
                   <div className="app-shell-content">
                     <Suspense fallback={null}>{children}</Suspense>
+                    <FeedbackWidget />
+                    <AccountFooter />
                     <BuildFooter rebootedAt={appRebootedAt} version={appVersion} />
                   </div>
                 </AppFrame>
