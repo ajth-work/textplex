@@ -10,6 +10,10 @@ This is the Phase 7 operational baseline for the canonical Next/API topology. It
 - API liveness: `GET /health`
 - API readiness: `GET /ready`
 
+## GitHub access health
+
+Use [`docs/GITHUB_AUTH_RUNBOOK.md`](GITHUB_AUTH_RUNBOOK.md) to repair local GitHub CLI authentication, register the weekly Windows check, and interpret the scheduled GitHub Actions App-token check.
+
 Operational changes should target the Next application on `3000`. Use `8200` only for explicit legacy comparison, rollback rehearsal, or GitHub Pages compatibility checks.
 
 ## Configuration

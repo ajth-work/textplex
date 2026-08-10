@@ -17,7 +17,7 @@ This is the repository's technology-stack source of truth. It records the tools 
 | Book storage | SQLite | Runtime-provided; no application version pin | Separate per-book databases and page assets | `apps/api/app/`, `packages/processor/`, `docs/DATA_MODEL.md` |
 | Learner storage | SQLite | Runtime-provided; no application version pin | Separate user profile database and learning events | `apps/api/app/services/learning_profile.py` |
 | Hosted identity/data | Supabase Auth, Postgres, Storage, and Realtime | Supabase CLI `^2.109.1`; local Postgres major version `17` | Account identity and user-owned hosted profile/settings | `package.json`, `supabase/config.toml` |
-| OCR integration | OpenAI Responses API | Model default `gpt-5.4-mini`; API is called through Python standard-library HTTP | Optional page OCR provider | `apps/api/app/services/ocr.py` |
+| OCR integration | OpenAI Responses API | Model default `gpt-5.6-luna`; API is called through Python standard-library HTTP | Optional page OCR provider | `apps/api/app/services/ocr.py` |
 
 ## Supported runtimes and delivery
 
@@ -74,6 +74,7 @@ The Python project files intentionally use several unpinned dependencies today. 
 | `pymupdf` | Unpinned | API | PDF rendering and page extraction |
 | `pillow` | Unpinned | API and processor | Page/image processing |
 | `jieba` | `>=0.42.1` | Processor and API image | Chinese tokenization |
+| `fugashi[unidic-lite]` | `>=1.5.2` | Processor and API image | Japanese morphological analysis with a bundled UniDic dictionary |
 | `pytest` | Dev-only, unpinned | API and processor | Python tests |
 | `ruff` | Dev-only, unpinned | API and processor | Python linting |
 | `mypy` | Dev-only, unpinned | API and processor | Optional static type checking |
@@ -89,7 +90,7 @@ The API and processor are installed together during local development and CI wit
 | Supabase Postgres | Local major version `17` | Hosted profile/settings schema and ownership RLS foundation. |
 | Supabase Storage | Supabase project service | Configured in local Supabase; intended for hosted user-owned book/page storage. |
 | Supabase Realtime | Enabled in local Supabase config | Available for future realtime product behavior. |
-| OpenAI Responses API | API endpoint `/v1/responses`; default OCR model `gpt-5.4-mini` | Optional OCR path. No OpenAI Python SDK is declared; the API uses the standard library HTTP client. |
+| OpenAI Responses API | API endpoint `/v1/responses`; default OCR model `gpt-5.6-luna` | Optional OCR path. No OpenAI Python SDK is declared; the API uses the standard library HTTP client. |
 
 ## Versioning and upgrade procedure
 

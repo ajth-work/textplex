@@ -2,6 +2,7 @@
 
 import { useAuth } from "./auth-provider";
 import { AccountMenu } from "./account-menu";
+import { FeedbackNotificationBell } from "./feedback-notification-bell";
 
 export function AccountFooter() {
   const { configured, loading, user } = useAuth();
@@ -12,6 +13,7 @@ export function AccountFooter() {
       {showAccount ? (
         <div className="app-account-footer-account" data-inventory-id="shell.account-menu">
           <span className="app-account-footer-label">Account</span>
+          <FeedbackNotificationBell />
           <AccountMenu compact />
         </div>
       ) : null}

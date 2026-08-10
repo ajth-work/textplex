@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 
 import type { BookRecord, ProgressBookSummary, ProgressSurfaceResponse } from "../../../packages/shared/src";
+import { languageShortCode } from "../lib/language-options";
 
 type HomeSurfaceProps = {
   books: BookRecord[];
@@ -102,7 +103,7 @@ export function HomeSurface({ books, progress }: Readonly<HomeSurfaceProps>) {
                 <h3>{continueItem.book.title}</h3>
                 <p className="preview-author">{continueItem.book.author || "Unknown author"}</p>
                 <p className="preview-book-meta">{continueItem.book.source_filename || "Imported text"}</p>
-                <p className="preview-book-meta">{continueItem.book.language_code.toUpperCase()} &middot; {contentTypeLabel(continueItem.book)}</p>
+                <p className="preview-book-meta">{languageShortCode(continueItem.book.language_code)} &middot; {contentTypeLabel(continueItem.book)}</p>
               </div>
               <div>
                 <div className="preview-progress-meta">{progressForBook(continueItem.progress)}% &middot; {formatProgress(continueItem.progress)}</div>

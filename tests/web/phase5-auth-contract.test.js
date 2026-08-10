@@ -15,6 +15,11 @@ test("Phase 5 starts from an explicit Supabase identity boundary", () => {
   assert.match(authProvider, /signOut/);
   assert.match(authPage, /signInWithPassword/);
   assert.match(authPage, /signUp/);
+  assert.match(authPage, /targetLanguage/);
+  assert.match(authPage, /target_language_other/);
+  assert.match(authPage, /auth\.target-language/);
+  assert.match(authPage, /learningTrack/);
+  assert.match(authPage, /auth\.learning-track/);
   assert.match(authPage, /resetPasswordForEmail/);
   assert.match(supabaseClient, /persistSession: true/);
   assert.match(supabaseClient, /autoRefreshToken: true/);
@@ -58,9 +63,13 @@ test("Phase 5 exposes an authenticated hosted profile read path", () => {
   assert.match(profileSurface, /fetchJson<HostedProfileSurfaceResponse>\("\/profile\/hosted"\)/);
   assert.match(profileSurface, /putJson<HostedProfileSurfaceResponse>\("\/profile\/hosted"/);
   assert.match(profileSurface, /profile\.hosted-account-card/);
+  assert.match(profileSurface, /profile\.email-change-form/);
+  assert.match(profileSurface, /auth\.updateUser/);
+  assert.match(profileSurface, /emailRedirectTo/);
+  assert.match(profileSurface, /profile\.learning-track-select/);
   assert.match(profileSurface, /profile\.migration-card/);
   assert.match(profileSurface, /Hello,/);
-  assert.match(profileSurface, /user zero/);
+  assert.match(profileSurface, /Local reading history is kept separate/);
   assert.match(sharedContracts, /HostedProfileSurfaceResponse/);
   assert.match(authPage, /data-inventory-id="auth\.public-return"/);
   assert.match(authPage, /Explore TextPlex/);
@@ -68,12 +77,18 @@ test("Phase 5 exposes an authenticated hosted profile read path", () => {
 
 test("Phase 5 starts from user-owned profile and settings RLS", () => {
   const migration = read("supabase", "migrations", "20260721130000_create_profiles.sql");
+  const languageMigration = read("supabase", "migrations", "20260809130000_add_signup_language_preferences.sql");
+  const learningTrackMigration = read("supabase", "migrations", "20260809140000_add_signup_learning_track.sql");
   const phase = read("docs", "FRONTEND_MIGRATION_PHASE_5.md");
 
   assert.match(migration, /alter table public\.profiles enable row level security/);
   assert.match(migration, /\(select auth\.uid\(\)\) = id/);
   assert.match(migration, /alter table public\.user_settings enable row level security/);
   assert.match(migration, /\(select auth\.uid\(\)\) = user_id/);
+  assert.match(languageMigration, /target_language_other/);
+  assert.match(languageMigration, /raw_user_meta_data ->> 'target_language'/);
+  assert.match(learningTrackMigration, /raw_user_meta_data ->> 'learning_track'/);
+  assert.match(learningTrackMigration, /'not_sure'/);
   assert.match(phase, /authenticated API request contract/);
   assert.match(phase, /server-authoritative/);
 });

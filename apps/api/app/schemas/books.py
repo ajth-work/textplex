@@ -137,3 +137,14 @@ class SentenceTranslationResponse(BaseModel):
     translation_source: str | None = None
     resolution_source: str
     translation_alignment: SentenceTranslationAlignment | None = None
+
+
+class SentenceTranslationPrefetchRequest(BaseModel):
+    lookahead: int = Field(default=3, ge=0, le=6)
+
+
+class SentenceTranslationPrefetchResponse(BaseModel):
+    book_id: str
+    page_number: int
+    sentence_order: int
+    translations: list[SentenceTranslationResponse] = Field(default_factory=list)

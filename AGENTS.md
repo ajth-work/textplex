@@ -30,6 +30,16 @@ Default implementation work targets the Next.js app in `apps/web/` on port `3000
 
 For a new card, assign a route-scoped ID such as `library.import-progress-card`, record its source path and purpose, and do not reuse a retired ID for a different purpose.
 
+## Plugin-authored Markdown
+
+When a named plugin produces a reusable Markdown recommendation, plan, review, or other durable artifact:
+
+1. Store it under `docs/plugins/<plugin-slug>/` in a folder dedicated to that plugin.
+2. Begin the filename and top-level heading with the plugin's display name, such as `docs/plugins/cloudflare/Cloudflare Recommendations for TextPlex.md`.
+3. Include front matter identifying the plugin, plugin display name, document type, status, and date.
+4. Keep the document clearly advisory unless implementation has been requested and completed.
+5. If the document becomes a production-candidate concept or implementation plan, apply the existing issue-tracking and changelog rules as well.
+
 ## Build, Test, and Development Commands
 
 Install the web workspace dependencies from the repo root:
@@ -156,7 +166,7 @@ The reusable audit procedure and current audit record are in [`docs/AUDIT.md`](d
 - Treat a new `docs/*.md` concept, plan, roadmap, draft, or product-direction note as a production candidate when it describes a future user-facing capability, workflow, policy, integration, or platform surface. A concept document is not documentation-only work if its stated purpose is to guide a later production feature.
 - When creating or materially expanding a production-candidate concept document, complete the local and global tracking steps in the same work session:
   1. Check `docs/ISSUE_TRACKER.md` and the GitHub repository for an existing matching issue before creating a duplicate.
-  2. Create or reuse one GitHub issue for the concept, then add it to the `TextPlex Feature Board` in the appropriate initial column (normally `Todo` or `Backlog`). Do not mark it `Done` merely because the concept note exists.
+  2. Create or reuse one GitHub issue for the concept, then add it to the `TextPlex Feature Board` (user project #2: <https://github.com/users/ajth-work/projects/2>) in the appropriate initial column (normally `Todo` or `Backlog`). Do not use BinoCart project #1, and do not mark a concept `Done` merely because the concept note exists.
   3. Add or update the corresponding row in `docs/ISSUE_TRACKER.md` with the issue number, board status, document path, and a concise scope/next-step note. Keep the local row and remote issue title/scope aligned.
   4. If GitHub write access is unavailable, record the row as `Local pending`, explain the synchronization limitation, and leave a clear follow-up for adding the issue to the board. Reconcile every `Local pending` concept row before treating the tracking work as complete.
   5. Add a concise entry to `CHANGELOG.md` for the concept and tracking work. Keep private/local-only drafts out of the public board unless the user explicitly asks to track them globally.

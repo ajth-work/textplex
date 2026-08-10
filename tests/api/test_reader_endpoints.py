@@ -202,6 +202,48 @@ def test_sentence_translation_endpoint_persists_google_translation_cache(tmp_pat
     assert cached_payload["resolution_source"] == "google_translate_cache"
 
 
+def test_sentence_translation_buffer_prefetches_current_and_next_three_sentences(tmp_path: Path, monkeypatch) -> None:
+    app.state.data_root = tmp_path
+    client = TestClient(app)
+    translated_texts: list[str] = []
+
+    def translate_text_stub(source_text: str, source_language_code: str, target_language_code: str = "en") -> str:
+        translated_texts.append(source_text)
+        return f"{source_text} (translated)"
+
+    monkeypatch.setattr("app.services.book_extraction.is_google_translate_configured", lambda: True)
+    monkeypatch.setattr("app.services.book_extraction.translate_text", translate_text_stub)
+    monkeypatch.setattr("app.services.book_extraction.record_google_translate_usage", lambda **_: None)
+
+    import_response = client.post(
+        "/texts/import",
+        json={
+            "text": "One. Two. Three. Four. Five.",
+            "language_code": "es",
+            "title": "Translation buffer sample",
+            "translation_mode": "off",
+        },
+    )
+    assert import_response.status_code == 200
+    book_id = import_response.json()["id"]
+
+    response = client.post(f"/books/{book_id}/pages/1/sentences/1/translation-buffer", json={"lookahead": 3})
+    assert response.status_code == 200
+    payload = response.json()
+    assert [translation["sentence_order"] for translation in payload["translations"]] == [1, 2, 3, 4]
+    assert all(translation["translation"].endswith("(translated)") for translation in payload["translations"])
+    assert len(translated_texts) == 4
+
+    page = client.get(f"/books/{book_id}/pages/1").json()
+    sentences = page["extraction"]["page"]["sentences"]
+    assert [sentence["translation"] for sentence in sentences[:4]] == [
+        "One. (translated)",
+        "Two. (translated)",
+        "Three. (translated)",
+        "Four. (translated)",
+    ]
+
+
 def test_sentence_translation_endpoint_persists_translation_alignment(tmp_path: Path, monkeypatch) -> None:
     app.state.data_root = tmp_path
     client = TestClient(app)

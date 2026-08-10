@@ -5,7 +5,14 @@ import { usePathname, useParams, useSearchParams, useRouter } from "next/navigat
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { READER_NAV_CONTEXT_CLEARED_EVENT, resolveReaderResumeHref } from "../lib/textplex";
+import {
+  READER_NAV_HIDE_DELAY_CHANGE_EVENT,
+  READER_NAV_HIDE_DELAY_DEFAULT_MS,
+  READER_NAV_HIDE_DELAY_STORAGE_KEY,
+  readReaderNavHideDelayMs,
+} from "../lib/reader-preferences";
 import { useAuth } from "./auth-provider";
+import { isTextPlexAdmin } from "../lib/auth-roles";
 import { ThemeToggleButton } from "./theme-toggle-button";
 import {
   ActivityIcon,
@@ -28,8 +35,6 @@ const LAST_BOOK_KEY = "textplex:last-book-id";
 const LAST_PAGE_KEY = "textplex:last-page-number";
 const LAST_SEARCH_KEY = "textplex:last-search-query";
 const HOME_PATH = "/home";
-const READER_NAV_HIDE_DELAY_MS = 3200;
-
 type NavigationContext = {
   bookId: string | null;
   pageNumber: number | null;
@@ -125,10 +130,13 @@ export function AppShell() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { configured, loading, signOut, user } = useAuth();
+  const isAdmin = isTextPlexAdmin(user);
   const [storedContext, setStoredContext] = useState<NavigationContext>({ bookId: null, pageNumber: null, searchQuery: null });
+  const [readerNavHideDelayMs, setReaderNavHideDelayMs] = useState(READER_NAV_HIDE_DELAY_DEFAULT_MS);
   const [readerNavCollapsed, setReaderNavCollapsed] = useState(false);
   const moreMenuRef = useRef<HTMLDetailsElement | null>(null);
   const readerNavHideTimerRef = useRef<number | null>(null);
+  const readerNavHideDelayRef = useRef(READER_NAV_HIDE_DELAY_DEFAULT_MS);
 
   const routeContext = useMemo(
     () => parseRouteContext(pathname, params as Record<string, string | string[] | undefined>, searchParams),
@@ -152,12 +160,43 @@ export function AppShell() {
     readerNavHideTimerRef.current = window.setTimeout(() => {
       setReaderNavCollapsed(true);
       readerNavHideTimerRef.current = null;
-    }, READER_NAV_HIDE_DELAY_MS);
+    }, readerNavHideDelayRef.current);
   }, [clearReaderNavHideTimer, isReaderRoute]);
 
   useEffect(() => {
     setStoredContext(readStoredContext());
   }, []);
+
+  useEffect(() => {
+    readerNavHideDelayRef.current = readerNavHideDelayMs;
+  }, [readerNavHideDelayMs]);
+
+  useEffect(() => {
+    const syncReaderNavHideDelay = () => {
+      setReaderNavHideDelayMs(readReaderNavHideDelayMs());
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === READER_NAV_HIDE_DELAY_STORAGE_KEY) {
+        syncReaderNavHideDelay();
+      }
+    };
+
+    syncReaderNavHideDelay();
+    window.addEventListener(READER_NAV_HIDE_DELAY_CHANGE_EVENT, syncReaderNavHideDelay);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener(READER_NAV_HIDE_DELAY_CHANGE_EVENT, syncReaderNavHideDelay);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isReaderRoute || readerNavCollapsed) {
+      return;
+    }
+
+    scheduleReaderNavCollapse();
+  }, [isReaderRoute, readerNavCollapsed, readerNavHideDelayMs, scheduleReaderNavCollapse]);
 
   useEffect(() => {
     const handleReaderContextCleared = () => {
@@ -210,7 +249,11 @@ export function AppShell() {
   const authReturnTo = pathname === "/auth" ? HOME_PATH : `${pathname}${searchKey ? `?${searchKey}` : ""}`;
   const signInHref = `/auth?returnTo=${encodeURIComponent(authReturnTo)}`;
   const brandHref = user ? HOME_PATH : "/";
-  const hasMoreActiveRoute = ["/analysis", "/search", "/progress", "/roadmap", "/activity", "/import", "/profile", "/settings"]
+  const moreRoutes = ["/analysis", "/search", "/progress", "/activity", "/import", "/profile", "/settings"];
+  if (isAdmin) {
+    moreRoutes.push("/admin", "/roadmap");
+  }
+  const hasMoreActiveRoute = moreRoutes
     .some((href) => isPathActive(pathname, href));
 
   function closeMoreMenu() {
@@ -314,10 +357,18 @@ export function AppShell() {
               <ActivityIcon size={14} />
               <span>Activity</span>
             </Link>
-            <Link className="app-nav-more-link" href="/roadmap" onClick={closeMoreMenu}>
-              <RoadmapIcon size={14} />
-              <span>Roadmap</span>
-            </Link>
+            {isAdmin ? (
+              <Link className="app-nav-more-link" href="/admin" onClick={closeMoreMenu}>
+                <ActivityIcon size={14} />
+                <span>Admin console</span>
+              </Link>
+            ) : null}
+            {isAdmin ? (
+              <Link className="app-nav-more-link" href="/roadmap" onClick={closeMoreMenu}>
+                <RoadmapIcon size={14} />
+                <span>Roadmap</span>
+              </Link>
+            ) : null}
             <Link className="app-nav-more-link" href="/profile" onClick={closeMoreMenu}>
               <ProfileIcon size={14} />
               <span>Profile</span>

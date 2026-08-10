@@ -19,7 +19,8 @@ RUN pip install --no-cache-dir \
     pymupdf \
     google-auth>=2.0.0 \
     pillow \
-    jieba>=0.42.1
+    jieba>=0.42.1 \
+    fugashi[unidic-lite]>=1.5.2
 
 EXPOSE 8000
 

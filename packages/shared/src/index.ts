@@ -1,4 +1,6 @@
 export type {
+  AdminUsageActivityPoint,
+  AdminUsageSummary,
   AuthMeResponse,
   BookExtractionResult,
   BookExtractionTriggerRequest,
@@ -53,6 +55,11 @@ export type {
   ThemeBundleCatalogItem,
   ThemeCatalogItem,
   ThemeCatalogResponse,
+  ThemeAdminRecord,
+  ThemeAdminResponse,
+  ThemeAdminUpsertRequest,
+  ThemeAiSuggestRequest,
+  ThemeAiSuggestResponse,
   SearchResult,
   SearchSurfaceResponse,
   SettingEntry,

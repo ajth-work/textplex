@@ -22,6 +22,17 @@ Collect the hard account details first, then ask for a small amount of learning 
    - Use later prompts for relationship-to-language details, confidence sliders, and certification history.
    - Use the same profile inputs to choose a default layout density or presentation mode.
 
+## Beta tester ingestion
+
+For invited beta testers, add one required introduction immediately after account creation and before the protected app surfaces open. Keep the gate short and explain the purpose:
+
+- Confirm or choose the target language already captured at signup, using friendly labels alongside the standard language codes such as `Japanese (ja)`.
+- Explain that the product is changing, that imported material must be authorized, and where to send feedback.
+- Ask the tester's first-use intent, current confidence, preferred support level, and an optional first-week goal.
+- Require an acknowledgement of the beta expectations, but do not require certification history, demographics, or a long research survey.
+
+Store the completed answers in the authenticated `user_settings` rows under the `onboarding.*` namespace. This keeps tester intake account-owned and lets the product gate new accounts without introducing a second profile record.
+
 ## Early questions
 
 Suggested first-pass questions:

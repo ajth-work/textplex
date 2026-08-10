@@ -17,8 +17,6 @@ _TOKEN_RE = re.compile(
     r"[\u4e00-\u9fff]+|[\u3041-\u309f]+|[\u30a1-\u30ff\uff66-\uff9f]+|[\uac00-\ud7a3\u3131-\u318e]+|[\u0400-\u04ff\u0500-\u052f]+|[\u0590-\u05ff\uFB1D-\uFB4F]+|[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+|[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?|[\u3002\uff01\uff1f!?.,:;\uff0c\u3001\uff1b\uff1a\u2026\u2014\u201c\u201d\u2018\u2019\uff08\uff09()\[\]{}\u300a\u300b\u3008\u3009\u300c\u300d\u300e\u300f\u3010\u3011\u30fb\u060c\u061b\u061f\u06d4]",
 )
 _CHINESE_RUN_RE = re.compile(r"[\u4e00-\u9fff]+")
-_JAPANESE_HIRAGANA_RUN_RE = re.compile(r"[\u3041-\u309f]+")
-_JAPANESE_KATAKANA_RUN_RE = re.compile(r"[\u30a1-\u30ff\uff66-\uff9f]+")
 _KOREAN_RUN_RE = re.compile(r"[\uac00-\ud7a3\u3131-\u318e]+")
 _WORDISH_RE = re.compile(
     r"[\u4e00-\u9fff]+|[\u3041-\u309f]+|[\u30a1-\u30ff\uff66-\uff9f]+|[\uac00-\ud7a3\u3131-\u318e]+|[\u0400-\u04ff\u0500-\u052f]+|[\u0590-\u05ff\uFB1D-\uFB4F]+|[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+|[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?|[\u3002\uff01\uff1f!?.,:;\uff0c\u3001\uff1b\uff1a\u2026\u2014\u201c\u201d\u2018\u2019\uff08\uff09()\[\]{}\u300a\u300b\u3008\u3009\u300c\u300d\u300e\u300f\u3010\u3011\u30fb\u060c\u061b\u061f\u06d4]",
@@ -33,6 +31,13 @@ try:
     from jieba import lcut as _jieba_lcut
 except ImportError:  # pragma: no cover - exercised when jieba is unavailable
     _jieba_lcut = None
+
+try:
+    from fugashi import Tagger as _JapaneseTagger
+except ImportError:  # pragma: no cover - dependency installation is covered by packaging checks
+    _JapaneseTagger = None
+
+_japanese_tagger = _JapaneseTagger() if _JapaneseTagger is not None else None
 
 
 def normalize_text(raw_text: str) -> str:
@@ -279,16 +284,95 @@ def _tokenize_chinese_sentence(sentence: str) -> list[str]:
     return pieces
 
 
+def _japanese_feature_value(word: object, field: str) -> str:
+    feature = getattr(word, "feature", None)
+    value = getattr(feature, field, "")
+    return str(value or "")
+
+
+def _is_japanese_dependent_predicate(morpheme: tuple[str, str, str, str]) -> bool:
+    _, part_of_speech, subcategory, _ = morpheme
+    return part_of_speech in {"助動詞", "接尾辞"} or (
+        part_of_speech in {"動詞", "形容詞"} and subcategory == "非自立可能"
+    )
+
+
+def _is_japanese_noun_predicate_start(morpheme: tuple[str, str, str, str]) -> bool:
+    _, part_of_speech, subcategory, _ = morpheme
+    return part_of_speech == "助動詞" or (part_of_speech == "動詞" and subcategory == "非自立可能")
+
+
+def _is_japanese_predicate_continuation(morpheme: tuple[str, str, str, str]) -> bool:
+    _, part_of_speech, _, _ = morpheme
+    return _is_japanese_dependent_predicate(morpheme) or part_of_speech == "助詞"
+
+
+def _consume_japanese_predicate_tail(morphemes: list[tuple[str, str, str, str]], start: int, pieces: list[str]) -> int:
+    index = start
+    while index < len(morphemes) and _is_japanese_predicate_continuation(morphemes[index]):
+        pieces.append(morphemes[index][0])
+        index += 1
+    return index
+
+
 def _tokenize_japanese_sentence(sentence: str) -> list[str]:
+    if _japanese_tagger is None:
+        raise RuntimeError("Japanese tokenization requires fugashi with the UniDic dictionary installed.")
+
+    morphemes = [
+        (
+            str(word.surface),
+            _japanese_feature_value(word, "pos1"),
+            _japanese_feature_value(word, "pos2"),
+            _japanese_feature_value(word, "pos3"),
+        )
+        for word in _japanese_tagger(sentence)
+    ]
     pieces: list[str] = []
-    for match in _WORDISH_RE.finditer(sentence):
-        chunk = match.group(0)
-        if _is_punctuation_token(chunk):
+    index = 0
+
+    while index < len(morphemes):
+        surface, part_of_speech, subcategory, _ = morphemes[index]
+        if part_of_speech == "補助記号" or _is_punctuation_token(surface):
+            index += 1
             continue
-        if _CHINESE_RUN_RE.fullmatch(chunk) or _JAPANESE_HIRAGANA_RUN_RE.fullmatch(chunk) or _JAPANESE_KATAKANA_RUN_RE.fullmatch(chunk):
-            pieces.append(chunk)
-        else:
-            pieces.append(chunk)
+
+        word_parts = [surface]
+        index += 1
+
+        if part_of_speech == "形状詞":
+            while index < len(morphemes) and morphemes[index][1] in {"接尾辞", "助動詞"}:
+                word_parts.append(morphemes[index][0])
+                index += 1
+        elif part_of_speech in {"動詞", "形容詞"}:
+            index = _consume_japanese_predicate_tail(morphemes, index, word_parts)
+        elif part_of_speech == "名詞":
+            if index < len(morphemes) and subcategory == "数詞" and morphemes[index][3] == "助数詞可能":
+                word_parts.append(morphemes[index][0])
+                index += 1
+
+            while index < len(morphemes) and morphemes[index][1] == "接尾辞":
+                word_parts.append(morphemes[index][0])
+                index += 1
+
+            if index < len(morphemes) and _is_japanese_noun_predicate_start(morphemes[index]):
+                index = _consume_japanese_predicate_tail(morphemes, index, word_parts)
+            else:
+                particle_start = index
+                while index < len(morphemes) and morphemes[index][1] == "助詞":
+                    index += 1
+                if (
+                    index < len(morphemes)
+                    and morphemes[index][1] == "形容詞"
+                    and morphemes[index][2] == "非自立可能"
+                ):
+                    word_parts.extend(item[0] for item in morphemes[particle_start:index])
+                    index = _consume_japanese_predicate_tail(morphemes, index, word_parts)
+                else:
+                    index = particle_start
+
+        pieces.append("".join(word_parts))
+
     return pieces
 
 

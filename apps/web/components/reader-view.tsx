@@ -43,6 +43,7 @@ import {
   type TranslationAlignmentToken,
   type TokenResult,
 } from "../lib/textplex";
+import { languageShortCode } from "../lib/language-options";
 import {
   APP_THEME_RECENT_LIMIT,
   APP_THEME_RECENT_STORAGE_KEY,
@@ -54,13 +55,25 @@ import {
   readStoredAppThemeRecents,
   type AppTheme,
 } from "../lib/theme";
+import {
+  formatReaderNavHideDelay,
+  persistReaderNavHideDelayMs,
+  readReaderNavHideDelayMs,
+  READER_NAV_HIDE_DELAY_DEFAULT_MS,
+  READER_NAV_HIDE_DELAY_MAX_MS,
+  READER_NAV_HIDE_DELAY_MIN_MS,
+  READER_NAV_HIDE_DELAY_STEP_MS,
+} from "../lib/reader-preferences";
 import { LoadingSkeleton, ReaderLoadingSkeleton } from "./loading-skeleton";
+import { useAuth } from "./auth-provider";
+import { isTextPlexAdmin } from "../lib/auth-roles";
 
 type ReaderTokenMode = "word" | "character";
 type ReaderMode = "sentence" | "page" | "token";
 type ReaderFontMode = "mixed" | "serif" | "sans";
 type ReaderThemeMode = AppTheme;
 type ReaderTextSizeMode = "small" | "medium" | "large";
+type ReaderProfileStatisticsView = "simple" | "detailed";
 type SentenceAudioRate = 0.25 | 0.5 | 0.75 | 1;
 type RussianSyllableDisplayMode = "romanization" | "original";
 type SentenceTranslationResponse = {
@@ -73,6 +86,12 @@ type SentenceTranslationResponse = {
   resolution_source: string;
   translation_alignment: SentenceTranslationAlignment | null;
 };
+type SentenceTranslationPrefetchResponse = {
+  book_id: string;
+  page_number: number;
+  sentence_order: number;
+  translations: SentenceTranslationResponse[];
+};
 type TranslationRevealToken = TranslationAlignmentToken & {
   revealed: boolean;
 };
@@ -84,6 +103,8 @@ type SessionSummaryItem = {
 
 const readerFontStorageKey = "textplex.readerFont";
 const readerTextSizeStorageKey = "textplex.readerTextSize";
+const readerTokenScaleStorageKey = "textplex.readerTokenScale";
+const readerTokenSpacingStorageKey = "textplex.readerTokenSpacing";
 const readerPronunciationFreshOnlyStorageKey = "textplex.readerPronunciationFreshOnly";
 const readerSrsColoringStorageKey = "textplex.readerSrsColoring";
 const readerRussianSyllableDisplayModeStorageKey = "textplex.readerRussianSyllableDisplayMode";
@@ -112,10 +133,17 @@ const readerTextSizeScales: Record<ReaderTextSizeMode, number> = {
   medium: 1,
   large: 1.1,
 };
+const readerTokenScaleDefault = 1;
+const readerTokenScaleMin = 0.8;
+const readerTokenScaleMax = 1.25;
+const readerTokenSpacingDefault = 1;
+const readerTokenSpacingMin = 0.55;
+const readerTokenSpacingMax = 1.25;
 const pronunciationFreshWindowMs = 30 * 24 * 60 * 60 * 1000;
 
 const readerPageBookmarksStorageKey = "textplex.readerPageBookmarks";
 const readerSentenceBookmarksStorageKey = "textplex.readerSentenceBookmarks";
+const readerProfileStatisticsViewStorageKey = "textplex.readerProfileStatisticsView";
 const readerGoogleTranslateFallbackStorageKey = "textplex.readerGoogleTranslateFallback";
 const readerMeaningLineEnabledStorageKey = "textplex.readerMeaningLineEnabled";
 const readerMeaningLineRevealAllStorageKey = "textplex.readerMeaningLineRevealAll";
@@ -285,8 +313,44 @@ function resolveReaderTextSize(value: string | null | undefined): ReaderTextSize
   return value === "small" || value === "large" || value === "medium" ? value : "medium";
 }
 
+function resolveReaderTokenScale(value: string | null | undefined): number {
+  if (!value?.trim()) {
+    return readerTokenScaleDefault;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.min(readerTokenScaleMax, Math.max(readerTokenScaleMin, parsed)) : readerTokenScaleDefault;
+}
+
+function resolveReaderTokenSpacing(value: string | null | undefined): number {
+  if (!value?.trim()) {
+    return readerTokenSpacingDefault;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.min(readerTokenSpacingMax, Math.max(readerTokenSpacingMin, parsed)) : readerTokenSpacingDefault;
+}
+
+function formatReaderTokenScale(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function formatReaderTokenSpacing(value: number): string {
+  if (value <= 0.7) {
+    return "Compact";
+  }
+  if (value >= 1.1) {
+    return "Relaxed";
+  }
+  return "Balanced";
+}
+
 function resolveReaderMode(value: string | null | undefined): ReaderMode {
   return value === "page" || value === "token" || value === "sentence" ? value : "sentence";
+}
+
+function resolveReaderProfileStatisticsView(value: string | null | undefined): ReaderProfileStatisticsView {
+  return value === "detailed" ? "detailed" : "simple";
 }
 
 function normalizeLookupKey(value: string | null | undefined): string {
@@ -765,6 +829,69 @@ function formatLexiconMatchConfidence(
     return `Match confidence: ${percent}% (${matchedTerm})`;
   }
   return `Match confidence: ${percent}%`;
+}
+
+type LexiconSelectionState = "matched" | "ambiguous" | "unmatched";
+
+type LexiconSelection = {
+  entry: LexiconEntryRecord | null;
+  state: LexiconSelectionState;
+};
+
+function normalizeLexiconComparisonValue(value: string | null | undefined): string {
+  return normalizeDisplayReading(value).replace(/\s+/gu, "").toLocaleLowerCase();
+}
+
+function isJapaneseKanaOnly(value: string): boolean {
+  return /^[\p{Script=Hiragana}\p{Script=Katakana}ー・]+$/u.test(value.trim());
+}
+
+function selectLexiconEntryForToken(
+  token: TokenResult,
+  response: LexiconLookupResponse | null,
+  languageCode: string | null | undefined,
+): LexiconSelection {
+  const entries = response?.entries ?? [];
+  if (!entries.length) {
+    return { entry: null, state: "unmatched" };
+  }
+
+  if (!languageCode?.toLowerCase().startsWith("ja")) {
+    return { entry: entries[0], state: "matched" };
+  }
+
+  const surface = token.surface_form.trim();
+  const exactSurfaceEntries = entries.filter((entry) => entry.surface_form.trim() === surface);
+  const tokenReading = normalizeLexiconComparisonValue(token.romanization ?? token.pronunciation);
+  const readingMatches = tokenReading
+    ? exactSurfaceEntries.filter((entry) => {
+        const entryReading = normalizeLexiconComparisonValue(entry.pronunciation ?? entry.pinyin);
+        return !entryReading || entryReading === tokenReading;
+      })
+    : exactSurfaceEntries;
+
+  if (readingMatches.length === 1) {
+    return { entry: readingMatches[0], state: "matched" };
+  }
+
+  if (readingMatches.length > 1) {
+    const distinctMeanings = new Set(readingMatches.map((entry) => entry.definition?.trim() ?? ""));
+    return distinctMeanings.size === 1
+      ? { entry: readingMatches[0], state: "matched" }
+      : { entry: null, state: "ambiguous" };
+  }
+
+  // A kana-only surface such as は must not inherit a kanji homograph such as 歯.
+  // A lemma match is safe only when the visible token itself carries kanji evidence.
+  const lemma = token.lemma?.trim() ?? "";
+  const lemmaEntries = lemma && !isJapaneseKanaOnly(surface)
+    ? entries.filter((entry) => entry.surface_form.trim() === lemma)
+    : [];
+  if (lemmaEntries.length === 1) {
+    return { entry: lemmaEntries[0], state: "matched" };
+  }
+
+  return { entry: null, state: entries.length > 1 ? "ambiguous" : "unmatched" };
 }
 
 function normalizePinyinCharacter(character: string): string {
@@ -1457,6 +1584,8 @@ function ReaderHskChart({ tokens }: { tokens: TokenResult[] }) {
 export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber: number }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { user: authenticatedUser } = useAuth();
+  const isAdmin = isTextPlexAdmin(authenticatedUser);
   const [pageData, setPageData] = useState<BookReaderPageResponse | null>(null);
   const [summary, setSummary] = useState<BookExtractionResult | null>(null);
   const [selectedToken, setSelectedToken] = useState<TokenResult | null>(null);
@@ -1472,7 +1601,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [showAllReaderThemes, setShowAllReaderThemes] = useState(false);
   const [readerThemeRecents, setReaderThemeRecents] = useState<AppTheme[]>(() => readStoredAppThemeRecents());
   const [readerTextSize, setReaderTextSize] = useState<ReaderTextSizeMode>("medium");
+  const [readerProfileStatisticsView, setReaderProfileStatisticsView] = useState<ReaderProfileStatisticsView>("simple");
+  const [readerTokenScale, setReaderTokenScale] = useState(readerTokenScaleDefault);
+  const [readerTokenSpacing, setReaderTokenSpacing] = useState(readerTokenSpacingDefault);
   const [readerGoogleTranslateFallback, setReaderGoogleTranslateFallback] = useState(false);
+  const [readerNavHideDelayMs, setReaderNavHideDelayMs] = useState(READER_NAV_HIDE_DELAY_DEFAULT_MS);
   const [readerMeaningLineEnabled, setReaderMeaningLineEnabled] = useState(true);
   const [readerMeaningLineRevealAll, setReaderMeaningLineRevealAll] = useState(false);
   const [readerDefinitionTraceEnabled, setReaderDefinitionTraceEnabled] = useState(false);
@@ -1487,6 +1620,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [sentenceRevealAll, setSentenceRevealAll] = useState(false);
   const [sentenceTranslationLoading, setSentenceTranslationLoading] = useState(false);
   const [sentenceTranslationResolutionSource, setSentenceTranslationResolutionSource] = useState<string | null>(null);
+  const translationPrefetchContextRef = useRef<string | null>(null);
+  const translationPrefetchRequestsRef = useRef(new Map<string, Promise<SentenceTranslationPrefetchResponse>>());
   const [sentenceAudioPlaying, setSentenceAudioPlaying] = useState(false);
   const [sentenceAudioRate, setSentenceAudioRate] = useState<SentenceAudioRate>(0.75);
   const [sentenceAudioTokenOrder, setSentenceAudioTokenOrder] = useState<number | null>(null);
@@ -1555,9 +1690,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     setReaderTokenMode(resolveReaderTokenMode(window.localStorage.getItem("textplex.readerTokenMode")));
     setReaderFont(resolveReaderFont(window.localStorage.getItem(readerFontStorageKey)));
     setReaderMode(resolveReaderMode(window.localStorage.getItem(readerModeStorageKey)));
+    setReaderProfileStatisticsView(resolveReaderProfileStatisticsView(window.localStorage.getItem(readerProfileStatisticsViewStorageKey)));
     setReaderTheme(readStoredAppTheme() ?? "jade");
     setReaderTextSize(resolveReaderTextSize(window.localStorage.getItem(readerTextSizeStorageKey)));
+    setReaderTokenScale(resolveReaderTokenScale(window.localStorage.getItem(readerTokenScaleStorageKey)));
+    setReaderTokenSpacing(resolveReaderTokenSpacing(window.localStorage.getItem(readerTokenSpacingStorageKey)));
     setReaderGoogleTranslateFallback(window.localStorage.getItem(readerGoogleTranslateFallbackStorageKey) === "true");
+    setReaderNavHideDelayMs(readReaderNavHideDelayMs());
     setReaderMeaningLineEnabled(window.localStorage.getItem(readerMeaningLineEnabledStorageKey) !== "false");
     setReaderMeaningLineRevealAll(window.localStorage.getItem(readerMeaningLineRevealAllStorageKey) === "true");
     setReaderDefinitionTraceEnabled(window.localStorage.getItem(readerDefinitionTraceEnabledStorageKey) === "true");
@@ -1823,6 +1962,15 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   }, [readerGoogleTranslateFallback]);
 
   useEffect(() => {
+    const syncReaderNavHideDelay = () => {
+      setReaderNavHideDelayMs(readReaderNavHideDelayMs());
+    };
+
+    window.addEventListener("storage", syncReaderNavHideDelay);
+    return () => window.removeEventListener("storage", syncReaderNavHideDelay);
+  }, []);
+
+  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
@@ -1978,15 +2126,16 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             setDefinitionLookupTrace([...trace]);
           }
         };
+        const languageCode = pageData.book.language_code.toLowerCase();
         const lookupTerms = selectedToken
           ? [
-              splitKoreanParticleChain(selectedToken.surface_form)[0] ?? "",
-              selectedToken.lemma ?? "",
+              ...(languageCode.startsWith("ko") ? [splitKoreanParticleChain(selectedToken.surface_form)[0] ?? ""] : []),
               selectedToken.surface_form,
+              selectedToken.lemma ?? "",
             ].filter((term, index, terms) => term && terms.indexOf(term) === index)
           : [];
         pushTrace(`Selected token: ${selectedToken.surface_form}`);
-        pushTrace(`Language: ${pageData.book.language_code.toUpperCase()}`);
+        pushTrace(`Language: ${languageShortCode(pageData.book.language_code)}`);
         pushTrace(`Google fallback: ${readerGoogleTranslateFallback ? "enabled" : "disabled"}`);
         pushTrace(`Lookup terms: ${lookupTerms.join(" -> ") || "none"}`);
         let lookup: LexiconLookupResponse | null = null;
@@ -1996,29 +2145,38 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             `/lexicon/lookup?language_code=${encodeURIComponent(pageData.book.language_code)}&term=${encodeURIComponent(lookupTerm)}&allow_google_fallback=${readerGoogleTranslateFallback ? "true" : "false"}`,
           );
           pushTrace(`Response for "${lookupTerm}": ${response.entries.length} entr${response.entries.length === 1 ? "y" : "ies"}`);
-          if (response.entries.length) {
+          const selection = selectLexiconEntryForToken(selectedToken, response, pageData.book.language_code);
+          if (selection.entry) {
             lookup = response;
-            const topEntry = response.entries[0];
-            const lookupReading = normalizeDisplayReading(topEntry.pronunciation ?? topEntry.pinyin ?? null);
+            const selectedEntry = selection.entry;
+            const lookupReading = normalizeDisplayReading(selectedEntry.pronunciation ?? selectedEntry.pinyin ?? null);
             if (lookupReading && selectedToken && selectedToken.order != null && !selectedToken.pronunciation && !selectedToken.romanization) {
               setTokenPronunciationOverrides((current) =>
                 current[selectedToken.order] === lookupReading ? current : { ...current, [selectedToken.order]: lookupReading },
               );
             }
-            pushTrace(`Resolved with "${topEntry.surface_form}" (${topEntry.entry_type})`);
-            pushTrace(`Source: ${getLexiconTraceSource(topEntry, response.resolution_source)}`);
+            pushTrace(`Resolved with "${selectedEntry.surface_form}" (${selectedEntry.entry_type})`);
+            pushTrace(`Source: ${getLexiconTraceSource(selectedEntry, response.resolution_source)}`);
             const confidenceLabel = formatLexiconMatchConfidence(response.match_confidence, response.matched_term);
             if (confidenceLabel) {
               pushTrace(confidenceLabel);
             }
             break;
           }
+          if (response.entries.length && selection.state === "ambiguous") {
+            pushTrace("Dictionary candidates were ambiguous for the visible token; no meaning was applied.");
+          } else if (response.entries.length) {
+            pushTrace("Dictionary candidate did not match the visible token; no meaning was applied.");
+          }
           if (!lookup) {
             lookup = response;
           }
         }
+        const finalSelection = selectLexiconEntryForToken(selectedToken, lookup, pageData.book.language_code);
         if (lookup && !lookup.entries.length) {
           pushTrace("No dictionary entry matched; falling back to book frequency or token metadata.");
+        } else if (lookup?.entries.length && !finalSelection.entry) {
+          pushTrace("No context-safe dictionary entry matched; keeping the visible token and reading separate from its meaning.");
         }
         if (active) {
           setLexiconResult(lookup);
@@ -2165,15 +2323,21 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   }, [bookId, pageNumber]);
 
   const page = pageData?.extraction?.page ?? null;
-  const lexiconEntry = lexiconResult?.entries[0] ?? null;
+  const lexiconSelection = selectedToken
+    ? selectLexiconEntryForToken(selectedToken, lexiconResult, pageData?.book.language_code)
+    : { entry: null, state: "unmatched" as const };
+  const lexiconEntry = lexiconSelection.entry;
   const imageUrl = pageData ? resolveResourceUrl(pageData.image_url) : "";
   const totalPages = pageData?.book.total_pages ?? summary?.page_end ?? null;
+  const beginningPageNumber = 1;
   const pageTranslation = page?.page_translation?.trim() || null;
   const selectedSentence = useMemo(
     () => (page ? page.sentences.find((sentence) => sentence.order === selectedSentenceOrder) ?? null : null),
     [page, selectedSentenceOrder],
   );
   const activeSentence = selectedSentence ?? page?.sentences[0] ?? null;
+  const activeSentenceOrder = activeSentence?.order ?? null;
+  const loadedPageNumber = pageData?.page.page_number ?? null;
   const activeSentenceTranslationSource = activeSentence?.translation_source ?? null;
   const activeSentenceTranslationText = activeSentence?.translation?.trim() || pageTranslation || null;
   const activeSentenceHasSentenceTranslation = Boolean(activeSentence?.translation?.trim());
@@ -2387,7 +2551,10 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       : selectedTokenReadingParts
     : [];
   const selectedTokenPronunciationLine = selectedTokenReadingParts.map((part) => part.text).join(" ");
-  const selectedTokenEnglishMeaning = lexiconEntry?.definition?.trim() || selectedToken?.definition_short?.trim() || null;
+  const selectedTokenMetadataMeaning = selectedToken?.definition_short?.trim() || null;
+  const selectedTokenEnglishMeaning = lexiconResult?.entries.length && !lexiconEntry
+    ? null
+    : lexiconEntry?.definition?.trim() || selectedTokenMetadataMeaning;
   function getStudyVocabularyItem(token: TokenResult): StudyVocabularyItem | null {
     const keys = [token.lemma, token.surface_form]
       .map((value) => normalizeLookupKey(value))
@@ -2511,7 +2678,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     };
   }, [averageSessionSeconds, bookId, page, pageNumber, selectedSentence, selectedSentenceOrder]);
 
-  const tokenLabel = lexiconEntry?.surface_form ?? selectedToken?.surface_form ?? "";
+  const tokenLabel = selectedToken?.surface_form ?? lexiconEntry?.surface_form ?? "";
   const tokenDefinition = selectedTokenEnglishMeaning;
   const tokenPinyin = selectedTokenReadingParts.length
     ? selectedTokenReadingParts.map((part) => part.text).join(" ")
@@ -2762,6 +2929,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     window.localStorage.setItem(readerFontStorageKey, nextMode);
   }
 
+  function handleSetReaderProfileStatisticsView(nextView: ReaderProfileStatisticsView) {
+    setReaderProfileStatisticsView(nextView);
+    window.localStorage.setItem(readerProfileStatisticsViewStorageKey, nextView);
+  }
+
   function handleSetReaderTheme(nextTheme: ReaderThemeMode) {
     setReaderTheme(nextTheme);
     persistAppTheme(nextTheme);
@@ -2770,6 +2942,18 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   function handleSetReaderTextSize(nextSize: ReaderTextSizeMode) {
     setReaderTextSize(nextSize);
     window.localStorage.setItem(readerTextSizeStorageKey, nextSize);
+  }
+
+  function handleSetReaderTokenScale(nextScale: number) {
+    const resolvedScale = resolveReaderTokenScale(String(nextScale));
+    setReaderTokenScale(resolvedScale);
+    window.localStorage.setItem(readerTokenScaleStorageKey, String(resolvedScale));
+  }
+
+  function handleSetReaderTokenSpacing(nextSpacing: number) {
+    const resolvedSpacing = resolveReaderTokenSpacing(String(nextSpacing));
+    setReaderTokenSpacing(resolvedSpacing);
+    window.localStorage.setItem(readerTokenSpacingStorageKey, String(resolvedSpacing));
   }
 
   function showBookmarkToast(message: string) {
@@ -2905,6 +3089,33 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
     if (sentenceTranslationLoading) {
       return false;
+    }
+
+    const prefetchKey = `${bookId}:${pageNumber}:${activeSentence.order}`;
+    const prefetchRequest = translationPrefetchRequestsRef.current.get(prefetchKey);
+    if (prefetchRequest) {
+      setSentenceTranslationLoading(true);
+      try {
+        const buffer = await prefetchRequest;
+        const prefetchedTranslation = buffer.translations.find(
+          (translation) => translation.page_number === pageNumber && translation.sentence_order === activeSentence.order,
+        );
+        if (prefetchedTranslation) {
+          applySentenceTranslation(
+            prefetchedTranslation.sentence_order,
+            prefetchedTranslation.translation,
+            prefetchedTranslation.translation_source,
+            prefetchedTranslation.translation_alignment,
+          );
+          setSentenceTranslationResolutionSource(prefetchedTranslation.resolution_source);
+          return Boolean(prefetchedTranslation.translation || activeSentenceTranslationText);
+        }
+        return false;
+      } catch {
+        // A failed buffer request falls through to the existing single-sentence fallback.
+      } finally {
+        setSentenceTranslationLoading(false);
+      }
     }
 
     setSentenceTranslationLoading(true);
@@ -3207,7 +3418,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
         source_sentence_text: sentence.text,
         pronunciation: token.pronunciation ?? tokenPronunciationOverrides[token.order] ?? lexiconEntry?.pronunciation ?? null,
         romanization: token.romanization ?? lexiconEntry?.pinyin ?? null,
-        definition_short: selectedTokenEnglishMeaning ?? token.definition_short ?? null,
+        definition_short:
+          selectedTokenEnglishMeaning ??
+          (selectedToken?.order === token.order && lexiconResult?.entries.length ? null : token.definition_short ?? null),
         proficiency_level: token.proficiency_level ?? null,
       });
       setSelectedTokenSaved(response.click_count > 0);
@@ -3223,6 +3436,87 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       // Study saves are best-effort so the reader stays usable offline.
     }
   }
+
+  const applyPrefetchedSentenceTranslations = useCallback((translations: SentenceTranslationResponse[]): void => {
+    setPageData((current) => {
+      if (!current?.extraction?.page) {
+        return current;
+      }
+
+      const translationsByOrder = new Map(
+        translations
+          .filter((translation) => translation.page_number === pageNumber)
+          .map((translation) => [translation.sentence_order, translation]),
+      );
+      if (translationsByOrder.size === 0) {
+        return current;
+      }
+
+      const nextPage = current.extraction.page;
+      return {
+        ...current,
+        extraction: {
+          ...current.extraction,
+          page: {
+            ...nextPage,
+            sentences: nextPage.sentences.map((sentence) => {
+              const translation = translationsByOrder.get(sentence.order);
+              return translation
+                ? {
+                    ...sentence,
+                    translation: translation.translation,
+                    translation_source: translation.translation_source,
+                    translation_alignment: translation.translation_alignment ?? sentence.translation_alignment,
+                  }
+                : sentence;
+            }),
+          },
+        },
+      };
+    });
+  }, [pageNumber]);
+
+  useEffect(() => {
+    if (activeSentenceOrder === null || loadedPageNumber !== pageNumber) {
+      return;
+    }
+
+    const contextKey = `${bookId}:${pageNumber}:${activeSentenceOrder}`;
+    translationPrefetchContextRef.current = contextKey;
+    let cancelled = false;
+
+    const prefetchRequest = postJson<SentenceTranslationPrefetchResponse>(
+      `/books/${bookId}/pages/${pageNumber}/sentences/${activeSentenceOrder}/translation-buffer`,
+      { lookahead: 3 },
+    );
+    translationPrefetchRequestsRef.current.set(contextKey, prefetchRequest);
+
+    void prefetchRequest
+      .then((response) => {
+        if (cancelled || translationPrefetchContextRef.current !== contextKey) {
+          return;
+        }
+        applyPrefetchedSentenceTranslations(response.translations);
+        const activeTranslation = response.translations.find(
+          (translation) => translation.page_number === pageNumber && translation.sentence_order === activeSentenceOrder,
+        );
+        if (activeTranslation) {
+          setSentenceTranslationResolutionSource(activeTranslation.resolution_source);
+        }
+      })
+      .catch(() => {
+        // Prefetching is opportunistic; the existing on-demand request remains the fallback.
+      })
+      .finally(() => {
+        if (translationPrefetchRequestsRef.current.get(contextKey) === prefetchRequest) {
+          translationPrefetchRequestsRef.current.delete(contextKey);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSentenceOrder, applyPrefetchedSentenceTranslations, bookId, loadedPageNumber, pageNumber]);
 
   function updateReaderCustomVocabularyLists(
     updater: (lists: ReaderCustomVocabularyList[]) => ReaderCustomVocabularyList[],
@@ -3295,7 +3589,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       return;
     }
 
-    const languageLabel = pageData.book.language_code.toUpperCase();
+    const languageLabel = languageShortCode(pageData.book.language_code);
     const nextName = window.prompt(`Name this ${languageLabel} custom list`, `${languageLabel} list`);
     const trimmedName = nextName?.trim().replace(/\s+/g, " ") ?? "";
     if (!trimmedName) {
@@ -3399,15 +3693,20 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       data-reader-font={readerFont}
       data-reader-theme={readerTheme}
       data-reader-text-size={readerTextSize}
-      style={{ "--reader-text-scale": readerTextSizeScales[readerTextSize] } as CSSProperties}
+      style={{
+        "--reader-text-scale": readerTextSizeScales[readerTextSize],
+        "--reader-token-scale": readerTokenScale,
+        "--reader-token-spacing": readerTokenSpacing,
+      } as CSSProperties}
     >
       <header className="reader-topbar" data-inventory-id="reader.header">
         <button
           type="button"
-          className="reader-back-button"
+          className="reader-back-button reader-tooltip-target"
           onClick={handleBack}
           aria-label="Back"
           title="Back"
+          data-tooltip="Back"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M15 18l-6-6 6-6" />
@@ -3427,13 +3726,14 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
         </div>
         <button
           type="button"
-          className={`reader-settings-button ${showReaderOptions ? "is-active" : ""}`}
+          className={`reader-settings-button reader-tooltip-target ${showReaderOptions ? "is-active" : ""}`}
           onClick={() => setShowReaderOptions((value) => !value)}
           disabled={!pageData}
           aria-expanded={showReaderOptions}
           aria-controls="reader-options-panel"
           aria-label="Reader settings"
           title="Reader settings"
+          data-tooltip="Reader settings"
           data-inventory-id="reader.settings-button"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -3465,7 +3765,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
               <div className="reader-options-section-head">
                 <div>
                   <span className="eyebrow">Font</span>
-                  <h3>Style and size</h3>
+                  <h3>Style and interface scale</h3>
                 </div>
               </div>
               <div className="reader-font-row" role="group" aria-label="Reader font style">
@@ -3485,7 +3785,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
               </div>
               <label className="reader-size-slider" htmlFor="reader-text-size-slider">
                 <span className="reader-size-slider-head">
-                  <strong>Text size</strong>
+                    <strong>Interface text size</strong>
                   <span>{readerTextSizeLabels[readerTextSize]}</span>
                 </span>
                 <input
@@ -3507,6 +3807,91 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   <span>Large</span>
                 </span>
               </label>
+            </section>
+            <section className="reader-options-section" data-inventory-id="reader.token-display-settings">
+              <div className="reader-options-section-head">
+                <div>
+                  <span className="eyebrow">Token layout</span>
+                  <h3>Token text and spacing</h3>
+                </div>
+              </div>
+              <label className="reader-size-slider" htmlFor="reader-token-scale-slider" data-inventory-id="reader.token-text-size-control">
+                <span className="reader-size-slider-head">
+                  <strong>Token text size</strong>
+                  <span>{formatReaderTokenScale(readerTokenScale)}</span>
+                </span>
+                <input
+                  id="reader-token-scale-slider"
+                  type="range"
+                  min={readerTokenScaleMin}
+                  max={readerTokenScaleMax}
+                  step={0.05}
+                  value={readerTokenScale}
+                  onChange={(event) => handleSetReaderTokenScale(Number(event.target.value))}
+                  aria-label="Token text size"
+                  aria-valuetext={formatReaderTokenScale(readerTokenScale)}
+                />
+                <span className="reader-size-slider-scale" aria-hidden="true">
+                  <span>Compact</span>
+                  <span>Balanced</span>
+                  <span>Large</span>
+                </span>
+              </label>
+              <label className="reader-size-slider" htmlFor="reader-token-spacing-slider" data-inventory-id="reader.token-spacing-control">
+                <span className="reader-size-slider-head">
+                  <strong>Token spacing</strong>
+                  <span>{formatReaderTokenSpacing(readerTokenSpacing)}</span>
+                </span>
+                <input
+                  id="reader-token-spacing-slider"
+                  type="range"
+                  min={readerTokenSpacingMin}
+                  max={readerTokenSpacingMax}
+                  step={0.05}
+                  value={readerTokenSpacing}
+                  onChange={(event) => handleSetReaderTokenSpacing(Number(event.target.value))}
+                  aria-label="Token spacing"
+                  aria-valuetext={formatReaderTokenSpacing(readerTokenSpacing)}
+                />
+                <span className="reader-size-slider-scale" aria-hidden="true">
+                  <span>Compact</span>
+                  <span>Balanced</span>
+                  <span>Relaxed</span>
+                </span>
+              </label>
+              <p className="small-copy">Adjust the word and reading together, then tighten the gaps when a sentence needs to fit comfortably on a phone.</p>
+            </section>
+            <section className="reader-options-section" data-inventory-id="reader.navigation-hide-delay-section">
+              <div className="reader-options-section-head">
+                <div>
+                  <span className="eyebrow">Focus</span>
+                  <h3>Navigation hide delay</h3>
+                </div>
+                <span className="pill">{formatReaderNavHideDelay(readerNavHideDelayMs)}</span>
+              </div>
+              <label className="reader-size-slider reader-navigation-hide-slider" htmlFor="reader-navigation-hide-delay-slider">
+                <span className="reader-size-slider-head">
+                  <strong>Hide app shell after</strong>
+                  <span>{formatReaderNavHideDelay(readerNavHideDelayMs)}</span>
+                </span>
+                <input
+                  id="reader-navigation-hide-delay-slider"
+                  type="range"
+                  min={READER_NAV_HIDE_DELAY_MIN_MS}
+                  max={READER_NAV_HIDE_DELAY_MAX_MS}
+                  step={READER_NAV_HIDE_DELAY_STEP_MS}
+                  value={readerNavHideDelayMs}
+                  onChange={(event) => setReaderNavHideDelayMs(persistReaderNavHideDelayMs(Number(event.target.value)))}
+                  aria-label="Navigation hide delay"
+                  data-inventory-id="reader.navigation-hide-delay-slider"
+                />
+                <span className="reader-size-slider-scale" aria-hidden="true">
+                  <span>1 sec</span>
+                  <span>8 sec</span>
+                  <span>15 sec</span>
+                </span>
+              </label>
+              <p className="small-copy">Choose how long the full app shell stays visible after entering the reader or revealing it.</p>
             </section>
             <section className="reader-options-section" data-inventory-id="reader.mode-control">
               <div className="reader-options-section-head">
@@ -3617,7 +4002,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   <span className="eyebrow">Sentence help</span>
                   <h3>Meaning line and trace</h3>
                 </div>
-                <span className="small-copy">Compact sentence reveal and lookup diagnostics.</span>
+                <span className="small-copy">Compact sentence reveal and translation help.</span>
               </div>
               <div className="reader-options-toggle-grid">
                 <div className="reader-options-toggle-row" data-inventory-id="reader.meaning-line-section">
@@ -3652,22 +4037,24 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     {readerMeaningLineRevealAll ? "On" : "Off"}
                   </button>
                 </div>
-                <div className="reader-options-toggle-row" data-inventory-id="reader.definition-trace-section">
-                  <div>
-                    <strong>Definition trace</strong>
-                    <p className="small-copy">Show the lookup trace in the token inspector for debugging fallback behavior.</p>
+                {isAdmin ? (
+                  <div className="reader-options-toggle-row" data-inventory-id="reader.definition-trace-section">
+                    <div>
+                      <strong>Definition trace</strong>
+                      <p className="small-copy">Show the lookup trace in the token inspector for debugging fallback behavior.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`button button-secondary button-compact ${readerDefinitionTraceEnabled ? "is-active" : ""}`}
+                      onClick={() => setReaderDefinitionTraceEnabled((value) => !value)}
+                      aria-pressed={readerDefinitionTraceEnabled}
+                      aria-label={readerDefinitionTraceEnabled ? "Hide definition trace" : "Show definition trace"}
+                      data-inventory-id="reader.definition-trace-toggle"
+                    >
+                      {readerDefinitionTraceEnabled ? "On" : "Off"}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className={`button button-secondary button-compact ${readerDefinitionTraceEnabled ? "is-active" : ""}`}
-                    onClick={() => setReaderDefinitionTraceEnabled((value) => !value)}
-                    aria-pressed={readerDefinitionTraceEnabled}
-                    aria-label={readerDefinitionTraceEnabled ? "Hide definition trace" : "Show definition trace"}
-                    data-inventory-id="reader.definition-trace-toggle"
-                  >
-                    {readerDefinitionTraceEnabled ? "On" : "Off"}
-                  </button>
-                </div>
+                ) : null}
               </div>
             </section>
             <section className="reader-options-section" data-inventory-id="reader.theme-section">
@@ -3838,11 +4225,31 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   <p className="small-copy">For now, the reader uses book extraction metadata so the page still behaves like a reading surface instead of a card wall.</p>
                 </section>
 
-                <section className="reader-tool-section" data-inventory-id="reader.reading-profile-card">
+                <section
+                  className="reader-tool-section"
+                  data-inventory-id="reader.reading-profile-card"
+                  data-profile-statistics-view={readerProfileStatisticsView}
+                >
                   <div className="reader-tool-section-head">
                     <h3>Reading profile</h3>
                   </div>
                   <p className="small-copy">The local profile records sessions, sentence dwell time, and token exposures without a cloud account.</p>
+                  <div className="reader-profile-view-control">
+                    <span className="eyebrow">Statistics view</span>
+                    <div className="reader-profile-view-options" role="group" aria-label="Reading profile statistics view">
+                      {(["simple", "detailed"] as const).map((view) => (
+                        <button
+                          key={view}
+                          type="button"
+                          className={`reader-profile-view-option${readerProfileStatisticsView === view ? " is-selected" : ""}`}
+                          onClick={() => handleSetReaderProfileStatisticsView(view)}
+                          aria-pressed={readerProfileStatisticsView === view}
+                        >
+                          {view === "simple" ? "Simple" : "Detailed"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="profile-metrics">
                     <div>
                       <span className="eyebrow">Sentences</span>
@@ -3852,17 +4259,17 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       <span className="eyebrow">Words</span>
                       <strong>{profileLoading ? <span className="skeleton-line skeleton-line-short" aria-hidden="true" /> : profileSummary?.unique_words_seen ?? 0}</strong>
                     </div>
-                    <div>
+                    <div data-profile-metric-id="characters">
                       <span className="eyebrow">Chars</span>
                       <strong>{profileLoading ? <span className="skeleton-line skeleton-line-short" aria-hidden="true" /> : profileSummary?.unique_characters_seen ?? 0}</strong>
                     </div>
                   </div>
                   <div className="profile-metrics profile-metrics-secondary">
-                    <div>
+                    <div data-profile-metric-id="seconds-per-character">
                       <span className="eyebrow">Avg sec/char</span>
                       <strong>{profileSummary?.average_seconds_per_character?.toFixed(2) ?? "ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â"}</strong>
                     </div>
-                    <div>
+                    <div data-profile-metric-id="seconds-per-word">
                       <span className="eyebrow">Avg sec/word</span>
                       <strong>{profileSummary?.average_seconds_per_word?.toFixed(2) ?? "ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â"}</strong>
                     </div>
@@ -3876,11 +4283,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       <span className="eyebrow">Remembered</span>
                       <strong>{profileSummary?.remembered_word_interactions ?? 0}</strong>
                     </div>
-                    <div>
+                    <div data-profile-metric-id="missed">
                       <span className="eyebrow">Missed</span>
                       <strong>{profileSummary?.missed_word_interactions ?? 0}</strong>
                     </div>
-                    <div>
+                    <div data-profile-metric-id="feedback">
                       <span className="eyebrow">Feedback</span>
                       <strong>
                         {profileSummary
@@ -3907,6 +4314,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     <h3>Page navigation</h3>
                   </div>
                   <div className="button-row">
+                    {pageNumber > beginningPageNumber ? (
+                      <Link className="button button-primary button-compact" href={`/reader/${bookId}/${beginningPageNumber}`}>
+                        Start at beginning
+                      </Link>
+                    ) : null}
                     {pageNumber > 1 ? (
                       <Link className="button button-secondary button-compact" href={`/reader/${bookId}/${pageNumber - 1}`}>
                         Previous page
@@ -3982,11 +4394,12 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                 <div className="reader-sentence-pager" aria-label="Sentence navigation">
                   <button
                     type="button"
-                    className="button button-secondary button-compact reader-pager-button"
+                    className="button button-secondary button-compact reader-pager-button reader-tooltip-target"
                     onClick={() => focusSentence(selectedSentenceIndex - 1)}
                     disabled={!canMoveToPreviousSentence}
                     aria-label="Previous sentence"
                     title="Previous sentence"
+                    data-tooltip="Previous sentence"
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M15 18l-6-6 6-6" />
@@ -3996,12 +4409,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     <span className="reader-bookmark-segment reader-page-bookmark-segment">
                       <button
                         type="button"
-                        className={`reader-bookmark-mark ${readerPageBookmarked ? "is-active" : ""}`}
+                        className={`reader-bookmark-mark reader-tooltip-target ${readerPageBookmarked ? "is-active" : ""}`}
                         onClick={handleTogglePageBookmark}
                         disabled={!pageData}
                         aria-pressed={readerPageBookmarked}
                         aria-label={readerPageBookmarked ? "Remove page bookmark" : "Save page bookmark"}
                         title={readerPageBookmarked ? "Remove page bookmark" : "Save page bookmark"}
+                        data-tooltip={readerPageBookmarked ? "Remove page bookmark" : "Save page bookmark"}
                         data-inventory-id="reader.page-bookmark"
                       >
                         <svg width="18" height="18" viewBox="0 0 24 24" fill={readerPageBookmarked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -4015,12 +4429,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       <span>{sentencePillLabel}</span>
                       <button
                         type="button"
-                        className={`reader-bookmark-mark ${readerSentenceBookmarked ? "is-active" : ""}`}
+                        className={`reader-bookmark-mark reader-tooltip-target ${readerSentenceBookmarked ? "is-active" : ""}`}
                         onClick={handleToggleSentenceBookmark}
                         disabled={!activeSentence}
                         aria-pressed={readerSentenceBookmarked}
                         aria-label={readerSentenceBookmarked ? "Remove sentence bookmark" : "Save sentence bookmark"}
                         title={readerSentenceBookmarked ? "Remove sentence bookmark" : "Save sentence bookmark"}
+                        data-tooltip={readerSentenceBookmarked ? "Remove sentence bookmark" : "Save sentence bookmark"}
                         data-inventory-id="reader.sentence-bookmark"
                       >
                         <svg width="18" height="18" viewBox="0 0 24 24" fill={readerSentenceBookmarked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -4031,11 +4446,12 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   </span>
                   <button
                     type="button"
-                    className="button button-secondary button-compact reader-pager-button"
+                    className="button button-secondary button-compact reader-pager-button reader-tooltip-target"
                     onClick={handleAdvanceSentence}
                     disabled={!canMoveToNextSentence && !canMoveToNextPage && !isCompletionPoint}
                     aria-label={isCompletionPoint ? "Finish reading" : canMoveToNextPage && !canMoveToNextSentence ? "Next page" : "Next sentence"}
                     title={isCompletionPoint ? "Finish reading" : canMoveToNextPage && !canMoveToNextSentence ? "Next page" : "Next sentence"}
+                    data-tooltip={isCompletionPoint ? "Finish reading" : canMoveToNextPage && !canMoveToNextSentence ? "Next page" : "Next sentence"}
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M9 18l6-6-6-6" />
@@ -4048,6 +4464,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       className="reader-session-pill-rail"
                       aria-roledescription="carousel"
                       aria-label="Session summary carousel"
+                      aria-keyshortcuts="ArrowLeft ArrowRight"
                       aria-describedby="reader-session-carousel-hint"
                       id="reader-session-details"
                       data-inventory-id="reader.session-summary-details"
@@ -4073,6 +4490,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                           >
                             <span className="reader-session-pill-action reader-session-pill-action--remove" aria-hidden="true">
                               -
+                            </span>
+                            <span className="reader-session-pill-action-label" aria-hidden="true">
+                              Hide
                             </span>
                             <span className="reader-session-pill-stat-copy">
                               <span>{item.label}</span>
@@ -4104,6 +4524,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                             >
                               <span className="reader-session-pill-action reader-session-pill-action--add" aria-hidden="true">
                                 +
+                              </span>
+                              <span className="reader-session-pill-action-label" aria-hidden="true">
+                                Restore
                               </span>
                               <span className="reader-session-pill-stat-copy">
                                 <span>{item.label}</span>
@@ -4162,17 +4585,25 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     </div>
                   </div>
                 ) : null}
+                {pageNumber > beginningPageNumber ? (
+                  <div className="reader-beginning-action" data-inventory-id="reader.beginning-action">
+                    <Link className="button button-secondary button-compact" href={`/reader/${bookId}/${beginningPageNumber}`}>
+                      Start at beginning
+                    </Link>
+                  </div>
+                ) : null}
               </div>
                 <div className={`reader-sentence-tools ${readerSupportsCharacterMode ? "has-token-mode" : ""}`} aria-label="Sentence display, translation, source, and speed controls">
                   {readerSupportsCharacterMode ? (
                     <button
                       type="button"
-                      className={`button button-secondary button-compact reader-sentence-tool-button token-mode-toggle ${effectiveReaderTokenMode === "character" ? "is-active" : ""}`}
+                      className={`button button-secondary button-compact reader-sentence-tool-button reader-tooltip-target reader-tooltip-target--compact token-mode-toggle ${effectiveReaderTokenMode === "character" ? "is-active" : ""}`}
                       onClick={handleToggleReaderTokenMode}
                       disabled={!pageData}
                       aria-pressed={effectiveReaderTokenMode === "character"}
                       aria-label={effectiveReaderTokenMode === "character" ? "Switch to word mode" : "Switch to character mode"}
                       title={effectiveReaderTokenMode === "character" ? "Switch to word mode" : "Switch to character mode"}
+                      data-tooltip={effectiveReaderTokenMode === "character" ? "Switch to word mode" : "Switch to character mode"}
                       data-inventory-id="reader.token-mode-button"
                     >
                       <span className="reader-token-mode-glyph" aria-hidden="true">
@@ -4183,12 +4614,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   ) : null}
                   <button
                     type="button"
-                    className={`button button-secondary button-compact reader-sentence-tool-button ${sentenceAudioPlaying ? "is-active" : ""}`}
+                    className={`button button-secondary button-compact reader-sentence-tool-button reader-tooltip-target reader-tooltip-target--compact ${sentenceAudioPlaying ? "is-active" : ""}`}
                     onClick={handlePlaySentenceAudio}
                     disabled={!activeSentence}
                     aria-pressed={sentenceAudioPlaying}
                     aria-label={sentenceAudioPlaying ? "Stop sentence audio" : "Play sentence audio"}
                     title={sentenceAudioPlaying ? "Stop sentence audio" : "Play sentence audio"}
+                    data-tooltip={sentenceAudioPlaying ? "Stop sentence audio" : "Play sentence audio"}
                     data-inventory-id="reader.sentence-audio-button"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -4200,12 +4632,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   </button>
                   <button
                     type="button"
-                    className={`button button-secondary button-compact reader-sentence-tool-button ${showSentenceTranslation ? "is-active" : ""}`}
+                    className={`button button-secondary button-compact reader-sentence-tool-button reader-tooltip-target reader-tooltip-target--compact ${showSentenceTranslation ? "is-active" : ""}`}
                     onClick={() => void handleToggleSentenceTranslation()}
                     disabled={sentenceTranslationLoading}
                     aria-pressed={showSentenceTranslation}
                     aria-label="Toggle sentence translation"
                     title="Toggle sentence translation"
+                    data-tooltip="Toggle sentence translation"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M4 6h9" />
@@ -4217,11 +4650,12 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   </button>
                   <button
                     type="button"
-                    className={`button button-secondary button-compact reader-sentence-tool-button ${showSourceSentence ? "is-active" : ""}`}
+                    className={`button button-secondary button-compact reader-sentence-tool-button reader-tooltip-target reader-tooltip-target--compact ${showSourceSentence ? "is-active" : ""}`}
                     onClick={() => setShowSourceSentence((value) => !value)}
                     aria-pressed={showSourceSentence}
                     aria-label="Toggle source sentence"
                     title="Toggle source sentence"
+                    data-tooltip="Toggle source sentence"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M6 3h9l3 3v15H6z" />
@@ -4241,11 +4675,12 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   <div className="reader-audio-speed-stepper" role="group" aria-label="Sentence audio speed">
                     <button
                       type="button"
-                      className="reader-audio-speed-button"
+                      className="reader-audio-speed-button reader-tooltip-target"
                       onClick={() => adjustSentenceAudioRate(-1)}
                       disabled={sentenceAudioRate === sentenceAudioRateOptions[0]}
                       aria-label="Decrease sentence audio speed"
                       title="Decrease sentence audio speed"
+                      data-tooltip="Decrease sentence audio speed"
                     >
                       -
                     </button>
@@ -4254,11 +4689,12 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     </span>
                     <button
                       type="button"
-                      className="reader-audio-speed-button"
+                      className="reader-audio-speed-button reader-tooltip-target"
                       onClick={() => adjustSentenceAudioRate(1)}
                       disabled={sentenceAudioRate === sentenceAudioRateOptions[sentenceAudioRateOptions.length - 1]}
                       aria-label="Increase sentence audio speed"
                       title="Increase sentence audio speed"
+                      data-tooltip="Increase sentence audio speed"
                     >
                       +
                     </button>
@@ -4460,13 +4896,14 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                         <div className="definition-control-row">
                           <button
                             type="button"
-                            className={`definition-audio definition-audio-icon ${selectedTokenAudioPlaying ? "is-active" : ""}`}
+                            className={`definition-audio definition-audio-icon reader-tooltip-target ${selectedTokenAudioPlaying ? "is-active" : ""}`}
                             data-inventory-id="reader.word-audio-button"
                             onClick={() => void handlePlaySelectedTokenAudio()}
                             disabled={!selectedToken || isSentencePunctuation(selectedToken.surface_form)}
                             aria-pressed={selectedTokenAudioPlaying}
                             aria-label={selectedTokenAudioPlaying ? "Stop word audio" : "Play word audio"}
                             title={selectedTokenAudioPlaying ? "Stop word audio" : "Play word audio"}
+                            data-tooltip={selectedTokenAudioPlaying ? "Stop word audio" : "Play word audio"}
                           >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill={selectedTokenAudioPlaying ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                               <path d="M11 5 6 9H3v6h3l5 4z" />
@@ -4477,7 +4914,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                           <div className="definition-save-group" aria-label="Vocabulary save actions">
                             <button
                               type="button"
-                              className={`definition-save definition-save-star ${selectedTokenSaved ? "is-saved" : ""}`}
+                              className={`definition-save definition-save-star reader-tooltip-target ${selectedTokenSaved ? "is-saved" : ""}`}
                               data-inventory-id="reader.study-save-button"
                               onClick={() => {
                                 if (selectedToken) {
@@ -4488,6 +4925,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                               aria-pressed={selectedTokenSaved}
                               aria-label={selectedTokenSaved ? "Saved to default list" : "Save to default list"}
                               title={selectedTokenSaved ? "Saved to default list" : "Save to default list"}
+                              data-tooltip={selectedTokenSaved ? "Saved to default list" : "Save to default list"}
                             >
                               <svg width="16" height="16" viewBox="0 0 24 24" fill={selectedTokenSaved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                 <path d="m12 2 2.9 6.1 6.7 1-4.8 4.7 1.1 6.7-5.9-3.1-5.9 3.1 1.1-6.7L2.4 9.1l6.7-1z" />
@@ -4495,7 +4933,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                             </button>
                             <button
                               type="button"
-                              className="definition-save definition-save-chevron"
+                              className="definition-save definition-save-chevron reader-tooltip-target"
                               data-inventory-id="reader.custom-list-picker-button"
                               onClick={() => {
                                 if (selectedToken && !isSentencePunctuation(selectedToken.surface_form)) {
@@ -4508,6 +4946,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                               aria-controls="reader-custom-vocabulary-lists"
                               aria-label="Choose a custom list"
                               title="Choose a custom list"
+                              data-tooltip="Choose a custom list"
                             >
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                 <path d="m9 6 6 6-6 6" />
@@ -4581,6 +5020,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                         <p className="definition-copy definition-meaning">{tokenDefinition || "Definition unavailable."}</p>
                       )}
                     </div>
+                    {!lexiconLoading && lexiconResult?.entries.length && !lexiconEntry ? (
+                      <p className="small-copy definition-context-notice" role="note">
+                        {lexiconSelection.state === "ambiguous"
+                          ? "Meaning withheld: this Japanese form has multiple possible readings or meanings."
+                          : "Meaning withheld: the dictionary result belongs to a different Japanese form."}
+                      </p>
+                    ) : null}
                     <div className="definition-feedback" aria-label="Word recall feedback">
                       <button
                         type="button"
@@ -4673,7 +5119,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     })}
                   </div>
                 ) : null}
-                {readerDefinitionTraceEnabled ? (
+                {isAdmin && readerDefinitionTraceEnabled ? (
                   <details className="definition-trace">
                     <summary className="definition-trace-summary">
                       <span className="definition-trace-summary-copy">

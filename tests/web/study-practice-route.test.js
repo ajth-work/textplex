@@ -29,20 +29,31 @@ test("Study practice route exposes a one-card drill flow", () => {
   assert.match(practiceSource, /buildReviewCards/);
   assert.match(practiceSource, /INTRODUCTION_CHUNK_SIZE = 5/);
   assert.match(practiceSource, /INTRODUCTION_AXIS_ORDER/);
+  assert.match(practiceSource, /const assessmentCards = shuffleWithSeed\(/);
   assert.match(practiceSource, /practiceModeLabel/);
   assert.match(practiceSource, /phase: "intro"/);
   assert.match(practiceSource, /phase: "assessment"/);
   for (const axisKey of ["form_to_meaning", "form_to_reading", "meaning_to_form", "reading_to_form"]) {
     assert.match(practiceSource, new RegExp(axisKey));
   }
+  for (const direction of ["Word → meaning", "Word → reading", "Meaning → word", "Reading → word"]) {
+    assert.match(practiceSource, new RegExp(direction));
+  }
   assert.match(practiceSource, /Next practice chunk/);
   assert.match(practiceSource, /Start practice/);
   assert.match(practiceSource, /Next word/);
-  assert.match(practiceSource, /Learn this word before we move into the randomized axis checks for this chunk\./);
+  assert.match(practiceSource, /Learn this word before we move into the mixed practice directions for this chunk\./);
+  assert.match(practiceSource, /Practice direction/);
+  assert.match(practiceSource, /Start mixed practice/);
+  assert.doesNotMatch(practiceSource, /randomized axis/);
   assert.match(practiceSource, /Type the romanization/);
   assert.match(practiceSource, /Type the \$\{card\.languageLabel\} term/);
   assert.match(practiceSource, /Type the English meaning/);
   assert.match(practiceSource, /RETRY_SIMILARITY_THRESHOLD = 0\.75/);
+  assert.match(practiceSource, /function normalizePracticeAnswer\(value: string, languageCode\?: string \| null\): string/);
+  assert.match(practiceSource, /languageRoot === "ja"/);
+  assert.match(practiceSource, /normalize\("NFKD"\)\.replace\(\/\\u0304\/g, ""\)/);
+  assert.match(practiceSource, /currentCard\.languageCode,/);
   assert.match(practiceSource, /levenshteinDistance/);
   assert.match(practiceSource, /answerSimilarityRatio/);
   assert.match(practiceSource, /study\.practice-card/);

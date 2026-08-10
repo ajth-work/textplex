@@ -17,10 +17,10 @@ from app.schemas.auth import (
 )
 from fastapi import Header, HTTPException
 
-ACCOUNT_ROLES = {"member", "qa", "admin"}
+ACCOUNT_ROLES = {"member", "tester", "admin"}
 ACCOUNT_ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
     "member": ("account.read",),
-    "qa": (
+    "tester": (
         "account.read",
         "themes.preview_all",
         "languages.preview_all",
@@ -231,7 +231,7 @@ def supabase_rest_request(
 def get_hosted_profile(context: AuthenticatedUserContext) -> HostedProfileSurfaceResponse:
     user_id = quote(context.user.id, safe="")
     profile_payload = _supabase_rest_get(
-        "profiles?select=id,display_name,target_language,learning_track,proficiency_level,created_at,updated_at"
+        "profiles?select=id,display_name,target_language,target_language_other,learning_track,proficiency_level,created_at,updated_at"
         f"&id=eq.{user_id}",
         context.access_token,
     )
@@ -291,6 +291,8 @@ def update_hosted_profile(
         values.pop("display_name", None)
     elif isinstance(values.get("display_name"), str) and not values["display_name"].strip():
         values["display_name"] = "Reader"
+    if values.get("learning_track") is None:
+        values.pop("learning_track", None)
     if values:
         user_id = quote(context.user.id, safe="")
         _supabase_rest_request(

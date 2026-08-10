@@ -1,4 +1,6 @@
 import { RoutePage } from "../../components/route-page";
+import { AdminOnly } from "../../components/admin-only";
+import { languageShortCode } from "../../lib/language-options";
 
 type PlanStep = {
   title: string;
@@ -110,7 +112,8 @@ const languageTracker: LanguageTrack[] = [
 
 export default function RoadmapPage() {
   return (
-    <RoutePage
+    <AdminOnly>
+      <RoutePage
       eyebrow="Roadmap"
       title="Implementation tracker"
       description=""
@@ -166,7 +169,7 @@ export default function RoadmapPage() {
             <article key={track.code} className="card roadmap-card">
               <div className="roadmap-card-topline">
                 <div>
-                  <span className="eyebrow">{track.code.toUpperCase()}</span>
+                  <span className="eyebrow">{languageShortCode(track.code)}</span>
                   <h3>{track.language}</h3>
                 </div>
                 <span className="pill">{track.status}</span>
@@ -189,6 +192,7 @@ export default function RoadmapPage() {
           ))}
         </div>
       </section>
-    </RoutePage>
+      </RoutePage>
+    </AdminOnly>
   );
 }

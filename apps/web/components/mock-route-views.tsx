@@ -400,6 +400,12 @@ export function MockProfileSurfaceView() {
         <p className="small-copy">Signed in as demo.reader@example.com. This demo account owns the packaged sample profile and settings.</p>
         <p className="small-copy">zh · hsk · HSK 3</p>
         <p className="small-copy">Hosted settings: {data.settings.entries.length}</p>
+        <div className="profile-email-change" data-inventory-id="profile.email-change-form">
+          <h3>Change email address</h3>
+          <p className="small-copy">Demo preview only. Live accounts confirm email changes through Supabase Auth.</p>
+          <input className="text-input" type="email" value="demo.reader@example.com" readOnly aria-label="Demo email address" />
+          <button className="button button-secondary" type="button" disabled>Send confirmation links</button>
+        </div>
       </section>
       <section className="card feature-card" data-inventory-id="profile.migration-card">
         <h2>Local profile migration</h2>
@@ -581,6 +587,7 @@ export function MockSearchSurfaceView() {
 
 export function MockSettingsSurfaceView() {
   const [readerSpeechVoiceGender, setReaderSpeechVoiceGender] = useState<"female" | "male">("female");
+  const isAdmin = false;
   const theme: AppTheme = "neutral";
 
   return (
@@ -601,23 +608,26 @@ export function MockSettingsSurfaceView() {
       <section className="card feature-card settings-preferences-card" data-inventory-id="settings.preferences-card">
         <h2>Preferences</h2>
         <p className="small-copy">
-          Theme settings now live on the dedicated theme settings page, where the app look and owned packs stay together.
-          Use the version footer toggle to show the current app version and last reboot/rebuild time at the bottom of every page.
+          Theme settings live on the dedicated theme settings page. Speech voice is shared by reader and study audio.
         </p>
-        <div className="settings-inspector-row" data-inventory-id="settings.inventory-labels-toggle">
-          <div>
-            <strong>Inventory labels</strong>
-            <p className="small-copy">Show route and component labels while auditing the app shell and reader surfaces.</p>
-          </div>
-          <InventoryInspectorToggle />
-        </div>
-        <div className="settings-inspector-row" data-inventory-id="settings.build-footer-toggle">
-          <div>
-            <strong>Version footer</strong>
-            <p className="small-copy">Show the current app version and last reboot/rebuild time at the bottom of every page.</p>
-          </div>
-          <BuildFooterToggle />
-        </div>
+        {isAdmin ? (
+          <>
+            <div className="settings-inspector-row" data-inventory-id="settings.inventory-labels-toggle">
+              <div>
+                <strong>Inventory labels</strong>
+                <p className="small-copy">Show route and component labels while auditing the app shell and reader surfaces.</p>
+              </div>
+              <InventoryInspectorToggle />
+            </div>
+            <div className="settings-inspector-row" data-inventory-id="settings.build-footer-toggle">
+              <div>
+                <strong>Version footer</strong>
+                <p className="small-copy">Show the current app version and last reboot/rebuild time at the bottom of every page.</p>
+              </div>
+              <BuildFooterToggle />
+            </div>
+          </>
+        ) : null}
         <div className="settings-inspector-row" data-inventory-id="settings.speech-voice-toggle">
           <div>
             <strong>Speech voice</strong>
@@ -642,7 +652,7 @@ export function MockSettingsSurfaceView() {
           Open theme settings
         </Link>
       </section>
-      <Link className="card feature-card settings-roadmap-card" href="/roadmap" data-inventory-id="settings.roadmap-card">
+      {isAdmin ? <Link className="card feature-card settings-roadmap-card" href="/roadmap" data-inventory-id="settings.roadmap-card">
         <div className="card-topline">
           <div>
             <span className="eyebrow">Planning</span>
@@ -652,7 +662,7 @@ export function MockSettingsSurfaceView() {
         </div>
         <p>Review the language-pack implementation plan, active build, and queued vocabulary tracks.</p>
         <span className="button button-secondary">Open roadmap</span>
-      </Link>
+      </Link> : null}
     </RoutePage>
   );
 }

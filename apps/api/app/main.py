@@ -1,9 +1,11 @@
+import asyncio
 import json
 import logging
 import os
 import shutil
 import threading
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -14,6 +16,7 @@ from app.core.paths import (
     resolve_books_root,
     resolve_user_data_root,
 )
+from app.schemas.admin_usage import AdminUsageSummary
 from app.schemas.auth import (
     AuthMeResponse,
     HostedProfileSurfaceResponse,
@@ -26,14 +29,25 @@ from app.schemas.books import (
     BookReaderPageResponse,
     BookRecord,
     PageExtractionArtifact,
+    SentenceTranslationPrefetchRequest,
+    SentenceTranslationPrefetchResponse,
     SentenceTranslationResponse,
     TextImportRequest,
     TextParseRequest,
 )
 from app.schemas.feedback import (
     FeedbackCreateRequest,
+    FeedbackDigestRequest,
+    FeedbackDigestResponse,
+    FeedbackGitHubCreateRequest,
     FeedbackListResponse,
+    FeedbackNotificationListResponse,
+    FeedbackNotificationReadRequest,
     FeedbackRecord,
+    FeedbackStatusUpdateRequest,
+    TesterListResponse,
+    TesterNicknameUpdateRequest,
+    TesterRecord,
 )
 from app.schemas.generated_articles import (
     GeneratedReaderArticlePromptDetails,
@@ -76,12 +90,20 @@ from app.schemas.surfaces import (
     SettingsUpdateRequest,
     StudySurfaceResponse,
 )
+from app.schemas.theme_admin import (
+    ThemeAdminRecord,
+    ThemeAdminResponse,
+    ThemeAdminUpsertRequest,
+    ThemeAiSuggestRequest,
+    ThemeAiSuggestResponse,
+)
 from app.schemas.themes import (
     ThemeCatalogResponse,
     ThemeCheckoutRequest,
     ThemeCheckoutResponse,
     ThemeEntitlementResponse,
 )
+from app.services.admin_usage import get_admin_usage_summary
 from app.services.auth import (
     AuthenticatedUserContext,
     get_authenticated_user_context,
@@ -100,6 +122,7 @@ from app.services.book_extraction import (
     import_text_into_book,
     load_page_artifact,
     parse_text_into_page_artifact,
+    prefetch_book_sentence_translation_window,
     preload_book_sentence_translations,
     recover_book_extraction_result,
     translate_page_sentence,
@@ -116,7 +139,21 @@ from app.services.commerce import (
     get_entitlements,
     verify_sandbox_signature,
 )
-from app.services.feedback import create_feedback, list_feedback
+from app.services.feedback import (
+    create_feedback,
+    create_github_issue,
+    list_feedback,
+    list_testers,
+    list_user_notifications,
+    mark_user_notifications_read,
+    update_feedback_status,
+    update_tester_nickname,
+)
+from app.services.feedback_digest import (
+    feedback_digest_enabled,
+    seconds_until_next_digest,
+    send_feedback_digest,
+)
 from app.services.generated_articles import (
     generate_reader_article,
     load_generated_article_prompt_details,
@@ -150,13 +187,40 @@ from app.services.surfaces import (
     search_surfaces,
     update_settings_surface,
 )
+from app.services.theme_admin import (
+    get_admin_themes,
+    save_admin_theme,
+    suggest_theme_with_ai,
+)
 from app.services.themes import get_theme_catalog, validate_theme_settings
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from processor.contracts import BookExtractionResult
 
-app = FastAPI(title="TextPlex API", version="0.1.0")
+
+async def _feedback_digest_scheduler() -> None:
+    while True:
+        await asyncio.sleep(seconds_until_next_digest())
+        try:
+            result = send_feedback_digest(app.state.data_root)
+            logger.info("Feedback digest scheduler: %s", result.message)
+        except Exception:
+            logger.exception("Feedback digest scheduler failed; the next scheduled run will retry.")
+
+
+@asynccontextmanager
+async def _lifespan(_application: FastAPI):
+    digest_task = asyncio.create_task(_feedback_digest_scheduler()) if feedback_digest_enabled() else None
+    try:
+        yield
+    finally:
+        if digest_task is not None:
+            digest_task.cancel()
+            await asyncio.gather(digest_task, return_exceptions=True)
+
+
+app = FastAPI(title="TextPlex API", version="0.1.0", lifespan=_lifespan)
 app.state.data_root = get_data_root()
 OPTIONAL_USER_CONTEXT = Depends(get_optional_user_context)
 AUTHENTICATED_USER_CONTEXT = Depends(get_authenticated_user_context)
@@ -187,7 +251,7 @@ app.add_middleware(
     allow_origins=cors_origins,
     allow_origin_regex=cors_origin_regex,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
 
@@ -501,6 +565,111 @@ def get_feedback(
     return FeedbackListResponse(records=list_feedback(app.state.data_root))
 
 
+@app.get("/feedback/testers", response_model=TesterListResponse)
+def get_feedback_testers(
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> TesterListResponse:
+    require_permission(context, "accounts.manage")
+    return TesterListResponse(testers=list_testers(app.state.data_root))
+
+
+@app.patch("/feedback/testers/{tester_id}", response_model=TesterRecord)
+def change_tester_nickname(
+    tester_id: str,
+    payload: TesterNicknameUpdateRequest,
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> TesterRecord:
+    require_permission(context, "accounts.manage")
+    try:
+        return update_tester_nickname(app.state.data_root, tester_id, payload.nickname)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/feedback/mine", response_model=FeedbackListResponse)
+def get_my_feedback(
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> FeedbackListResponse:
+    return FeedbackListResponse(records=[record for record in list_feedback(app.state.data_root, limit=1000) if record.user_id == context.user.id])
+
+
+@app.get("/feedback/notifications", response_model=FeedbackNotificationListResponse)
+def get_feedback_notifications(
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> FeedbackNotificationListResponse:
+    notifications = list_user_notifications(app.state.data_root, context.user.id)
+    return FeedbackNotificationListResponse(
+        notifications=notifications,
+        unread_count=sum(1 for notification in notifications if not notification.read),
+    )
+
+
+@app.post("/feedback/notifications/read")
+def read_feedback_notifications(
+    payload: FeedbackNotificationReadRequest,
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> dict[str, str]:
+    mark_user_notifications_read(app.state.data_root, context.user.id, payload.notification_ids)
+    return {"status": "read"}
+
+
+@app.patch("/feedback/{feedback_id}/status", response_model=FeedbackRecord)
+def change_feedback_status(
+    feedback_id: str,
+    payload: FeedbackStatusUpdateRequest,
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> FeedbackRecord:
+    require_permission(context, "accounts.manage")
+    try:
+        return update_feedback_status(
+            app.state.data_root,
+            feedback_id,
+            payload.status,
+            note=payload.note,
+            changed_by=context.user.id,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/feedback/{feedback_id}/github-issue", response_model=FeedbackRecord)
+def post_feedback_github_issue(
+    feedback_id: str,
+    payload: FeedbackGitHubCreateRequest,
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> FeedbackRecord:
+    require_permission(context, "accounts.manage")
+    try:
+        return create_github_issue(
+            app.state.data_root,
+            feedback_id,
+            changed_by=context.user.id,
+            title=payload.title,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/feedback/digest", response_model=FeedbackDigestResponse)
+def post_feedback_digest(
+    payload: FeedbackDigestRequest,
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> FeedbackDigestResponse:
+    require_permission(context, "accounts.manage")
+    try:
+        result = send_feedback_digest(app.state.data_root, force=payload.force)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return FeedbackDigestResponse(
+        sent=result.sent,
+        record_count=result.record_count,
+        generated_at=result.generated_at,
+        message=result.message,
+    )
+
+
 @app.post("/texts/parse", response_model=PageExtractionArtifact)
 def parse_text(
     payload: TextParseRequest,
@@ -763,6 +932,57 @@ def get_book_sentence_translation(
     )
 
 
+@app.post(
+    "/books/{book_id}/pages/{page_number}/sentences/{sentence_order}/translation-buffer",
+    response_model=SentenceTranslationPrefetchResponse,
+)
+def prefetch_book_sentence_translations(
+    book_id: str,
+    page_number: int,
+    sentence_order: int,
+    request: SentenceTranslationPrefetchRequest | None = None,
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
+) -> SentenceTranslationPrefetchResponse:
+    book = _book_exists(book_id, context)
+    current_artifact = load_page_artifact(
+        book_id=book_id,
+        page_number=page_number,
+        data_root=_books_root(),
+        owner_id=book.owner_id,
+    )
+    if current_artifact is None:
+        raise HTTPException(status_code=404, detail=f"Page artifact not found for page: {page_number}")
+    if not any(sentence.order == sentence_order for sentence in current_artifact.page.sentences):
+        raise HTTPException(status_code=404, detail=f"Sentence not found: {sentence_order}")
+
+    translations = prefetch_book_sentence_translation_window(
+        book=book,
+        page_number=page_number,
+        sentence_order=sentence_order,
+        lookahead=(request.lookahead if request is not None else 3),
+        data_root=_books_root(),
+        owner_id=book.owner_id,
+    )
+    return SentenceTranslationPrefetchResponse(
+        book_id=book_id,
+        page_number=page_number,
+        sentence_order=sentence_order,
+        translations=[
+            SentenceTranslationResponse(
+                book_id=book_id,
+                page_number=translated_page_number,
+                sentence_order=sentence.order,
+                sentence_text=sentence.text,
+                translation=sentence.translation,
+                translation_source=sentence.translation_source,
+                resolution_source=resolution_source,
+                translation_alignment=sentence.translation_alignment.model_dump() if sentence.translation_alignment is not None else None,
+            )
+            for translated_page_number, sentence, resolution_source in translations
+        ],
+    )
+
+
 @app.get("/books/{book_id}/pages/{page_number}/image")
 def get_book_page_image(
     book_id: str,
@@ -1015,6 +1235,14 @@ def admin_google_translate_usage(
     return get_google_translate_usage_summary(app.state.data_root)
 
 
+@app.get("/admin/usage", response_model=AdminUsageSummary)
+def admin_usage(
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> AdminUsageSummary:
+    require_permission(context, "usage.global.read")
+    return get_admin_usage_summary(app.state.data_root)
+
+
 @app.get("/analysis/{book_id}", response_model=BookAnalysisSurfaceResponse)
 def get_analysis_surface(
     book_id: str,
@@ -1097,6 +1325,40 @@ def themes_catalog(
     return get_theme_catalog(context, data_root=app.state.data_root)
 
 
+@app.get("/admin/themes", response_model=ThemeAdminResponse)
+def admin_themes(
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> ThemeAdminResponse:
+    return get_admin_themes(context)
+
+
+@app.post("/admin/themes", response_model=ThemeAdminRecord)
+def create_admin_theme(
+    payload: ThemeAdminUpsertRequest,
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> ThemeAdminRecord:
+    return save_admin_theme(context, payload)
+
+
+@app.put("/admin/themes/{theme_id}", response_model=ThemeAdminRecord)
+def update_admin_theme(
+    theme_id: str,
+    payload: ThemeAdminUpsertRequest,
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> ThemeAdminRecord:
+    if theme_id != payload.id:
+        raise HTTPException(status_code=400, detail="The theme ID in the path must match the payload.")
+    return save_admin_theme(context, payload)
+
+
+@app.post("/admin/themes/ai-suggest", response_model=ThemeAiSuggestResponse)
+def admin_theme_ai_suggest(
+    payload: ThemeAiSuggestRequest,
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> ThemeAiSuggestResponse:
+    return suggest_theme_with_ai(context, payload)
+
+
 @app.post("/themes/checkout", response_model=ThemeCheckoutResponse)
 def themes_checkout(
     payload: ThemeCheckoutRequest,
@@ -1140,8 +1402,14 @@ def activity_surface(
 
 
 @app.get("/import", response_model=ImportSurfaceResponse)
-def import_surface() -> ImportSurfaceResponse:
-    return get_import_surface(app.state.data_root, default_language=os.getenv("DEFAULT_LANGUAGE", "zh"))
+def import_surface(
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
+) -> ImportSurfaceResponse:
+    return get_import_surface(
+        app.state.data_root,
+        default_language=os.getenv("DEFAULT_LANGUAGE", "zh"),
+        owner_id=context.user.id if context else None,
+    )
 
 
 @app.get("/settings", response_model=SettingsSurfaceResponse)

@@ -21,17 +21,13 @@ import {
 import { GeneratedArticlePromptCard } from "./generated-article-prompt-card";
 import { LoadingSkeleton } from "./loading-skeleton";
 import { HskSeriesChart } from "./hsk-series-chart";
+import { ImportProgressCard } from "./import-progress-card";
+import { useImportProgress } from "./import-progress-provider";
+import { isImportInProgress } from "../lib/import-progress";
+import { languageDisplayLabel, languageShortCode } from "../lib/language-options";
 
 function languageLabel(languageCode: string): string {
-  const labels: Record<string, string> = {
-    ar: "Arabic",
-    he: "Hebrew",
-    ja: "Japanese",
-    ko: "Korean",
-    ru: "Russian",
-    zh: "Chinese",
-  };
-  return labels[languageCode.toLowerCase().split("-", 1)[0]] ?? languageCode.toUpperCase();
+  return languageDisplayLabel(languageCode);
 }
 
 function titleCaseTopic(topic: string): string {
@@ -67,6 +63,7 @@ function detailSummary(book: BookRecord, generationDetails: GeneratedReaderArtic
 }
 
 export function BookDetailView({ bookId }: { bookId: string }) {
+  const { activeImport, trackImport } = useImportProgress();
   const [book, setBook] = useState<BookRecord | null>(null);
   const [manifest, setManifest] = useState<BookPageManifest | null>(null);
   const [summary, setSummary] = useState<BookExtractionResult | null>(null);
@@ -199,6 +196,15 @@ export function BookDetailView({ bookId }: { bookId: string }) {
     };
   }, [bookId, refreshNonce]);
 
+  useEffect(() => {
+    if (!book || isDemoMode || !isImportInProgress(book)) {
+      return;
+    }
+    if (!activeImport || activeImport.id === book.id || !isImportInProgress(activeImport)) {
+      trackImport(book);
+    }
+  }, [activeImport, book, trackImport]);
+
   async function handleExtractNow() {
     if (!manifest || extracting) {
       return;
@@ -228,6 +234,7 @@ export function BookDetailView({ bookId }: { bookId: string }) {
   const heroTitle = book ? detailTitle(book, generationDetails) : null;
   const heroSummary = book ? detailSummary(book, generationDetails) : null;
   const pageCountLabel = book && !isPdfBook(book) ? "Reader pages" : "Total pages in the source PDF";
+  const detailImport = activeImport?.id === bookId ? activeImport : book;
 
   return (
     <section className="app-shell">
@@ -252,7 +259,7 @@ export function BookDetailView({ bookId }: { bookId: string }) {
         <div className="detail-layout">
           <article className="card detail-main">
             <div className="card-topline">
-              <span className="pill">{book.language_code.toUpperCase()}</span>
+              <span className="pill">{languageShortCode(book.language_code)}</span>
               <span className="muted">{book.status.replaceAll("_", " ")}</span>
             </div>
             <h2>{book.title}</h2>
@@ -275,9 +282,15 @@ export function BookDetailView({ bookId }: { bookId: string }) {
             <p className="small-copy">
               Extraction source: <strong>{extractionSourceLabel}</strong>
             </p>
+            {detailImport && isImportInProgress(detailImport) ? (
+              <ImportProgressCard book={detailImport} inventoryId="book-detail.import-progress-card" showReaderLink={false} />
+            ) : null}
             <div className="button-row">
               <Link className="button button-primary" href={resumeReaderHref}>
                 Open reader
+              </Link>
+              <Link className="button button-secondary" href={`/reader/${bookId}/${firstPageNumber}`}>
+                Start at beginning
               </Link>
               <button className="button button-secondary" type="button" onClick={() => void handleExtractNow()} disabled={extracting || loading || isDemoMode}>
                 {extracting ? "Refreshing..." : isDemoMode ? "Demo sample" : needsExtraction ? "Extract pages" : "Refresh extraction"}

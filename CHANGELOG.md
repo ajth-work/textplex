@@ -1,5 +1,85 @@
 # Changelog
 
+## 2026-08-10
+
+- Fixed six Ruff import-order violations in the API, theme-admin services, and new admin tests so the GitHub Actions Python check can complete after its test step.
+
+- Prepared the current feedback, admin, onboarding, theme, reader, and learner-sync feature batch for pull-request review: aligned web contract tests with the live route boundaries, verified API/processor/site/web/build checks, and renumbered the reconciliation migration to avoid a duplicate local migration version.
+
+- Added a bounded Reader translation buffer: opening or advancing a sentence now resolves that sentence plus the next three in the background, persists the per-sentence cache, and carries the window across page boundaries without preloading an entire book.
+
+- Hardened learner synchronization with a local per-event reconciliation ledger, stable retry scheduling, retained failure details, and explicit local-event-authority documentation. Expanded the hosted `learning_events` contract to accept vocabulary-study and word-interaction events while preserving RLS and idempotent upload keys.
+
+- Added the Cloudflare plugin recommendation record under `docs/plugins/cloudflare/` and established a repository convention for plugin-authored Markdown artifacts in dedicated, plugin-labeled folders.
+
+- Replaced the Japanese script-boundary heuristic with UniDic-backed morphological analysis, then grouped inflection and grammar tails into reader-level words while keeping independent particles separate. Existing Reader artifacts automatically re-tokenize when reopened (`reader.token`, issue #60).
+
+- Added a trusted-device account switcher to the shared TextPlex account menu: saved Supabase sessions can be switched instantly, another account can be added without losing the current login, and inactive sessions can be removed from the device.
+
+- Added an authenticated profile email-change request flow backed by Supabase Auth, with fixed callback routing, current/new inbox confirmation messaging, and inventory coverage; learner databases remain keyed by immutable user IDs.
+
+- Completed the beta tester feedback loop: authenticated tester submissions now have an end-to-end regression path into the admin review queue, `/admin/feedback` uses the shared admin access boundary, and focused web/API coverage protects submission, review, status updates, and tester notifications.
+
+- Added the first admin-only theme console at `/admin/themes`: hosted theme metadata and visual-token editing, native color/brightness controls, draft preview, reference-image upload, and server-side OpenAI concept suggestions that return structured theme tokens for review before saving. Added admin-only Supabase write policies and focused API coverage; live learner rendering from hosted tokens and asset storage remain the next phase.
+
+- Added an admin-only Platform Usage console at `/admin`, with API-enforced aggregate metrics for profiles, reading activity, books, feedback, and translation usage; added admin navigation and inventory coverage.
+
+- Reflowed Reader reading-profile statistics into responsive, wrapped metric cards and added a persisted Simple/Detailed view preference for issue #89 without removing the underlying metrics.
+
+- Clarified Reader session-statistics editing for issue #90 with visible Hide/Restore actions, arrow-key shortcut metadata, and preserved book-scoped layout persistence.
+
+- Preserved Japanese Reader context for issue #92 by prioritizing visible-surface lookup, rejecting mismatched kana/kanji candidates, and adding distinct particle (wa) and tooth (ha) lexicon entries with API and Reader regression coverage.
+
+- Corrected the consolidated Supabase theme-seed artifact after detecting a generated-file truncation marker inside a visual-token JSON value; rebuilt it directly from all 13 source migrations and verified all sections are present.
+- Generated a consolidated manual Supabase script for the remaining theme catalog and visual-token seed migrations at `artifacts/textplex-theme-seed-20260810.sql`.
+- Added an explicit target-language choice to beta onboarding, including friendly short-code display such as Japanese (JP), and normalized major live language labels so Japanese appears as JP rather than the internal `ja` code.
+- Corrected the language display convention: learner-facing labels now retain the canonical lowercase codes, including `Japanese (ja)`, rather than using `JP`.
+
+## 2026-08-09
+
+- Added GitHub issue #95 to the TextPlex Feature Board project #2 in Todo for learner-authored sentence comprehension scoring, structured semantic feedback, server-side evaluation, and a configurable Reader threshold; synchronized the work item into `docs/ISSUE_TRACKER.md`.
+- Added independent reader controls for token text size and token spacing, persisted locally so readers can fit annotated sentences more comfortably on narrow screens (`reader.token-display-settings`, `reader.token-text-size-control`, `reader.token-spacing-control`).
+- Added a visible Reader “Start at beginning” action for books opened on a later page, exposed the same path from book detail, and prevented unread books from inheriting stale server resume positions (`reader.beginning-action`, issue #93).
+- Updated GitHub repository references, feedback links, and authentication checks for the moved private repository `TextPlex/textplex`; the user-owned Feature Board project #2 remains unchanged.
+- Clarified Study practice directions for issue #87 with learner-facing word/meaning/reading labels while preserving randomized assessment order and internal axis contracts.
+- Accepted Japanese macroned and macronless romaji equivalents in Study answer validation for issue #86 without changing validation rules for other languages.
+- Added interaction-only help hints for Reader icon controls in issue #93, with compact sentence-tool hints appearing on hover or keyboard focus only when their text labels are hidden.
+
+- Fixed Japanese reader tokenization so mixed kanji/okurigana words such as 飲み stay together for lookup and romanization instead of rendering as separate 飲 and み readings (`reader.token`). Added processor and API regression coverage.
+- Retained the latest book import progress across route changes and reloads, polling it from the shared app shell so the Import page and matching book-detail page keep showing the live percentage until processing completes (`import.progress-card`, `book-detail.import-progress-card`).
+- Set GPT-5.6 Luna as the default OpenAI model for page OCR while preserving the `OPENAI_OCR_MODEL` override.
+- Scoped the import page's Recent books list to the authenticated account so one user's uploaded content cannot appear in another account's import history, with API regression coverage.
+- Accepted the AI triage `usability` category and mapped it to the existing UX GitHub label, with regression coverage for OpenAI Responses parsing.
+- Added a required beta tester onboarding step after account creation. It introduces the beta expectations, confirms the selected target language, captures first-use intent, confidence, support preference, and an optional first-week goal, and stores the intake in account-owned settings before protected routes open.
+- Added an explicit learning-path choice to beta onboarding so users can review or change their track after signup, with the selected value saved in account-owned onboarding settings.
+- Clarified learning paths with explicit signup choices for HSK, JLPT, TOPIK, TRKI, CEFR, general reading, custom paths, and undecided learners; friendly labels now replace the raw `local` track in profile summaries and SQL reporting.
+- Made the recently-active Supabase query work without the optional `public.learning_events` table and documented the migration required by event-based queries.
+- Added a Supabase schema-readiness check and public-table migration map to the SQL reference so missing hosted tables can be identified and enabled in dependency order.
+- Added Dan’s Japanese-focused tester feedback to TextPlex Feature Board Todo as issues #86-#94, covering Study axis terminology, romanization variants, romaji-to-hiragana input and auto-advance, context-aware readings, profile-stat layout, Reader control discoverability, horizontal navigation, session-stat customization, and Japanese Library 404s. Added the related Japanese segmentation reproduction to #60 and synchronized `docs/ISSUE_TRACKER.md`.
+
+## 2026-08-09
+
+- Added GitHub issue #85 to TextPlex Feature Board project #2 in Todo for a first-run tutorial and replayable product tour, and synchronized the work item into `docs/ISSUE_TRACKER.md`.
+- Added required target-language selection during registration, an Other-language suggestion field, shared language options across library/import/auth, and Supabase profile storage for the signup choice.
+- Centered the reader sentence-audio speed stepper's plus and minus controls within their circular buttons.
+- Added Supabase theme visual-token migrations that seed all catalog themes from the current CSS semantic variables into `public.theme_visual_tokens`, including color scheme, component token JSON, and wallpaper paths for the future theme editor.
+- Added opt-in automatic GitHub routing for new feedback, a persisted SMTP daily digest with admin/project links, a protected manual digest endpoint, and regression coverage for retry-safe routing and digest deduplication.
+- Added `docs/SUPABASE_USEFUL_QUERIES.md` with 20 read-only operational queries covering users, product roles, profiles, learning activity, theme entitlements, commerce, settings, RLS policies, and database health.
+- Organized the Supabase query reference into `User Groups`, `Profiles & Preferences`, `Learning Activity`, `Themes & Commerce`, and `Security & Database Operations` sections.
+- Separated learner settings from development tooling: admin-role accounts now see the developer controls, implementation roadmap, wallpaper tuning, and reader definition trace while normal profiles get a simpler user-facing settings and profile experience (`settings.developer-tools-card`, `theme-shop.preview-tuning`, `reader.definition-trace-section`).
+- Added a tester directory to the admin feedback workspace with stable tester IDs, private nickname labels, saved nickname editing, and clearer access to tester identity beside each report.
+- Renamed the internal product role from `qa` to `tester` across API schemas, shared contracts, permissions, tests, and account-role documentation; legacy `qa` metadata now falls back to `member` until migrated.
+- Added a token-safe weekly GitHub access routine: a PowerShell `gh`/project check, optional Windows Task Scheduler registration, and a scheduled GitHub Actions App-token smoke test with an operations runbook.
+- Confirmed that TextPlex tracking belongs on the user-owned TextPlex Feature Board project #2 and documented the exact board URL, keeping BinoCart project #1 out of the workflow.
+- Created and added GitHub issues #57-#78 to TextPlex Feature Board #2 for the production-candidate concept notes, active local tracker items, language-pack work, audit follow-up, commerce direction, and future platform plans; synchronized their Todo/In Progress states into `docs/ISSUE_TRACKER.md`.
+
+- Removed the CI-only dependency on the ignored `three-body-mini` fixture; phase-6 ownership tests now reuse the tracked `alice-mini` sample while preserving the legacy unowned-record case.
+- Added feedback lifecycle operations: richer AI implementation plans, server-backed tester notifications with a feedback bell, an admin feedback console at `/admin/feedback`, protected status transitions with resolution notes, optional GitHub issue creation, and GitHub Project status synchronization hooks.
+- Synced six local feedback records into GitHub issues #79-#84, applied route/type/tester labels, added each issue to TextPlex Feature Board project #2 in Todo, and wrote the GitHub links back into the local feedback records.
+- Organized feedback records under submitting-user and workflow-status folders, added `in_progress`, `completed`, and `acknowledged` workflow states with status history, and added an admin-only status transition endpoint.
+- Added a Reader settings slider for the app-shell navigation hide delay, persisted locally from 1 to 15 seconds and applied immediately to the reader shell (`reader.navigation-hide-delay-section`, `reader.navigation-hide-delay-slider`, `shell.reader-nav`).
+- Tightened the meaning-line disclosure header by placing the Meaning line label and chevron on the same centered row.
+
 ## 2026-08-08
 
 - Replaced the feedback modal’s text Close action with an accessible icon-only X and kept the Help improve TextPlex eyebrow on one line at phone widths (`shell.feedback-dialog`).

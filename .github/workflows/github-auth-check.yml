@@ -1,0 +1,44 @@
+name: GitHub auth health
+
+on:
+  schedule:
+    # Sundays at 13:30 UTC. This validates the repository-scoped GitHub App token
+    # that GitHub Actions creates for the job.
+    - cron: "30 13 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: github-auth-health-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check GitHub App token through gh
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Verify repository-scoped App token
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          gh --version
+          gh auth status --active --hostname github.com
+          $repo = gh repo view $env:GH_REPO --json nameWithOwner,viewerPermission,defaultBranchRef | ConvertFrom-Json
+          if ($repo.nameWithOwner -ne $env:GH_REPO) {
+            throw "Token resolved the wrong repository: $($repo.nameWithOwner)"
+          }
+          if ([string]$repo.viewerPermission -notin @("READ", "WRITE", "MAINTAIN", "ADMIN")) {
+            throw "Unexpected repository permission: $($repo.viewerPermission)"
+          }
+          gh issue list --repo $env:GH_REPO --limit 1 --json number | Out-Null
+          gh pr list --repo $env:GH_REPO --limit 1 --json number | Out-Null
+          gh run list --repo $env:GH_REPO --limit 1 --json databaseId | Out-Null
+          Write-Host "GitHub Actions App token checks passed for $env:GH_REPO."

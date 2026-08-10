@@ -2,6 +2,7 @@ from pathlib import Path
 
 from app.services.ocr import (
     OcrPageResult,
+    get_openai_ocr_model,
     get_text_source_signature,
     resolve_page_text,
     should_use_openai_ocr,
@@ -26,9 +27,13 @@ def test_openai_ocr_requires_provider_and_key(monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
     assert should_use_openai_ocr() is True
-    assert get_text_source_signature() == ("openai", "openai:gpt-5.4-mini:ocr-v2")
+    assert get_openai_ocr_model() == "gpt-5.6-luna"
+    assert get_text_source_signature() == ("openai", "openai:gpt-5.6-luna:ocr-v2")
     assert should_use_openai_ocr("openai") is True
-    assert get_text_source_signature("openai") == ("openai", "openai:gpt-5.4-mini:ocr-v2")
+    assert get_text_source_signature("openai") == ("openai", "openai:gpt-5.6-luna:ocr-v2")
+
+    monkeypatch.setenv("OPENAI_OCR_MODEL", "gpt-5.4-mini")
+    assert get_openai_ocr_model() == "gpt-5.4-mini"
 
 
 def test_resolve_page_text_uses_openai_route_without_network(monkeypatch) -> None:
