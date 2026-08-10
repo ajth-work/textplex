@@ -6,8 +6,6 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from fastapi import HTTPException
-
 from app.schemas.theme_admin import (
     ThemeAdminRecord,
     ThemeAdminResponse,
@@ -21,6 +19,7 @@ from app.services.auth import (
     require_permission,
     supabase_is_configured,
 )
+from fastapi import HTTPException
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 DEFAULT_THEME_MODEL = "gpt-5.4-mini"

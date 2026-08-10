@@ -16,12 +16,12 @@ from app.core.paths import (
     resolve_books_root,
     resolve_user_data_root,
 )
+from app.schemas.admin_usage import AdminUsageSummary
 from app.schemas.auth import (
     AuthMeResponse,
     HostedProfileSurfaceResponse,
     HostedProfileUpdateRequest,
 )
-from app.schemas.admin_usage import AdminUsageSummary
 from app.schemas.books import (
     BookExtractionRequest,
     BookImportRequest,
@@ -90,12 +90,6 @@ from app.schemas.surfaces import (
     SettingsUpdateRequest,
     StudySurfaceResponse,
 )
-from app.schemas.themes import (
-    ThemeCatalogResponse,
-    ThemeCheckoutRequest,
-    ThemeCheckoutResponse,
-    ThemeEntitlementResponse,
-)
 from app.schemas.theme_admin import (
     ThemeAdminRecord,
     ThemeAdminResponse,
@@ -103,6 +97,13 @@ from app.schemas.theme_admin import (
     ThemeAiSuggestRequest,
     ThemeAiSuggestResponse,
 )
+from app.schemas.themes import (
+    ThemeCatalogResponse,
+    ThemeCheckoutRequest,
+    ThemeCheckoutResponse,
+    ThemeEntitlementResponse,
+)
+from app.services.admin_usage import get_admin_usage_summary
 from app.services.auth import (
     AuthenticatedUserContext,
     get_authenticated_user_context,
@@ -116,7 +117,6 @@ from app.services.auth import (
     update_hosted_profile,
     update_hosted_settings,
 )
-from app.services.admin_usage import get_admin_usage_summary
 from app.services.book_extraction import (
     extract_book_text,
     import_text_into_book,
@@ -187,8 +187,12 @@ from app.services.surfaces import (
     search_surfaces,
     update_settings_surface,
 )
+from app.services.theme_admin import (
+    get_admin_themes,
+    save_admin_theme,
+    suggest_theme_with_ai,
+)
 from app.services.themes import get_theme_catalog, validate_theme_settings
-from app.services.theme_admin import get_admin_themes, save_admin_theme, suggest_theme_with_ai
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse

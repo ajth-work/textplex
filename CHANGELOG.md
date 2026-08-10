@@ -2,6 +2,8 @@
 
 ## 2026-08-10
 
+- Fixed six Ruff import-order violations in the API, theme-admin services, and new admin tests so the GitHub Actions Python check can complete after its test step.
+
 - Prepared the current feedback, admin, onboarding, theme, reader, and learner-sync feature batch for pull-request review: aligned web contract tests with the live route boundaries, verified API/processor/site/web/build checks, and renumbered the reconciliation migration to avoid a duplicate local migration version.
 
 - Added a bounded Reader translation buffer: opening or advancing a sentence now resolves that sentence plus the next three in the background, persists the per-sentence cache, and carries the window across page boundaries without preloading an entire book.

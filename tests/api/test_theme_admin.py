@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.schemas.auth import AuthMeResponse
 from app.schemas.theme_admin import ThemeAdminUpsertRequest, ThemeAiSuggestRequest
 from app.services import theme_admin

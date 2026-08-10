@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
-
 from app.schemas.google_translate import GoogleTranslateUsageSummary
+from pydantic import BaseModel
 
 
 class AdminUsageActivityPoint(BaseModel):
