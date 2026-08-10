@@ -5,7 +5,7 @@ TextPlex uses two separate GitHub access paths. Keep both healthy:
 1. Local PowerShell `gh` authentication for repository, issue, pull request, Actions, and project-board work.
 2. The GitHub Actions `GITHUB_TOKEN`, which is a short-lived GitHub App installation token created for each workflow job.
 
-The connected GitHub app in Codex is a separate app connection. A repository file cannot refresh that connection. If Codex reports that `ajth-work/textplex` is missing or inaccessible, reconnect the GitHub app and grant it access to the repository and the TextPlex Feature Board project.
+The connected GitHub app in Codex is a separate app connection. A repository file cannot refresh that connection. If Codex reports that `TextPlex/textplex` is missing or inaccessible, reconnect the GitHub app and grant it access to the repository and the TextPlex Feature Board project.
 
 ## First-time or repair authentication
 
@@ -23,7 +23,7 @@ Do not paste tokens into this repository, `.env` files, workflow files, or chat.
 powershell.exe -NoProfile -File .\scripts\Test-GitHubAuth.ps1
 ```
 
-The check validates the active account, `ajth-work/textplex`, issues, pull requests, Actions runs, and TextPlex Feature Board project #2. It never prints the token.
+The check validates the active account, `TextPlex/textplex`, issues, pull requests, Actions runs, and TextPlex Feature Board project #2. It never prints the token.
 
 ## Register the weekly Windows check
 

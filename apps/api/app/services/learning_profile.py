@@ -65,11 +65,11 @@ TRACK_DEFINITIONS: dict[str, dict[str, str]] = {
         "note": "Built from European-language books in the local library.",
     },
     "local": {
-        "label": "Local",
+        "label": "General reading",
         "language_code": "local",
-        "level": "Custom",
-        "subtitle": "Mixed local reading track",
-        "note": "Books that do not match a formal exam track stay here.",
+        "level": "Self-directed",
+        "subtitle": "General reading and self-directed progress",
+        "note": "Mixed or unsupported language reading without a formal exam syllabus.",
     },
 }
 
@@ -766,6 +766,14 @@ def _queue_learning_event(
         """
         INSERT OR IGNORE INTO learning_event_receipts (event_id, received_at)
         VALUES (?, ?)
+        """,
+        (event_id, occurred_at),
+    )
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO learning_event_reconciliation (
+            event_id, status, last_checked_at
+        ) VALUES (?, 'queued', ?)
         """,
         (event_id, occurred_at),
     )

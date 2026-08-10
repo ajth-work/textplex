@@ -218,9 +218,86 @@ def test_parse_text_into_page_artifact_enriches_japanese_reading(
 
     token_surfaces = [token.surface_form for token in artifact.page.sentences[0].tokens]
 
-    assert token_surfaces == ["\u4eca\u65e5", "\u306f", "\u56f3\u66f8\u9928", "\u3067", "\u52c9\u5f37", "\u3057\u307e\u3057\u305f"]
+    assert token_surfaces == ["\u4eca\u65e5", "\u306f", "\u56f3\u66f8\u9928", "\u3067", "\u52c9\u5f37\u3057\u307e\u3057\u305f"]
     assert artifact.page.sentences[0].tokens[0].romanization == "reading-\u4eca\u65e5"
     assert artifact.page.sentences[0].tokens[2].definition_short == "definition for \u56f3\u66f8\u9928"
+
+
+def test_parse_text_into_page_artifact_keeps_japanese_homographs_context_safe(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    entries = {
+        "\u306f": ("wa", "topic or subject marker"),
+        "\u6b6f": ("ha", "tooth; teeth"),
+    }
+
+    monkeypatch.setattr(
+        book_extraction_service,
+        "lookup_lexicon_entry_map",
+        lambda *, terms, **_kwargs: {
+            term: LexiconEntryRecord(
+                id=index + 1,
+                language_code="ja",
+                entry_type="particle" if term == "\u306f" else "word",
+                surface_form=term,
+                pinyin=reading,
+                definition=definition,
+            )
+            for index, (term, (reading, definition)) in enumerate(entries.items())
+            if term in terms
+        },
+    )
+    monkeypatch.setattr(
+        book_extraction_service,
+        "lookup_lexicon_pinyin_map",
+        lambda *, terms, **_kwargs: {term: entries[term][0] for term in entries if term in terms},
+    )
+
+    artifact = book_extraction_service.parse_text_into_page_artifact(
+        text="\u4eca\u65e5\u306f\u6b6f\u304c\u75db\u3044\u3002",
+        language_code="ja",
+        title="\u65e5\u672c\u8a9e\u6587\u8108",
+        data_root=tmp_path,
+    )
+
+    tokens = {token.surface_form: token for token in artifact.page.sentences[0].tokens}
+    assert tokens["\u306f"].romanization == "wa"
+    assert tokens["\u306f"].definition_short == "topic or subject marker"
+    assert tokens["\u6b6f"].romanization == "ha"
+    assert tokens["\u6b6f"].definition_short == "tooth; teeth"
+
+
+def test_parse_text_into_page_artifact_keeps_japanese_okurigana_reading_together(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        book_extraction_service,
+        "lookup_lexicon_entry_map",
+        lambda *, terms, **_kwargs: {
+            term: LexiconEntryRecord(
+                id=index + 1,
+                language_code="ja",
+                entry_type="word",
+                surface_form=term,
+                pinyin=f"reading-{term}",
+                definition=f"definition for {term}",
+            )
+            for index, term in enumerate(terms)
+        },
+    )
+    monkeypatch.setattr(book_extraction_service, "lookup_lexicon_pinyin_map", lambda *, terms, **_kwargs: {})
+
+    artifact = book_extraction_service.parse_text_into_page_artifact(
+        text="\u98f2\u307f\u307e\u3059\u3002",
+        language_code="ja",
+        data_root=tmp_path,
+    )
+
+    tokens = artifact.page.sentences[0].tokens
+    assert [token.surface_form for token in tokens] == ["\u98f2\u307f\u307e\u3059"]
+    assert tokens[0].romanization == "reading-\u98f2\u307f\u307e\u3059"
 
 
 def test_parse_text_into_page_artifact_uses_google_romanization_when_local_readings_are_missing(

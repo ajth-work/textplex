@@ -130,6 +130,25 @@ def test_import_and_lookup_lexicon_from_korean_pack(tmp_path: Path) -> None:
     assert lookup.entries[0].pinyin == "achim"
 
 
+def test_import_and_lookup_japanese_context_entries(tmp_path: Path) -> None:
+    source_root = Path(__file__).resolve().parents[2] / "resources" / "lexicon" / "japanese"
+    data_root = tmp_path / "data"
+
+    summary = import_lexicon_from_source(source_root, data_root=data_root, language_code="ja", replace_existing=True)
+
+    assert summary.vocabulary_rows >= 19
+
+    particle_lookup = lookup_lexicon_entry(data_root=data_root, language_code="ja", term="\u306f")
+    assert particle_lookup.entries[0].surface_form == "\u306f"
+    assert particle_lookup.entries[0].pinyin == "wa"
+    assert particle_lookup.entries[0].definition == "topic or subject marker"
+
+    noun_lookup = lookup_lexicon_entry(data_root=data_root, language_code="ja", term="\u6b6f")
+    assert noun_lookup.entries[0].surface_form == "\u6b6f"
+    assert noun_lookup.entries[0].pinyin == "ha"
+    assert noun_lookup.entries[0].definition == "tooth; teeth"
+
+
 def test_import_and_lookup_lexicon_from_russian_pack(tmp_path: Path) -> None:
     source_root = Path(__file__).resolve().parents[2] / "resources" / "lexicon" / "russian"
     data_root = tmp_path / "data"

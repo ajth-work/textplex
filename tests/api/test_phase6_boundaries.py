@@ -63,6 +63,30 @@ def test_private_books_are_visible_only_to_owner(tmp_path: Path) -> None:
         app.state.data_root = original_root
 
 
+def test_import_surface_is_visible_only_to_owner(tmp_path: Path) -> None:
+    record = import_book_from_path(
+        SOURCE_FIXTURE,
+        language_code="ja",
+        page_count=1,
+        data_root=tmp_path / "books",
+        owner_id="user-a",
+    )
+
+    original_root = app.state.data_root
+    app.state.data_root = tmp_path
+    app.dependency_overrides[get_optional_user_context] = lambda: _context("user-b")
+    try:
+        client = TestClient(app)
+        assert client.get("/import").json()["recent_books"] == []
+
+        app.dependency_overrides[get_optional_user_context] = lambda: _context("user-a")
+        recent_books = client.get("/import").json()["recent_books"]
+        assert [book["book_id"] for book in recent_books] == [record.id]
+    finally:
+        app.dependency_overrides.pop(get_optional_user_context, None)
+        app.state.data_root = original_root
+
+
 def test_legacy_unowned_books_remain_available_without_account_context(tmp_path: Path) -> None:
     record = import_book_from_path(
         SOURCE_FIXTURE,

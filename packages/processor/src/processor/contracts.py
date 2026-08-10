@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+CURRENT_PIPELINE_VERSION = "textplex-3"
+
 
 class BoundingBox(BaseModel):
     x: float
@@ -81,7 +83,7 @@ class PageExtractionResult(BaseModel):
     language_code: str
     source_page_sha256: str | None = None
     processor_version: str = "0.1.0"
-    pipeline_version: str = "textplex-1"
+    pipeline_version: str = CURRENT_PIPELINE_VERSION
     raw_text: str
     clean_text: str
     page_translation: str | None = None

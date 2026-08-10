@@ -14,7 +14,7 @@ const appShellSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "compo
 const stylesheetSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "app", "globals.css"), "utf8");
 
 test("Settings menu cards use the shared route card spacing", () => {
-  assert.match(surfaceSource, /settings-preferences-card[\s\S]*settings-roadmap-card/);
+  assert.match(surfaceSource, /settings-preferences-card[\s\S]*settings-developer-tools-card/);
   assert.match(mockSurfaceSource, /settings-preferences-card[\s\S]*settings-roadmap-card/);
   assert.match(surfaceSource, /settings\.theme-settings-link/);
   assert.match(mockSurfaceSource, /settings\.theme-settings-link/);
@@ -32,6 +32,8 @@ test("Settings menu cards use the shared route card spacing", () => {
   assert.match(mockSurfaceSource, /Male/);
   assert.match(surfaceSource, /InventoryInspectorToggle/);
   assert.match(mockSurfaceSource, /InventoryInspectorToggle/);
+  assert.match(surfaceSource, /isTextPlexAdmin/);
+  assert.match(surfaceSource, /settings\.developer-tools-card/);
   assert.match(themeToggleSource, /shell\.theme-toggle/);
   assert.match(layoutSource, /<ThemeProvider>/);
   assert.match(layoutSource, /generateViewport/);
@@ -49,7 +51,7 @@ test("Settings menu cards use the shared route card spacing", () => {
   assert.match(appShellSource, /href="\/profile\/themes"/);
   assert.match(appShellSource, /Open theme settings/);
   assert.match(appShellSource, /Go back/);
-  assert.match(appShellSource, /nav-link-home" href=\{HOME_PATH\}>\s*<svg/);
+  assert.match(appShellSource, /className="button button-secondary nav-link nav-link-home" href=\{HOME_PATH\}/);
   assert.match(appShellSource, /className="button button-secondary nav-link nav-link-home"/);
   assert.match(stylesheetSource, /\.app-shell\s*\{[\s\S]*display: grid;[\s\S]*gap: 1rem;/);
   assert.match(stylesheetSource, /\.shell-icon-button,\s*\.button\.theme-toggle-button\s*\{[\s\S]*width: 2\.4rem;/);

@@ -78,6 +78,33 @@ export interface LexicalEntryResult {
   last_page: number | null;
 }
 
+export interface AdminUsageActivityPoint {
+  date: string;
+  active_profiles: number;
+  sessions: number;
+  page_reads: number;
+  sentence_reads: number;
+}
+
+export interface AdminUsageSummary {
+  generated_at: string;
+  data_scope: "local_data";
+  profile_count: number;
+  active_profiles_7d: number;
+  active_profiles_30d: number;
+  book_count: number;
+  processed_book_count: number;
+  reading_sessions: number;
+  page_reads: number;
+  sentence_reads: number;
+  active_seconds: number;
+  unique_words_exposed: number;
+  feedback_count: number;
+  open_feedback_count: number;
+  google_translate: GoogleTranslateUsageSummary;
+  activity: AdminUsageActivityPoint[];
+}
+
 export interface TranslationAlignmentToken {
   token_id: number;
   text: string;
@@ -114,7 +141,7 @@ export interface AuthMeResponse {
   id: string;
   email: string | null;
   role: string;
-  account_role: "member" | "qa" | "admin";
+  account_role: "member" | "tester" | "admin";
   permissions: string[];
   display_name: string | null;
 }
@@ -390,6 +417,15 @@ export interface LearningSyncResponse {
   retry_after_seconds: number;
   conflict_count: number;
   last_error: string | null;
+  last_reconciliation_event_id: string | null;
+  last_reconciliation_status:
+    | "queued"
+    | "uploading"
+    | "retry_scheduled"
+    | "synced"
+    | "hydrated"
+    | "conflict"
+    | null;
 }
 
 export type WordInteractionType =
@@ -773,6 +809,7 @@ export interface HostedProfileRecord {
   id: string;
   display_name: string | null;
   target_language: string;
+  target_language_other: string | null;
   learning_track: string;
   proficiency_level: string | null;
   created_at: string;
@@ -792,7 +829,7 @@ export interface HostedProfileSurfaceResponse {
 export interface HostedProfileUpdateRequest {
   display_name?: string | null;
   target_language?: string;
-  learning_track?: string;
+  learning_track?: "local" | "hsk" | "jlpt" | "topik" | "trki" | "cefr" | "custom" | "not_sure";
   proficiency_level?: string | null;
 }
 
@@ -833,6 +870,51 @@ export interface ThemeCatalogResponse {
   mode: "local" | "hosted";
   themes: ThemeCatalogItem[];
   bundles: ThemeBundleCatalogItem[];
+}
+
+export interface ThemeAdminRecord {
+  id: string;
+  title: string;
+  description: string;
+  price_cents: number;
+  is_free: boolean;
+  preview_available: boolean;
+  sort_order: number;
+  color_scheme: "light" | "dark" | null;
+  tokens: Record<string, string>;
+  pattern_image: string | null;
+  bundle_ids: string[];
+}
+
+export interface ThemeAdminResponse {
+  themes: ThemeAdminRecord[];
+}
+
+export interface ThemeAdminUpsertRequest {
+  id: string;
+  title: string;
+  description: string;
+  price_cents: number;
+  is_free: boolean;
+  preview_available: boolean;
+  sort_order: number;
+  color_scheme: "light" | "dark";
+  tokens: Record<string, string>;
+  pattern_image: string | null;
+}
+
+export interface ThemeAiSuggestRequest {
+  prompt: string;
+  image_data_url?: string | null;
+  current_theme?: ThemeAdminUpsertRequest | null;
+}
+
+export interface ThemeAiSuggestResponse {
+  title: string;
+  description: string;
+  color_scheme: "light" | "dark";
+  tokens: Record<string, string>;
+  design_notes: string;
 }
 
 export interface ActivityEvent {

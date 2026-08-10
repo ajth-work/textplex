@@ -7,11 +7,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../../components/auth-provider";
 import { SignOutButton } from "../../components/sign-out-button";
 import { resolveAccountLabel } from "../../lib/auth-display";
+import { targetLanguageOptions } from "../../lib/language-options";
+import { learningTrackOptions } from "../../lib/learning-track-options";
 import { getSupabaseClient, isSupabaseConfigured } from "../../lib/supabase";
 
 type AuthMode = "sign-in" | "sign-up" | "reset";
 
 const DEFAULT_RETURN_TO = "/home";
+const OTHER_LANGUAGE_CODE = "other";
 
 function normalizeReturnTo(value: string | null): string {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
@@ -28,12 +31,16 @@ export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [targetLanguage, setTargetLanguage] = useState("");
+  const [targetLanguageOther, setTargetLanguageOther] = useState("");
+  const [learningTrack, setLearningTrack] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const returnTo = normalizeReturnTo(searchParams.get("returnTo"));
+  const isAddingAccount = searchParams.get("mode") === "add-account";
 
-  if (user) {
+  if (user && !isAddingAccount) {
     const accountLabel = resolveAccountLabel(user);
     return (
       <main className="auth-shell" data-inventory-id="auth.page">
@@ -74,6 +81,19 @@ export default function AuthPage() {
       return;
     }
 
+    if (mode === "sign-up" && !targetLanguage) {
+      setError("Choose your target language before creating your account.");
+      return;
+    }
+    if (mode === "sign-up" && !learningTrack) {
+      setError("Choose a learning path before creating your account.");
+      return;
+    }
+    if (mode === "sign-up" && targetLanguage === OTHER_LANGUAGE_CODE && !targetLanguageOther.trim()) {
+      setError("Tell us which language you would like to see added.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       if (mode === "reset") {
@@ -91,7 +111,12 @@ export default function AuthPage() {
           email,
           password,
           options: {
-            data: { display_name: displayName.trim() || undefined },
+            data: {
+              display_name: displayName.trim() || undefined,
+              target_language: targetLanguage,
+              target_language_other: targetLanguageOther.trim() || undefined,
+              learning_track: learningTrack,
+            },
             emailRedirectTo: redirectTo,
           },
         });
@@ -128,10 +153,12 @@ export default function AuthPage() {
     <main className="auth-shell" data-inventory-id="auth.page">
       <section className="auth-card card" data-inventory-id="auth.account-card">
         <span className="eyebrow">TextPlex account</span>
-        <h1>{isReset ? "Reset your password" : isSignUp ? "Create your learner account" : "Welcome back"}</h1>
+        <h1>{isReset ? "Reset your password" : isSignUp ? "Create your learner account" : isAddingAccount ? "Add another account" : "Welcome back"}</h1>
         <p className="lede">
           {isReset
             ? "We will send a secure reset link to your email address."
+            : isAddingAccount
+              ? "Sign in to another TextPlex account. Your saved accounts remain available from the account menu on this device."
             : "Keep your reading history, vocabulary progress, and preferences available across devices."}
         </p>
 
@@ -140,6 +167,46 @@ export default function AuthPage() {
             <label>
               Display name
               <input className="text-input" value={displayName} onChange={(event) => setDisplayName(event.target.value)} autoComplete="name" />
+            </label>
+          ) : null}
+          {isSignUp ? (
+            <label data-inventory-id="auth.target-language">
+              Target language
+              <select className="text-input" value={targetLanguage} onChange={(event) => setTargetLanguage(event.target.value)} required>
+                <option value="">Choose a target language</option>
+                {targetLanguageOptions.map((option) => (
+                  <option key={option.code} value={option.code}>{option.label} ({option.shortCode})</option>
+                ))}
+                <option value={OTHER_LANGUAGE_CODE}>Other</option>
+              </select>
+            </label>
+          ) : null}
+          {isSignUp ? (
+            <label>
+              Suggest another language <span className="muted">(optional)</span>
+              <input
+                className="text-input"
+                value={targetLanguageOther}
+                onChange={(event) => setTargetLanguageOther(event.target.value)}
+                placeholder="For example, Spanish"
+                maxLength={80}
+                required={targetLanguage === OTHER_LANGUAGE_CODE}
+              />
+              <span className="small-copy">If your language is not listed, choose Other and tell us what you would like to read.</span>
+            </label>
+          ) : null}
+          {isSignUp ? (
+            <label data-inventory-id="auth.learning-track">
+              Learning path
+              <select className="text-input" value={learningTrack} onChange={(event) => setLearningTrack(event.target.value)} required>
+                <option value="">Choose a learning path</option>
+                {learningTrackOptions.map((option) => (
+                  <option key={option.code} value={option.code}>{option.label}</option>
+                ))}
+              </select>
+              <span className="small-copy">
+                {learningTrackOptions.find((option) => option.code === learningTrack)?.description ?? "Choose the kind of progress you want TextPlex to organize around."}
+              </span>
             </label>
           ) : null}
           <label>

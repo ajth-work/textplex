@@ -12,6 +12,7 @@ import { AUTH_SESSION_COOKIE_KEY, parseAuthSessionCookie } from "../lib/auth-ses
 import { appVersion } from "../lib/build-info";
 import { ThemeProvider } from "../components/theme-provider";
 import { FeedbackWidget } from "../components/feedback-widget";
+import { ImportProgressProvider } from "../components/import-progress-provider";
 import { APP_THEME_COOKIE_KEY, appThemeBrowserColors, isDarkAppTheme, resolveAppTheme } from "../lib/theme";
 import { getThemeWallpaperThumbnailPath } from "../lib/theme-catalog";
 
@@ -144,15 +145,17 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <AuthProvider initialUser={storedAuthSession ? (storedAuthSession.user as unknown as User) : null}>
             <ThemeProvider>
               <Suspense fallback={null}>
-                <AppFrame>
-                  <AppShell />
-                  <div className="app-shell-content">
-                    <Suspense fallback={null}>{children}</Suspense>
-                    <FeedbackWidget />
-                    <AccountFooter />
-                    <BuildFooter rebootedAt={appRebootedAt} version={appVersion} />
-                  </div>
-                </AppFrame>
+                <ImportProgressProvider>
+                  <AppFrame>
+                    <AppShell />
+                    <div className="app-shell-content">
+                      <Suspense fallback={null}>{children}</Suspense>
+                      <FeedbackWidget />
+                      <AccountFooter />
+                      <BuildFooter rebootedAt={appRebootedAt} version={appVersion} />
+                    </div>
+                  </AppFrame>
+                </ImportProgressProvider>
               </Suspense>
             </ThemeProvider>
           </AuthProvider>

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$TaskName = "TextPlex GitHub Auth Check",
-    [string]$Repo = "ajth-work/textplex",
+    [string]$Repo = "TextPlex/textplex",
     [string]$ProjectOwner = "ajth-work",
     [int]$ProjectNumber = 2,
     [ValidateSet("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")]

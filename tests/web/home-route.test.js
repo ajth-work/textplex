@@ -15,10 +15,10 @@ const progressContract = fs.readFileSync(path.join(repoRoot, "packages", "shared
 const inventorySource = fs.readFileSync(path.join(repoRoot, "docs", "COMPONENTS_INVENTORY.md"), "utf8");
 
 test("home continuation uses learner reading progress instead of extraction analysis", () => {
-  assert.match(homeRouteSource, /export default function HomePage\(\)/);
-  assert.match(homeRouteSource, /<HomeSurface \/>/);
+  assert.match(homeRouteSource, /export default async function HomePage\(\)/);
+  assert.match(homeRouteSource, /<HomeSurface books=\{data\.books\} progress=\{data\.progress\} \/>/);
   assert.match(legacyPortalRouteSource, /redirect\("\/home"\)/);
-  assert.match(homeSource, /fetchJson<ProgressSurfaceResponse>\("\/progress"\)/);
+  assert.match(homeRouteSource, /fetchHomeJson<ProgressSurfaceResponse>\(origin, "\/progress", accessToken\)/);
   assert.match(homeSource, /home\.continue-reading-card/);
   assert.match(homeSource, /home\.continue-reading-list/);
   assert.match(homeSource, /home\.continue-reading-row/);
@@ -55,4 +55,6 @@ test("reader entry points resume the last sentence for the selected book", () =>
   assert.match(librarySource, /resolveReaderResumeHref\(bookId, progress\)/);
   assert.match(librarySource, /library-read-state/);
   assert.match(bookDetailSource, /resolveReaderResumeHref\(bookId, progress, firstPageNumber\)/);
+  assert.match(textplexSource, /const hasStartedReading = progressBook\?\.reading_state === "in_progress" \|\| progressBook\?\.reading_state === "finished"/);
+  assert.match(bookDetailSource, /href=\{`\/reader\/\$\{bookId\}\/\$\{firstPageNumber\}`\}/);
 });

@@ -11,8 +11,12 @@ import type {
   VocabularyAssessmentStateRecord,
   ThemeCheckoutRequest,
   ThemeCheckoutResponse,
+  ThemeAdminResponse,
+  ThemeAiSuggestRequest,
+  ThemeAiSuggestResponse,
   ThemeEntitlementResponse,
   GoogleTranslateUsageSummary,
+  AdminUsageSummary,
   ProgressBookSummary,
   ProgressSurfaceResponse,
 } from "../../../packages/shared/src";
@@ -57,6 +61,7 @@ export type {
   ImportRecentBook,
   ImportSurfaceResponse,
   GoogleTranslateUsageSummary,
+  AdminUsageSummary,
   LexicalEntryResult,
   LexiconEntryRecord,
   LexiconImportRequest,
@@ -98,6 +103,11 @@ export type {
   ThemeCheckoutRequest,
   ThemeCheckoutResponse,
   ThemeEntitlementResponse,
+  ThemeAdminRecord,
+  ThemeAdminResponse,
+  ThemeAdminUpsertRequest,
+  ThemeAiSuggestRequest,
+  ThemeAiSuggestResponse,
 } from "../../../packages/shared/src";
 
 export const apiBaseUrl = process.env.NEXT_PUBLIC_TEXTPLEX_API_URL ?? "/api";
@@ -132,10 +142,66 @@ export type FeedbackRecord = {
     reproduction_notes?: string | null;
     suggested_action?: string | null;
     tags: string[];
+    plan: {
+      problem_statement: string;
+      expected_behavior: string;
+      actual_behavior: string;
+      reproduction_steps: string[];
+      implementation_tasks: string[];
+      acceptance_criteria: string[];
+      suggested_tests: string[];
+      risks: string[];
+      priority: "low" | "medium" | "high" | "urgent";
+      estimated_effort: "small" | "medium" | "large" | "unknown";
+    };
   };
   triage_source: "openai" | "fallback";
-  status: "needs_review" | "accepted" | "dismissed";
+  status: "needs_review" | "in_progress" | "completed" | "acknowledged" | "dismissed";
+  status_history: Array<{
+    status: "needs_review" | "in_progress" | "completed" | "acknowledged" | "dismissed";
+    changed_at: string;
+    changed_by?: string | null;
+    note?: string | null;
+    event_type: "status_changed" | "github_linked";
+    github_issue_url?: string | null;
+  }>;
+  resolution_note?: string | null;
+  github?: {
+    repository: string;
+    issue_number: number;
+    issue_url: string;
+    issue_state: "open" | "closed";
+    project_item_id?: string | null;
+    project_url?: string | null;
+    linked_at: string;
+    last_synced_at?: string | null;
+  } | null;
   user_id?: string | null;
+};
+
+export type TesterRecord = {
+  tester_id: string;
+  nickname?: string | null;
+  feedback_count: number;
+  last_seen_at?: string | null;
+};
+
+export type FeedbackNotification = {
+  id: string;
+  feedback_id: string;
+  title: string;
+  status: "needs_review" | "in_progress" | "completed" | "acknowledged" | "dismissed";
+  event_type: "status_changed" | "github_linked";
+  message: string;
+  created_at: string;
+  route: string;
+  github_issue_url?: string | null;
+  read: boolean;
+};
+
+export type FeedbackNotificationListResponse = {
+  notifications: FeedbackNotification[];
+  unread_count: number;
 };
 
 const readerLastPositionStoragePrefix = "textplex.reader-last-position:";
@@ -382,7 +448,8 @@ function readRememberedReaderPosition(bookId: string): ReaderResumePosition | nu
 export function resolveReaderResumePositionForBook(bookId: string, progressBook: ProgressBookSummary | null, fallbackPage = 1): ReaderResumePosition {
   const rememberedPosition = readRememberedReaderPosition(bookId);
   const serverPage = Math.max(progressBook?.resume_page ?? 0, progressBook?.furthest_page ?? 0);
-  if (serverPage > 0) {
+  const hasStartedReading = progressBook?.reading_state === "in_progress" || progressBook?.reading_state === "finished";
+  if (hasStartedReading && serverPage > 0) {
     if (rememberedPosition && rememberedPosition.pageNumber >= serverPage) {
       return rememberedPosition;
     }
@@ -392,7 +459,7 @@ export function resolveReaderResumePositionForBook(bookId: string, progressBook:
     };
   }
 
-  if (rememberedPosition) {
+  if (rememberedPosition && progressBook?.reading_state !== "not_read") {
     return rememberedPosition;
   }
 
@@ -499,6 +566,22 @@ export async function putJson<T>(pathname: string, body: unknown): Promise<T> {
 
   const response = await fetch(joinPath(pathname), {
     method: "PUT",
+    headers: await authHeaders(true),
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`Request failed (${response.status}) for ${pathname}`);
+  }
+  return (await response.json()) as T;
+}
+
+export async function patchJson<T>(pathname: string, body: unknown): Promise<T> {
+  if (isDemoMode) {
+    throw new Error("Demo mode does not support feedback administration.");
+  }
+
+  const response = await fetch(joinPath(pathname), {
+    method: "PATCH",
     headers: await authHeaders(true),
     body: JSON.stringify(body),
   });

@@ -5,12 +5,13 @@ const { test } = require("node:test");
 
 const repoRoot = path.join(__dirname, "..", "..");
 const librarySource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "library-view.tsx"), "utf8");
+const languageOptionsSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "lib", "language-options.ts"), "utf8");
 const stylesheetSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "app", "globals.css"), "utf8");
 
 test("Next library exposes target-language filter buttons above the shelf", () => {
   assert.match(librarySource, /const libraryLanguageOptions: LibraryLanguageOption\[\] = \[/);
   for (const code of ["all", "zh", "ko", "ja", "ru", "he", "ar"]) {
-    assert.match(librarySource, new RegExp(`code: "${code}"`));
+    assert.match(code === "all" ? librarySource : languageOptionsSource, new RegExp(`code: "${code}"`));
   }
   assert.match(librarySource, /const \[languageCode, setLanguageCode\] = useState\("all"\)/);
   assert.match(librarySource, /matchesLibraryLanguage\(book: BookRecord, languageCode: string\): boolean/);

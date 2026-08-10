@@ -38,6 +38,8 @@ test("Next reader meaning line preserves spacing, offers a complete reveal escap
   assert.match(readerSource, /disabled=\{isPunctuation\}/);
   assert.match(readerSource, /Punctuation \$\{token\.surface_form\}/);
   assert.match(readerSource, /reader-translation-reveal-heading[\s\S]*reader-translation-reveal-text[\s\S]*reader-translation-reveal-actions/);
+  assert.match(stylesheetSource, /\.reader-translation-reveal-card > summary\s*\{[\s\S]*display: flex;[\s\S]*align-items: center;/);
+  assert.match(stylesheetSource, /\.reader-translation-reveal-summary-copy\s*\{[\s\S]*display: inline-flex;/);
   assert.match(stylesheetSource, /\.reader-translation-reveal-part\.is-space\s*\{[\s\S]*display: inline-block;/);
   assert.match(stylesheetSource, /\.reader-translation-reveal-actions \.button\s*\{[\s\S]*width: auto;/);
   assert.match(stylesheetSource, /\.token-inline\.is-punct:hover,[\s\S]*box-shadow: none;/);
@@ -134,6 +136,19 @@ test("Next reader keeps settings in the title row while account access lives in 
   assert.match(stylesheetSource, /\.reader-settings-button\s*\{[\s\S]*grid-area: settings/);
 });
 
+test("Next reader exposes independent token size and spacing preferences", () => {
+  assert.match(readerSource, /readerTokenScaleStorageKey/);
+  assert.match(readerSource, /readerTokenSpacingStorageKey/);
+  assert.match(readerSource, /data-inventory-id="reader\.token-display-settings"/);
+  assert.match(readerSource, /data-inventory-id="reader\.token-text-size-control"/);
+  assert.match(readerSource, /data-inventory-id="reader\.token-spacing-control"/);
+  assert.match(readerSource, /id="reader-token-scale-slider"/);
+  assert.match(readerSource, /id="reader-token-spacing-slider"/);
+  assert.match(stylesheetSource, /--reader-token-scale/);
+  assert.match(stylesheetSource, /--reader-token-spacing/);
+  assert.match(stylesheetSource, /\.sentence-row\s*\{[\s\S]*column-gap: calc\(1rem \* var\(--reader-token-spacing, 1\)\)/);
+});
+
 test("Next reader expands the session summary into book-scoped stats", () => {
   assert.match(readerSource, /bookProgressSummary/);
   assert.match(readerSource, /sessionSummaryItems/);
@@ -183,12 +198,47 @@ test("Next reader makes the desktop session rail discoverable and draggable", ()
   assert.match(stylesheetSource, /@media \(hover: hover\) and \(pointer: fine\)/);
 });
 
+test("Next reader lets learners hide and restore session statistics with keyboard support", () => {
+  assert.match(readerSource, /readerSessionSummaryLayoutStorageKey\(bookId\)/);
+  assert.match(readerSource, /persistReaderSessionSummaryHiddenItemIds/);
+  assert.match(readerSource, /handleHideSessionSummaryItem/);
+  assert.match(readerSource, /handleShowSessionSummaryItem/);
+  assert.match(readerSource, /aria-label=\{`Hide \$\{item\.label\}`\}/);
+  assert.match(readerSource, /aria-label=\{`Restore \$\{item\.label\}`\}/);
+  assert.match(readerSource, /aria-keyshortcuts="ArrowLeft ArrowRight"/);
+  assert.match(readerSource, /reader-session-pill-action-label/);
+  assert.match(stylesheetSource, /\.reader-session-pill-stat-button:focus-visible,[\s\S]*\.reader-session-pill-edit:focus-visible/);
+  assert.match(stylesheetSource, /\.reader-session-pill-rail\s*\{[\s\S]*touch-action: pan-x/);
+  assert.match(stylesheetSource, /\.reader-session-pill-stat-button\s*\{[\s\S]*scroll-margin-inline/);
+});
+
+test("Next reader keeps reading profile statistics legible and selectable", () => {
+  assert.match(readerSource, /readerProfileStatisticsViewStorageKey/);
+  assert.match(readerSource, /resolveReaderProfileStatisticsView/);
+  assert.match(readerSource, /data-inventory-id="reader\.reading-profile-card"/);
+  assert.match(readerSource, /data-profile-statistics-view=\{readerProfileStatisticsView\}/);
+  assert.match(readerSource, /Statistics view/);
+  assert.match(readerSource, /Simple/);
+  assert.match(readerSource, /Detailed/);
+  assert.match(readerSource, /data-profile-metric-id="seconds-per-word"/);
+  assert.match(stylesheetSource, /\.profile-metrics\s*\{[\s\S]*grid-template-columns: repeat\(auto-fit/);
+  assert.match(stylesheetSource, /\.profile-metrics \.eyebrow[\s\S]*overflow-wrap: anywhere/);
+  assert.match(stylesheetSource, /\[data-profile-statistics-view="simple"\][\s\S]*data-profile-metric-id="seconds-per-word"/);
+});
+
 test("Next reader keeps the compact pager as the primary progress signal", () => {
   assert.match(readerSource, /className="reader-sentence-pager"/);
   assert.match(readerSource, /const pagePillLabel = totalPages/);
   assert.match(readerSource, /reader\.reading-progress-module/);
   assert.match(readerSource, /reader-progress-compact/);
   assert.doesNotMatch(readerSource, /reader-progress-card/);
+});
+
+test("Next reader gives a later-page opening a visible path back to the beginning", () => {
+  assert.match(readerSource, /const beginningPageNumber = 1/);
+  assert.match(readerSource, /data-inventory-id="reader\.beginning-action"/);
+  assert.match(readerSource, /Start at beginning/);
+  assert.match(readerSource, /pageNumber > beginningPageNumber/);
 });
 
 test("Next reader definition traces wrap long lookup paths inside the card", () => {
@@ -222,7 +272,9 @@ test("Next reader definition card stays compact and exposes the save action", ()
   assert.match(readerSource, /\/learning\/study-items/);
   assert.match(readerSource, /\/learning\/word-interactions/);
   assert.match(readerSource, /selectedTokenEnglishMeaning/);
-  assert.match(readerSource, /definition_short: selectedTokenEnglishMeaning \?\? token\.definition_short \?\? null/);
+  assert.match(readerSource, /definition_short:/);
+  assert.match(readerSource, /selectedTokenEnglishMeaning \?\?/);
+  assert.match(readerSource, /token\.definition_short/);
   assert.match(readerSource, /Saved to default list/);
   assert.match(readerSource, /Mark word as remembered/);
   assert.match(readerSource, /Mark word as missed/);
@@ -251,7 +303,7 @@ test("Next reader romanizes Korean token readings instead of falling back to Han
   assert.match(readerSource, /const selectedTokenReadingParts = selectedToken[\s\S]*buildTokenReadingParts/);
   assert.match(readerSource, /const selectedTokenReading = normalizeDisplayReading\(/);
   assert.match(readerSource, /const selectedTokenReadingDisplayParts = selectedToken/);
-  assert.match(readerSource, /const lexiconEntry = lexiconResult\?\.entries\[0\] \?\? null/);
+  assert.match(readerSource, /const lexiconEntry = lexiconSelection\.entry/);
   assert.match(readerSource, /const tokenSurfaceParts = languageCode\?\.startsWith\("ko"\) \? splitKoreanParticleChain\(token\.surface_form\) : \[\];/);
   assert.match(readerSource, /const tokenReadingParts = buildTokenReadingParts\(/);
   assert.match(readerSource, /const isTokenPronunciationMuted =/);
@@ -288,6 +340,15 @@ test("Next reader romanizes Korean token readings instead of falling back to Han
   assert.match(themeSource, /APP_THEME_RECENTS_CHANGE_EVENT/);
   assert.match(themeSource, /readStoredAppThemeRecents/);
   assert.match(themeSource, /persistAppThemeRecents/);
+});
+
+test("Next reader keeps Japanese surface, reading, lemma, and meaning aligned", () => {
+  assert.match(readerSource, /function selectLexiconEntryForToken\(/);
+  assert.match(readerSource, /const exactSurfaceEntries = entries\.filter\(\(entry\) => entry\.surface_form\.trim\(\) === surface\)/);
+  assert.match(readerSource, /A kana-only surface such as は must not inherit a kanji homograph such as 歯/);
+  assert.match(readerSource, /selectedToken\.surface_form,[\s\S]*selectedToken\.lemma \?\? ""/);
+  assert.match(readerSource, /Meaning withheld: this Japanese form has multiple possible readings or meanings\./);
+  assert.match(readerSource, /Meaning withheld: the dictionary result belongs to a different Japanese form\./);
 });
 
 test("Next reader separates page and sentence bookmarks with confirmation feedback", () => {
@@ -332,7 +393,7 @@ test("Next reader groups word mode, translation, source, and speed controls bene
 });
 
 test("Next reader illuminates translation and source tools only while their cards are visible", () => {
-  assert.match(readerSource, /reader-sentence-tool-button \$\{showSentenceTranslation \? "is-active" : ""\}/);
+  assert.match(readerSource, /reader-sentence-tool-button[\s\S]*?\$\{showSentenceTranslation \? "is-active" : ""\}/);
   assert.match(readerSource, /aria-label="Toggle sentence translation"/);
   assert.match(readerSource, /aria-label="Toggle source sentence"/);
   assert.match(readerSource, /sentenceTranslationLoading \? "Loading\.\.\." : "Translation"/);
@@ -343,6 +404,17 @@ test("Next reader illuminates translation and source tools only while their card
   assert.match(stylesheetSource, /\.token-inline\.is-audio-active\s*\{/);
   assert.match(stylesheetSource, /\.reader-shell \.reader-sentence-tool-button:not\(\.is-active\):hover/);
   assert.match(stylesheetSource, /\.reader-sentence-tool-button:not\(\.is-active\):focus-visible[\s\S]*outline-color: var\(--line\)/);
+});
+
+test("Next reader reveals quiet help hints for icon-only controls", () => {
+  assert.match(readerSource, /reader-tooltip-target/);
+  assert.match(readerSource, /data-tooltip="Back"/);
+  assert.match(readerSource, /data-tooltip="Reader settings"/);
+  assert.match(readerSource, /data-tooltip=\{readerPageBookmarked \? "Remove page bookmark"/);
+  assert.match(readerSource, /reader-tooltip-target--compact/);
+  assert.match(stylesheetSource, /\.reader-tooltip-target::after[\s\S]*content: attr\(data-tooltip\)/);
+  assert.match(stylesheetSource, /\.reader-tooltip-target:hover::after,[\s\S]*\.reader-tooltip-target:focus-visible::after/);
+  assert.match(stylesheetSource, /@media \(max-width: 520px\)[\s\S]*\.reader-tooltip-target--compact:focus-visible::after/);
 });
 
 test("Next reader adapts long titles to a balanced two-line header", () => {

@@ -37,11 +37,12 @@ Phase 6 completes the two product boundaries intentionally deferred from Phase 5
 ## Current Slice
 
 - [x] Add a local learning-event outbox and receipt ledger to account-scoped profile databases.
-- [x] Replicate reading sessions, page reads, and sentence/token exposures to an RLS-protected Supabase event table with idempotent keys.
+- [x] Replicate all local learner event types to an RLS-protected Supabase event table with stable IDs and per-user idempotent keys.
 - [x] Hydrate remote events into another local account cache without duplicating already-applied local events.
 - [x] Add an authenticated `/learning/sync` API endpoint and a best-effort reader sync trigger.
 - [x] Add API coverage for upload idempotency, remote hydration, and receipt isolation.
-- [x] Add offline retry scheduling and conflict/reconciliation reporting in the client.
+- [x] Add per-event retry scheduling, failure retention, and local reconciliation reporting.
+- [x] Keep local event history authoritative while treating hosted aggregates as rebuildable projections.
 - [x] Add private book/page ownership enforcement and sandbox commerce fulfillment.
 - [x] Add signed webhook replay protection, refund revocation, local entitlement reads, and hosted commerce schema/RLS scaffolding.
 

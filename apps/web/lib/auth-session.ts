@@ -11,6 +11,7 @@ export type AuthSessionSnapshot = {
     role: string | null;
     display_name: string | null;
     user_metadata: Record<string, unknown> | null;
+    app_metadata: Record<string, unknown> | null;
   };
 };
 
@@ -26,6 +27,9 @@ function snapshotUser(sessionUser: Session["user"]): AuthSessionSnapshot["user"]
     role: sessionUser.role ?? null,
     display_name: displayName && displayName.length > 0 ? displayName : null,
     user_metadata: metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>) : null,
+    app_metadata: sessionUser.app_metadata && typeof sessionUser.app_metadata === "object"
+      ? (sessionUser.app_metadata as Record<string, unknown>)
+      : null,
   };
 }
 
@@ -55,6 +59,9 @@ export function parseAuthSessionCookie(value: string | null | undefined): AuthSe
         display_name: typeof user.display_name === "string" && user.display_name.trim() ? user.display_name.trim() : null,
         user_metadata: user.user_metadata && typeof user.user_metadata === "object"
           ? (user.user_metadata as Record<string, unknown>)
+          : null,
+        app_metadata: user.app_metadata && typeof user.app_metadata === "object"
+          ? (user.app_metadata as Record<string, unknown>)
           : null,
       },
     };

@@ -15,6 +15,7 @@ import {
   type StudyProgramGroup,
   type StudySurfaceResponse,
 } from "../lib/textplex";
+import { languageDisplayLabel, languageShortCode, targetLanguageOptions } from "../lib/language-options";
 
 type LibraryLanguageOption = {
   code: string;
@@ -23,13 +24,7 @@ type LibraryLanguageOption = {
 
 const libraryLanguageOptions: LibraryLanguageOption[] = [
   { code: "all", label: "All" },
-  { code: "zh", label: "Chinese" },
-  { code: "ko", label: "Korean" },
-  { code: "ja", label: "Japanese" },
-  { code: "ru", label: "Russian" },
-  { code: "he", label: "Hebrew" },
-  { code: "ar", label: "Arabic" },
-  { code: "yo", label: "Yoruba" },
+  ...targetLanguageOptions,
 ];
 
 type GeneratorCurriculumMode = "auto" | "study_program" | "exam";
@@ -197,7 +192,7 @@ function matchesLibraryLanguage(book: BookRecord, languageCode: string): boolean
 }
 
 function generatorLanguageLabel(languageCode: string): string {
-  return libraryLanguageOptions.find((option) => option.code === languageCode)?.label ?? languageCode.toUpperCase();
+  return languageDisplayLabel(languageCode);
 }
 
 function generatorOptionLabel(options: readonly { value: string; label: string }[], value: string): string {
@@ -301,7 +296,7 @@ function LibraryCard({ book, progress, onOpenInfo, onOpenReader }: {
       <div className={artClass} aria-hidden="true" />
       <div className="library-card-body">
         <p className="library-kicker">
-          {book.language_code.toUpperCase()} · {bookFormatLabel(book)}
+          {languageShortCode(book.language_code)} · {bookFormatLabel(book)}
         </p>
         <h3>{book.title}</h3>
         <p className="library-author">{bookSubtitle(book)}</p>
@@ -610,7 +605,7 @@ export function LibraryView() {
                 aria-pressed={languageCode === option.code}
                 onClick={() => setLanguageCode(option.code)}
               >
-                {option.code === "all" ? option.label : `(${option.code.toUpperCase()})`}
+                {option.code === "all" ? option.label : `(${languageShortCode(option.code)})`}
               </button>
             ))}
           </div>

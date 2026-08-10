@@ -787,10 +787,15 @@ def get_activity_surface(
     )
 
 
-def get_import_surface(data_root: Path, *, default_language: str = "zh") -> ImportSurfaceResponse:
+def get_import_surface(
+    data_root: Path,
+    *,
+    default_language: str = "zh",
+    owner_id: str | None = None,
+) -> ImportSurfaceResponse:
     registry = load_registry(_books_root(data_root) / "registry.json")
     recent_books = sorted(
-        registry.values(),
+        (record for record in registry.values() if record.owner_id == owner_id),
         key=lambda record: record.processed_at or record.created_at,
         reverse=True,
     )

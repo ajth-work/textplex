@@ -61,19 +61,33 @@ def test_auth_me_validates_token_with_supabase(monkeypatch, tmp_path: Path) -> N
     }
 
 
-def test_auth_me_maps_trusted_textplex_role_to_permissions() -> None:
+def test_auth_me_maps_trusted_textplex_tester_role_to_permissions() -> None:
     response = auth_service._auth_me_response(
         {
-            "id": "user-qa",
-            "email": "qa@textplex.co",
+            "id": "user-tester",
+            "email": "tester@textplex.co",
+            "role": "authenticated",
+            "app_metadata": {"textplex_role": "tester"},
+        }
+    )
+
+    assert response.account_role == "tester"
+    assert "themes.preview_all" in response.permissions
+    assert "usage.global.read" not in response.permissions
+
+
+def test_auth_me_rejects_removed_qa_role() -> None:
+    response = auth_service._auth_me_response(
+        {
+            "id": "legacy-qa-user",
+            "email": "legacy-qa@textplex.co",
             "role": "authenticated",
             "app_metadata": {"textplex_role": "qa"},
         }
     )
 
-    assert response.account_role == "qa"
-    assert "themes.preview_all" in response.permissions
-    assert "usage.global.read" not in response.permissions
+    assert response.account_role == "member"
+    assert response.permissions == ["account.read"]
 
 
 def test_hosted_profile_reads_user_owned_supabase_rows(monkeypatch) -> None:

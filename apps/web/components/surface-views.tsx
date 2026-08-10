@@ -8,6 +8,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { RoutePage } from "./route-page";
 import { useAuth } from "./auth-provider";
 import { resolveAccountLabel } from "../lib/auth-display";
+import { getSupabaseClient } from "../lib/supabase";
+import { languageShortCode, targetLanguageOptions } from "../lib/language-options";
+import { learningTrackOptions, type LearningTrackCode } from "../lib/learning-track-options";
 import {
   fetchJson,
   formatDateTime,
@@ -81,12 +84,15 @@ import {
 import { LoadingSkeleton } from "./loading-skeleton";
 import { InventoryInspectorToggle } from "./inventory-inspector";
 import { BuildFooterToggle } from "./build-footer";
+import { isTextPlexAdmin } from "../lib/auth-roles";
 import { GlobalThemePicker } from "./global-theme-picker";
 import { HskSeriesChart } from "./hsk-series-chart";
 import { ReadingProgressChart } from "./reading-progress-chart";
 import { DueReviewChart } from "./due-review-chart";
 import { StudyDueLanguageGroups } from "./study-due-language-groups";
 import { StudyAxisRadarChart } from "./study-axis-radar-chart";
+import { ImportProgressCard } from "./import-progress-card";
+import { useImportProgress } from "./import-progress-provider";
 
 type LexicalEntryDetail = {
   pinyin: string | null;
@@ -94,23 +100,12 @@ type LexicalEntryDetail = {
   hskLevel: string | null;
 };
 
-type ImportLanguageOption = {
-  code: string;
-  label: string;
-};
+type ImportLanguageOption = (typeof targetLanguageOptions)[number];
 
 const googleTranslatePricePerMillionCharacters = 10;
 const translationConfirmationCharacterThreshold = 40000;
 
-const importLanguageOptions: ImportLanguageOption[] = [
-  { code: "zh", label: "Chinese" },
-  { code: "ko", label: "Korean" },
-  { code: "ja", label: "Japanese" },
-  { code: "ru", label: "Russian" },
-  { code: "he", label: "Hebrew" },
-  { code: "ar", label: "Arabic" },
-  { code: "yo", label: "Yoruba" },
-];
+const importLanguageOptions: ImportLanguageOption[] = [...targetLanguageOptions];
 
 function formatCurrencyUsd(value: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -415,7 +410,7 @@ export function AnalysisSurfaceView({ bookId }: { bookId: string }) {
             <article className="card feature-card" data-inventory-id="analysis.summary-card">
               <h2>Difficulty and coverage</h2>
               <p>Book: {data.book_id}</p>
-              <p>Language: {data.language_code}</p>
+              <p>Language: {languageShortCode(data.language_code)}</p>
               <p>Status: {data.has_extraction ? "Extraction available" : "No extraction yet"}</p>
               <p>Sentence average: {data.metrics.text_expected_level_label ?? "Not available"}</p>
               <p>Character-weighted average: {data.metrics.character_weighted_average_level ?? "Not available"}</p>
@@ -457,6 +452,7 @@ export function AnalysisSurfaceView({ bookId }: { bookId: string }) {
 }
 
 export function ImportSurfaceView() {
+  const { activeImport, trackImport } = useImportProgress();
   const [data, setData] = useState<ImportSurfaceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"paste" | "upload">("paste");
@@ -465,7 +461,6 @@ export function ImportSurfaceView() {
   const [languageCode, setLanguageCode] = useState("zh");
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [activeBook, setActiveBook] = useState<BookRecord | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -490,37 +485,6 @@ export function ImportSurfaceView() {
       active = false;
     };
   }, []);
-
-  useEffect(() => {
-    const activeBookId = activeBook?.id;
-    if (!activeBookId || activeBook.extraction_status === "complete" || activeBook.status === "extracted") {
-      return;
-    }
-
-    let active = true;
-    const refresh = async () => {
-      try {
-        const book = await fetchJson<BookRecord>(`/books/${activeBookId}`);
-        if (active) {
-          setActiveBook(book);
-          if (book.extraction_status === "complete" || book.status === "extracted") {
-            setActionMessage("Import complete. The reader is ready.");
-          }
-        }
-      } catch (err) {
-        if (active) {
-          setActionError(err instanceof Error ? err.message : "Unable to refresh import progress.");
-        }
-      }
-    };
-
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 1500);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [activeBook?.id, activeBook?.extraction_status, activeBook?.status]);
 
   const draftText = text.trim();
   const draftCharacterCount = mode === "paste" ? Array.from(draftText).length : 0;
@@ -571,7 +535,7 @@ export function ImportSurfaceView() {
         book = await postFormData<BookRecord>("/books/upload", formData);
       }
 
-      setActiveBook(book);
+      trackImport(book);
       setActionMessage(
         book.extraction_status === "complete" || book.status === "extracted"
           ? "Import complete. The reader is ready."
@@ -604,12 +568,6 @@ export function ImportSurfaceView() {
     }
     await runImport();
   };
-
-  const extractionTotal = activeBook?.extraction_total_pages ?? 0;
-  const extractionProcessed = activeBook?.extraction_pages_processed ?? 0;
-  const extractionPercent = extractionTotal > 0
-    ? Math.min(100, Math.round((extractionProcessed / extractionTotal) * 100))
-    : activeBook?.extraction_status === "complete" || activeBook?.status === "extracted" ? 100 : 0;
 
   return (
     <RoutePage
@@ -659,7 +617,7 @@ export function ImportSurfaceView() {
                   <select className="text-input" value={languageCode} onChange={(event) => setLanguageCode(event.target.value)} required>
                     {importLanguageOptions.map((option) => (
                       <option key={option.code} value={option.code}>
-                        {option.label} ({option.code.toUpperCase()})
+                        {option.label} ({languageShortCode(option.code)})
                       </option>
                     ))}
                     </select>
@@ -733,24 +691,7 @@ export function ImportSurfaceView() {
               </form>
             </section>
 
-          {activeBook ? (
-            <section className="card feature-card import-progress-card" aria-live="polite">
-              <div className="card-topline">
-                <h2>{activeBook.title}</h2>
-                <span className="pill">{activeBook.status.replaceAll("_", " ")}</span>
-              </div>
-              <p>{actionMessage ?? "Preparing import status..."}</p>
-              <div className="import-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={extractionPercent}>
-                <span style={{ width: `${extractionPercent}%` }} />
-              </div>
-              <p className="small-copy">
-                {extractionTotal > 0 ? `${extractionProcessed} of ${extractionTotal} pages processed.` : activeBook.extraction_status === "complete" ? "Text is ready to read." : "Waiting for extraction progress..."}
-              </p>
-              {activeBook.extraction_status === "complete" || activeBook.status === "extracted" ? (
-                <Link className="button button-secondary" href={resolveReaderResumeHref(activeBook.id, null)}>Open reader</Link>
-              ) : null}
-            </section>
-          ) : null}
+          {activeImport ? <ImportProgressCard book={activeImport} inventoryId="import.progress-card" message={actionMessage} /> : null}
 
           <section className="card feature-card">
             <div className="card-topline">
@@ -765,7 +706,7 @@ export function ImportSurfaceView() {
                     <span className="muted">{book.status.replaceAll("_", " ")}</span>
                   </div>
                   <p className="small-copy">
-                    {book.language_code.toUpperCase()} - Imported {formatDateTime(book.processed_at ?? book.created_at)}
+                    {languageShortCode(book.language_code)} - Imported {formatDateTime(book.processed_at ?? book.created_at)}
                   </p>
                 </article>
               ))}
@@ -866,11 +807,17 @@ export function ProgressSurfaceView() {
 
 export function ProfileSurfaceView() {
   const { loading: authLoading, user: authenticatedUser } = useAuth();
+  const isAdmin = isTextPlexAdmin(authenticatedUser);
   const [data, setData] = useState<ProfileSurfaceResponse | null>(null);
   const [hostedData, setHostedData] = useState<HostedProfileSurfaceResponse | null>(null);
   const [hostedError, setHostedError] = useState<string | null>(null);
-  const [hostedDisplayName, setHostedDisplayName] = useState("");
-  const [hostedSaving, setHostedSaving] = useState(false);
+    const [hostedDisplayName, setHostedDisplayName] = useState("");
+    const [hostedLearningTrackCode, setHostedLearningTrackCode] = useState<LearningTrackCode>("local");
+    const [hostedSaving, setHostedSaving] = useState(false);
+    const [emailInput, setEmailInput] = useState("");
+    const [emailSaving, setEmailSaving] = useState(false);
+    const [emailMessage, setEmailMessage] = useState<string | null>(null);
+    const [emailError, setEmailError] = useState<string | null>(null);
   const [migration, setMigration] = useState<ProfileMigrationResponse | null>(null);
   const [migrationError, setMigrationError] = useState<string | null>(null);
   const [migrationSaving, setMigrationSaving] = useState(false);
@@ -907,9 +854,11 @@ export function ProfileSurfaceView() {
     void fetchJson<HostedProfileSurfaceResponse>("/profile/hosted")
       .then((result) => {
         if (active) {
-          setHostedData(result);
-          setHostedDisplayName(result.profile.display_name ?? "");
-          setHostedError(null);
+            setHostedData(result);
+            setHostedDisplayName(result.profile.display_name ?? "");
+            setHostedLearningTrackCode(learningTrackOptions.find((option) => option.code === result.profile.learning_track)?.code ?? "local");
+            setEmailInput(result.user.email ?? authenticatedUser.email ?? "");
+            setHostedError(null);
         }
       })
       .catch((err) => {
@@ -962,10 +911,14 @@ export function ProfileSurfaceView() {
   async function saveHostedProfile() {
     setHostedSaving(true);
     try {
-      const payload: HostedProfileUpdateRequest = { display_name: hostedDisplayName.trim() || null };
+      const payload: HostedProfileUpdateRequest = {
+        display_name: hostedDisplayName.trim() || null,
+        learning_track: hostedLearningTrackCode,
+      };
       const result = await putJson<HostedProfileSurfaceResponse>("/profile/hosted", payload);
       setHostedData(result);
       setHostedDisplayName(result.profile.display_name ?? "");
+      setHostedLearningTrackCode(learningTrackOptions.find((option) => option.code === result.profile.learning_track)?.code ?? "local");
       setHostedError(null);
     } catch (err) {
       setHostedError(err instanceof Error ? err.message : "Unable to save hosted profile.");
@@ -974,9 +927,47 @@ export function ProfileSurfaceView() {
     }
   }
 
+  async function requestEmailChange() {
+    const client = getSupabaseClient();
+    const nextEmail = emailInput.trim().toLowerCase();
+    const currentEmail = (authenticatedUser?.email ?? hostedData?.user.email ?? "").trim().toLowerCase();
+
+    setEmailMessage(null);
+    setEmailError(null);
+    if (!client) {
+      setEmailError("Supabase authentication is not configured for this app.");
+      return;
+    }
+    if (!nextEmail || !nextEmail.includes("@")) {
+      setEmailError("Enter a valid email address.");
+      return;
+    }
+    if (nextEmail === currentEmail) {
+      setEmailError("Enter a different email address.");
+      return;
+    }
+
+    setEmailSaving(true);
+    try {
+      const redirectTo = `${window.location.origin}/auth/callback?returnTo=${encodeURIComponent("/profile")}`;
+      const result = await client.auth.updateUser(
+        { email: nextEmail },
+        { emailRedirectTo: redirectTo },
+      );
+      if (result.error) {
+        throw result.error;
+      }
+      setEmailMessage("Confirmation links were sent. For account safety, approve the change from both your current and new email inboxes.");
+    } catch (err) {
+      setEmailError(err instanceof Error ? err.message : "Unable to request the email change.");
+    } finally {
+      setEmailSaving(false);
+    }
+  }
+
   const settingsMap = new Map(data?.settings.entries.map((entry) => [entry.key, entry.value]) ?? []);
-  const profilePreferenceEntries = data?.settings.entries.filter((entry) => entry.key !== "readerMode" && entry.key !== "readerTokenAudioOnTap") ?? [];
   const accountLabel = resolveAccountLabel(hostedData?.user ?? authenticatedUser);
+  const hostedLearningTrack = learningTrackOptions.find((option) => option.code === hostedLearningTrackCode);
   const selectedTrack =
     data?.profile.learning_tracks.find((track) => track.code === data.profile.selected_track_code) ??
     data?.profile.learning_tracks[0] ??
@@ -1015,26 +1006,57 @@ export function ProfileSurfaceView() {
             Display name
             <input className="text-input" value={hostedDisplayName} onChange={(event) => setHostedDisplayName(event.target.value)} />
           </label>
+          <label data-inventory-id="profile.learning-track-select">
+            Learning path
+            <select className="text-input" value={hostedLearningTrackCode} onChange={(event) => setHostedLearningTrackCode(event.target.value as LearningTrackCode)}>
+              {learningTrackOptions.map((option) => (
+                <option key={option.code} value={option.code}>{option.label}</option>
+              ))}
+            </select>
+            <span className="small-copy">{hostedLearningTrack?.description}</span>
+          </label>
           <button className="button button-secondary" type="button" onClick={() => void saveHostedProfile()} disabled={hostedSaving}>
             {hostedSaving ? "Saving..." : "Save hosted profile"}
           </button>
-          <p className="small-copy">
-            {hostedData.profile.target_language} · {hostedData.profile.learning_track} · {hostedData.profile.proficiency_level ?? "Level not set"}
-          </p>
-          <p className="small-copy">Hosted settings: {hostedData.settings.length}</p>
+            <p className="small-copy">
+              {hostedData.profile.target_language} · {hostedLearningTrack?.label ?? hostedData.profile.learning_track} · {hostedData.profile.proficiency_level ?? "Level not set"}
+            </p>
+            <div className="profile-email-change" data-inventory-id="profile.email-change-form">
+              <h3>Change email address</h3>
+              <p className="small-copy">
+                Your learner data stays attached to this account. We will only update the sign-in email after the current and new addresses confirm the request.
+              </p>
+              <label>
+                New email address
+                <input
+                  className="text-input"
+                  type="email"
+                  value={emailInput}
+                  onChange={(event) => setEmailInput(event.target.value)}
+                  autoComplete="email"
+                />
+              </label>
+              <button className="button button-secondary" type="button" onClick={() => void requestEmailChange()} disabled={emailSaving}>
+                {emailSaving ? "Sending confirmations..." : "Send confirmation links"}
+              </button>
+              {emailMessage ? <p className="small-copy">{emailMessage}</p> : null}
+              {emailError ? <p className="small-copy">{emailError}</p> : null}
+            </div>
+            <p className="small-copy">Account type: {isAdmin ? "Administrator" : "Reader"}</p>
+          {isAdmin ? <span className="pill">Admin access</span> : null}
         </section>
       ) : null}
       {authenticatedUser ? (
         <section className="card feature-card" data-inventory-id="profile.migration-card">
           <h2>Local profile migration</h2>
-          <p className="small-copy">Use this to merge the anonymous local profile into this account and turn your seeded test data into user zero.</p>
+          <p className="small-copy">Move reading history created before sign-in into this account without replacing newer account data.</p>
           {migrationError ? <p className="small-copy">{migrationError}</p> : null}
           {!migration && !migrationError ? <LoadingSkeleton label="Checking local profile migration" /> : null}
           {migration ? (
             <>
               <p>{migration.message}</p>
               <p className="small-copy">
-                Anonymous rows: {Object.values(migration.source_counts).reduce((sum, count) => sum + count, 0)} · Account rows: {Object.values(migration.target_counts).reduce((sum, count) => sum + count, 0)}
+                Local reading history is kept separate until you choose to merge it.
               </p>
               {migration.status === "ready" ? (
                 <button className="button button-primary" type="button" onClick={() => void migrateLocalProfile()} disabled={migrationSaving}>
@@ -1071,21 +1093,9 @@ export function ProfileSurfaceView() {
           ) : null}
           <article className="card feature-card">
             <h2>Preferences</h2>
-            <div className="surface-list">
-              {profilePreferenceEntries.length > 0 ? (
-                profilePreferenceEntries.map((entry) => (
-                  <div key={entry.key} className="surface-list-item">
-                    <div className="card-topline">
-                      <strong>{entry.key}</strong>
-                      <span className="muted">{entry.value}</span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="small-copy">No saved settings yet.</p>
-              )}
-            </div>
-            <p className="small-copy">Theme: {appThemeLabels[resolveAppTheme(settingsMap.get("theme"))]}</p>
+            <p>Theme: {appThemeLabels[resolveAppTheme(settingsMap.get("theme"))]}</p>
+            <p className="small-copy">Open Settings to adjust the app appearance and reading preferences.</p>
+            <Link className="button button-secondary" href="/settings">Open settings</Link>
           </article>
           <article className="card feature-card">
             <h2>Book activity</h2>
@@ -1115,6 +1125,8 @@ export function ProfileSurfaceView() {
 }
 
 export function ThemeSettingsSurfaceView() {
+  const { user: authenticatedUser } = useAuth();
+  const isAdmin = isTextPlexAdmin(authenticatedUser);
   const [data, setData] = useState<SettingsSurfaceResponse | null>(null);
   const [catalog, setCatalog] = useState<ThemeCatalogResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1488,7 +1500,7 @@ export function ThemeSettingsSurfaceView() {
               ))}
             </div>
           </div>
-          <details className="theme-shop-preview-controls" open data-inventory-id="theme-shop.preview-tuning">
+          {isAdmin ? <details className="theme-shop-preview-controls" open data-inventory-id="theme-shop.preview-tuning">
             <summary>
               <span className="theme-shop-preview-controls-title">
                 <span className="eyebrow">Developer preview</span>
@@ -1564,7 +1576,7 @@ export function ThemeSettingsSurfaceView() {
                 Reset preview controls
               </button>
             </div>
-          </details>
+          </details> : null}
           <div className="theme-bundle-carousel" data-inventory-id="theme-shop.collections-carousel" aria-roledescription="carousel" aria-label="All theme collections">
             <div className="theme-bundle-carousel-heading">
               <div>
@@ -1808,6 +1820,7 @@ export function SearchSurfaceView() {
 
 export function SettingsSurfaceView() {
   const { configured: authConfigured, user: authenticatedUser } = useAuth();
+  const isAdmin = isTextPlexAdmin(authenticatedUser);
   const [data, setData] = useState<SettingsSurfaceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [readerSpeechVoiceGender, setReaderSpeechVoiceGender] = useState<ReaderSpeechVoiceGender>(() => readStoredReaderSpeechVoiceGender());
@@ -1888,23 +1901,8 @@ export function SettingsSurfaceView() {
       <section className="card feature-card settings-preferences-card" data-inventory-id="settings.preferences-card">
         <h2>Preferences</h2>
         <p className="small-copy">
-          Theme controls now live in the dedicated theme settings page, where the app look and owned visual packs stay together.
-          Use the version footer toggle to show the current app version and last reboot/rebuild time at the bottom of every page.
+          Theme controls live in the dedicated theme settings page. Speech voice is shared by reader and study audio.
         </p>
-        <div className="settings-inspector-row" data-inventory-id="settings.inventory-labels-toggle">
-          <div>
-            <strong>Inventory labels</strong>
-            <p className="small-copy">Show route and component labels while auditing the app shell and reader surfaces.</p>
-          </div>
-          <InventoryInspectorToggle />
-        </div>
-        <div className="settings-inspector-row" data-inventory-id="settings.build-footer-toggle">
-          <div>
-            <strong>Version footer</strong>
-            <p className="small-copy">Show the current app version and last reboot/rebuild time at the bottom of every page.</p>
-          </div>
-          <BuildFooterToggle />
-        </div>
         <div className="settings-inspector-row" data-inventory-id="settings.speech-voice-toggle">
           <div>
             <strong>Speech voice</strong>
@@ -1928,19 +1926,36 @@ export function SettingsSurfaceView() {
         <Link className="button button-secondary" href="/profile/themes" data-inventory-id="settings.theme-settings-link">
           Open theme settings
         </Link>
-        {data ? <p className="small-copy">Stored settings: {data.entries.length}</p> : null}
       </section>
-      <Link className="card feature-card settings-roadmap-card" href="/roadmap" data-inventory-id="settings.roadmap-card">
-        <div className="card-topline">
-          <div>
-            <span className="eyebrow">Planning</span>
-            <h2>Vocabulary roadmap</h2>
+      {isAdmin ? (
+        <section className="card feature-card settings-developer-tools-card" data-inventory-id="settings.developer-tools-card">
+          <div className="card-topline">
+            <div>
+              <span className="eyebrow">Admin tools</span>
+              <h2>Developer controls</h2>
+            </div>
+            <span className="pill">Admin only</span>
           </div>
-          <span className="pill">Open</span>
-        </div>
-        <p>Review the language-pack implementation plan, active build, and queued vocabulary tracks.</p>
-        <span className="button button-secondary">Open roadmap</span>
-      </Link>
+          <p className="small-copy">These controls are for auditing builds and previewing implementation details. They are hidden from reader accounts.</p>
+          <div className="settings-inspector-row" data-inventory-id="settings.inventory-labels-toggle">
+            <div>
+              <strong>Inventory labels</strong>
+              <p className="small-copy">Show route and component labels while auditing the app shell and reader surfaces.</p>
+            </div>
+            <InventoryInspectorToggle />
+          </div>
+          <div className="settings-inspector-row" data-inventory-id="settings.build-footer-toggle">
+            <div>
+              <strong>Version footer</strong>
+              <p className="small-copy">Show the current app version and last reboot/rebuild time at the bottom of every page.</p>
+            </div>
+            <BuildFooterToggle />
+          </div>
+          <Link className="button button-secondary" href="/roadmap" data-inventory-id="settings.roadmap-card">
+            Open implementation roadmap
+          </Link>
+        </section>
+      ) : null}
     </RoutePage>
   );
 }

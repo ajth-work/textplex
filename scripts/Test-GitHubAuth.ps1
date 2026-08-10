@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Repo = "ajth-work/textplex",
+    [string]$Repo = "TextPlex/textplex",
     [string]$ProjectOwner = "ajth-work",
     [int]$ProjectNumber = 2,
     [string]$LogPath

@@ -142,17 +142,17 @@ def test_unconfigured_theme_catalog_is_server_defined(monkeypatch) -> None:
     assert bundles["fall-editions"]["price_cents"] == 899
 
 
-def test_qa_account_can_preview_all_themes(monkeypatch) -> None:
+def test_tester_account_can_preview_all_themes(monkeypatch) -> None:
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_PUBLISHABLE_KEY", raising=False)
     context = AuthenticatedUserContext(
         user=AuthMeResponse(
-            id="qa-user",
-            email="qa@textplex.co",
-            account_role="qa",
+            id="tester-user",
+            email="tester@textplex.co",
+            account_role="tester",
             permissions=["account.read", "themes.preview_all"],
         ),
-        access_token="qa-token",
+        access_token="tester-token",
     )
 
     catalog = get_theme_catalog(context)

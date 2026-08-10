@@ -8,7 +8,7 @@ This is the reusable audit record and operating procedure for TextPlex. The deta
 | --- | --- |
 | Last performed | 2026-07-19 |
 | Audit revision | 1.0 |
-| Repository | `ajth-work/textplex` |
+| Repository | `TextPlex/textplex` |
 | Branch | `codex-textplex-reader-preview-split` |
 | Recorded HEAD | `cab48c8` |
 | Working tree | Dirty; 46 paths changed when recorded |
@@ -19,6 +19,14 @@ This is the reusable audit record and operating procedure for TextPlex. The deta
 | Sensitive data policy | Do not inspect, copy, or commit private books, OCR output, learner data, secrets, or generated databases |
 
 The audit was performed against the checkout as it existed, not a clean commit. Existing user changes were preserved. That is useful for real handoff review, but it means audit findings must identify whether a failure belongs to the baseline, the active change, or the environment.
+
+## 2026-08-10 Supabase learning-sync hardening
+
+- Detected a hosted/local contract drift: the hosted `learning_events` check constraint accepted only reading-session, page-read, and sentence-read events while the local outbox also emits vocabulary-study and word-interaction events.
+- Added a hosted migration to align all five event types and enforce non-empty stable event and idempotency keys. The migration is prepared in the repository but was not applied to the connected hosted project during this code change.
+- Added a local per-event reconciliation ledger with upload attempts, retry timestamps, retained errors, synced/hydrated states, and conflict status. Local learner events remain authoritative; hosted rows remain replicated history.
+- Focused verification passed: `tests/api/test_learning_sync.py` and `tests/api/test_phase6_boundaries.py` (`11 passed`), plus targeted Ruff checks for all changed Python files.
+- Connected Supabase advisor review found existing project warnings for executable `SECURITY DEFINER` functions, anonymous-access policy detection, leaked-password protection, and two unindexed foreign keys. These are recorded as separate hosted-project follow-up work.
 
 ## 2026-07-21 frontend runtime cleanup audit
 
@@ -326,7 +334,7 @@ This was a focused audit of the components inventory and the analysis/difficulty
 
 ### Issue mapping
 
-- GitHub issue [#42](https://github.com/ajth-work/textplex/issues/42): Define text difficulty and expected HSK level analytics. The issue is recorded in `docs/ISSUE_TRACKER.md` and is scoped across calculation, contract, live/preview consumers, and tests.
+- GitHub issue [#42](https://github.com/TextPlex/textplex/issues/42): Define text difficulty and expected HSK level analytics. The issue is recorded in `docs/ISSUE_TRACKER.md` and is scoped across calculation, contract, live/preview consumers, and tests.
 - Existing #27 and #31 remain related roadmap work, but neither defines the canonical difficulty/HSK metric contract identified here.
 
 ### Limitations and next trigger

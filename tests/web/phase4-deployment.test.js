@@ -31,8 +31,10 @@ test("canonical deployment docs keep the browser and API ports explicit", () => 
 
 test("Next keeps the import-to-reader-progress wiring explicit", () => {
   const importSource = read("apps", "web", "components", "surface-views.tsx");
+  const languageOptionsSource = read("apps", "web", "lib", "language-options.ts");
   const appShellSource = read("apps", "web", "components", "app-shell.tsx");
   const readerSource = read("apps", "web", "components", "reader-view.tsx");
+  const importProgressSource = read("apps", "web", "components", "import-progress-card.tsx");
 
   assert.match(importSource, /postJson<BookRecord>\("\/texts\/import"/);
   assert.match(importSource, /const importLanguageOptions: ImportLanguageOption\[\] = \[/);
@@ -40,14 +42,15 @@ test("Next keeps the import-to-reader-progress wiring explicit", () => {
   assert.match(importSource, /translation_mode: translationMode === "preload" \? "preload" : "off"/);
   assert.match(importSource, /formData\.append\("translation_mode", translationMode === "preload" \? "preload" : "off"\)/);
   for (const code of ["zh", "ko", "ja", "ru", "he", "ar"]) {
-    assert.match(importSource, new RegExp(`code: "${code}"`));
+    assert.match(languageOptionsSource, new RegExp(`code: "${code}"`));
   }
   assert.match(importSource, /<select className="text-input" value=\{languageCode\} onChange=\{\(event\) => setLanguageCode\(event\.target\.value\)\} required>/);
   assert.match(importSource, /Translate on demand/);
   assert.match(importSource, /Translate now/);
   assert.match(importSource, /import-translation-grid/);
   assert.match(importSource, /import-confirmation-card/);
-  assert.match(importSource, /resolveReaderResumeHref\(activeBook\.id, null\)/);
+  assert.match(importSource, /trackImport\(book\)/);
+  assert.match(importProgressSource, /href=\{resolveReaderResumeHref\(book\.id, null\)\}/);
   assert.match(appShellSource, /resolveReaderResumeHref\(activeBookId, null, activePageNumber \?\? 1\)/);
   assert.match(importSource, /Import complete\. The reader is ready\./);
   assert.match(readerSource, /postJson<ReadingSessionRecord>\("\/learning\/sessions"/);
@@ -58,7 +61,7 @@ test("Next keeps the import-to-reader-progress wiring explicit", () => {
   assert.match(readerSource, /reader\.sentence-translation/);
   assert.match(readerSource, /reader\.source-sentence/);
   assert.match(readerSource, /handleToggleSentenceTranslation/);
-  assert.match(readerSource, /Save to study list/);
+  assert.match(readerSource, /Save to default list/);
 });
 
 test("Next profile keeps the legacy shell link removed", () => {

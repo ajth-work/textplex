@@ -159,6 +159,15 @@ class LearningSyncResponse(BaseModel):
     retry_after_seconds: int = Field(default=0, ge=0)
     conflict_count: int = Field(default=0, ge=0)
     last_error: str | None = None
+    last_reconciliation_event_id: str | None = None
+    last_reconciliation_status: Literal[
+        "queued",
+        "uploading",
+        "retry_scheduled",
+        "synced",
+        "hydrated",
+        "conflict",
+    ] | None = None
 
 
 class WordInteractionCreateRequest(BaseModel):

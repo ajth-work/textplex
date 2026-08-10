@@ -130,3 +130,20 @@ Deterministic local code should handle:
 ## 7. Spoiler boundary for future book chat
 
 Every retrieval query must accept a maximum readable page. Default AI answers should use only pages the user has completed. Full-book context requires an explicit user action.
+
+## 8. Learner sync policy
+
+The local learner profile remains the authoritative event ledger. Every locally
+recorded learner event receives one stable `event_id`, is written to the local
+outbox in the same transaction as the learner mutation, and reuses that ID for
+every retry.
+
+Supabase `learning_events` is an append-only replicated event store. Its
+`event_id` primary key and per-user `idempotency_key` constraint make duplicate
+uploads safe; hosted rows do not overwrite local history. Local receipts prevent
+remote hydration from applying the same event twice.
+
+Sync failures are retryable and recorded per event with attempt count, next
+retry time, and the last error. Conflicts are retained for reconciliation rather
+than silently discarded. Derived learner aggregates may be rebuilt from the
+event ledger, so a hosted aggregate never becomes the sole source of truth.

@@ -36,6 +36,7 @@ from processor import (
     stitch_page_sentence_carryover,
 )
 from processor.contracts import (
+    CURRENT_PIPELINE_VERSION,
     BookExtractionResult,
     PageExtractionResult,
     SentenceResult,
@@ -222,6 +223,7 @@ def _recover_page_result(
     owner_id: str | None = None,
 ) -> PageExtractionResult:
     raw_text = page.raw_text.strip()
+    needs_pipeline_rebuild = page.pipeline_version != CURRENT_PIPELINE_VERSION
     parsed: dict | None = None
     if raw_text.startswith("{"):
         try:
@@ -233,8 +235,11 @@ def _recover_page_result(
 
     if parsed is None:
         transcription = _json_string_fragment(raw_text, "transcription")
+        has_structured_transcription = bool(transcription)
         if not transcription:
-            return page
+            if not needs_pipeline_rebuild:
+                return page
+            transcription = raw_text
         page_translation = _json_string_fragment(raw_text, "page_translation") or _json_string_fragment(raw_text, "translation")
         page_translation_source = _json_string_fragment(raw_text, "page_translation_source") or _json_string_fragment(raw_text, "translation_source")
         page_ends_with_sentence_terminator = _json_bool_fragment(raw_text, "page_ends_with_sentence_terminator")
@@ -243,6 +248,13 @@ def _recover_page_result(
         sentence_translation_sources = _string_list(_json_list_fragment(raw_text, "sentence_translation_sources")) or _string_list(_json_list_fragment(raw_text, "translation_sources"))
         token_hints = _json_list_fragment(raw_text, "token_hints")
         source_payload = None
+        if needs_pipeline_rebuild and not has_structured_transcription:
+            sentence_texts = [sentence.text for sentence in page.sentences]
+            sentence_translations = [sentence.translation or "" for sentence in page.sentences]
+            sentence_translation_sources = [sentence.translation_source or "" for sentence in page.sentences]
+            page_translation = page.page_translation
+            page_translation_source = page.page_translation_source
+            page_ends_with_sentence_terminator = page.page_ends_with_sentence_terminator
     else:
         transcription = parsed.get("transcription")
         if not isinstance(transcription, str):
@@ -759,6 +771,71 @@ def translate_page_sentence(
     if aligned_sentence is not None and aligned_page is not updated_page:
         return aligned_page, aligned_sentence, "google_translate_live"
     return updated_page, updated_sentence, "google_translate_live"
+
+
+def prefetch_book_sentence_translation_window(
+    *,
+    book: BookRecord,
+    page_number: int,
+    sentence_order: int,
+    lookahead: int = 3,
+    data_root: Path | None = None,
+    owner_id: str | None = None,
+) -> list[tuple[int, SentenceResult, str]]:
+    """Cache the focused sentence and a small forward-looking reader window.
+
+    The window is deliberately sentence-bounded rather than page-bounded, so a
+    learner reaching a page boundary still has the first sentences of the next
+    page ready. Results are persisted per page as they are resolved.
+    """
+    data_root = data_root or get_books_root()
+    owner_id = owner_id or book.owner_id
+    remaining = lookahead + 1
+    next_page_number = page_number
+    results: list[tuple[int, SentenceResult, str]] = []
+
+    while remaining > 0 and next_page_number <= book.total_pages:
+        artifact = load_page_artifact(
+            book_id=book.id,
+            page_number=next_page_number,
+            data_root=data_root,
+            owner_id=owner_id,
+        )
+        if artifact is None:
+            next_page_number += 1
+            continue
+
+        sentences = sorted(artifact.page.sentences, key=lambda sentence: sentence.order)
+        if next_page_number == page_number:
+            start_index = next((index for index, sentence in enumerate(sentences) if sentence.order == sentence_order), None)
+            if start_index is None:
+                return results
+        else:
+            start_index = 0
+
+        updated_page = artifact.page
+        for sentence in sentences[start_index:]:
+            updated_page, updated_sentence, resolution_source = translate_page_sentence(
+                updated_page,
+                sentence_order=sentence.order,
+                data_root=data_root,
+                owner_id=owner_id,
+            )
+            if updated_sentence is None:
+                continue
+            results.append((next_page_number, updated_sentence, resolution_source))
+            remaining -= 1
+            if remaining == 0:
+                break
+
+        if updated_page is not artifact.page:
+            _save_page_artifact(
+                _page_artifact_path(book.id, next_page_number, data_root),
+                artifact.model_copy(update={"page": updated_page}),
+            )
+        next_page_number += 1
+
+    return results
 
 
 def preload_book_sentence_translations(

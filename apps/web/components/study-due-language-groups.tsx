@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { StudyProgramGroup, StudyQueueItem, StudyVocabularyGroup } from "../lib/textplex";
+import { languageDisplayLabel } from "../lib/language-options";
 import { StudyAxisRadarChart } from "./study-axis-radar-chart";
 
 type StudyDueLanguageGroupsProps = {
@@ -15,21 +16,8 @@ type StudyDueLanguageGroupsProps = {
 
 const QUARTER_HOUR_MS = 15 * 60 * 1000;
 
-const languageLabels: Record<string, string> = {
-  ar: "Arabic",
-  fr: "French",
-  he: "Hebrew",
-  ja: "Japanese",
-  ko: "Korean",
-  local: "Local",
-  ru: "Russian",
-  yo: "Yoruba",
-  zh: "Chinese",
-};
-
 function languageLabel(languageCode: string): string {
-  const normalized = languageCode.trim().toLowerCase();
-  return languageLabels[normalized] ?? languageCode.toUpperCase();
+  return languageCode.trim().toLowerCase() === "local" ? "Local" : languageDisplayLabel(languageCode);
 }
 
 function roundUpToQuarterHour(timestamp: number): number {

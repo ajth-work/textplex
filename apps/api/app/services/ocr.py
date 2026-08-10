@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
-DEFAULT_OCR_MODEL = "gpt-5.4-mini"
+DEFAULT_OCR_MODEL = "gpt-5.6-luna"
 DEFAULT_MAX_OUTPUT_TOKENS = 2048
 DEFAULT_OCR_PROVIDER = "local"
 OCR_PROMPT_VERSION = "ocr-v2"

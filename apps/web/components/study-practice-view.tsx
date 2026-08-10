@@ -14,6 +14,7 @@ import {
   type VocabularyAssessmentAxisKey,
   type VocabularyAssessmentStateRecord,
 } from "../lib/textplex";
+import { languageDisplayLabel } from "../lib/language-options";
 import { StudyPronunciationGuide } from "./study-pronunciation-guide";
 
 type PracticeMode = "program" | "review" | "glossed" | "both";
@@ -111,24 +112,7 @@ function normalizeLanguageCode(value: string | null | undefined): string | null 
 }
 
 function languageLabel(languageCode: string): string {
-  switch (languageCode.toLowerCase()) {
-    case "ru":
-      return "Russian";
-    case "zh":
-      return "Chinese";
-    case "ja":
-      return "Japanese";
-    case "ko":
-      return "Korean";
-    case "he":
-      return "Hebrew";
-    case "ar":
-      return "Arabic";
-    case "yo":
-      return "Yoruba";
-    default:
-      return languageCode.toUpperCase();
-  }
+  return languageDisplayLabel(languageCode);
 }
 
 function practiceModeLabel(mode: PracticeMode): string {
@@ -144,10 +128,16 @@ function practiceModeLabel(mode: PracticeMode): string {
   }
 }
 
-function normalizePracticeAnswer(value: string): string {
-  return value
+function normalizePracticeAnswer(value: string, languageCode?: string | null): string {
+  const languageRoot = languageCode?.trim().toLowerCase().split(/[-_]/)[0] ?? "";
+  const normalizedValue = value
     .normalize("NFKC")
-    .toLowerCase()
+    .toLowerCase();
+  const languageAwareValue = languageRoot === "ja"
+    ? normalizedValue.normalize("NFKD").replace(/\u0304/g, "").normalize("NFKC")
+    : normalizedValue;
+
+  return languageAwareValue
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim()
     .replace(/\s+/g, " ");
@@ -183,9 +173,9 @@ function levenshteinDistance(left: string, right: string): number {
   return previousRow[rightCharacters.length] ?? 0;
 }
 
-function answerSimilarityRatio(submittedAnswer: string, expectedAnswer: string): number {
-  const normalizedSubmittedAnswer = normalizePracticeAnswer(submittedAnswer);
-  const normalizedExpectedAnswer = normalizePracticeAnswer(expectedAnswer);
+function answerSimilarityRatio(submittedAnswer: string, expectedAnswer: string, languageCode?: string | null): number {
+  const normalizedSubmittedAnswer = normalizePracticeAnswer(submittedAnswer, languageCode);
+  const normalizedExpectedAnswer = normalizePracticeAnswer(expectedAnswer, languageCode);
   if (!normalizedSubmittedAnswer.length || !normalizedExpectedAnswer.length) {
     return 0;
   }
@@ -203,16 +193,17 @@ function classifyPracticeResult(
   expectedAnswer: string | null,
   promptText: string | null,
   alternateAnswers: Array<string | null>,
+  languageCode?: string | null,
 ): AnswerResult {
-  const normalizedSubmittedAnswer = normalizePracticeAnswer(submittedAnswer);
-  const normalizedExpectedAnswer = normalizePracticeAnswer(expectedAnswer ?? "");
-  const normalizedPromptText = normalizePracticeAnswer(promptText ?? "");
+  const normalizedSubmittedAnswer = normalizePracticeAnswer(submittedAnswer, languageCode);
+  const normalizedExpectedAnswer = normalizePracticeAnswer(expectedAnswer ?? "", languageCode);
+  const normalizedPromptText = normalizePracticeAnswer(promptText ?? "", languageCode);
   if (normalizedSubmittedAnswer.length > 0 && normalizedExpectedAnswer.length > 0 && normalizedSubmittedAnswer === normalizedExpectedAnswer) {
     return "correct";
   }
 
   const wrongAxisMatches = alternateAnswers
-    .map((candidate) => normalizePracticeAnswer(candidate ?? ""))
+    .map((candidate) => normalizePracticeAnswer(candidate ?? "", languageCode))
     .filter((candidate) => candidate.length > 0)
     .filter((candidate) => candidate !== normalizedExpectedAnswer)
     .filter((candidate) => candidate !== normalizedPromptText);
@@ -221,7 +212,7 @@ function classifyPracticeResult(
     return "wrong_axis";
   }
 
-  if (answerSimilarityRatio(normalizedSubmittedAnswer, normalizedExpectedAnswer) >= RETRY_SIMILARITY_THRESHOLD) {
+  if (answerSimilarityRatio(normalizedSubmittedAnswer, normalizedExpectedAnswer, languageCode) >= RETRY_SIMILARITY_THRESHOLD) {
     return "retry";
   }
 
@@ -353,16 +344,16 @@ function writeIntroductionProgress(storageKey: string, progress: IntroductionPro
   }
 }
 
-function assessmentAxisLabel(axisKey: VocabularyAssessmentAxisKey): string {
+function assessmentDirectionLabel(axisKey: VocabularyAssessmentAxisKey): string {
   switch (axisKey) {
     case "form_to_reading":
-      return "Form to reading";
+      return "Word → reading";
     case "meaning_to_form":
-      return "Meaning to form";
+      return "Meaning → word";
     case "reading_to_form":
-      return "Reading to form";
+      return "Reading → word";
     default:
-      return "Form to meaning";
+      return "Word → meaning";
   }
 }
 
@@ -485,10 +476,10 @@ function buildProgramCards(
         sourceLabel: `${selectedProgram.program_source_label} - ${selectedLevel.level_label}`,
         title: selectedProgram.program_label,
         subtitle: selectedLevel.introduction_note,
-        progressLabel: assessmentAxisLabel(assessmentAxisKey),
+        progressLabel: assessmentDirectionLabel(assessmentAxisKey),
         detailRows: [
           { label: "Level", value: selectedLevel.level_label },
-          { label: "Review axis", value: assessmentAxisLabel(assessmentAxisKey) },
+          { label: "Practice direction", value: assessmentDirectionLabel(assessmentAxisKey) },
           { label: "Frequency", value: item.frequency_rank != null ? `#${item.frequency_rank}` : "-" },
           { label: "Saved", value: String(item.saved_count) },
           { label: "Confidence", value: item.confidence_score != null ? item.confidence_score.toFixed(2) : "-" },
@@ -558,7 +549,7 @@ function buildGlossedCards(
         sourceLabel: item.source_book_title ?? item.source_book_id,
         title: "Glossed vocabulary study",
         subtitle: "Words saved from reading get one introduction before stage 0 practice.",
-        progressLabel: assessmentAxisLabel(assessmentAxisKey),
+        progressLabel: assessmentDirectionLabel(assessmentAxisKey),
         detailRows: [
           { label: "Book", value: item.source_book_title ?? item.source_book_id },
           { label: "Page", value: String(item.source_page_number) },
@@ -914,6 +905,7 @@ export function StudyPracticeView({
       currentPrompt.answer,
       currentPrompt.prompt,
       [currentCard.term, resolvedMeaning, resolvedPronunciation],
+      currentCard.languageCode,
     );
 
     setAssessmentPending(true);
@@ -983,7 +975,7 @@ export function StudyPracticeView({
               <div className="study-practice-stage">
                 <div className="study-practice-stage-topline">
                   <span className="pill">{currentCard.sourceLabel}</span>
-                  <span className="pill">{currentCard.phase === "assessment" ? assessmentAxisLabel(currentCard.assessmentAxisKey ?? "form_to_meaning") : "Introduction"}</span>
+                  <span className="pill">{currentCard.phase === "assessment" ? assessmentDirectionLabel(currentCard.assessmentAxisKey ?? "form_to_meaning") : "Introduction"}</span>
                 </div>
 
                 <p className="study-practice-term" lang={currentPrompt?.promptLanguage ?? currentCard.languageCode}>
@@ -1008,7 +1000,7 @@ export function StudyPracticeView({
                 ) : null}
                 {currentCard.phase === "intro" ? (
                   <p className="study-practice-intro-copy">
-                    Learn this word before we move into the randomized axis checks for this chunk.
+                    Learn this word before we move into the mixed practice directions for this chunk.
                   </p>
                 ) : currentAttempt.revealed && currentAttempt.answerResult !== "correct" ? (
                   <p
@@ -1046,7 +1038,7 @@ export function StudyPracticeView({
                         : currentAttempt.answerResult === "retry"
                           ? "Try again"
                           : currentAttempt.answerResult === "wrong_axis"
-                            ? "Oops, wrong axis"
+                            ? "That answer matches a different direction"
                             : "Incorrect"}
                     </strong>
                   </div>
@@ -1167,7 +1159,7 @@ export function StudyPracticeView({
                         setSelectedIndex((current) => (current + 1) % practiceCards.length);
                       }}
                       aria-label="Next word"
-                      title={introAdvanceCard?.phase === "assessment" ? "Start randomized axis practice" : "Next word"}
+                      title={introAdvanceCard?.phase === "assessment" ? "Start mixed practice" : "Next word"}
                       data-inventory-id="study.practice-next"
                     >
                       {introAdvanceCard?.phase === "assessment" ? "Start practice" : "Next word"}
@@ -1180,7 +1172,7 @@ export function StudyPracticeView({
                       }}
                       disabled={practiceCards.length <= 1}
                       aria-label="Next term"
-                      title={introAdvanceCard?.phase === "assessment" ? "Start randomized axis practice" : "Next term"}
+                      title={introAdvanceCard?.phase === "assessment" ? "Start mixed practice" : "Next term"}
                     >
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="m9 18 6-6-6-6" />

@@ -123,7 +123,55 @@ def test_tokenize_sentence_keeps_korean_words_together() -> None:
 def test_tokenize_sentence_keeps_japanese_hiragana_and_katakana_together() -> None:
     tokens = tokenize_sentence("\u4eca\u65e5\u306f\u30b3\u30d4\u30fc\u3067\u52c9\u5f37\u3057\u307e\u3057\u305f\u3002", "ja")
 
-    assert [token.surface_form for token in tokens] == ["\u4eca\u65e5", "\u306f", "\u30b3\u30d4\u30fc", "\u3067", "\u52c9\u5f37", "\u3057\u307e\u3057\u305f"]
+    assert [token.surface_form for token in tokens] == ["\u4eca\u65e5", "\u306f", "\u30b3\u30d4\u30fc", "\u3067", "\u52c9\u5f37\u3057\u307e\u3057\u305f"]
+
+
+def test_tokenize_sentence_keeps_japanese_okurigana_attached_to_words() -> None:
+    tokens = tokenize_sentence("\u671d\u306f\u6c34\u3092\u5c11\u3057\u98f2\u307f\u3001\u9854\u3092\u6d17\u3044\u307e\u3059\u3002", "ja")
+
+    assert [token.surface_form for token in tokens] == [
+        "\u671d",
+        "\u306f",
+        "\u6c34",
+        "\u3092",
+        "\u5c11\u3057",
+        "\u98f2\u307f",
+        "\u9854",
+        "\u3092",
+        "\u6d17\u3044\u307e\u3059",
+    ]
+
+
+def test_tokenize_sentence_keeps_japanese_conjugations_and_na_adjectives_together() -> None:
+    tokens = tokenize_sentence("正しい。完全な強固さとしなやかさが、間違ってはいなくても。", "ja")
+
+    assert [token.surface_form for token in tokens] == [
+        "正しい",
+        "完全な",
+        "強固さ",
+        "と",
+        "しなやかさ",
+        "が",
+        "間違ってはいなくても",
+    ]
+
+
+def test_tokenize_sentence_uses_morphology_for_japanese_word_boundaries() -> None:
+    tokens = tokenize_sentence("私は学校に行かなければならない。昨日、友達と映画を見てしまった。", "ja")
+
+    assert [token.surface_form for token in tokens] == [
+        "私",
+        "は",
+        "学校",
+        "に",
+        "行かなければならない",
+        "昨日",
+        "友達",
+        "と",
+        "映画",
+        "を",
+        "見てしまった",
+    ]
 
 
 def test_tokenize_sentence_keeps_russian_words_together() -> None:

@@ -5,10 +5,10 @@ TextPlex keeps Supabase's built-in `authenticated` database role separate from i
 | Product role | Intended use | Permissions |
 | --- | --- | --- |
 | `member` | Normal learner account | Account-owned reading, profile, and settings data |
-| `qa` | Internal testing account | Member access plus premium theme previews, experimental language access, and translation fallback testing |
-| `admin` | Platform operations | QA access plus global usage reports, account management, and entitlement management |
+| `tester` | Internal product-testing account | Member access plus premium theme previews, experimental language access, and translation fallback testing |
+| `admin` | Platform operations | Tester access plus global usage reports, account management, and entitlement management |
 
-## Bootstrap a QA account
+## Bootstrap a tester account
 
 Create the account through the TextPlex sign-up flow first. Then use a protected Supabase SQL Editor session to assign the role. Replace the email and role values deliberately:
 
@@ -17,13 +17,26 @@ update auth.users
 set raw_app_meta_data = jsonb_set(
     coalesce(raw_app_meta_data, '{}'::jsonb),
     '{textplex_role}',
-    to_jsonb('qa'::text),
+    to_jsonb('tester'::text),
     true
 )
-where email = 'qa@textplex.co';
+where email = 'tester@textplex.co';
 ```
 
 The API treats every new account as `member` until this trusted field is assigned. Users cannot promote themselves through browser-editable profile metadata.
+
+If an existing account still has the retired `qa` value, migrate it explicitly before the next sign-in:
+
+```sql
+update auth.users
+set raw_app_meta_data = jsonb_set(
+    coalesce(raw_app_meta_data, '{}'::jsonb),
+    '{textplex_role}',
+    to_jsonb('tester'::text),
+    true
+)
+where raw_app_meta_data->>'textplex_role' = 'qa';
+```
 
 ## Usage boundaries
 

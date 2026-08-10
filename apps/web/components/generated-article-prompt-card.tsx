@@ -1,6 +1,7 @@
 "use client";
 
 import { formatDateTime, type GeneratedReaderArticlePromptDetails } from "../lib/textplex";
+import { languageShortCode } from "../lib/language-options";
 
 type GeneratedArticlePromptCardProps = {
   details: GeneratedReaderArticlePromptDetails | null;
@@ -65,7 +66,7 @@ export function GeneratedArticlePromptCard({
             <div>
               <dt>Language</dt>
               <dd>
-                {details.language_label} ({details.language_code.toUpperCase()})
+                {details.language_label} ({languageShortCode(details.language_code)})
               </dd>
             </div>
             <div>
