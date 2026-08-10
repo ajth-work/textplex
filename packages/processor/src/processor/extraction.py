@@ -142,9 +142,11 @@ def _normalize_token_hints(
         if not normalized_surface:
             continue
         romanization = hint.get("romanization") if isinstance(hint.get("romanization"), str) else None
+        furigana = hint.get("furigana") if isinstance(hint.get("furigana"), str) else None
         definition_short = hint.get("definition_short") if isinstance(hint.get("definition_short"), str) else None
         hints[normalized_surface] = {
             "romanization": romanization,
+            "furigana": furigana,
             "definition_short": definition_short,
         }
     return hints
@@ -169,6 +171,8 @@ def _apply_token_hints(
         update_payload = {}
         if hint.get("romanization") and not token.romanization:
             update_payload["romanization"] = hint["romanization"]
+        if hint.get("furigana") and not token.furigana:
+            update_payload["furigana"] = hint["furigana"]
         if hint.get("definition_short") and not token.definition_short:
             update_payload["definition_short"] = hint["definition_short"]
         tokens.append(token.model_copy(update=update_payload) if update_payload else token)

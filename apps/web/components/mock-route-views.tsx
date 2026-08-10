@@ -587,6 +587,8 @@ export function MockSearchSurfaceView() {
 
 export function MockSettingsSurfaceView() {
   const [readerSpeechVoiceGender, setReaderSpeechVoiceGender] = useState<"female" | "male">("female");
+  const [readerAnnotationMode, setReaderAnnotationMode] = useState<"romanization" | "furigana">("romanization");
+  const [furiganaVisibility, setFuriganaVisibility] = useState<"always" | "jlpt_threshold">("always");
   const isAdmin = false;
   const theme: AppTheme = "neutral";
 
@@ -647,6 +649,26 @@ export function MockSettingsSurfaceView() {
               </button>
             ))}
           </div>
+        </div>
+        <div className="settings-inspector-row" data-inventory-id="settings.japanese-reading-toggle">
+          <div>
+            <strong>{readerAnnotationMode === "furigana" ? "Japanese furigana" : "Romanization"}</strong>
+            <p className="small-copy">Choose lowercase romanization or kana-only readings above Japanese kanji.</p>
+          </div>
+          <div className="voice-gender-toggle-group" role="group" aria-label="Japanese reading annotation mode">
+            <button type="button" className={`button button-secondary button-compact ${readerAnnotationMode === "romanization" ? "is-active" : ""}`} onClick={() => setReaderAnnotationMode("romanization")} aria-pressed={readerAnnotationMode === "romanization"}>Romaji</button>
+            <button type="button" className={`button button-secondary button-compact ${readerAnnotationMode === "furigana" ? "is-active" : ""}`} onClick={() => setReaderAnnotationMode("furigana")} aria-pressed={readerAnnotationMode === "furigana"}>Kana</button>
+          </div>
+        </div>
+        <div className="settings-inspector-row" data-inventory-id="settings.furigana-visibility">
+          <div>
+            <strong>Furigana visibility</strong>
+            <p className="small-copy">JLPT filtering is queued until the ranked Japanese lexicon is connected.</p>
+          </div>
+          <select className="text-input" value={furiganaVisibility} onChange={(event) => setFuriganaVisibility(event.target.value === "jlpt_threshold" ? "jlpt_threshold" : "always")} aria-label="Furigana visibility">
+            <option value="always">Always when available</option>
+            <option value="jlpt_threshold">JLPT threshold (pending)</option>
+          </select>
         </div>
         <Link className="button button-secondary" href="/profile/themes" data-inventory-id="settings.theme-settings-link">
           Open theme settings

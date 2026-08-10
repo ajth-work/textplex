@@ -21,6 +21,7 @@ class TokenResult(BaseModel):
     part_of_speech: str | None = None
     pronunciation: str | None = None
     romanization: str | None = None
+    furigana: str | None = None
     definition_short: str | None = None
     proficiency_system: str | None = None
     proficiency_level: str | None = None

@@ -396,6 +396,7 @@
           <div class="reader-toolbar-actions">
             <button id="toggleImage" class="icon-button reader-nav-button" type="button" aria-label="Toggle page image">🖼</button>
             <button id="readerTokenModeToggle" class="button button-secondary button-compact reader-token-mode-toggle" type="button" aria-pressed="false" aria-label="Switch to character mode">Word</button>
+            <button id="readerAnnotationModeToggle" class="button button-secondary button-compact reader-token-mode-toggle" type="button" aria-pressed="false" aria-label="Switch to Japanese furigana">Romaji</button>
             <button id="extractNow" class="icon-button reader-nav-button" type="button" aria-label="Extract now" disabled>＋</button>
             <button class="icon-button reader-nav-button" type="button" aria-label="Bookmark">☆</button>
             <div class="reader-options-wrap">
@@ -567,6 +568,18 @@
                 </span>
               </button>
             </div>
+          </div>
+
+          <div class="theme-group">
+            <h3>Japanese reading</h3>
+            <label class="field">
+              <span>Furigana visibility</span>
+              <select id="furiganaVisibility">
+                <option value="always">Always show when available</option>
+                <option value="jlpt_threshold">JLPT level threshold (lexicon pending)</option>
+              </select>
+            </label>
+            <p class="small-copy">JLPT-aware hiding will use Japanese lexicon rankings once that lexicon is connected.</p>
           </div>
 
           <div class="theme-group archive-group">

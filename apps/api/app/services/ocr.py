@@ -27,6 +27,7 @@ _TRAILING_SENTENCE_CLOSERS = "\"')]}〉》」』】〗〟”’"
 class OcrTokenHint(BaseModel):
     surface_form: str
     romanization: str | None = None
+    furigana: str | None = None
     definition_short: str | None = None
 
 
@@ -88,7 +89,7 @@ def build_ocr_prompt(*, book_title: str | None, language_code: str, page_number:
         "If the page ends mid-sentence, transcribe only the visible fragment and do not add ending punctuation.\n"
         "Split the transcription into sentence_texts using the original punctuation.\n"
         "If you can confidently translate the page, include page_translation and sentence_translations aligned to the sentence_texts order.\n"
-        "If you can confidently identify segmented tokens, include token_hints with surface_form, romanization, and a short definition.\n"
+        "If you can confidently identify segmented tokens, include token_hints with surface_form, romanization, furigana (Japanese kana only when available), and a short definition.\n"
         "Keep token_hints focused on the segmented words visible on this page.\n"
         "Do not translate, summarize, explain, or rewrite the content.\n"
         "Return only a JSON object with transcription, sentence_texts, sentence_translations, page_translation, page_ends_with_sentence_terminator, and token_hints."
@@ -231,11 +232,13 @@ def _normalize_token_hints(values: object) -> list[OcrTokenHint]:
             continue
 
         romanization = item.get("romanization")
+        furigana = item.get("furigana")
         definition_short = item.get("definition_short")
         hints.append(
             OcrTokenHint(
                 surface_form=surface_form.strip(),
                 romanization=romanization if isinstance(romanization, str) else None,
+                furigana=furigana if isinstance(furigana, str) else None,
                 definition_short=definition_short if isinstance(definition_short, str) else None,
             )
         )

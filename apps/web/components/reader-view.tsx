@@ -76,6 +76,7 @@ type ReaderTextSizeMode = "small" | "medium" | "large";
 type ReaderProfileStatisticsView = "simple" | "detailed";
 type SentenceAudioRate = 0.25 | 0.5 | 0.75 | 1;
 type RussianSyllableDisplayMode = "romanization" | "original";
+type ReaderAnnotationMode = "romanization" | "furigana";
 type SentenceTranslationResponse = {
   book_id: string;
   page_number: number;
@@ -108,6 +109,8 @@ const readerTokenSpacingStorageKey = "textplex.readerTokenSpacing";
 const readerPronunciationFreshOnlyStorageKey = "textplex.readerPronunciationFreshOnly";
 const readerSrsColoringStorageKey = "textplex.readerSrsColoring";
 const readerRussianSyllableDisplayModeStorageKey = "textplex.readerRussianSyllableDisplayMode";
+const readerAnnotationModeStorageKey = "textplex.readerAnnotationMode";
+const furiganaVisibilityStorageKey = "textplex.furiganaVisibility";
 const readerModeStorageKey = "textplex.readerMode";
 const readerModeLabels: Record<ReaderMode, string> = {
   sentence: "Sentence",
@@ -628,7 +631,22 @@ function normalizeDisplayReading(value: string | null | undefined): string {
     return "";
   }
 
-  return romanizeHangulText(value);
+  return romanizeHangulText(value).toLowerCase();
+}
+
+function resolveReaderAnnotationMode(value: string | null | undefined): ReaderAnnotationMode {
+  return value === "furigana" ? "furigana" : "romanization";
+}
+
+function toHiragana(value: string): string {
+  return Array.from(value).map((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint >= 0x30a1 && codePoint <= 0x30f6 ? String.fromCodePoint(codePoint - 0x60) : character;
+  }).join("");
+}
+
+function hasKanji(value: string): boolean {
+  return /[\u3400-\u4dbf\u4e00-\u9fff]/u.test(value);
 }
 
 type TokenReadingPart = {
@@ -747,13 +765,18 @@ function buildTokenReadingParts(
   languageCode?: string | null,
   pronunciationOverride?: string | null,
   readingOverride?: string | null,
+  annotationMode: ReaderAnnotationMode = "romanization",
 ): TokenReadingPart[] {
   const surface = token.surface_form ?? "";
   if (!surface) {
     return [];
   }
 
-  const reading = normalizeDisplayReading(
+  const isJapanese = languageCode?.toLowerCase().startsWith("ja");
+  const japaneseKana = isJapanese && annotationMode === "furigana" && hasKanji(surface)
+    ? toHiragana(token.furigana?.trim() || (isJapaneseKanaOnly(token.pronunciation ?? "") ? token.pronunciation ?? "" : ""))
+    : "";
+  const reading = annotationMode === "furigana" && isJapanese ? japaneseKana : normalizeDisplayReading(
     readingOverride?.trim() ||
       token.romanization?.trim() ||
       pronunciationOverride?.trim() ||
@@ -1610,6 +1633,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [readerMeaningLineRevealAll, setReaderMeaningLineRevealAll] = useState(false);
   const [readerDefinitionTraceEnabled, setReaderDefinitionTraceEnabled] = useState(false);
   const [readerPronunciationFreshOnly, setReaderPronunciationFreshOnly] = useState(false);
+  const [readerAnnotationMode, setReaderAnnotationMode] = useState<ReaderAnnotationMode>("romanization");
+  const [furiganaVisibility, setFuriganaVisibility] = useState("always");
   const [readerSrsColoring, setReaderSrsColoring] = useState(false);
   const [readerTokenAudioOnTap, setReaderTokenAudioOnTap] = useState(() => readStoredReaderTokenAudioOnTap());
   const [readerSpeechVoiceGender, setReaderSpeechVoiceGender] = useState<"female" | "male">("female");
@@ -1701,6 +1726,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     setReaderMeaningLineRevealAll(window.localStorage.getItem(readerMeaningLineRevealAllStorageKey) === "true");
     setReaderDefinitionTraceEnabled(window.localStorage.getItem(readerDefinitionTraceEnabledStorageKey) === "true");
     setReaderPronunciationFreshOnly(window.localStorage.getItem(readerPronunciationFreshOnlyStorageKey) === "true");
+    setReaderAnnotationMode(resolveReaderAnnotationMode(window.localStorage.getItem(readerAnnotationModeStorageKey)));
+    setFuriganaVisibility(window.localStorage.getItem(furiganaVisibilityStorageKey) === "jlpt_threshold" ? "jlpt_threshold" : "always");
     setReaderSrsColoring(window.localStorage.getItem(readerSrsColoringStorageKey) === "true");
     setReaderTokenAudioOnTap(readStoredReaderTokenAudioOnTap());
     readerTokenAudioIntroSeenRef.current = window.localStorage.getItem(readerTokenAudioIntroSeenStorageKey) === "true";
@@ -1997,6 +2024,14 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     }
     window.localStorage.setItem(readerPronunciationFreshOnlyStorageKey, String(readerPronunciationFreshOnly));
   }, [readerPronunciationFreshOnly]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(readerAnnotationModeStorageKey, readerAnnotationMode);
+    window.localStorage.setItem(furiganaVisibilityStorageKey, furiganaVisibility);
+  }, [readerAnnotationMode, furiganaVisibility]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -2539,6 +2574,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
         pageData?.book.language_code ?? null,
         selectedTokenPronunciationOverride,
         selectedTokenReading,
+        readerAnnotationMode,
       )
     : [];
   const selectedTokenSurfaceParts = selectedToken ? splitKoreanParticleChain(selectedToken.surface_form) : [];
@@ -2921,6 +2957,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       window.localStorage.setItem("textplex.readerTokenMode", nextMode);
       return nextMode;
     });
+    setSelectedToken(null);
+  }
+
+  function handleToggleReaderAnnotationMode() {
+    setReaderAnnotationMode((mode) => (mode === "furigana" ? "romanization" : "furigana"));
     setSelectedToken(null);
   }
 
@@ -3975,6 +4016,41 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                 definition card still shows the full lookup reading.
               </p>
             </section>
+            <section className="reader-options-section" data-inventory-id="reader.annotation-mode-section">
+              <div className="reader-options-section-head">
+                <div>
+                  <span className="eyebrow">Japanese reading</span>
+                  <h3>{readerAnnotationMode === "furigana" ? "Furigana" : "Romanization"}</h3>
+                </div>
+                <button
+                  type="button"
+                  className={`button button-secondary button-compact ${readerAnnotationMode === "furigana" ? "is-active" : ""}`}
+                  onClick={handleToggleReaderAnnotationMode}
+                  aria-pressed={readerAnnotationMode === "furigana"}
+                  aria-label={readerAnnotationMode === "furigana" ? "Switch to lowercase romanization" : "Switch to Japanese furigana"}
+                  data-inventory-id="reader.annotation-mode-toggle"
+                >
+                  {readerAnnotationMode === "furigana" ? "Kana" : "Romaji"}
+                </button>
+              </div>
+              <label className="reader-size-slider" htmlFor="furigana-visibility-select">
+                <span className="reader-size-slider-head">
+                  <strong>Furigana visibility</strong>
+                  <span>{furiganaVisibility === "jlpt_threshold" ? "JLPT threshold" : "Always when available"}</span>
+                </span>
+                <select
+                  id="furigana-visibility-select"
+                  className="text-input"
+                  value={furiganaVisibility}
+                  onChange={(event) => setFuriganaVisibility(event.target.value === "jlpt_threshold" ? "jlpt_threshold" : "always")}
+                  aria-label="Furigana visibility"
+                >
+                  <option value="always">Always show when available</option>
+                  <option value="jlpt_threshold">JLPT level threshold (lexicon pending)</option>
+                </select>
+              </label>
+              <p className="small-copy">JLPT-aware hiding will use Japanese lexicon rankings once that lexicon is connected.</p>
+            </section>
             <section className="reader-options-section" data-inventory-id="reader.srs-color-section">
               <div className="reader-options-section-head">
                 <div>
@@ -4712,7 +4788,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   const isAudioActive = sentenceAudioPlaying && sentenceAudioTokenOrder === token.order;
                   const languageCode = pageData?.book.language_code ?? null;
                   const tokenStudyItem = getStudyVocabularyItem(token);
-                  const tokenReadingParts = buildTokenReadingParts(token, languageCode, tokenPronunciationOverrides[token.order] ?? null);
+                  const tokenReadingParts = buildTokenReadingParts(token, languageCode, tokenPronunciationOverrides[token.order] ?? null, null, readerAnnotationMode);
                   const isTokenPronunciationMuted =
                     readerPronunciationFreshOnly && !studySurfaceLoading && !isFreshStudyItem(tokenStudyItem) && tokenReadingParts.length > 0;
                   const tokenSurfaceParts = languageCode?.startsWith("ko") ? splitKoreanParticleChain(token.surface_form) : [];
