@@ -55,6 +55,7 @@ export interface TokenResult {
   part_of_speech: string | null;
   pronunciation: string | null;
   romanization: string | null;
+  furigana?: string | null;
   definition_short: string | null;
   proficiency_system: string | null;
   proficiency_level: string | null;

@@ -5,8 +5,6 @@ const wakeHelperStorageKey = "textplex.processorWakeHelperUrl";
 const ocrProviderStorageKey = "textplex.ocrProvider";
 const themeStorageKey = "textplex.theme";
 const readerTokenModeStorageKey = "textplex.readerTokenMode";
-const readerAnnotationModeStorageKey = "textplex.readerAnnotationMode";
-const furiganaVisibilityStorageKey = "textplex.furiganaVisibility";
 const localEntriesStorageKey = "textplex.localTextEntries";
 const archiveItemsStorageKey = "textplex.archiveItems";
 const uploadSessionStorageKey = "textplex.uploadSession";
@@ -14,8 +12,6 @@ const defaultView = "home";
 const defaultTheme = "paper";
 const defaultOcrProvider = "local";
 const defaultReaderTokenMode = "word";
-const defaultReaderAnnotationMode = "romanization";
-const defaultFuriganaVisibility = "always";
 const defaultEntryKind = "book";
 const entryKinds = new Set(["book", "article"]);
 const requestTimeoutMs = 15000;
@@ -84,8 +80,6 @@ const elements = {
   readerBack: document.getElementById("readerBack"),
   toggleImage: document.getElementById("toggleImage"),
   readerTokenModeToggle: document.getElementById("readerTokenModeToggle"),
-  readerAnnotationModeToggle: document.getElementById("readerAnnotationModeToggle"),
-  furiganaVisibility: document.getElementById("furiganaVisibility"),
   extractNow: document.getElementById("extractNow"),
   readerOptionsButton: document.getElementById("readerOptionsButton"),
   readerOptionsMenu: document.getElementById("readerOptionsMenu"),
@@ -112,8 +106,6 @@ const state = {
   ocrProvider: resolveOcrProvider(window.localStorage.getItem(ocrProviderStorageKey) ?? defaultOcrProvider),
   theme: resolveTheme(window.localStorage.getItem(themeStorageKey) ?? defaultTheme),
   readerTokenMode: resolveReaderTokenMode(window.localStorage.getItem(readerTokenModeStorageKey) ?? defaultReaderTokenMode),
-  readerAnnotationMode: resolveReaderAnnotationMode(window.localStorage.getItem(readerAnnotationModeStorageKey) ?? defaultReaderAnnotationMode),
-  furiganaVisibility: resolveFuriganaVisibility(window.localStorage.getItem(furiganaVisibilityStorageKey) ?? defaultFuriganaVisibility),
   books: [],
   localEntries: loadLocalEntries(),
   archivedItems: loadArchivedItems(),
@@ -184,12 +176,6 @@ function bindEvents() {
     renderReader();
   });
   elements.readerTokenModeToggle?.addEventListener("click", handleReaderTokenModeToggle);
-  elements.readerAnnotationModeToggle?.addEventListener("click", handleReaderAnnotationModeToggle);
-  elements.furiganaVisibility?.addEventListener("change", (event) => {
-    state.furiganaVisibility = resolveFuriganaVisibility(event.target?.value);
-    window.localStorage.setItem(furiganaVisibilityStorageKey, state.furiganaVisibility);
-    renderReader();
-  });
   elements.readerBack.addEventListener("click", () => setActiveView("library"));
   elements.extractNow.addEventListener("click", () => void extractSelectedBook());
   elements.readerOptionsButton?.addEventListener("click", () => {
@@ -737,46 +723,6 @@ function resolveReaderTokenMode(value) {
   return value === "character" ? "character" : "word";
 }
 
-function resolveReaderAnnotationMode(value) {
-  return value === "furigana" ? "furigana" : "romanization";
-}
-
-function resolveFuriganaVisibility(value) {
-  return value === "jlpt_threshold" ? "jlpt_threshold" : "always";
-}
-
-function isJapaneseLanguage(languageCode) {
-  return String(languageCode ?? "").toLowerCase().startsWith("ja");
-}
-
-function hasKanji(value) {
-  return /[\u3400-\u4dbf\u4e00-\u9fff]/u.test(String(value ?? ""));
-}
-
-function toHiragana(value) {
-  return Array.from(String(value ?? ""), (character) => {
-    const codePoint = character.codePointAt(0) ?? 0;
-    return codePoint >= 0x30a1 && codePoint <= 0x30f6 ? String.fromCodePoint(codePoint - 0x60) : character;
-  }).join("");
-}
-
-function normalizeRomanization(value) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  return normalized || "";
-}
-
-function resolveTokenAnnotation(token, annotationMode, languageCode) {
-  if (resolveReaderAnnotationMode(annotationMode) === "furigana" && isJapaneseLanguage(languageCode)) {
-    if (!hasKanji(token?.surface_form)) {
-      return "";
-    }
-    const pronunciation = String(token?.pronunciation ?? "");
-    const kana = token?.furigana || (/^[\u3040-\u30ff]+$/u.test(pronunciation) ? pronunciation : "");
-    return kana ? toHiragana(kana) : "";
-  }
-  return normalizeRomanization(token?.romanization ?? token?.pronunciation ?? "");
-}
-
 function getReaderTokenModeLabel(mode) {
   return resolveReaderTokenMode(mode) === "character" ? "Char" : "Word";
 }
@@ -784,108 +730,6 @@ function getReaderTokenModeLabel(mode) {
 function shouldExpandTokenIntoCharacters(surface) {
   const text = String(surface ?? "");
   return isCjk(text) && Array.from(text).length > 1;
-}
-
-const pinyinSyllablePattern = /^(?:(?:zh|ch|sh)|[bpmfdtnlgkhjqxrzcsyw])?(?:a|ai|an|ang|ao|e|ei|en|eng|er|o|ong|ou|i|ia|ian|iang|iao|ie|in|ing|iong|iu|u|ua|uai|uan|uang|ue|ui|un|uo|v|ve|van|vn)$/;
-const pinyinSeparatorPattern = /[\s'’\-.0-9]/u;
-
-function normalizePinyinCharacter(character) {
-  switch (character) {
-    case "ā":
-    case "á":
-    case "ǎ":
-    case "à":
-      return "a";
-    case "ē":
-    case "é":
-    case "ě":
-    case "è":
-      return "e";
-    case "ī":
-    case "í":
-    case "ǐ":
-    case "ì":
-      return "i";
-    case "ō":
-    case "ó":
-    case "ǒ":
-    case "ò":
-      return "o";
-    case "ū":
-    case "ú":
-    case "ǔ":
-    case "ù":
-      return "u";
-    case "ǖ":
-    case "ǘ":
-    case "ǚ":
-    case "ǜ":
-    case "ü":
-      return "v";
-    default:
-      return character.toLowerCase();
-  }
-}
-
-function isValidPinyinChunk(chunk) {
-  return pinyinSyllablePattern.test(chunk);
-}
-
-function splitConcatenatedPinyin(romanization, characterCount) {
-  const sourceCharacters = Array.from(String(romanization ?? "").trim()).filter((character) => !pinyinSeparatorPattern.test(character));
-  if (!sourceCharacters.length || characterCount <= 0) {
-    return null;
-  }
-
-  const normalizedCharacters = sourceCharacters.map((character) => normalizePinyinCharacter(character));
-  const maxChunkLength = Math.min(7, normalizedCharacters.length);
-  const memo = new Map();
-
-  function splitFrom(startIndex, remainingCount) {
-    const memoKey = `${startIndex}:${remainingCount}`;
-    if (memo.has(memoKey)) {
-      return memo.get(memoKey) ?? null;
-    }
-
-    const remainingCharacters = normalizedCharacters.length - startIndex;
-    if (remainingCount <= 0 || remainingCharacters < remainingCount) {
-      memo.set(memoKey, null);
-      return null;
-    }
-
-    if (remainingCount === 1) {
-      const chunk = normalizedCharacters.slice(startIndex).join("");
-      if (!chunk || !isValidPinyinChunk(chunk)) {
-        memo.set(memoKey, null);
-        return null;
-      }
-
-      const tail = sourceCharacters.slice(startIndex).join("");
-      memo.set(memoKey, [tail]);
-      return [tail];
-    }
-
-    const maxEndIndex = Math.min(normalizedCharacters.length - (remainingCount - 1), startIndex + maxChunkLength);
-    for (let endIndex = startIndex + 1; endIndex <= maxEndIndex; endIndex += 1) {
-      const chunk = normalizedCharacters.slice(startIndex, endIndex).join("");
-      if (!isValidPinyinChunk(chunk)) {
-        continue;
-      }
-
-      const tail = splitFrom(endIndex, remainingCount - 1);
-      if (tail) {
-        const head = sourceCharacters.slice(startIndex, endIndex).join("");
-        const result = [head, ...tail];
-        memo.set(memoKey, result);
-        return result;
-      }
-    }
-
-    memo.set(memoKey, null);
-    return null;
-  }
-
-  return splitFrom(0, characterCount);
 }
 
 function splitRomanizationByCharacters(romanization, characterCount) {
@@ -917,13 +761,6 @@ function splitRomanizationByCharacters(romanization, characterCount) {
       }
     }
     return readings;
-  }
-
-  if (syllables.length === 1 && characterCount > 1) {
-    const splitSyllables = splitConcatenatedPinyin(romanization, characterCount);
-    if (splitSyllables && splitSyllables.length === characterCount) {
-      return splitSyllables;
-    }
   }
 
   const readings = Array.from({ length: characterCount }, () => "");
@@ -971,16 +808,6 @@ function buildReaderDisplayTokens(sentence, mode) {
 function handleReaderTokenModeToggle() {
   state.readerTokenMode = state.readerTokenMode === "character" ? "word" : "character";
   window.localStorage.setItem(readerTokenModeStorageKey, state.readerTokenMode);
-  state.selectedToken = null;
-  state.selectedBookEntry = null;
-  state.lexicon = null;
-  state.vocabLookup = null;
-  renderReader();
-}
-
-function handleReaderAnnotationModeToggle() {
-  state.readerAnnotationMode = state.readerAnnotationMode === "furigana" ? "romanization" : "furigana";
-  window.localStorage.setItem(readerAnnotationModeStorageKey, state.readerAnnotationMode);
   state.selectedToken = null;
   state.selectedBookEntry = null;
   state.lexicon = null;
@@ -2145,7 +1972,6 @@ function renderReader() {
   const currentSentenceNumber = localEntry ? state.localReaderSentenceIndex + 1 : state.selectedSentenceIndex + 1;
   const pageTranslation = !localEntry && typeof page?.page_translation === "string" ? page.page_translation.trim() : "";
   const sentenceTranslation = !localEntry && typeof currentSentence?.translation === "string" ? currentSentence.translation.trim() : "";
-  const languageCode = page?.language_code ?? book?.language_code ?? localEntry?.language_code ?? "zh";
   const displayedSentenceTokens = currentSentence ? buildReaderDisplayTokens(currentSentence, state.readerTokenMode) : [];
   const readableDisplayedTokens = displayedSentenceTokens.filter((token) => !isSentencePunctuation(token.surface_form));
 
@@ -2171,19 +1997,6 @@ function renderReader() {
     );
     elements.readerTokenModeToggle.setAttribute("aria-pressed", String(state.readerTokenMode === "character"));
     elements.readerTokenModeToggle.title = state.readerTokenMode === "character" ? "Character mode" : "Word mode";
-  }
-  if (elements.readerAnnotationModeToggle) {
-    const furigana = state.readerAnnotationMode === "furigana";
-    elements.readerAnnotationModeToggle.classList.toggle("is-active", furigana);
-    elements.readerAnnotationModeToggle.textContent = furigana ? "Kana" : "Romaji";
-    elements.readerAnnotationModeToggle.setAttribute("aria-label", furigana ? "Switch to romanization" : "Switch to Japanese furigana");
-    elements.readerAnnotationModeToggle.setAttribute("aria-pressed", String(furigana));
-    elements.readerAnnotationModeToggle.title = state.furiganaVisibility === "jlpt_threshold"
-      ? "JLPT filtering will activate after the Japanese lexicon is connected"
-      : furigana ? "Japanese kana readings" : "Lowercase romanization";
-  }
-  if (elements.furiganaVisibility) {
-    elements.furiganaVisibility.value = state.furiganaVisibility;
   }
   elements.pageImageWrap.classList.toggle("is-hidden", !state.showImage || !page);
   elements.pageImage.src = resolveResourceUrl(state.pageData?.image_url ?? "");
@@ -2242,9 +2055,11 @@ function renderReader() {
           const tokenButton = document.createElement("button");
           tokenButton.type = "button";
           const isSelected = state.selectedToken && state.selectedToken.surface_form === token.surface_form && state.selectedToken.order === token.order;
-          const annotation = resolveTokenAnnotation(token, state.readerAnnotationMode, languageCode);
-          tokenButton.className = `token-inline ${isCjk(token.surface_form) ? "is-cjk" : "is-word"} ${annotation ? "" : "is-punct"}${isSelected ? " is-selected" : ""}`.trim();
-          tokenButton.innerHTML = renderTokenAnnotationMarkup(token, annotation);
+          tokenButton.className = `token-inline ${isCjk(token.surface_form) ? "is-cjk" : "is-word"} ${token.romanization ? "" : "is-punct"}${isSelected ? " is-selected" : ""}`.trim();
+          tokenButton.innerHTML = `
+            <span class="token-romanization">${escapeHtml(token.romanization ?? "")}</span>
+            <span class="token-surface">${escapeHtml(token.surface_form)}</span>
+          `;
           tokenButton.addEventListener("click", () => void inspectLocalToken(token, localEntry));
           tokenButton.addEventListener("keydown", (event) => {
             if (event.key === "Enter" || event.key === " ") {
@@ -2274,9 +2089,11 @@ function renderReader() {
         const tokenButton = document.createElement("button");
         tokenButton.type = "button";
         const isSelected = state.selectedToken && state.selectedToken.surface_form === token.surface_form && state.selectedToken.order === token.order;
-        const annotation = resolveTokenAnnotation(token, state.readerAnnotationMode, languageCode);
-        tokenButton.className = `token-inline ${isCjk(token.surface_form) ? "is-cjk" : "is-word"} ${annotation ? "" : "is-punct"}${isSelected ? " is-selected" : ""}`.trim();
-        tokenButton.innerHTML = renderTokenAnnotationMarkup(token, annotation);
+        tokenButton.className = `token-inline ${isCjk(token.surface_form) ? "is-cjk" : "is-word"} ${token.romanization ? "" : "is-punct"}${isSelected ? " is-selected" : ""}`.trim();
+        tokenButton.innerHTML = `
+          <span class="token-romanization">${escapeHtml(token.romanization ?? "")}</span>
+          <span class="token-surface">${escapeHtml(token.surface_form)}</span>
+        `;
         tokenButton.addEventListener("click", () => void inspectToken(token));
         tokenButton.addEventListener("keydown", (event) => {
           if (event.key === "Enter" || event.key === " ") {
@@ -2302,17 +2119,6 @@ function renderReader() {
         <p class="reader-translation-text">${escapeHtml(sentenceTranslation || pageTranslation || "Translation will appear here once the processor returns it.")}</p>
       `
       : "";
-}
-
-function renderTokenAnnotationMarkup(token, annotation) {
-  const surface = escapeHtml(token?.surface_form ?? "");
-  if (state.readerAnnotationMode === "furigana" && annotation) {
-    return `<ruby><span class="token-surface">${surface}</span><rt>${escapeHtml(annotation)}</rt></ruby>`;
-  }
-  return `
-    <span class="token-romanization">${escapeHtml(annotation)}</span>
-    <span class="token-surface">${surface}</span>
-  `;
 }
 
 function renderTokenPanel(page, localEntry = null) {

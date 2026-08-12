@@ -52,6 +52,7 @@ One row per normalized lemma in the book.
 - part_of_speech TEXT
 - pronunciation TEXT
 - romanization TEXT
+- furigana TEXT (Japanese kana reading when available)
 - definition_short TEXT
 - frequency_in_book INTEGER DEFAULT 0
 - first_page INTEGER

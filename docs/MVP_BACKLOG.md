@@ -48,8 +48,16 @@ Exit criterion: processed pages can be queried as structured reading data.
 - [x] Definition panel
 - [x] Book frequency display
 - [x] Page active-time tracker
+- [x] Normalize reader romanization annotation casing to lowercase
+- [x] Add reader annotation toggle for romanization versus Japanese kana/furigana
 
 Exit criterion: one can read a processed book and inspect vocabulary.
+
+### Japanese reading annotations
+
+- [ ] Add a dedicated Japanese lexicon database with kana readings and JLPT N5-N1 rankings
+- [ ] Add JLPT-aware furigana visibility setting (for example, show only N2 and above for an N2 learner)
+- [ ] Apply the JLPT visibility threshold to reader annotations after lexicon ranking is available
 
 ## Milestone 4 - Learning profile
 

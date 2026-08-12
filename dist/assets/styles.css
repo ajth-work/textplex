@@ -1101,18 +1101,6 @@ a {
   color: var(--muted);
 }
 
-.token-inline ruby {
-  ruby-position: over;
-}
-
-.token-inline rt {
-  display: block;
-  min-height: 0.95em;
-  font-size: 0.72rem;
-  line-height: 1;
-  color: var(--muted);
-}
-
 .token-surface {
   display: block;
   font-size: 1.02rem;

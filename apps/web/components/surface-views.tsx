@@ -1805,6 +1805,8 @@ export function SettingsSurfaceView() {
   const [data, setData] = useState<SettingsSurfaceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [readerSpeechVoiceGender, setReaderSpeechVoiceGender] = useState<ReaderSpeechVoiceGender>(() => readStoredReaderSpeechVoiceGender());
+  const [readerAnnotationMode, setReaderAnnotationMode] = useState<"romanization" | "furigana">("romanization");
+  const [furiganaVisibility, setFuriganaVisibility] = useState<"always" | "jlpt_threshold">("always");
 
   useEffect(() => {
     let active = true;
@@ -1835,6 +1837,8 @@ export function SettingsSurfaceView() {
     );
     setReaderSpeechVoiceGender(nextReaderSpeechVoiceGender);
     persistReaderSpeechVoiceGender(nextReaderSpeechVoiceGender);
+    setReaderAnnotationMode(data.entries.find((entry) => entry.key === "readerAnnotationMode")?.value === "furigana" ? "furigana" : "romanization");
+    setFuriganaVisibility(data.entries.find((entry) => entry.key === "furiganaVisibility")?.value === "jlpt_threshold" ? "jlpt_threshold" : "always");
   }, [data]);
 
   const theme: AppTheme = data ? resolveAppThemeFromSettings(data.entries) : "neutral";
@@ -1853,6 +1857,29 @@ export function SettingsSurfaceView() {
       setReaderSpeechVoiceGender(previousGender);
       persistReaderSpeechVoiceGender(previousGender);
       setError(err instanceof Error ? err.message : "Unable to save the speech voice preference.");
+    }
+  }
+
+  async function handleSetReaderAnnotationSettings(
+    nextMode: "romanization" | "furigana",
+    nextVisibility: "always" | "jlpt_threshold",
+  ): Promise<void> {
+    const previousMode = readerAnnotationMode;
+    const previousVisibility = furiganaVisibility;
+    setReaderAnnotationMode(nextMode);
+    setFuriganaVisibility(nextVisibility);
+    try {
+      const updated = await putJson<SettingsSurfaceResponse>("/settings", {
+        entries: [
+          { key: "readerAnnotationMode", value: nextMode },
+          { key: "furiganaVisibility", value: nextVisibility },
+        ],
+      } satisfies SettingsUpdateRequest);
+      setData(updated);
+    } catch (err) {
+      setReaderAnnotationMode(previousMode);
+      setFuriganaVisibility(previousVisibility);
+      setError(err instanceof Error ? err.message : "Unable to save Japanese reading preferences.");
     }
   }
 
@@ -1903,6 +1930,26 @@ export function SettingsSurfaceView() {
               </button>
             ))}
           </div>
+        </div>
+        <div className="settings-inspector-row" data-inventory-id="settings.japanese-reading-toggle">
+          <div>
+            <strong>{readerAnnotationMode === "furigana" ? "Japanese furigana" : "Romanization"}</strong>
+            <p className="small-copy">Choose lowercase romanization or kana-only readings above Japanese kanji.</p>
+          </div>
+          <div className="voice-gender-toggle-group" role="group" aria-label="Japanese reading annotation mode">
+            <button type="button" className={`button button-secondary button-compact ${readerAnnotationMode === "romanization" ? "is-active" : ""}`} onClick={() => void handleSetReaderAnnotationSettings("romanization", furiganaVisibility)} aria-pressed={readerAnnotationMode === "romanization"}>Romaji</button>
+            <button type="button" className={`button button-secondary button-compact ${readerAnnotationMode === "furigana" ? "is-active" : ""}`} onClick={() => void handleSetReaderAnnotationSettings("furigana", furiganaVisibility)} aria-pressed={readerAnnotationMode === "furigana"}>Kana</button>
+          </div>
+        </div>
+        <div className="settings-inspector-row" data-inventory-id="settings.furigana-visibility">
+          <div>
+            <strong>Furigana visibility</strong>
+            <p className="small-copy">JLPT filtering is queued until the ranked Japanese lexicon is connected.</p>
+          </div>
+          <select className="text-input" value={furiganaVisibility} onChange={(event) => void handleSetReaderAnnotationSettings(readerAnnotationMode, event.target.value === "jlpt_threshold" ? "jlpt_threshold" : "always")} aria-label="Furigana visibility">
+            <option value="always">Always when available</option>
+            <option value="jlpt_threshold">JLPT threshold (pending)</option>
+          </select>
         </div>
         <Link className="button button-secondary" href="/profile/themes" data-inventory-id="settings.theme-settings-link">
           Open theme settings

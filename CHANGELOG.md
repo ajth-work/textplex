@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-12
+
+- Resolved the PR #99 merge conflict with the latest `main`, preserving the Reader's Japanese Romaji/Furigana controls, furigana visibility preference, and legacy preference migration.
+
 ## 2026-08-11
 
 - Simplified targeted reader feedback labels to star + `Sentence` and star + `Word`, removing the keyboard-letter cue from contextual and global feedback buttons.

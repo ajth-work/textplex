@@ -25,6 +25,7 @@ The processor may use OCR, AI vision, local language tools, or a hybrid. All pro
           "part_of_speech": "verb",
           "pronunciation": null,
           "romanization": null,
+          "furigana": null,
           "definition_short": "to go",
           "proficiency_system": "internal",
           "proficiency_level": "beginner",
