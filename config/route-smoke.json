@@ -1,0 +1,28 @@
+{
+  "canonical": [
+    { "path": "/", "expected": "Read for free. Practice deeply. Create your own immersion." },
+    { "path": "/home" },
+    { "path": "/library", "expected": "Library" },
+    { "path": "/analysis/demo-book", "expected": "Text analysis summary" },
+    { "path": "/reader/demo-book/1" },
+    { "path": "/import" },
+    { "path": "/study" },
+    { "path": "/study/practice" },
+    { "path": "/progress" },
+    { "path": "/activity" },
+    { "path": "/settings" },
+    { "path": "/profile" }
+  ],
+  "legacy": [
+    { "path": "/", "expected": "Vocabulary database implementation tracker" },
+    { "path": "/legacy/index.html", "expected": "Vocabulary database implementation tracker" },
+    { "path": "/library", "expected": "Search titles, authors, tags..." },
+    { "path": "/analysis/demo-book", "expected": "Text Analysis" },
+    { "path": "/search", "expected": "Texts (1)" },
+    { "path": "/study", "expected": "Tap to reveal meaning" },
+    { "path": "/progress", "expected": "Your Progress" },
+    { "path": "/activity", "expected": "Activity" },
+    { "path": "/import", "expected": "Add Content" },
+    { "path": "/settings", "expected": "Profile and app preferences" }
+  ]
+}
