@@ -15,7 +15,7 @@
   ],
   "legacy": [
     { "path": "/", "expected": "Vocabulary database implementation tracker" },
-    { "path": "/legacy/index.html", "expected": "Vocabulary database implementation tracker" },
+    { "path": "/legacy/index.html", "expected": "TextPlex Reader" },
     { "path": "/library", "expected": "Search titles, authors, tags..." },
     { "path": "/analysis/demo-book", "expected": "Text Analysis" },
     { "path": "/search", "expected": "Texts (1)" },
