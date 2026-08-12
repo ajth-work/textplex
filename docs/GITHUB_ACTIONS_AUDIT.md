@@ -49,7 +49,7 @@ Implemented in the P1 slice: the container smoke job now checks the canonical Ne
 
 ### P1 — Make dependency/security findings actionable
 
-Implemented in the P1 slice: CI and the weekly audit now fail on high-or-critical production npm vulnerabilities, and pull requests run GitHub's dependency-review action with a high-severity failure threshold. The audit found and remediated the vulnerable PostCSS/nanoid path by updating the root PostCSS range to `^8.5.23`; the production audit now reports zero vulnerabilities. Secret scanning remains a GitHub repository security-setting follow-up rather than a workflow-local substitute.
+Implemented in the P1 slice: CI and the weekly audit now fail on high-or-critical production npm vulnerabilities, and pull requests run GitHub's dependency-review action with a high-severity failure threshold. The audit found and remediated the vulnerable PostCSS/nanoid path by updating the root PostCSS range to `^8.5.23`; the production audit now reports zero vulnerabilities. GitHub vulnerability alerts were enabled so dependency review could run, its rerun passed, and the check is now required on `main`. Secret scanning remains a GitHub repository security-setting follow-up rather than a workflow-local substitute.
 
 ### P2 — Add authenticated and external integration evidence
 
