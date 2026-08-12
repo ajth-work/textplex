@@ -6,7 +6,7 @@
 
 ## Scope
 
-Reviewed `.github/workflows/ci.yml`, `weekly-audit.yml`, `pages.yml`, and `github-auth-check.yml` against the current API, processor, Next.js, static-site, deployment, and maintenance test surfaces. Reviewed recent GitHub Actions runs through the GitHub CLI.
+Reviewed the five repository workflows plus the new manual integration-evidence workflow against the current API, processor, Next.js, static-site, deployment, and maintenance test surfaces. Reviewed recent GitHub Actions runs through the GitHub CLI.
 
 ## Current coverage
 
@@ -16,6 +16,8 @@ Reviewed `.github/workflows/ci.yml`, `weekly-audit.yml`, `pages.yml`, and `githu
 - Maintenance and backup/restore tests.
 - Docker Compose build and canonical/legacy route smoke checks.
 - Weekly dependency/runtime drift reporting and live API readiness checks.
+- Manual local boundary evidence for authentication, ownership, Supabase adapters, learner sync, commerce/webhooks, backup/restore, and web contracts.
+- Optional hosted probes for real API readiness, authenticated profile ownership, learner sync, entitlements, multi-user separation, and deployment-owned routes.
 
 ## Findings
 
@@ -53,11 +55,11 @@ Implemented in the P1 slice: CI and the weekly audit now fail on high-or-critica
 
 ### P2 — Add authenticated and external integration evidence
 
-Add protected multi-user, learner-sync, Supabase, commerce/webhook, backup/restore, and deployment-owned checks when those environments are available. Keep credentials and private learner/book data out of CI fixtures and logs.
+Implemented a manually dispatched `integration-evidence.yml` workflow. Its local job runs the focused auth, ownership, Supabase-adapter, learner-sync, commerce/webhook, backup/restore, and web-contract suites. Its hosted job is opt-in and requires an `integration` environment with `TEXTPLEX_HOSTED_API_BASE_URL` plus `TEXTPLEX_HOSTED_AUTH_TOKEN`; an optional second token proves cross-account separation, and an optional hosted web URL checks deployment-owned routes. The hosted probe never prints tokens or private response bodies. Commerce/webhook behavior remains fixture-backed until a safe hosted sandbox environment is provisioned.
 
 ### P2 — Add workflow maintenance controls
 
-Add Dependabot configuration and pin third-party Actions to immutable commit SHAs after the workflow surface stabilizes.
+Implemented `.github/dependabot.yml` for npm, both Python packages, and GitHub Actions. All third-party workflow actions are now pinned to immutable commit SHAs with their major version retained in a comment; Dependabot can keep those pins current.
 
 ## Recent evidence
 
