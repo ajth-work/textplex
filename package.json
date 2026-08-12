@@ -24,6 +24,7 @@
     "build:web:demo": "node ./scripts/build_web_demo.mjs",
     "lint:web": "npm --workspace apps/web run lint",
     "test:web": "node ./scripts/check_web_reachability.mjs",
+    "test:web:contracts": "node ./scripts/run-web-contract-tests.mjs",
     "test:web:reader": "node --test tests/web/reader-route.test.js",
     "test:web:phase3": "node --test tests/web/analysis-book-detail.test.js",
     "test:web:phase4": "node --test tests/web/phase4-deployment.test.js",

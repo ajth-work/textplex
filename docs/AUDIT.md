@@ -18,6 +18,17 @@ This is the reusable audit record and operating procedure for TextPlex. The deta
 | Scheduled audit | Sundays at 13:00 UTC via `.github/workflows/weekly-audit.yml` |
 | Sensitive data policy | Do not inspect, copy, or commit private books, OCR output, learner data, secrets, or generated databases |
 
+## 2026-08-12 GitHub Actions coverage audit
+
+- Reviewed all four GitHub workflows and recent Actions evidence against the growing API, processor, Next.js, legacy-site, deployment, and maintenance surface.
+- Found that `tests/web/*.test.js` was not run by CI; added a deterministic `test:web:contracts` runner to the CI and weekly-audit workflows in the current P0 slice.
+- Found that `main` had no branch protection or rulesets; the P0 follow-up requires pull requests and the three CI jobs before merge.
+- Applied `main` branch protection on GitHub: pull requests and the three CI jobs are required, administrators are included, and force-pushes/deletion are disabled.
+- Found that Pages build/upload passed but deployment returned 404 because GitHub Pages was disabled; repository settings were changed separately and require a successful future `main` deployment run.
+- Verified the Pages setting change with successful manual `main` deployment run [31644287876](https://github.com/ajth-work/textplex/actions/runs/31644287876); build and deploy both passed.
+- Found that the weekly audit's readiness check expected `status: ok` while the API correctly returned `status: ready`; this remains a follow-up workflow/script correction.
+- Full recommendations and evidence are recorded in `docs/GITHUB_ACTIONS_AUDIT.md`.
+
 The audit was performed against the checkout as it existed, not a clean commit. Existing user changes were preserved. That is useful for real handoff review, but it means audit findings must identify whether a failure belongs to the baseline, the active change, or the environment.
 
 ## 2026-08-10 Supabase learning-sync hardening

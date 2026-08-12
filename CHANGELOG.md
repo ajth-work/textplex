@@ -2,6 +2,12 @@
 
 ## 2026-08-12
 
+- Added a deterministic Next web contract-test runner and wired all `tests/web/*.test.js` coverage into CI and the weekly audit as the first P0 GitHub Actions hardening slice.
+
+- Protected `main` with required pull requests and CI status checks, administrator enforcement, and force-push/deletion safeguards.
+
+- Verified the GitHub Pages repository setting with successful manual `main` build and deployment run 31644287876; recorded the remaining hosted-action Node deprecation warning for follow-up.
+
 - Documented the required GitHub Flow sequence for repository work: branch, commit, push, and draft pull request, with explicit safeguards for `main` and mixed worktrees.
 
 - Restore wallpaper artwork in the public landing-page reader and study previews by preserving their absolute image layers; verified against `landing.hero-previews`, `landing.hero-reader-preview`, and `landing.hero-study-preview`.
