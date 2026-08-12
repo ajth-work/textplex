@@ -59,6 +59,9 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Run static site tests
         run: npm run test:site
 
@@ -115,6 +118,17 @@ jobs:
           docker compose --profile legacy up -d api web site
           sleep 10
           for url in \
+            http://127.0.0.1:3000/ \
+            http://127.0.0.1:3000/home \
+            http://127.0.0.1:3000/library \
+            http://127.0.0.1:3000/analysis/demo-book \
+            http://127.0.0.1:3000/reader/demo-book/1 \
+            http://127.0.0.1:3000/import \
+            http://127.0.0.1:3000/study \
+            http://127.0.0.1:3000/study/practice \
+            http://127.0.0.1:3000/progress \
+            http://127.0.0.1:3000/activity \
+            http://127.0.0.1:3000/settings \
             http://127.0.0.1:3000/profile \
             http://127.0.0.1:8201/health \
             http://127.0.0.1:8201/ready \

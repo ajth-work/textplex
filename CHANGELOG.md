@@ -2,6 +2,10 @@
 
 ## 2026-08-12
 
+- Expanded CI and weekly audit coverage to build and smoke-test the canonical Next routes, accept the documented API readiness payload, fail on high-severity production npm vulnerabilities, and review dependency changes on pull requests.
+
+- Remediated the high-severity PostCSS/nanoid dependency path by updating the root PostCSS range to `^8.5.23`; production npm audit now reports zero vulnerabilities.
+
 - Added a deterministic Next web contract-test runner and wired all `tests/web/*.test.js` coverage into CI and the weekly audit as the first P0 GitHub Actions hardening slice.
 
 - Protected `main` with required pull requests and CI status checks, administrator enforcement, and force-push/deletion safeguards.

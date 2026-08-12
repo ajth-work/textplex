@@ -28,6 +28,8 @@ This is the reusable audit record and operating procedure for TextPlex. The deta
 - Verified the Pages setting change with successful manual `main` deployment run [31644287876](https://github.com/ajth-work/textplex/actions/runs/31644287876); build and deploy both passed.
 - Found that the weekly audit's readiness check expected `status: ok` while the API correctly returned `status: ready`; this remains a follow-up workflow/script correction.
 - Full recommendations and evidence are recorded in `docs/GITHUB_ACTIONS_AUDIT.md`.
+- P1 implementation added canonical Next live smoke coverage, corrected `/ready` payload validation, and made production npm vulnerability findings plus PR dependency changes actionable in CI.
+- The P1 dependency audit found a real high-severity PostCSS/nanoid path; updating PostCSS to `^8.5.23` resolved it, and the production npm audit now reports zero vulnerabilities.
 
 The audit was performed against the checkout as it existed, not a clean commit. Existing user changes were preserved. That is useful for real handoff review, but it means audit findings must identify whether a failure belongs to the baseline, the active change, or the environment.
 
