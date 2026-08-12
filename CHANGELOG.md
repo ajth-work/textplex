@@ -2,6 +2,10 @@
 
 ## 2026-08-12
 
+- Added P2 integration evidence workflow: focused local boundary suites cover auth, ownership, Supabase adapters, learner sync, commerce/webhooks, backup/restore, and web contracts; optional hosted probes cover readiness, authenticated profile ownership, learner sync, entitlements, multi-user separation, and deployment routes.
+
+- Added Dependabot coverage for npm, both Python packages, and GitHub Actions, and pinned every third-party workflow action to an immutable commit SHA.
+
 - Expanded CI and weekly audit coverage to build and smoke-test the canonical Next routes, accept the documented API readiness payload, fail on high-severity production npm vulnerabilities, and review dependency changes on pull requests.
 
 - Remediated the high-severity PostCSS/nanoid dependency path by updating the root PostCSS range to `^8.5.23`; production npm audit now reports zero vulnerabilities.
