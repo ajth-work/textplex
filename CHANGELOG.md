@@ -1,6 +1,127 @@
 # Changelog
 
+## 2026-08-11
+
+- Simplified targeted reader feedback labels to star + `Sentence` and star + `Word`, removing the keyboard-letter cue from contextual and global feedback buttons.
+
+- Japanese romaji composition now expands macronized long vowels, so input such as `chō` is composed and validated as `ちょう` alongside `chou`.
+
+- Added targeted reader correction feedback actions for sentences and selected words. Both actions use the existing feedback dialog, show the star/F feedback cue, prefill the relevant reading context, and persist the target type, exact text, and order for review in the admin detail (`reader.sentence-feedback-button`, `reader.definition-correction-button`, `admin-feedback.detail`).
+
+- Fixed glossed-word study saves to resolve fallback meanings from the visible source token before lemma alternatives and preserve an existing meaning when a later save has no definition.
+
+- Added a tester-only build update gate that records each tester's last acknowledged build, presents plain-language changes grouped by area, and blocks the app until the tester acknowledges a new build (`shell.tester-build-update-gate`, `shell.tester-build-update-sections`, `shell.tester-build-update-section`, `shell.tester-build-update-items`, `shell.tester-build-update-acknowledge`).
+
+- Incremented the web build to `0.1.1` so testers with a previously acknowledged `0.1.0` build receive the grouped update review.
+
+- Added a Japanese-only Reader setting to switch sentence and selected-word readings between romaji and hiragana furigana (`reader.japanese-reading-display-section`, `reader.japanese-reading-romaji`, `reader.japanese-reading-furigana`).
+
+- Added an explicit Wikipedia-language selector inside the random article card, separate from paste/upload language, and made random article imports tolerate auxiliary lexicon/analytics failures instead of surfacing an internal server error (`import.wikipedia-random-card`, `import.wikipedia-random-button`).
+
+- Improved import request errors so API-provided guidance, including the random Wikipedia retry message, is shown in the reader instead of only the HTTP status (`import.wikipedia-random-card`).
+
+- Simplified the random Wikipedia import explanation so the action describes adding a random selected-language Wikipedia article to the library without implementation jargon (`import.wikipedia-random-card`).
+
+- Fixed Japanese furigana display for selected readings ending in `n`, such as `sasshin`, so the definition card shows `ん` instead of a trailing Latin `n` (`reader.token-inspector`).
+
+- Fixed primary navigation dropdowns so the Library menu opens beneath the Library control instead of starting at the chevron segment (`shell.primary-nav`, `shell.primary-nav-menu`).
+
+- Fixed the selected Japanese Reader token inspector so kanji tokens show a visible furigana line derived from their stored reading (`reader.token-inspector`).
+
+- Fixed theme-catalog selection so a tester can choose a hosted theme such as Hong Kong City, see the global theme picker update, and save that selection to the account-wide settings (`theme-settings.app-theme-card`, `theme-shop.catalog-card`).
+
+- Added a selected-target-language random Wikipedia article importer that fetches a readable main-namespace article server-side, sends it through the normal book/extraction pipeline, and exposes progress on the Next import surface (`import.wikipedia-random-card`, `import.wikipedia-random-button`). Added API and web contract coverage.
+
+- Prevented the paste-text import form from submitting while Supabase authentication is still resolving or missing, replacing the raw `/texts/import` `401` with a clear sign-in/session message (`import.form`).
+
+- Fixed zoomed-out Home spacing by preventing the desktop home grid's auto-sized rows from stretching across the full viewport (`home.page`, `home.continue-reading`, `home.continue-reading-list`, `home.goals`).
+
+- Clarified the password-reset completion state with a dedicated “Password updated” heading, success message, and primary continuation action (`auth.reset-password-success`).
+
+- Fixed the mobile shell header layout so the feedback notification button keeps a dedicated action slot and no longer overlaps the centered TextPlex brand (`shell.header`, `shell.brand`, `shell.feedback-notifications`).
+
+- Fixed the progress book list to honor account ownership, preventing books imported under another account from appearing in the current learner’s progress (`progress.books-card`, `progress.book-item`).
+
+- Added readable Y-axis values, an optional Points toggle, and theme-colored pill scrollbar styling to the admin reading-activity line chart (`admin.activity-card`).
+
+- Restored consistent responsive padding on the Admin theme console catalog, definition, assisted-design, and visual-system cards.
+
+- Added EPUB book import: spine-ordered XHTML is parsed as readable text, OPF title/author metadata is retained, local reader page images are generated, and PDF/EPUB upload plus import-surface contracts are exposed (`import.form`).
+
+- Added a reproducible generator for a 120-sentence Japanese EPUB sample at `scripts/generate_japanese_epub.py`.
+
+- Reflowed the Japanese EPUB sample from numbered list items into one continuous paragraph per chapter while preserving all 120 sentences.
+
+- Added Japanese Study romaji composition for supported reading answers, preserving direct kana entry and caret movement while showing the composed text; correct answers now display a cancellable 1.8-second auto-advance countdown (`study.practice-input-composition`, `study.practice-auto-advance`, `study.practice-auto-advance-cancel`, issue #88). Added focused composition and route-contract tests.
+
+- Joined each primary navigation destination to its chevron so Library, Read, and Study render as one continuous pill instead of separate button pills (`shell.primary-nav`, `shell.primary-nav-menu`).
+
+- Added role-aware feature-demand analytics and a bottom-of-card audience selector so admins can compare captured feature usage across all users, members, testers, or admins (`admin.analytics-feature-card`, `admin.analytics-feature-filter`).
+
+- Refined the admin reading-activity line chart with a stable wide aspect ratio and more balanced vertical spacing so its curve no longer stretches unnaturally across the panel (`admin.activity-card`).
+
+- Fixed primary navigation dropdowns so their card menus remain floating layers like More instead of expanding the navbar button pill (`shell.primary-nav-menu`).
+
+- Removed import-time full-book Google Translate preloading after a 310-page import generated 965 translation requests. Imports now rely exclusively on the Reader’s bounded current-plus-three-sentence translation buffer.
+
+- Consolidated shell navigation with Library, Read, and Study chevron menus for import/search, analysis, practice, and progress, leaving More focused on overflow and account destinations (`shell.primary-nav`, `shell.primary-nav-menu`, `shell.secondary-nav`).
+
+- Added the authenticated `/tester` console with submitted-feedback history, TextPlex response timelines, verification actions, and summary counts; exposed it in More with an unread red-dot indicator alongside the notification bell (`tester.page`, `tester.summary`, `tester.record-list`, `tester.detail`, `shell.feedback-notifications`).
+
+- Moved the tester feedback notification bell from the footer into the persistent top app-shell actions so feedback updates remain visible while navigating (`shell.feedback-notifications`).
+
+- Enlarged the notification bell icon, anchored the top-shell popover below its button within the viewport, and made the panel opaque for readable feedback updates (`shell.feedback-notifications`).
+
+- Raised the notification action layer above the primary navigation so its open popover remains readable instead of being covered by nav content (`shell.feedback-notifications`).
+
+- Added a shared admin sub-navigation bar across Platform usage, Feedback, Themes, and Roadmap, with active-section highlighting (`admin.nav`).
+
+- Added local feedback-console filters for tester, language, route, category, severity, priority, screenshots, and GitHub state, plus review/resolution timing, backlog, route, category, and language metrics (`admin-feedback.filters`, `admin-feedback.metrics`).
+
+- Added the internal implementation-review loop: always-visible footer build number, `Ready for tester review` status, admin build/instruction fields, notification-bell verification responses, and local tracker to-dos for GitHub/email setup (`shell.build-footer`, `admin-feedback.resolution`, `shell.feedback-notifications`).
+
+- Added the feedback-console admin roadmap and implemented the first triage slice: status summary counts with quick filters plus an explicit resolution-note editor for final decisions (`docs/FEEDBACK_CONSOLE_ADMIN_ROADMAP.md`, `admin-feedback.summary`, `admin-feedback.resolution`).
+
+- Compressed the admin feedback tester directory into expandable rows with inline pencil/check/cancel nickname editing (`admin-feedback.tester-list`).
+
+- Expanded feedback attachments to three local screenshots per report and added an admin-only screenshot gallery with explicit on-demand OpenAI visual analysis, keeping automatic text triage image-free (`shell.feedback-screenshot`, `admin-feedback.screenshots`).
+
+- Added optional screenshot attachments to the shared feedback dialog and multipart feedback API, with client/server image-type validation, a 5 MB limit, local attachment storage, and the `shell.feedback-screenshot` inventory entry.
+
+- Fixed generated-article topic handling so English topic briefs are interpreted as subject matter rather than copied into Japanese quotation marks or treated as vocabulary; added prompt and fallback regression coverage and rebuilt the live Docker services.
+
+- Added a regression test for model responses that report one sentence when the generator requested 30, and rebuilt the local Docker web/API services so the live preview uses the current generator validation.
+
+- Added a generation vocabulary-source toggle so learners can disable profile-term injection and generate from an exam ladder such as JLPT N5–N1; the level-only mode defaults Japanese to JLPT N4 when no level is selected and records the choice in generation metadata.
+
+- Tightened generated practice articles after Japanese learner feedback: the default length is now 10 sentences, Japanese model output must match the requested sentence count and pass basic naturalness checks, and the offline Japanese fallback uses grammatical reading sentences instead of concatenated vocabulary terms.
+
+- Moved admin analytics implementation issue #97 to In Progress and synchronized the concept note, issue tracker, and component inventory with the local analytics surfaces.
+
 ## 2026-08-10
+
+- Added the admin analytics and paid-value concept note, verbatim product direction plus the technical plan for event instrumentation, cohort/funnel APIs, retention, paywall intent, and protected admin-console surfaces; tracked in issue #97 and TextPlex Feature Board In Progress (`docs/ADMIN_ANALYTICS_AND_PAID_VALUE.md`).
+- Implemented the first local analytics slice: append-only event storage, server-side activation/learning/AI/feedback emitters, protected admin analytics overview API, and admin funnel, value, paywall, feature-demand, retention, and pseudonymous watchlist cards (`admin.analytics-funnel-card`, `admin.analytics-value-card`, `admin.analytics-paywall-card`, `admin.analytics-feature-card`, `admin.analytics-retention-card`, `admin.analytics-user-watchlist`).
+
+- Reoriented the admin reading activity chart into a left-to-right daily bar graph with relative scaling (`admin.activity-card`).
+
+- Restored consistent responsive padding across the admin feedback hero, filters, tester directory, report list, and detail cards (`admin-feedback.page`, `admin-feedback.filters`, `admin-feedback.tester-list`, `admin-feedback.record-list`, `admin-feedback.detail`).
+- Added the same responsive card insets to the admin usage hero, summary cards, activity panel, breakdown panel, and loading/error states (`admin.hero`, `admin.profile-summary-card`, `admin.reading-summary-card`, `admin.reading-depth-card`, `admin.exposure-summary-card`, `admin.activity-card`, `admin.breakdown-card`).
+- Added a Bars/Line toggle to the admin reading-activity chart, including a smooth day-by-day line with point tooltips (`admin.activity-card`).
+
+- Fixed admin role hydration to re-read the authenticated Supabase user, use the server-resolved role for protected surfaces, and show a permission diagnostic when the account is authenticated without the trusted `admin` role.
+
+- Improved Japanese generated-reading conventions: prompts now require natural `「」` dialogue punctuation and no inserted word spaces, template fallbacks avoid artificial Japanese spacing, and UniDic grouping keeps nominal suffixes such as `私たち` together in the Reader (`reader.token`, `reader.source-sentence-card`).
+
+- Prevented mobile app-resume network hiccups from replacing an already-completed beta onboarding session with the setup error screen; completion is cached per account and revalidated in the background (`onboarding.page`).
+
+- Granted admin accounts explicit all-theme review access in the catalog and settings save path, including a clear `Admin review` status for premium themes.
+
+- Fixed wallpaper loading so the catalog and initial paint use lightweight WebP thumbnails, then promote the active canvas to the full-resolution wallpaper after preload (`theme-shop.selected-preview`).
+
+- Replaced the low-resolution tomato wallpaper with a versioned 1440×2560 v2 asset and matching catalog thumbnail (`theme-shop.selected-preview`).
+
+- Changed the default canvas grid preference to off while preserving explicit user opt-ins (`theme-settings.behavior-card`).
 
 - Fixed six Ruff import-order violations in the API, theme-admin services, and new admin tests so the GitHub Actions Python check can complete after its test step.
 

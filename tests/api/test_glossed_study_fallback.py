@@ -5,7 +5,9 @@ from pathlib import Path
 
 from app.main import app
 from app.services import surfaces as surfaces_service
-from app.services.learning_profile import ensure_profile_database
+from app.schemas.learning import StudyVocabularyItemCreateRequest
+from app.services import learning_profile as learning_profile_service
+from app.services.learning_profile import ensure_profile_database, record_study_vocabulary_item
 from fastapi.testclient import TestClient
 
 
@@ -82,3 +84,65 @@ def test_study_surface_backfills_missing_glossed_meaning_from_lexicon_fallback(t
             ("he", "חזרו"),
         ).fetchone()[0]
     assert stored_definition == "to return"
+
+
+def test_study_save_prefers_visible_source_word_when_fallback_meaning_is_needed(tmp_path: Path, monkeypatch) -> None:
+    class FakeEntry:
+        def __init__(self, definition: str) -> None:
+            self.definition = definition
+
+    def fake_lookup(**kwargs):
+        definitions = {
+            "visible-word": "meaning for visible word",
+            "lemma-word": "meaning for a different lemma",
+        }
+        entry = FakeEntry(definitions[kwargs["term"]]) if kwargs["term"] in definitions else None
+
+        class FakeLookup:
+            entries = [entry] if entry else []
+
+        return FakeLookup()
+
+    monkeypatch.setattr(learning_profile_service, "lookup_lexicon_entry", fake_lookup)
+    payload = StudyVocabularyItemCreateRequest(
+        book_id="book-001",
+        language_code="zh",
+        lemma="lemma-word",
+        display_form="visible-word",
+        page_number=1,
+        sentence_order=1,
+        token_order=1,
+        source_surface_form="visible-word",
+        source_sentence_text="visible-word",
+    )
+
+    record = record_study_vocabulary_item(tmp_path / "data", payload)
+
+    assert record.definition_short == "meaning for visible word"
+
+
+def test_study_save_does_not_erase_existing_meaning_on_later_empty_save(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        learning_profile_service,
+        "lookup_lexicon_entry",
+        lambda **_kwargs: type("FakeLookup", (), {"entries": []})(),
+    )
+    data_root = tmp_path / "data"
+    first_payload = StudyVocabularyItemCreateRequest(
+        book_id="book-001",
+        language_code="zh",
+        lemma="visible-word",
+        display_form="visible-word",
+        page_number=1,
+        sentence_order=1,
+        token_order=1,
+        source_surface_form="visible-word",
+        source_sentence_text="visible-word",
+        definition_short="meaning saved from reader lookup",
+    )
+    second_payload = first_payload.model_copy(update={"definition_short": None, "page_number": 2})
+
+    record_study_vocabulary_item(data_root, first_payload)
+    record = record_study_vocabulary_item(data_root, second_payload)
+
+    assert record.definition_short == "meaning saved from reader lookup"

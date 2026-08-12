@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sqlite3
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,7 +17,11 @@ from app.services.book_registry import (
     save_registry,
 )
 from app.services.book_sources import (
+    EPUB_TEXT_SOURCE,
+    EPUB_TEXT_SOURCE_SIGNATURE,
+    is_epub_source,
     is_text_fixture_source,
+    load_epub_pages,
     load_text_fixture_pages,
     write_text_fixture_source,
 )
@@ -420,7 +425,6 @@ def import_text_into_book(
     language_code: str,
     title: str | None = None,
     author: str | None = None,
-    translation_mode: str = "off",
     data_root: Path | None = None,
     owner_id: str | None = None,
 ) -> BookRecord:
@@ -464,8 +468,6 @@ def import_text_into_book(
     book.extraction_updated_at = _utc_now()
     book.extraction_path = str(extraction_path)
     book.status = "extracted"
-    if translation_mode == "preload":
-        preload_book_sentence_translations(book=book, page_start=1, page_count=extracted_page_count or None, data_root=books_root)
     _persist_book_record(book, data_root=books_root)
     return book
 
@@ -516,7 +518,7 @@ def _enrich_page_lexicon_metadata(
             language_code=page_result.language_code,
             terms=surface_forms,
         )
-    except FileNotFoundError:
+    except (FileNotFoundError, OSError, sqlite3.Error, RuntimeError, ValueError):
         lexicon_entries = {}
     try:
         pinyin_map = lookup_lexicon_pinyin_map(
@@ -524,7 +526,7 @@ def _enrich_page_lexicon_metadata(
             language_code=page_result.language_code,
             terms=surface_forms,
         )
-    except FileNotFoundError:
+    except (FileNotFoundError, OSError, sqlite3.Error, RuntimeError, ValueError):
         pinyin_map = {}
     if not pinyin_map and not lexicon_entries:
         pinyin_map = {}
@@ -907,15 +909,18 @@ def extract_book_pages(
     extraction_root = _artifact_dir(book.id, data_root) / "pages"
     extraction_root.mkdir(parents=True, exist_ok=True)
 
-    source_pdf = Path(book.source_path)
+    source_path = Path(book.source_path)
     start_page = max(1, page_start)
     end_page = book.total_pages if page_count is None else min(book.total_pages, start_page + page_count - 1)
     total_to_process = max(0, end_page - start_page + 1)
-    fixture_pages = load_text_fixture_pages(source_pdf) if is_text_fixture_source(source_pdf) else None
-    reader = None if fixture_pages is not None else PdfReader(str(source_pdf))
+    fixture_pages = load_text_fixture_pages(source_path) if is_text_fixture_source(source_path) else None
+    epub_pages = load_epub_pages(source_path) if is_epub_source(source_path) else None
+    reader = None if fixture_pages is not None or epub_pages is not None else PdfReader(str(source_path))
     current_text_source, current_text_source_signature = (
         (FIXTURE_TEXT_SOURCE, FIXTURE_TEXT_SIGNATURE)
         if fixture_pages is not None
+        else (EPUB_TEXT_SOURCE, EPUB_TEXT_SOURCE_SIGNATURE)
+        if epub_pages is not None
         else get_text_source_signature(ocr_provider or book.ocr_provider)
     )
 
@@ -949,6 +954,15 @@ def extract_book_pages(
             raw_text = fixture_pages[page_number - 1][2]
             text_source = FIXTURE_TEXT_SOURCE
             text_source_signature = FIXTURE_TEXT_SIGNATURE
+            sentence_texts = None
+            sentence_translations = None
+            page_translation = None
+            page_ends = None
+            token_hints = None
+        elif epub_pages is not None:
+            raw_text = epub_pages[page_number - 1][2]
+            text_source = EPUB_TEXT_SOURCE
+            text_source_signature = EPUB_TEXT_SOURCE_SIGNATURE
             sentence_texts = None
             sentence_translations = None
             page_translation = None

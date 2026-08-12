@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ChangeEvent } from "react";
 
 import { RoutePage } from "./route-page";
+import { AdminSubnav } from "./admin-subnav";
 import {
   fetchJson,
   postJson,
@@ -367,6 +368,7 @@ export function AdminThemeConsole() {
 
   return (
     <div data-inventory-id="admin-theme.page">
+      <AdminSubnav />
       <RoutePage
       eyebrow="Admin"
       title="Theme console"

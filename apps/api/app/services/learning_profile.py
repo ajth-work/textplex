@@ -924,11 +924,15 @@ def record_study_vocabulary_item(
     display_form = payload.display_form.strip() or lemma
     source_surface_form = payload.source_surface_form.strip() or display_form
     source_sentence_text = payload.source_sentence_text.strip()
-    definition_short = payload.definition_short or _resolve_study_definition_short(
-        data_root,
-        language_code=language_code,
-        candidates=(lemma, display_form, source_surface_form),
-        owner_id=owner_id,
+    definition_short = (
+        payload.definition_short.strip()
+        if payload.definition_short and payload.definition_short.strip()
+        else _resolve_study_definition_short(
+            data_root,
+            language_code=language_code,
+            candidates=(source_surface_form, display_form, lemma),
+            owner_id=owner_id,
+        )
     )
 
     with _connect(data_root, owner_id) as connection:
@@ -963,7 +967,7 @@ def record_study_vocabulary_item(
                 source_sentence_text = excluded.source_sentence_text,
                 pronunciation = excluded.pronunciation,
                 romanization = excluded.romanization,
-                definition_short = excluded.definition_short,
+                definition_short = COALESCE(excluded.definition_short, study_vocabulary_items.definition_short),
                 proficiency_level = excluded.proficiency_level,
                 click_count = study_vocabulary_items.click_count + 1,
                 first_seen_at = COALESCE(study_vocabulary_items.first_seen_at, excluded.first_seen_at),

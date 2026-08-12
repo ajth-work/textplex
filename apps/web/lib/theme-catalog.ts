@@ -50,7 +50,10 @@ export const themeWallpaperAssetCandidates: Record<string, ThemeWallpaperAsset[]
   "fruit-grape": [{ version: 1, path: "/themes/fruit-grape-v1.jpg" }],
   "vegetable-avocado": [{ version: 1, path: "/themes/vegetable-avocado-v1.jpg" }],
   "vegetable-carrot": [{ version: 1, path: "/themes/vegetable-carrot-v1.jpg" }],
-  "vegetable-tomato": [{ version: 1, path: "/themes/vegetable-tomato-v1.jpg" }],
+  "vegetable-tomato": [
+    { version: 1, path: "/themes/vegetable-tomato-v1.jpg" },
+    { version: 2, path: "/themes/vegetable-tomato-v2.png" },
+  ],
   "vegetable-corn": [{ version: 1, path: "/themes/vegetable-corn-v1.jpg" }],
   "vegetable-cucumber": [
     { version: 1, path: "/themes/vegetable-cucumber-v1.jpg" },

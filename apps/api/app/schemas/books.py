@@ -6,7 +6,7 @@ from processor.contracts import PageExtractionResult
 from pydantic import BaseModel, Field
 
 OcrProviderMode = Literal["local", "openai"]
-TranslationMode = Literal["off", "preload"]
+TranslationMode = Literal["off"]
 ReaderTokenDisplayMode = Literal["word", "character"]
 
 
@@ -30,6 +30,10 @@ class TextParseRequest(BaseModel):
 class TextImportRequest(TextParseRequest):
     author: str | None = None
     translation_mode: TranslationMode = Field(default="off")
+
+
+class WikipediaRandomImportRequest(BaseModel):
+    language_code: str = Field(min_length=2, max_length=3)
 
 
 class BookExtractionRequest(BaseModel):

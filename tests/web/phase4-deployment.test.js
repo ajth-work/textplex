@@ -38,17 +38,17 @@ test("Next keeps the import-to-reader-progress wiring explicit", () => {
 
   assert.match(importSource, /postJson<BookRecord>\("\/texts\/import"/);
   assert.match(importSource, /const importLanguageOptions: ImportLanguageOption\[\] = \[/);
-  assert.match(importSource, /translationConfirmationCharacterThreshold/);
-  assert.match(importSource, /translation_mode: translationMode === "preload" \? "preload" : "off"/);
-  assert.match(importSource, /formData\.append\("translation_mode", translationMode === "preload" \? "preload" : "off"\)/);
+  assert.match(importSource, /Translations are prepared as you read/);
+  assert.doesNotMatch(importSource, /Translate now/);
+  assert.doesNotMatch(importSource, /translation_mode/);
   for (const code of ["zh", "ko", "ja", "ru", "he", "ar"]) {
     assert.match(languageOptionsSource, new RegExp(`code: "${code}"`));
   }
   assert.match(importSource, /<select className="text-input" value=\{languageCode\} onChange=\{\(event\) => setLanguageCode\(event\.target\.value\)\} required>/);
-  assert.match(importSource, /Translate on demand/);
-  assert.match(importSource, /Translate now/);
-  assert.match(importSource, /import-translation-grid/);
-  assert.match(importSource, /import-confirmation-card/);
+  assert.match(importSource, /focused sentence and next three sentences stay buffered/);
+  assert.doesNotMatch(importSource, /Translate on demand/);
+  assert.doesNotMatch(importSource, /import-translation-grid/);
+  assert.doesNotMatch(importSource, /import-confirmation-card/);
   assert.match(importSource, /trackImport\(book\)/);
   assert.match(importProgressSource, /href=\{resolveReaderResumeHref\(book\.id, null\)\}/);
   assert.match(appShellSource, /resolveReaderResumeHref\(activeBookId, null, activePageNumber \?\? 1\)/);

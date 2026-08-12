@@ -244,6 +244,22 @@ def test_sentence_translation_buffer_prefetches_current_and_next_three_sentences
     ]
 
 
+def test_import_rejects_full_book_translation_preload(tmp_path: Path) -> None:
+    app.state.data_root = tmp_path
+    client = TestClient(app)
+
+    response = client.post(
+        "/texts/import",
+        json={
+            "text": "One. Two.",
+            "language_code": "es",
+            "translation_mode": "preload",
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_sentence_translation_endpoint_persists_translation_alignment(tmp_path: Path, monkeypatch) -> None:
     app.state.data_root = tmp_path
     client = TestClient(app)

@@ -150,7 +150,13 @@ def get_theme_catalog(
 ) -> ThemeCatalogResponse:
     themes, bundles = _server_catalog()
     owned_ids = _owned_theme_ids(context, data_root=data_root)
-    can_preview_all = bool(context and "themes.preview_all" in context.user.permissions)
+    can_preview_all = bool(
+        context
+        and (
+            context.user.account_role == "admin"
+            or "themes.preview_all" in context.user.permissions
+        )
+    )
     catalog_items = [
         ThemeCatalogItem(
             id=str(theme["id"]),

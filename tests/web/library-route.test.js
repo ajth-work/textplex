@@ -34,6 +34,8 @@ test("Next library keeps the language filter visually grouped with the search he
     assert.match(librarySource, /Generator settings/);
     assert.match(librarySource, /Target language/);
     assert.match(librarySource, /Vocabulary balance/);
+    assert.match(librarySource, /Vocabulary source/);
+    assert.match(librarySource, /JLPT \/ exam level only/);
     assert.match(librarySource, /library-practice-status/);
     assert.match(stylesheetSource, /\.library-language-filter[\s\S]*\.library-language-button/);
     assert.match(stylesheetSource, /\.library-practice-action[\s\S]*\.library-generator-settings/);

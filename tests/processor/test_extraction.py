@@ -142,6 +142,21 @@ def test_tokenize_sentence_keeps_japanese_okurigana_attached_to_words() -> None:
     ]
 
 
+def test_tokenize_sentence_keeps_japanese_nominal_suffixes_attached_to_pronouns() -> None:
+    tokens = tokenize_sentence("私たちははいと答える。学生たちが来る。", "ja")
+
+    assert [token.surface_form for token in tokens] == [
+        "私たち",
+        "は",
+        "はい",
+        "と",
+        "答える",
+        "学生たち",
+        "が",
+        "来る",
+    ]
+
+
 def test_tokenize_sentence_keeps_japanese_conjugations_and_na_adjectives_together() -> None:
     tokens = tokenize_sentence("正しい。完全な強固さとしなやかさが、間違ってはいなくても。", "ja")
 

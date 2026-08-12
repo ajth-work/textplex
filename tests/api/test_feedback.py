@@ -4,13 +4,18 @@ from pathlib import Path
 
 from app.main import app
 from app.schemas.auth import AuthMeResponse
-from app.schemas.feedback import FeedbackContext, FeedbackRecord
+from app.schemas.feedback import (
+    FeedbackContext,
+    FeedbackRecord,
+    FeedbackScreenshotAnalysis,
+)
 from app.services import auth as auth_service
 from app.services.feedback import (
     create_feedback,
     list_testers,
     list_user_notifications,
     mark_user_notifications_read,
+    submit_tester_verification,
     update_feedback_status,
     update_tester_nickname,
 )
@@ -66,6 +71,87 @@ def test_feedback_persists_original_text_and_fallback_triage(tmp_path: Path, mon
     assert json.loads(saved_files[0].read_text(encoding="utf-8"))["id"] == payload["id"]
 
 
+def test_feedback_accepts_multiple_screenshot_attachments(tmp_path: Path, monkeypatch) -> None:
+    original_data_root = app.state.data_root
+    app.state.data_root = tmp_path
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    try:
+        response = TestClient(app).post(
+            "/feedback/with-screenshot",
+            data={
+                "original_text": "The selected word is difficult to see.",
+                "context": json.dumps({"route": "/reader/book-1/3", "app_version": "0.1.0"}),
+            },
+            files=[
+                ("screenshots", ("reader-screen.png", b"\x89PNG\r\n\x1a\nmock-image", "image/png")),
+                ("screenshots", ("reader-screen.jpg", b"\xff\xd8\xffmock-image", "image/jpeg")),
+            ],
+        )
+    finally:
+        app.state.data_root = original_data_root
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["filename"] for item in payload["screenshots"]] == ["reader-screen.png", "reader-screen.jpg"]
+    attachments = list((tmp_path / "feedback" / "anonymous" / "attachments").glob("*"))
+    assert len(attachments) == 2
+    assert any(path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n") for path in attachments)
+    assert any(path.read_bytes().startswith(b"\xff\xd8\xff") for path in attachments)
+
+
+def test_feedback_rejects_invalid_screenshot_attachment() -> None:
+    response = TestClient(app).post(
+        "/feedback/with-screenshot",
+        data={
+            "original_text": "The selected word is difficult to see.",
+            "context": json.dumps({"route": "/reader", "app_version": "0.1.0"}),
+        },
+        files={"screenshot": ("not-an-image.txt", b"not-an-image", "text/plain")},
+    )
+
+    assert response.status_code == 422
+
+
+def test_admin_can_request_on_demand_screenshot_analysis(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    created = create_feedback(
+        tmp_path,
+        "The reader control is difficult to find.",
+        FeedbackContext(route="/reader/book-1/3", app_version="0.1.0"),
+        user_id="tester-images",
+        screenshot_uploads=[
+            ("reader-screen.png", "image/png", b"\x89PNG\r\n\x1a\nmock-image"),
+            ("reader-screen.jpg", "image/jpeg", b"\xff\xd8\xffmock-image"),
+        ],
+    )
+    monkeypatch.setattr(
+        "app.services.feedback._call_openai_screenshot_analysis",
+        lambda _data_root, _record: FeedbackScreenshotAnalysis(
+            analyzed_at="2026-08-11T00:00:00Z",
+            model="test-model",
+            summary="The screenshots show the reader control competing with nearby controls.",
+            observations=["The control is visually low contrast."],
+            visible_text=["Reader"],
+            suggested_action="Increase the control label contrast.",
+        ),
+    )
+    original_data_root = app.state.data_root
+    app.state.data_root = tmp_path
+    try:
+        app.dependency_overrides[auth_service.get_authenticated_user_context] = lambda: _context("admin-1", "admin")
+        client = TestClient(app)
+        image_response = client.get(f"/feedback/{created.id}/screenshots/1")
+        analysis_response = client.post(f"/feedback/{created.id}/screenshot-analysis")
+    finally:
+        app.dependency_overrides.clear()
+        app.state.data_root = original_data_root
+
+    assert image_response.status_code == 200
+    assert image_response.content.startswith(b"\xff\xd8\xff")
+    assert analysis_response.status_code == 200
+    assert analysis_response.json()["screenshot_analysis"]["model"] == "test-model"
+
+
 def test_feedback_is_partitioned_by_user_and_status_and_keeps_history(tmp_path: Path, monkeypatch) -> None:
     original_data_root = app.state.data_root
     app.state.data_root = tmp_path
@@ -112,6 +198,44 @@ def test_feedback_notifications_follow_status_and_read_state(tmp_path: Path, mon
 
     mark_user_notifications_read(tmp_path, "tester-456", [notifications[0].id])
     assert list_user_notifications(tmp_path, "tester-456")[0].read is True
+
+
+def test_feedback_can_be_sent_to_tester_for_internal_verification(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    created = create_feedback(
+        tmp_path,
+        "The reader control is hard to find.",
+        FeedbackContext(route="/reader/book-1/3", app_version="0.1.0"),
+        user_id="tester-verify",
+    )
+
+    ready = update_feedback_status(
+        tmp_path,
+        created.id,
+        "ready_for_testing",
+        changed_by="admin-1",
+        implementation_build="0.2.0-beta.3",
+        verification_instructions="Open the Reader, use the control, and confirm it is discoverable.",
+    )
+    assert ready.status == "ready_for_testing"
+    assert ready.verification is not None
+    assert ready.verification.implementation_build == "0.2.0-beta.3"
+    notifications = list_user_notifications(tmp_path, "tester-verify")
+    assert notifications[0].status == "ready_for_testing"
+    assert notifications[0].verification_build == "0.2.0-beta.3"
+
+    verified = submit_tester_verification(
+        tmp_path,
+        created.id,
+        "verified",
+        note="The control is now easy to find.",
+        user_id="tester-verify",
+    )
+    assert verified.status == "completed"
+    assert verified.verification is not None
+    assert verified.verification.response == "verified"
+    assert verified.status_history[-1].event_type == "tester_response"
+    assert list_user_notifications(tmp_path, "tester-verify") == []
 
 
 def test_feedback_rejects_empty_or_oversized_original_text() -> None:

@@ -44,6 +44,8 @@ import {
   type TokenResult,
 } from "../lib/textplex";
 import { languageShortCode } from "../lib/language-options";
+import { requestReaderFeedback } from "../lib/feedback-events";
+import { finalizeJapaneseRomaji } from "../lib/japanese-romaji";
 import {
   APP_THEME_RECENT_LIMIT,
   APP_THEME_RECENT_STORAGE_KEY,
@@ -76,6 +78,7 @@ type ReaderTextSizeMode = "small" | "medium" | "large";
 type ReaderProfileStatisticsView = "simple" | "detailed";
 type SentenceAudioRate = 0.25 | 0.5 | 0.75 | 1;
 type RussianSyllableDisplayMode = "romanization" | "original";
+type JapaneseReadingDisplayMode = "romaji" | "furigana";
 type SentenceTranslationResponse = {
   book_id: string;
   page_number: number;
@@ -108,6 +111,7 @@ const readerTokenSpacingStorageKey = "textplex.readerTokenSpacing";
 const readerPronunciationFreshOnlyStorageKey = "textplex.readerPronunciationFreshOnly";
 const readerSrsColoringStorageKey = "textplex.readerSrsColoring";
 const readerRussianSyllableDisplayModeStorageKey = "textplex.readerRussianSyllableDisplayMode";
+const readerJapaneseReadingDisplayModeStorageKey = "textplex.readerJapaneseReadingDisplayMode";
 const readerModeStorageKey = "textplex.readerMode";
 const readerModeLabels: Record<ReaderMode, string> = {
   sentence: "Sentence",
@@ -303,6 +307,10 @@ function persistRussianSyllableDisplayMode(mode: RussianSyllableDisplayMode): vo
   }
 
   window.localStorage.setItem(readerRussianSyllableDisplayModeStorageKey, mode);
+}
+
+function resolveJapaneseReadingDisplayMode(value: string | null | undefined): JapaneseReadingDisplayMode {
+  return value === "furigana" ? "furigana" : "romaji";
 }
 
 function resolveReaderFont(value: string | null | undefined): ReaderFontMode {
@@ -747,6 +755,7 @@ function buildTokenReadingParts(
   languageCode?: string | null,
   pronunciationOverride?: string | null,
   readingOverride?: string | null,
+  japaneseReadingDisplayMode: JapaneseReadingDisplayMode = "romaji",
 ): TokenReadingPart[] {
   const surface = token.surface_form ?? "";
   if (!surface) {
@@ -796,7 +805,11 @@ function buildTokenReadingParts(
     return [];
   }
 
-  return [{ surface, text: reading, kind: "generic", gloss: null }];
+  const displayReading = languageCode?.startsWith("ja") && japaneseReadingDisplayMode === "furigana"
+    ? finalizeJapaneseRomaji(reading).replace(/\s+/gu, "")
+    : reading;
+
+  return [{ surface, text: displayReading, kind: "generic", gloss: null }];
 }
 
 function getLexiconTraceSource(entry: LexiconEntryRecord | null, resolutionSource?: LexiconLookupResponse["resolution_source"] | null): string {
@@ -1614,6 +1627,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [readerTokenAudioOnTap, setReaderTokenAudioOnTap] = useState(() => readStoredReaderTokenAudioOnTap());
   const [readerSpeechVoiceGender, setReaderSpeechVoiceGender] = useState<"female" | "male">("female");
   const [readerRussianSyllableDisplayMode, setReaderRussianSyllableDisplayMode] = useState<RussianSyllableDisplayMode>("romanization");
+  const [readerJapaneseReadingDisplayMode, setReaderJapaneseReadingDisplayMode] = useState<JapaneseReadingDisplayMode>("romaji");
   const [showSentenceTranslation, setShowSentenceTranslation] = useState(false);
   const [showSourceSentence, setShowSourceSentence] = useState(false);
   const [sentenceRevealSourceTokenOrders, setSentenceRevealSourceTokenOrders] = useState<number[]>([]);
@@ -1706,6 +1720,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     readerTokenAudioIntroSeenRef.current = window.localStorage.getItem(readerTokenAudioIntroSeenStorageKey) === "true";
     setReaderSpeechVoiceGender(readStoredReaderSpeechVoiceGender());
     setReaderRussianSyllableDisplayMode(readStoredRussianSyllableDisplayMode());
+    setReaderJapaneseReadingDisplayMode(
+      resolveJapaneseReadingDisplayMode(window.localStorage.getItem(readerJapaneseReadingDisplayModeStorageKey)),
+    );
     const pageBookmarkId = `${bookId}:${pageNumber}`;
     const legacyPageBookmarkKey = `textplex.readerBookmark:${bookId}:${pageNumber}`;
     const legacyPageBookmarkSaved = window.localStorage.getItem(legacyPageBookmarkKey) === "saved";
@@ -2016,6 +2033,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   useEffect(() => {
     persistRussianSyllableDisplayMode(readerRussianSyllableDisplayMode);
   }, [readerRussianSyllableDisplayMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(readerJapaneseReadingDisplayModeStorageKey, readerJapaneseReadingDisplayMode);
+  }, [readerJapaneseReadingDisplayMode]);
 
   useEffect(() => {
     let active = true;
@@ -2539,6 +2563,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
         pageData?.book.language_code ?? null,
         selectedTokenPronunciationOverride,
         selectedTokenReading,
+        readerJapaneseReadingDisplayMode,
       )
     : [];
   const selectedTokenSurfaceParts = selectedToken ? splitKoreanParticleChain(selectedToken.surface_form) : [];
@@ -2551,6 +2576,12 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       : selectedTokenReadingParts
     : [];
   const selectedTokenPronunciationLine = selectedTokenReadingParts.map((part) => part.text).join(" ");
+  const selectedTokenFurigana = selectedToken &&
+    pageData?.book.language_code?.startsWith("ja") &&
+    /[\p{Script=Han}]/u.test(selectedToken.surface_form) &&
+    selectedTokenReading
+    ? finalizeJapaneseRomaji(selectedTokenReading).replace(/\s+/gu, "")
+    : null;
   const selectedTokenMetadataMeaning = selectedToken?.definition_short?.trim() || null;
   const selectedTokenEnglishMeaning = lexiconResult?.entries.length && !lexiconEntry
     ? null
@@ -3207,6 +3238,34 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       return "Page translation";
     }
     return null;
+  }
+
+  function handleSentenceFeedback(): void {
+    if (!activeSentence) {
+      return;
+    }
+
+    requestReaderFeedback({
+      target: "sentence",
+      targetText: activeSentence.text,
+      targetOrder: activeSentence.order,
+      message: `Sentence correction\n\n${activeSentence.text}\n\nPlease describe what is wrong and, if possible, provide the corrected sentence. You can mention grammar, conjugation, particle usage, segmentation, translation, or another sentence-level issue.`,
+    });
+  }
+
+  function handleWordFeedback(): void {
+    if (!selectedToken || !activeSentence) {
+      return;
+    }
+
+    const reading = selectedTokenReadingParts.map((part) => part.text).join(" ") || selectedTokenReading || "unavailable";
+    const definition = selectedTokenEnglishMeaning || selectedTokenMetadataMeaning || "unavailable";
+    requestReaderFeedback({
+      target: "word",
+      targetText: selectedToken.surface_form,
+      targetOrder: selectedToken.order,
+      message: `Word correction\n\nWord: ${selectedToken.surface_form}\nReading: ${reading}\nCurrent definition: ${definition}\nSentence: ${activeSentence.text}\n\nPlease describe the correction, such as a definition, conjugation, particle, segmentation, romanization, or furigana issue.`,
+    });
   }
 
   async function recordSentenceAudioPlayback(sentence: SentenceResult): Promise<void> {
@@ -3975,6 +4034,36 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                 definition card still shows the full lookup reading.
               </p>
             </section>
+            {pageData?.book.language_code?.startsWith("ja") ? (
+              <section className="reader-options-section" data-inventory-id="reader.japanese-reading-display-section">
+                <div className="reader-options-toggle-row">
+                  <div>
+                    <strong>Japanese reading display</strong>
+                    <p className="small-copy">Choose romaji or hiragana furigana for Japanese token readings and the selected-word card.</p>
+                  </div>
+                  <div className="reader-reading-mode-toggle" role="group" aria-label="Japanese reading display">
+                    <button
+                      type="button"
+                      className={`button button-secondary button-compact ${readerJapaneseReadingDisplayMode === "romaji" ? "is-active" : ""}`}
+                      onClick={() => setReaderJapaneseReadingDisplayMode("romaji")}
+                      aria-pressed={readerJapaneseReadingDisplayMode === "romaji"}
+                      data-inventory-id="reader.japanese-reading-romaji"
+                    >
+                      Romaji
+                    </button>
+                    <button
+                      type="button"
+                      className={`button button-secondary button-compact ${readerJapaneseReadingDisplayMode === "furigana" ? "is-active" : ""}`}
+                      onClick={() => setReaderJapaneseReadingDisplayMode("furigana")}
+                      aria-pressed={readerJapaneseReadingDisplayMode === "furigana"}
+                      data-inventory-id="reader.japanese-reading-furigana"
+                    >
+                      Furigana
+                    </button>
+                  </div>
+                </div>
+              </section>
+            ) : null}
             <section className="reader-options-section" data-inventory-id="reader.srs-color-section">
               <div className="reader-options-section-head">
                 <div>
@@ -4712,7 +4801,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   const isAudioActive = sentenceAudioPlaying && sentenceAudioTokenOrder === token.order;
                   const languageCode = pageData?.book.language_code ?? null;
                   const tokenStudyItem = getStudyVocabularyItem(token);
-                  const tokenReadingParts = buildTokenReadingParts(token, languageCode, tokenPronunciationOverrides[token.order] ?? null);
+                  const tokenReadingParts = buildTokenReadingParts(
+                    token,
+                    languageCode,
+                    tokenPronunciationOverrides[token.order] ?? null,
+                    undefined,
+                    readerJapaneseReadingDisplayMode,
+                  );
                   const isTokenPronunciationMuted =
                     readerPronunciationFreshOnly && !studySurfaceLoading && !isFreshStudyItem(tokenStudyItem) && tokenReadingParts.length > 0;
                   const tokenSurfaceParts = languageCode?.startsWith("ko") ? splitKoreanParticleChain(token.surface_form) : [];
@@ -4781,6 +4876,21 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     </button>
                   );
                 })}
+              </div>
+              <div className="reader-token-panel-footer">
+                <button
+                  type="button"
+                  className="reader-inline-feedback-button reader-tooltip-target reader-tooltip-target--compact"
+                  onClick={handleSentenceFeedback}
+                  disabled={!activeSentence}
+                  aria-label="Report a sentence correction"
+                  title="Report a sentence correction"
+                  data-tooltip="Report sentence correction"
+                  data-inventory-id="reader.sentence-feedback-button"
+                >
+                  <span aria-hidden="true">✦</span>
+                  <span>Sentence</span>
+                </button>
               </div>
                 {readerMeaningLineEnabled && activeSentence ? (
                   <details className="reader-translation-reveal-card" data-inventory-id="reader.translation-reveal-card">
@@ -4877,20 +4987,27 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   <div className="definition-token-heading">
                     <div className="definition-term-row">
                       <h3 className="definition-headword">
-                        {selectedTokenSurfaceParts.length > 1 ? (
-                          <span className="definition-headword-reading" aria-label={selectedTokenSurfaceParts.join(" ")}>
-                            {selectedTokenSurfaceParts.map((part, index) => (
-                              <span
-                                key={`${selectedToken?.order ?? 0}-headword-${index}-${part}`}
-                                className={`definition-headword-reading-part ${index > 0 ? "is-particle" : ""}`}
-                              >
-                                <span className="definition-headword-reading-text">{part}</span>
-                              </span>
-                            ))}
-                          </span>
-                        ) : (
-                          selectedToken?.surface_form ?? tokenLabel
-                        )}
+                        <span className="definition-headword-stack">
+                          {selectedTokenSurfaceParts.length > 1 ? (
+                            <span className="definition-headword-reading" aria-label={selectedTokenSurfaceParts.join(" ")}>
+                              {selectedTokenSurfaceParts.map((part, index) => (
+                                <span
+                                  key={`${selectedToken?.order ?? 0}-headword-${index}-${part}`}
+                                  className={`definition-headword-reading-part ${index > 0 ? "is-particle" : ""}`}
+                                >
+                                  <span className="definition-headword-reading-text">{part}</span>
+                                </span>
+                              ))}
+                            </span>
+                          ) : (
+                            selectedToken?.surface_form ?? tokenLabel
+                          )}
+                          {readerJapaneseReadingDisplayMode === "furigana" && selectedTokenFurigana ? (
+                            <span className="definition-headword-furigana" lang="ja" aria-label={`Furigana: ${selectedTokenFurigana}`}>
+                              {selectedTokenFurigana}
+                            </span>
+                          ) : null}
+                        </span>
                       </h3>
                       <div className="definition-control-stack" ref={customVocabularyMenuRef}>
                         <div className="definition-control-row">
@@ -4997,7 +5114,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       </div>
                     </div>
                     <div className="definition-meta">
-                      {selectedTokenPronunciationLine ? (
+                      {selectedTokenPronunciationLine && (readerJapaneseReadingDisplayMode !== "furigana" || !selectedTokenFurigana) ? (
                         <span className="definition-meta-reading-line" aria-label={selectedTokenPronunciationLine}>
                           {selectedTokenReadingParts.map((part, index) => (
                             <span
@@ -5069,6 +5186,18 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                         <span>Missed</span>
                       </button>
                     </div>
+                    <button
+                      type="button"
+                      className="reader-inline-feedback-button definition-correction-feedback-button"
+                      onClick={handleWordFeedback}
+                      disabled={!selectedToken || !activeSentence || isSentencePunctuation(selectedToken.surface_form)}
+                      aria-label="Report a word correction"
+                      title="Report a word correction"
+                      data-inventory-id="reader.definition-correction-button"
+                    >
+                      <span aria-hidden="true">✦</span>
+                      <span>Word</span>
+                    </button>
                   </div>
                 </div>
                 {selectedTokenReadingDisplayParts.length > 1 ? (

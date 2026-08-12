@@ -102,19 +102,7 @@ type LexicalEntryDetail = {
 
 type ImportLanguageOption = (typeof targetLanguageOptions)[number];
 
-const googleTranslatePricePerMillionCharacters = 10;
-const translationConfirmationCharacterThreshold = 40000;
-
 const importLanguageOptions: ImportLanguageOption[] = [...targetLanguageOptions];
-
-function formatCurrencyUsd(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-}
 
 type ActivityBookGroup = {
   bookId: string;
@@ -452,6 +440,7 @@ export function AnalysisSurfaceView({ bookId }: { bookId: string }) {
 }
 
 export function ImportSurfaceView() {
+  const { configured: authConfigured, loading: authLoading, session: authSession } = useAuth();
   const { activeImport, trackImport } = useImportProgress();
   const [data, setData] = useState<ImportSurfaceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -459,16 +448,20 @@ export function ImportSurfaceView() {
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [languageCode, setLanguageCode] = useState("zh");
+  const [wikipediaLanguageCode, setWikipediaLanguageCode] = useState("zh");
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [translationMode, setTranslationMode] = useState<"on-demand" | "preload">("on-demand");
-  const [showTranslationConfirm, setShowTranslationConfirm] = useState(false);
+  const [wikipediaSubmitting, setWikipediaSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (authLoading || (authConfigured && !authSession?.access_token)) {
+      return undefined;
+    }
+
     let active = true;
     void fetchJson<ImportSurfaceResponse>("/import")
       .then((result) => {
@@ -484,26 +477,22 @@ export function ImportSurfaceView() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [authConfigured, authLoading, authSession?.access_token]);
 
   const draftText = text.trim();
-  const draftCharacterCount = mode === "paste" ? Array.from(draftText).length : 0;
-  const draftWordCount = mode === "paste" ? draftText.split(/\s+/).filter(Boolean).length : 0;
-  const draftTranslationCost = (draftCharacterCount / 1_000_000) * googleTranslatePricePerMillionCharacters;
-  const translationConfirmationRequired =
-    mode === "paste" &&
-    translationMode === "preload" &&
-    draftCharacterCount >= translationConfirmationCharacterThreshold;
-
-  useEffect(() => {
-    if (!translationConfirmationRequired) {
-      setShowTranslationConfirm(false);
-    }
-  }, [translationConfirmationRequired]);
-
   const runImport = async () => {
     setActionError(null);
     setActionMessage(null);
+
+    if (authLoading) {
+      setActionError("Your sign-in session is still loading. Please wait a moment and try again.");
+      return;
+    }
+    if (authConfigured && !authSession?.access_token) {
+      setActionError("Your TextPlex sign-in session is missing or expired. Sign in again before importing text.");
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -517,19 +506,17 @@ export function ImportSurfaceView() {
           language_code: languageCode,
           title: title.trim() || null,
           author: author.trim() || null,
-          translation_mode: translationMode === "preload" ? "preload" : "off",
         });
       } else {
         if (!file) {
-          throw new Error("Choose a PDF before uploading it.");
+          throw new Error("Choose a PDF or EPUB before uploading it.");
         }
-        if (!file.name.toLowerCase().endsWith(".pdf")) {
-          throw new Error("TextPlex currently accepts PDF uploads only.");
+        if (!file.name.toLowerCase().endsWith(".pdf") && !file.name.toLowerCase().endsWith(".epub")) {
+          throw new Error("TextPlex currently accepts PDF or EPUB uploads.");
         }
         const formData = new FormData();
         formData.append("file", file);
         formData.append("language_code", languageCode);
-        formData.append("translation_mode", translationMode === "preload" ? "preload" : "off");
         if (title.trim()) formData.append("title", title.trim());
         if (author.trim()) formData.append("author", author.trim());
         book = await postFormData<BookRecord>("/books/upload", formData);
@@ -543,7 +530,6 @@ export function ImportSurfaceView() {
       );
       setText("");
       setFile(null);
-      setShowTranslationConfirm(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
       const refreshed = await fetchJson<ImportSurfaceResponse>("/import");
       setData(refreshed);
@@ -556,24 +542,41 @@ export function ImportSurfaceView() {
 
   const handleImport = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (translationConfirmationRequired && !showTranslationConfirm) {
-      setShowTranslationConfirm(true);
-      setActionError(null);
-      setActionMessage(
-        `This paste is ${draftCharacterCount.toLocaleString()} characters. Preloading translation is estimated at ${formatCurrencyUsd(
-          draftTranslationCost,
-        )}. Confirm below to continue or switch to on-demand translation.`,
-      );
+    await runImport();
+  };
+
+  const runRandomWikipediaImport = async () => {
+    setActionError(null);
+    setActionMessage(null);
+
+    if (authLoading) {
+      setActionError("Your sign-in session is still loading. Please wait a moment and try again.");
       return;
     }
-    await runImport();
+    if (authConfigured && !authSession?.access_token) {
+      setActionError("Your TextPlex sign-in session is missing or expired. Sign in again before importing text.");
+      return;
+    }
+
+    setWikipediaSubmitting(true);
+    try {
+      const book = await postJson<BookRecord>("/wikipedia/random-import", { language_code: wikipediaLanguageCode });
+      trackImport(book);
+      setActionMessage(`Imported a random ${languageShortCode(wikipediaLanguageCode).toUpperCase()} Wikipedia article: ${book.title}`);
+      const refreshed = await fetchJson<ImportSurfaceResponse>("/import");
+      setData(refreshed);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Unable to import a random Wikipedia article.");
+    } finally {
+      setWikipediaSubmitting(false);
+    }
   };
 
   return (
     <RoutePage
       eyebrow="Import"
       title="Paste text or upload a book"
-      description="Live import metadata and entry points for books, pasted text, and future source types."
+      description="Import pasted text, PDF books, or EPUB books into the reader."
       badge={data?.default_language?.toUpperCase() ?? "Live"}
       links={[
         { href: "/library", label: "Library" },
@@ -581,7 +584,7 @@ export function ImportSurfaceView() {
       ]}
       metrics={[
         { label: "Inputs", value: data ? data.supported_inputs.join(", ") : "Loading" },
-        { label: "Uploads", value: data ? (data.can_upload_pdf ? "Enabled" : "Disabled") : "Loading" },
+        { label: "Uploads", value: data ? (data.can_upload_pdf || data.can_upload_epub ? "Enabled" : "Disabled") : "Loading" },
         { label: "Paste", value: data ? (data.can_paste_text ? "Enabled" : "Disabled") : "Loading" },
       ]}
     >
@@ -592,14 +595,14 @@ export function ImportSurfaceView() {
           <section className="card feature-card import-form-card">
             <div className="card-topline">
               <h2>Add content</h2>
-              <span className="pill">{mode === "paste" ? "Paste" : "PDF"}</span>
+              <span className="pill">{mode === "paste" ? "Paste" : "PDF / EPUB"}</span>
             </div>
             <div className="button-row" aria-label="Import method">
               <button className={`button ${mode === "paste" ? "button-primary" : "button-secondary"}`} type="button" onClick={() => setMode("paste")}>
                 Paste text
               </button>
               <button className={`button ${mode === "upload" ? "button-primary" : "button-secondary"}`} type="button" onClick={() => setMode("upload")}>
-                Upload PDF
+                Upload PDF / EPUB
               </button>
             </div>
             <form className="surface-form" onSubmit={handleImport}>
@@ -623,30 +626,7 @@ export function ImportSurfaceView() {
                     </select>
                   </label>
                 </div>
-                <div className="import-translation-grid" aria-label="Translation planning summary">
-                  <span className="pill">Characters {mode === "paste" ? draftCharacterCount.toLocaleString() : "—"}</span>
-                  <span className="pill">Words {mode === "paste" ? draftWordCount.toLocaleString() : "—"}</span>
-                  <span className="pill">GT est. {mode === "paste" ? formatCurrencyUsd(draftTranslationCost) : "After extraction"}</span>
-                </div>
-                <div className="button-row" aria-label="Translation mode">
-                  <button
-                    type="button"
-                    className={`button ${translationMode === "on-demand" ? "button-primary" : "button-secondary"}`}
-                    onClick={() => {
-                      setTranslationMode("on-demand");
-                      setShowTranslationConfirm(false);
-                    }}
-                  >
-                    Translate on demand
-                  </button>
-                  <button
-                    type="button"
-                    className={`button ${translationMode === "preload" ? "button-primary" : "button-secondary"}`}
-                    onClick={() => setTranslationMode("preload")}
-                  >
-                    Translate now
-                  </button>
-                </div>
+                <p className="small-copy">Translations are prepared as you read: the focused sentence and next three sentences stay buffered, without translating the whole book on import.</p>
                 {mode === "paste" ? (
                   <label>
                     Article text
@@ -654,41 +634,39 @@ export function ImportSurfaceView() {
                   </label>
                 ) : (
                   <label>
-                    PDF file
-                    <input ref={fileInputRef} className="text-input" type="file" accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} required />
+                    PDF or EPUB file
+                    <input ref={fileInputRef} className="text-input" type="file" accept="application/pdf,.pdf,application/epub+zip,.epub" onChange={(event) => setFile(event.target.files?.[0] ?? null)} required />
                   </label>
                 )}
                 {actionError ? <p className="form-error" role="alert">{actionError}</p> : null}
                 {actionMessage ? <p className="form-message" role="status">{actionMessage}</p> : null}
-                {translationConfirmationRequired && showTranslationConfirm ? (
-                  <section className="card import-confirmation-card">
-                    <h3>Confirm translation preload</h3>
-                    <p className="small-copy">
-                      This paste is above the {translationConfirmationCharacterThreshold.toLocaleString()} character safety threshold. Preloading translation is
-                      estimated at {formatCurrencyUsd(draftTranslationCost)} based on {draftCharacterCount.toLocaleString()} characters.
-                    </p>
-                    <div className="button-row">
-                      <button className="button button-primary" type="button" onClick={() => void runImport()} disabled={submitting}>
-                        {submitting ? "Working..." : "Confirm and translate now"}
-                      </button>
-                      <button
-                        className="button button-secondary"
-                        type="button"
-                        onClick={() => {
-                          setTranslationMode("on-demand");
-                          setShowTranslationConfirm(false);
-                          setActionMessage("Switched to on-demand translation. The reader will translate sentences when opened.");
-                        }}
-                      >
-                        Switch to on-demand
-                      </button>
-                    </div>
-                  </section>
-                ) : null}
                 <button className="button button-primary" type="submit" disabled={submitting}>
                   {submitting ? "Processing..." : mode === "paste" ? "Process text" : "Upload and process"}
                 </button>
               </form>
+              {data.can_import_random_wikipedia ? (
+                <section className="import-wikipedia-card" data-inventory-id="import.wikipedia-random-card">
+                  <div>
+                    <h3>Try a random Wikipedia article</h3>
+                    <p className="small-copy">TextPlex will pick a random article from the selected-language Wikipedia and add it to your library.</p>
+                  </div>
+                  <div className="import-wikipedia-controls">
+                    <label>
+                      Wikipedia language
+                      <select className="text-input" value={wikipediaLanguageCode} onChange={(event) => setWikipediaLanguageCode(event.target.value)}>
+                        {importLanguageOptions.map((option) => (
+                          <option key={option.code} value={option.code}>
+                            {option.label} ({languageShortCode(option.code)})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button className="button button-secondary" type="button" data-inventory-id="import.wikipedia-random-button" onClick={() => void runRandomWikipediaImport()} disabled={submitting || wikipediaSubmitting}>
+                      {wikipediaSubmitting ? "Finding an article..." : `Import random ${languageShortCode(wikipediaLanguageCode).toUpperCase()} article`}
+                    </button>
+                  </div>
+                </section>
+              ) : null}
             </section>
 
           {activeImport ? <ImportProgressCard book={activeImport} inventoryId="import.progress-card" message={actionMessage} /> : null}
@@ -782,11 +760,11 @@ export function ProgressSurfaceView() {
               <p>{selectedTrack.next_step}</p>
             </article>
           ) : null}
-          <article className="card feature-card">
+          <article className="card feature-card" data-inventory-id="progress.books-card">
             <h2>Books</h2>
             <div className="surface-list">
               {data.books.map((book) => (
-                <div key={book.book_id} className="surface-list-item">
+                <div key={book.book_id} className="surface-list-item" data-inventory-id="progress.book-item">
                   <div className="card-topline">
                     <strong>{book.title}</strong>
                     <span className="muted">{book.active_seconds}s</span>
@@ -1245,15 +1223,15 @@ export function ThemeSettingsSurfaceView() {
   useLayoutEffect(() => {
     setSelectedWallpaperLoaded(!selectedWallpaperPath);
   }, [selectedWallpaperPath]);
-  const catalogThemes = catalog?.themes ?? appThemeOptions.map((option) => ({
-    id: option.value,
-    title: option.title,
-    description: option.description,
-    price_cents: Math.round(option.price * 100),
-    is_free: ["neutral", "sepia", "ink", "black"].includes(option.value),
-    is_owned: ["neutral", "sepia", "ink", "black"].includes(option.value),
-    preview_available: true,
-  }));
+  const catalogThemes = (catalog?.themes ?? appThemeOptions.map((option) => ({
+      id: option.value,
+      title: option.title,
+      description: option.description,
+      price_cents: Math.round(option.price * 100),
+      is_free: ["neutral", "sepia", "ink", "black"].includes(option.value),
+      is_owned: ["neutral", "sepia", "ink", "black"].includes(option.value),
+      preview_available: true,
+    }))).map((item) => (isAdmin ? { ...item, is_owned: true, preview_available: true } : item));
   const serverThemeMap = new Map(catalogThemes.map((item) => [item.id, item]));
   const collectionGroups = themeCatalogCategories
     .filter((item): item is { value: Exclude<ThemeCatalogCategory, "all">; label: string } => item.value !== "all" && (category === "all" || category === item.value))
@@ -1290,6 +1268,9 @@ export function ThemeSettingsSurfaceView() {
   function themeStatus(item: (typeof catalogThemes)[number]) {
     if (item.is_free) {
       return "Included";
+    }
+    if (isAdmin) {
+      return "Admin review";
     }
     if (item.is_owned) {
       return "Owned";
@@ -1946,8 +1927,8 @@ export function SettingsSurfaceView() {
           </div>
           <div className="settings-inspector-row" data-inventory-id="settings.build-footer-toggle">
             <div>
-              <strong>Version footer</strong>
-              <p className="small-copy">Show the current app version and last reboot/rebuild time at the bottom of every page.</p>
+              <strong>Build details</strong>
+              <p className="small-copy">The current build is always shown in the footer; optionally include the last reboot/rebuild time.</p>
             </div>
             <BuildFooterToggle />
           </div>

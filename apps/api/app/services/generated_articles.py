@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 DEFAULT_GENERATION_MODEL = "gpt-5.4-mini"
 DEFAULT_MAX_OUTPUT_TOKENS = 4096
-ARTICLE_PROMPT_VERSION = "reader-article-v1"
+ARTICLE_PROMPT_VERSION = "reader-article-v4"
 GENERATED_ARTICLE_PROMPT_FILENAME = "generation.json"
 GENRE_DEFAULT_TOPICS = {
     "everyday": "daily life and routine",
@@ -360,6 +360,9 @@ def _select_window_terms(
     request: GeneratedReaderArticleRequest,
     owner_id: str | None,
 ) -> ArticleWindow:
+    if not request.use_learner_vocabulary:
+        return ArticleWindow(known_terms=[], recent_terms=[], upcoming_terms=[])
+
     profile_db = ensure_profile_database(data_root, owner_id)
     lexicon_db = ensure_lexicon_database(data_root)
     normalized_language_code = _normalized_language_code(language_code)
@@ -592,10 +595,27 @@ def _template_article(
     sentence_count: int,
     window: ArticleWindow,
 ) -> tuple[str, int]:
-    separator = "。" if _normalized_language_code(language_code) in {"zh", "ja", "ko"} else "."
+    no_space_language = _normalized_language_code(language_code) in {"zh", "ja", "ko"}
+    separator = "。" if no_space_language else "."
     seed_terms = [term.term for term in (window.known_terms + window.recent_terms + window.upcoming_terms) if term.term]
     if not seed_terms:
         seed_terms = [topic]
+
+    if _normalized_language_code(language_code) == "ja":
+        japanese_topic = topic if re.search(r"[ぁ-んァ-ン一-龯々〆ヵヶー]", topic) else "日常生活"
+        term_cycle = [term.term for term in (window.known_terms + window.recent_terms + window.upcoming_terms) if term.term] or ["言葉"]
+        japanese_sentences = [
+            f"今日は{japanese_topic}について、短い文章を読みます。",
+            "朝は家を出る前に、一日の予定を確認します。",
+            f"次に、「{term_cycle[0]}」という言葉を使った文を読みます。",
+            f"そのあと、「{term_cycle[1 % len(term_cycle)]}」の意味を文脈から考えます。",
+            f"最後に、「{term_cycle[2 % len(term_cycle)]}」をもう一度復習します。",
+            "わからない部分は、前後の文を読んでから確認します。",
+            "同じ文を声に出して読むと、表現を覚えやすくなります。",
+            "無理をせず、一文ずつ内容を理解していきます。",
+        ]
+        sentences = [japanese_sentences[index % len(japanese_sentences)] for index in range(sentence_count)]
+        return "".join(sentences), len(sentences)
 
     sentences: list[str] = []
     cycle_index = 0
@@ -603,10 +623,11 @@ def _template_article(
         known = window.known_terms[cycle_index % len(window.known_terms)].term if window.known_terms else seed_terms[cycle_index % len(seed_terms)]
         recent = window.recent_terms[cycle_index % len(window.recent_terms)].term if window.recent_terms else seed_terms[(cycle_index + 1) % len(seed_terms)]
         upcoming = window.upcoming_terms[cycle_index % len(window.upcoming_terms)].term if window.upcoming_terms else seed_terms[(cycle_index + 2) % len(seed_terms)]
-        sentences.append(f"{known} {recent} {upcoming}".strip())
+        sentence_terms = (known, recent, upcoming)
+        sentences.append("".join(sentence_terms) if no_space_language else " ".join(sentence_terms))
         cycle_index += 1
 
-    article_text = f"{separator} ".join(sentences)
+    article_text = separator.join(sentences) if no_space_language else f"{separator} ".join(sentences)
     if not article_text.endswith(separator):
         article_text = f"{article_text}{separator}"
     return article_text, len(sentences)
@@ -620,6 +641,7 @@ def _build_prompt(
     tone: str,
     curriculum_mode: str,
     curriculum_level: str | None,
+    use_learner_vocabulary: bool,
     sentence_count: int,
     max_new_lemmas: int,
     window: ArticleWindow,
@@ -632,19 +654,40 @@ def _build_prompt(
         "tone": tone,
         "curriculum_mode": curriculum_mode,
         "curriculum_level": curriculum_level,
+        "use_learner_vocabulary": use_learner_vocabulary,
         "sentence_count": sentence_count,
         "max_new_lemmas": max_new_lemmas,
         "known_terms": [term.model_dump() for term in window.known_terms],
         "recent_terms": [term.model_dump() for term in window.recent_terms],
         "upcoming_terms": [term.model_dump() for term in window.upcoming_terms],
     }
+    vocabulary_guidance = (
+        "Use the learner vocabulary window as a useful guide, but place terms into natural sentences rather than forcing them.\n"
+        if use_learner_vocabulary
+        else "The learner vocabulary window is disabled. Do not use learner-profile terms as sentence ingredients; use the selected curriculum or exam level as the sole vocabulary and grammar guide, and prioritize natural idiomatic writing.\n"
+    )
+    japanese_guidance = ""
+    if _normalized_language_code(language_code) == "ja":
+        japanese_guidance = (
+            "For Japanese, write idiomatic Japanese that a native editor would accept; do not translate word-for-word or concatenate vocabulary items just to use them. "
+            "Use natural Japanese punctuation and spacing: do not insert spaces between Japanese words. "
+            "When the article contains spoken dialogue, enclose each spoken turn in Japanese corner brackets 「」; "
+            "use 『』 only for a quotation nested inside dialogue, and do not use bare dialogue without quotation marks. "
+            "Keep common morphological units such as 私たち as one natural word. "
+            "Check particles and noun compounds carefully: do not use 朝の家 to mean 'morning at home'. "
+            "If the topic is written in English, express its meaning in Japanese; never place the English topic phrase inside Japanese quotation marks. "
+            "If the intended meaning is that a person's day starts when they leave home, write 私の一日は、朝、家を出るところから始まります。\n"
+        )
     return (
         "You write learner-calibrated reading passages for TextPlex.\n"
         "Return only valid JSON. Do not add markdown, headings, or commentary.\n"
         "Create one coherent article in the target language that is exactly the requested sentence count.\n"
+        "Treat the topic as a semantic brief, not as source text or a vocabulary term. Translate or interpret it naturally in the target language; never quote or repeat an English topic phrase inside the article unless it is a genuine proper name.\n"
         "Match the requested genre and tone, and keep vocabulary at or below the requested curriculum ceiling when one is provided.\n"
-        "Use the known terms heavily, reuse the recent terms naturally, and introduce the upcoming terms gently.\n"
+        f"{vocabulary_guidance}"
+        "When the learner window is enabled, use known terms heavily, reuse recent terms naturally, and introduce upcoming terms gently; never force a term into an ungrammatical sentence.\n"
         "Do not exceed the new-lemma budget. Keep the wording concrete and readable.\n"
+        f"{japanese_guidance}"
         "Return a JSON object with article_text, used_known_terms, used_recent_terms, used_upcoming_terms, unknown_lemma_count, and sentence_count.\n"
         f"Request payload: {json.dumps(payload, ensure_ascii=False, sort_keys=True)}"
     )
@@ -739,6 +782,38 @@ def _parse_model_payload(text: str) -> dict[str, Any] | None:
     return payload
 
 
+def _count_sentence_terminators(text: str, language_code: str) -> int:
+    if _normalized_language_code(language_code) in {"zh", "ja", "ko"}:
+        return len(re.findall(r"。|[！？]+", text))
+    return len(re.findall(r"[.!?](?:\s|$)", text))
+
+
+def _accept_model_article(
+    *,
+    language_code: str,
+    topic: str,
+    article_text: object,
+    reported_sentence_count: object,
+    requested_sentence_count: int,
+    unknown_count: object,
+    max_new_lemmas: int,
+) -> bool:
+    if not isinstance(article_text, str) or not article_text.strip():
+        return False
+    if not isinstance(unknown_count, int) or unknown_count < 0 or unknown_count > max_new_lemmas:
+        return False
+    if not isinstance(reported_sentence_count, int) or reported_sentence_count != requested_sentence_count:
+        return False
+    if _count_sentence_terminators(article_text, language_code) != requested_sentence_count:
+        return False
+    if _normalized_language_code(language_code) == "ja":
+        if " " in article_text or "朝の家" in article_text:
+            return False
+        if not re.search(r"[ぁ-んァ-ン一-龯々〆ヵヶー]", topic) and topic.casefold() in article_text.casefold():
+            return False
+    return True
+
+
 def _fallback_unknown_lemma_count(window: ArticleWindow) -> int:
     return 0
 
@@ -746,6 +821,13 @@ def _fallback_unknown_lemma_count(window: ArticleWindow) -> int:
 def _resolve_topic(language_code: str, topic: str | None, genre: str) -> str:
     cleaned_topic = topic.strip() if isinstance(topic, str) else ""
     return cleaned_topic or _default_topic(language_code, genre)
+
+
+def _default_exam_level(language_code: str) -> str | None:
+    levels = EXAM_LEVEL_ORDER.get(_normalized_language_code(language_code), [])
+    if not levels:
+        return None
+    return levels[min(1, len(levels) - 1)]
 
 
 def _resolve_curriculum_label(
@@ -779,12 +861,17 @@ def generate_reader_article(
     genre = payload.genre.strip() if isinstance(payload.genre, str) and payload.genre.strip() else "everyday"
     tone = _tone_label(payload.tone or payload.style)
     curriculum_mode = _normalize_curriculum_mode(payload.curriculum_mode)
+    curriculum_level = payload.curriculum_level.strip() if isinstance(payload.curriculum_level, str) and payload.curriculum_level.strip() else None
+    if not payload.use_learner_vocabulary and curriculum_mode == "auto":
+        curriculum_mode = "exam"
+        curriculum_level = curriculum_level or _default_exam_level(language_code)
+    max_new_lemmas = payload.max_new_lemmas if payload.use_learner_vocabulary else 30
     topic = _resolve_topic(language_code, payload.topic, genre)
     window = _select_window_terms(data_root, language_code=language_code, request=payload, owner_id=owner_id)
     curriculum_label = _resolve_curriculum_label(
         language_code=language_code,
         curriculum_mode=curriculum_mode,
-        curriculum_level=payload.curriculum_level,
+        curriculum_level=curriculum_level,
         study_program_groups=build_study_program_groups(data_root, language_code=language_code),
     )
     sentence_count = max(5, payload.sentence_count)
@@ -795,8 +882,9 @@ def generate_reader_article(
         tone=tone,
         curriculum_mode=curriculum_mode,
         curriculum_level=curriculum_label,
+        use_learner_vocabulary=payload.use_learner_vocabulary,
         sentence_count=sentence_count,
-        max_new_lemmas=payload.max_new_lemmas,
+        max_new_lemmas=max_new_lemmas,
         window=window,
     )
 
@@ -820,13 +908,20 @@ def generate_reader_article(
         if parsed_payload is not None:
             unknown_count = parsed_payload.get("unknown_lemma_count")
             parsed_sentence_count = parsed_payload.get("sentence_count")
-            if isinstance(unknown_count, int) and unknown_count <= payload.max_new_lemmas and isinstance(parsed_sentence_count, int) and parsed_sentence_count >= 1:
-                generated_text = str(parsed_payload["article_text"]).strip()
-                if generated_text:
-                    article_text = generated_text
-                    actual_sentence_count = parsed_sentence_count
-                    unknown_lemma_count = unknown_count
-                    generation_source = "openai"
+            generated_text = parsed_payload.get("article_text")
+            if _accept_model_article(
+                language_code=language_code,
+                topic=topic,
+                article_text=generated_text,
+                reported_sentence_count=parsed_sentence_count,
+                requested_sentence_count=sentence_count,
+                unknown_count=unknown_count,
+                max_new_lemmas=max_new_lemmas,
+            ):
+                article_text = generated_text.strip()
+                actual_sentence_count = parsed_sentence_count
+                unknown_lemma_count = unknown_count
+                generation_source = "openai"
 
     title_prefix = f"{_language_label(language_code)}"
     if curriculum_label:
@@ -850,14 +945,15 @@ def generate_reader_article(
         genre=genre,
         tone=tone,
         curriculum_mode=curriculum_mode,
-        curriculum_level=payload.curriculum_level.strip() if isinstance(payload.curriculum_level, str) and payload.curriculum_level.strip() else None,
+        curriculum_level=curriculum_level,
         curriculum_label=curriculum_label,
+        use_learner_vocabulary=payload.use_learner_vocabulary,
         requested_sentence_count=sentence_count,
         actual_sentence_count=actual_sentence_count,
         prompt_version=ARTICLE_PROMPT_VERSION,
         model=_openai_model(),
         generation_source=generation_source,
-        max_new_lemmas=payload.max_new_lemmas,
+        max_new_lemmas=max_new_lemmas,
         known_lemma_limit=payload.known_lemma_limit,
         recent_lemma_limit=payload.recent_lemma_limit,
         upcoming_lemma_limit=payload.upcoming_lemma_limit,

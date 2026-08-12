@@ -11,8 +11,12 @@ import fitz
 from app.core.paths import get_books_root
 from app.schemas.books import BookPageManifest, BookRecord, PageRecord
 from app.services.book_sources import (
+    hash_epub_source,
     hash_text_fixture_source,
+    is_epub_source,
     is_text_fixture_source,
+    load_epub_document,
+    load_epub_pages,
     load_text_fixture_manifest,
     load_text_fixture_pages,
     render_text_page_image,
@@ -27,6 +31,14 @@ def _utc_now() -> str:
 
 def _max_pdf_pages() -> int:
     raw_value = os.getenv("TEXTPLEX_MAX_PDF_PAGES", "1000").strip()
+    try:
+        return max(1, int(raw_value))
+    except ValueError:
+        return 1000
+
+
+def _max_epub_pages() -> int:
+    raw_value = os.getenv("TEXTPLEX_MAX_EPUB_PAGES", "1000").strip()
     try:
         return max(1, int(raw_value))
     except ValueError:
@@ -66,7 +78,7 @@ def _load_manifest(manifest_path: Path, book_id: str, source_path: str, total_pa
     return BookPageManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
 
 
-def split_pdf_into_page_images(
+def split_source_into_page_images(
     source_path: str | Path,
     *,
     book_id: str,
@@ -122,6 +134,44 @@ def split_pdf_into_page_images(
 
         return manifest
 
+    if is_epub_source(resolved_source_path):
+        epub_pages = load_epub_pages(resolved_source_path)
+        total_pages = len(epub_pages)
+        end_page = total_pages if page_count is None else min(total_pages, start_page + page_count - 1)
+        manifest_path = pages_dir / "manifest.json"
+        manifest = _load_manifest(manifest_path, book_id, str(resolved_source_path), total_pages)
+        existing_pages = {page.page_number: page for page in manifest.pages}
+
+        for page_number in range(start_page, end_page + 1):
+            _, _, page_text = epub_pages[page_number - 1]
+            image_filename = _page_filename(page_number)
+            image_path = pages_dir / image_filename
+            if not image_path.exists():
+                render_text_page_image(
+                    page_text,
+                    image_path,
+                    book_title=display_title or resolved_source_path.stem,
+                    page_number=page_number,
+                )
+
+            existing_pages[page_number] = PageRecord(
+                page_number=page_number,
+                image_filename=image_filename,
+                image_path=str(image_path),
+                status="ready",
+                created_at=_utc_now(),
+            )
+            manifest = BookPageManifest(
+                book_id=book_id,
+                source_path=str(resolved_source_path),
+                total_pages=total_pages,
+                page_count=len(existing_pages),
+                pages=[existing_pages[number] for number in sorted(existing_pages)],
+            )
+            _write_manifest(manifest_path, manifest)
+
+        return manifest
+
     end_page = total_pages if page_count is None else min(total_pages, start_page + page_count - 1)
 
     manifest_path = pages_dir / "manifest.json"
@@ -155,6 +205,9 @@ def split_pdf_into_page_images(
     return manifest
 
 
+split_pdf_into_page_images = split_source_into_page_images
+
+
 def import_book_from_path(
     source_path: str | Path,
     *,
@@ -176,8 +229,9 @@ def import_book_from_path(
     data_root.mkdir(parents=True, exist_ok=True)
 
     is_fixture_source = is_text_fixture_source(resolved_source_path)
-    if not is_fixture_source and resolved_source_path.suffix.lower() != ".pdf":
-        raise ValueError("TextPlex import currently accepts PDF files or text fixture directories.")
+    is_epub = is_epub_source(resolved_source_path)
+    if not is_fixture_source and resolved_source_path.suffix.lower() not in {".pdf", ".epub"}:
+        raise ValueError("TextPlex import accepts PDF or EPUB files, or text fixture directories.")
 
     if is_fixture_source:
         fixture_manifest = load_text_fixture_manifest(resolved_source_path)
@@ -188,6 +242,15 @@ def import_book_from_path(
         source_author = fixture_manifest.get("author")
         source_title = source_title if isinstance(source_title, str) else None
         source_author = source_author if isinstance(source_author, str) else None
+        source_filename = resolved_source_path.name
+    elif is_epub:
+        epub_document = load_epub_document(resolved_source_path)
+        source_sha256 = hash_epub_source(resolved_source_path)
+        source_title = epub_document.title
+        source_author = epub_document.author
+        total_pages = len(epub_document.pages)
+        if total_pages > _max_epub_pages():
+            raise ValueError("The EPUB exceeds the configured page limit.")
         source_filename = resolved_source_path.name
     else:
         source_bytes = resolved_source_path.read_bytes()
@@ -230,7 +293,7 @@ def import_book_from_path(
         encoding="utf-8",
     )
 
-    page_manifest = split_pdf_into_page_images(
+    page_manifest = split_source_into_page_images(
         resolved_source_path,
         book_id=book_id,
         total_pages=record.total_pages,

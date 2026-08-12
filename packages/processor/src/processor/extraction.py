@@ -302,6 +302,11 @@ def _is_japanese_noun_predicate_start(morpheme: tuple[str, str, str, str]) -> bo
     return part_of_speech == "助動詞" or (part_of_speech == "動詞" and subcategory == "非自立可能")
 
 
+def _is_japanese_nominal(morpheme: tuple[str, str, str, str]) -> bool:
+    _, part_of_speech, _, _ = morpheme
+    return part_of_speech in {"名詞", "代名詞"}
+
+
 def _is_japanese_predicate_continuation(morpheme: tuple[str, str, str, str]) -> bool:
     _, part_of_speech, _, _ = morpheme
     return _is_japanese_dependent_predicate(morpheme) or part_of_speech == "助詞"
@@ -346,7 +351,7 @@ def _tokenize_japanese_sentence(sentence: str) -> list[str]:
                 index += 1
         elif part_of_speech in {"動詞", "形容詞"}:
             index = _consume_japanese_predicate_tail(morphemes, index, word_parts)
-        elif part_of_speech == "名詞":
+        elif _is_japanese_nominal(morphemes[index - 1]):
             if index < len(morphemes) and subcategory == "数詞" and morphemes[index][3] == "助数詞可能":
                 word_parts.append(morphemes[index][0])
                 index += 1

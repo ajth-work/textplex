@@ -25,7 +25,7 @@ export function AuthProvider({ children, initialUser = null }: Readonly<{ childr
   const client = useMemo(() => getSupabaseClient(), []);
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(initialUser);
-  const [loading, setLoading] = useState(configured && !initialUser);
+  const [loading, setLoading] = useState(configured);
   const [savedSessions, setSavedSessions] = useState<Session[]>([]);
 
   useEffect(() => {
@@ -34,20 +34,39 @@ export function AuthProvider({ children, initialUser = null }: Readonly<{ childr
       return undefined;
     }
 
+    const authClient = client;
+
     let mounted = true;
-    void client.auth.getSession().then(({ data }) => {
-      if (mounted) {
-        setSession(data.session);
-        setUser(data.session?.user ?? null);
-        setSavedSessions(data.session ? saveAuthSession(data.session) : readSavedAuthSessions());
-        syncAuthSessionCookie(data.session);
-        setLoading(false);
+
+    async function hydrateSession(nextSession: Session | null): Promise<void> {
+      let hydratedSession = nextSession;
+      if (nextSession) {
+        try {
+          const { data: userData } = await authClient.auth.getUser();
+          if (userData.user) {
+            hydratedSession = { ...nextSession, user: userData.user };
+          }
+        } catch {
+          // Keep the cached session if the verification request is temporarily unavailable.
+        }
       }
-    });
+
+      if (!mounted) {
+        return;
+      }
+
+      setSession(hydratedSession);
+      setUser(hydratedSession?.user ?? null);
+      setSavedSessions(hydratedSession ? saveAuthSession(hydratedSession) : readSavedAuthSessions());
+      syncAuthSessionCookie(hydratedSession);
+      setLoading(false);
+    }
+
+    void authClient.auth.getSession().then(({ data }) => hydrateSession(data.session));
 
     const {
       data: { subscription },
-    } = client.auth.onAuthStateChange((_event, nextSession) => {
+    } = authClient.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
       setSavedSessions(nextSession ? saveAuthSession(nextSession) : readSavedAuthSessions());
@@ -91,10 +110,19 @@ export function AuthProvider({ children, initialUser = null }: Readonly<{ childr
           throw result.error;
         }
         if (result.data.session) {
-          setSession(result.data.session);
-          setUser(result.data.session.user);
-          setSavedSessions(saveAuthSession(result.data.session));
-          syncAuthSessionCookie(result.data.session);
+          let hydratedSession = result.data.session;
+          try {
+            const { data: userData } = await client.auth.getUser();
+            if (userData.user) {
+              hydratedSession = { ...result.data.session, user: userData.user };
+            }
+          } catch {
+            // Keep the session returned by setSession if verification is temporarily unavailable.
+          }
+          setSession(hydratedSession);
+          setUser(hydratedSession.user);
+          setSavedSessions(saveAuthSession(hydratedSession));
+          syncAuthSessionCookie(hydratedSession);
           setLoading(false);
         }
       },

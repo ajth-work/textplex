@@ -154,11 +154,15 @@ export default function ResetPasswordPage() {
     <main className="auth-shell" data-inventory-id="auth.reset-password-page">
       <section className="auth-card card" data-inventory-id="auth.reset-password-card">
         <span className="eyebrow">TextPlex account</span>
-        <h1>Choose a new password</h1>
+        <h1>{success ? "Password updated" : "Choose a new password"}</h1>
         <p className="lede">
-          {ready ? "Set a new password for your TextPlex account." : "Opening your secure password reset link..."}
+          {success
+            ? "Your new password is ready. Continue to TextPlex to pick up where you left off."
+            : ready
+              ? "Set a new password for your TextPlex account."
+              : "Opening your secure password reset link..."}
         </p>
-        {accountEmail ? (
+        {accountEmail && !success ? (
           <p className="small-copy auth-reset-account" data-inventory-id="auth.reset-password-account">
             Resetting the password for <strong>{accountLabel ?? accountEmail}</strong> ({accountEmail}).
           </p>
@@ -181,9 +185,14 @@ export default function ResetPasswordPage() {
         ) : null}
 
         {success ? (
-          <div className="auth-message" role="status" data-inventory-id="auth.reset-password-success">
-            Your password has been updated. <Link href={returnTo}>Continue to TextPlex</Link>
-          </div>
+          <>
+            <div className="auth-message" role="status" data-inventory-id="auth.reset-password-success">
+              Your password has been updated successfully.
+            </div>
+            <div className="button-row">
+              <Link className="button button-primary" href={returnTo}>Continue to TextPlex</Link>
+            </div>
+          </>
         ) : null}
         {error ? <p className="auth-error" role="alert" data-inventory-id="auth.reset-password-error">{error}</p> : null}
         {!ready && !error ? <span className="small-copy">If this takes more than a few seconds, request a fresh reset link.</span> : null}

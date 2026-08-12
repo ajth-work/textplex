@@ -25,6 +25,14 @@ test("Phase 5 starts from an explicit Supabase identity boundary", () => {
   assert.match(supabaseClient, /autoRefreshToken: true/);
 });
 
+test("Phase 5 makes password reset completion explicit", () => {
+  const resetPage = read("apps", "web", "app", "auth", "reset-password", "page.tsx");
+
+  assert.match(resetPage, /success \? "Password updated"/);
+  assert.match(resetPage, /Your password has been updated successfully/);
+  assert.match(resetPage, /className="button button-primary" href=\{returnTo\}>Continue to TextPlex/);
+});
+
 test("Phase 5 exposes an authenticated hosted profile read path", () => {
   const authService = read("apps", "api", "app", "services", "auth.py");
   const main = read("apps", "api", "app", "main.py");
@@ -73,6 +81,18 @@ test("Phase 5 exposes an authenticated hosted profile read path", () => {
   assert.match(sharedContracts, /HostedProfileSurfaceResponse/);
   assert.match(authPage, /data-inventory-id="auth\.public-return"/);
   assert.match(authPage, /Explore TextPlex/);
+});
+
+test("Phase 5 prevents imports from racing the Supabase session", () => {
+  const importSurface = read("apps", "web", "components", "surface-views.tsx");
+
+  assert.match(importSurface, /session: authSession/);
+  assert.match(importSurface, /authLoading \|\| \(authConfigured && !authSession\?\.access_token\)/);
+  assert.match(importSurface, /sign-in session is missing or expired/);
+
+  const textplexClient = read("apps", "web", "lib", "textplex.ts");
+  assert.match(textplexClient, /response\.status !== 401/);
+  assert.match(textplexClient, /auth\.refreshSession\(\)/);
 });
 
 test("Phase 5 starts from user-owned profile and settings RLS", () => {

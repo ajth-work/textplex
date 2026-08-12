@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   appThemeLabels,
@@ -32,6 +32,12 @@ export function GlobalThemePicker({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTheme(initialTheme);
+    setSaved(false);
+    setError(null);
+  }, [initialTheme]);
 
   function selectTheme(nextTheme: AppTheme) {
     setTheme(nextTheme);

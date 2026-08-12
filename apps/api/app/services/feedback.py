@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
@@ -17,10 +18,14 @@ from app.schemas.feedback import (
     FeedbackNotification,
     FeedbackPlan,
     FeedbackRecord,
+    FeedbackScreenshot,
+    FeedbackScreenshotAnalysis,
     FeedbackStatus,
     FeedbackStatusChange,
+    FeedbackTesterResponse,
     FeedbackTriage,
     TesterRecord,
+    FeedbackVerification,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,6 +36,15 @@ DEFAULT_FEEDBACK_MAX_OUTPUT_TOKENS = 768
 FEEDBACK_PROMPT_VERSION = "feedback-triage-v2"
 GITHUB_API_URL = "https://api.github.com"
 GITHUB_GRAPHQL_URL = "https://api.github.com/graphql"
+MAX_FEEDBACK_SCREENSHOT_BYTES = 5_242_880
+MAX_FEEDBACK_SCREENSHOTS = 3
+MAX_FEEDBACK_SCREENSHOTS_TOTAL_BYTES = 15_728_640
+FEEDBACK_SCREENSHOT_TYPES = {
+    "image/png": (".png", (b"\x89PNG\r\n\x1a\n",)),
+    "image/jpeg": (".jpg", (b"\xff\xd8\xff",)),
+    "image/webp": (".webp", (b"RIFF",)),
+    "image/gif": (".gif", (b"GIF87a", b"GIF89a")),
+}
 
 
 def _utc_now() -> str:
@@ -55,6 +69,64 @@ def _folder_segment(value: str | None, *, fallback: str) -> str:
 def _record_path(data_root: Path, record: FeedbackRecord) -> Path:
     user_segment = _folder_segment(record.user_id, fallback="anonymous")
     return _feedback_root(data_root) / user_segment / record.status / f"{record.id}.json"
+
+
+def _record_screenshots(record: FeedbackRecord) -> list[FeedbackScreenshot]:
+    if record.screenshots:
+        return record.screenshots
+    return [record.screenshot] if record.screenshot else []
+
+
+def _screenshot_path(data_root: Path, record: FeedbackRecord, index: int) -> Path | None:
+    screenshots = _record_screenshots(record)
+    if index < 0 or index >= len(screenshots):
+        return None
+    extension = FEEDBACK_SCREENSHOT_TYPES[screenshots[index].content_type][0]
+    user_segment = _folder_segment(record.user_id, fallback="anonymous")
+    attachment_root = _feedback_root(data_root) / user_segment / "attachments"
+    if not record.screenshots and record.screenshot is not None:
+        legacy_path = attachment_root / f"{record.id}{extension}"
+        if legacy_path.exists():
+            return legacy_path
+    return attachment_root / f"{record.id}-{index + 1}{extension}"
+
+
+def validate_feedback_screenshot(filename: str, content_type: str, content: bytes) -> FeedbackScreenshot:
+    normalized_type = content_type.strip().lower()
+    type_details = FEEDBACK_SCREENSHOT_TYPES.get(normalized_type)
+    if type_details is None:
+        raise ValueError("Screenshots must be PNG, JPEG, WebP, or GIF images.")
+    if not content:
+        raise ValueError("The screenshot file is empty.")
+    if len(content) > MAX_FEEDBACK_SCREENSHOT_BYTES:
+        raise ValueError("Screenshots must be 5 MB or smaller.")
+    signatures = type_details[1]
+    if normalized_type == "image/webp":
+        if len(content) < 12 or not content.startswith(b"RIFF") or content[8:12] != b"WEBP":
+            raise ValueError("The screenshot file does not match its declared image type.")
+    elif not any(content.startswith(signature) for signature in signatures):
+        raise ValueError("The screenshot file does not match its declared image type.")
+    display_name = re.split(r"[\\/]", filename.strip())[-1]
+    display_name = re.sub(r"[^A-Za-z0-9._() -]", "_", display_name)[:160].strip(" .")
+    return FeedbackScreenshot(
+        filename=display_name or f"screenshot{type_details[0]}",
+        content_type=normalized_type,
+        size_bytes=len(content),
+    )
+
+
+def get_feedback_screenshot_file(data_root: Path, feedback_id: str, index: int) -> tuple[FeedbackRecord, FeedbackScreenshot, Path]:
+    source_path = _find_feedback_path(data_root, feedback_id)
+    if source_path is None:
+        raise FileNotFoundError(f"Feedback record not found: {feedback_id}")
+    record = FeedbackRecord.model_validate_json(source_path.read_text(encoding="utf-8"))
+    screenshots = _record_screenshots(record)
+    if index < 0 or index >= len(screenshots):
+        raise IndexError(f"Feedback screenshot not found: {feedback_id}/{index}")
+    screenshot_path = _screenshot_path(data_root, record, index)
+    if screenshot_path is None or not screenshot_path.exists():
+        raise FileNotFoundError(f"Feedback screenshot file not found: {feedback_id}/{index}")
+    return record, screenshots[index], screenshot_path
 
 
 def _find_feedback_path(data_root: Path, feedback_id: str) -> Path | None:
@@ -165,6 +237,76 @@ def _call_openai(original_text: str, context: FeedbackContext) -> FeedbackTriage
     return FeedbackTriage.model_validate(parsed)
 
 
+def _call_openai_screenshot_analysis(data_root: Path, record: FeedbackRecord) -> FeedbackScreenshotAnalysis:
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured.")
+
+    screenshots = _record_screenshots(record)
+    if not screenshots:
+        raise ValueError("This feedback report has no screenshots to analyze.")
+    content: list[dict[str, object]] = [
+        {
+            "type": "input_text",
+            "text": (
+                "Review these tester-submitted TextPlex screenshots in the context of the original report. "
+                "Return only valid JSON with summary, observations, visible_text, and suggested_action. "
+                "Do not invent details that are not visible. Distinguish visible evidence from inference. "
+                f"Original report: {record.original_text}\n"
+                f"Page context: {json.dumps(record.context.model_dump(exclude_none=True), ensure_ascii=False, sort_keys=True)}"
+            ),
+        }
+    ]
+    for index, screenshot in enumerate(screenshots):
+        screenshot_path = _screenshot_path(data_root, record, index)
+        if screenshot_path is None or not screenshot_path.exists():
+            raise FileNotFoundError(f"Feedback screenshot file not found: {record.id}/{index}")
+        encoded = base64.b64encode(screenshot_path.read_bytes()).decode("ascii")
+        content.append(
+            {
+                "type": "input_image",
+                "image_url": f"data:{screenshot.content_type};base64,{encoded}",
+                "detail": "high",
+            }
+        )
+
+    request_payload = {
+        "model": _openai_model(),
+        "max_output_tokens": _max_output_tokens(),
+        "input": [{"role": "user", "content": content}],
+    }
+    request = Request(
+        OPENAI_RESPONSES_URL,
+        data=json.dumps(request_payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=45) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"OpenAI screenshot analysis failed with HTTP {exc.code}: {detail}") from exc
+    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"OpenAI screenshot analysis failed: {exc}") from exc
+
+    if not isinstance(payload, dict):
+        raise TypeError("OpenAI screenshot analysis response was not a JSON object.")
+    parsed = _json_object_from_text(_response_text(payload))
+    if parsed is None:
+        raise RuntimeError("OpenAI screenshot analysis did not return a JSON object.")
+    return FeedbackScreenshotAnalysis.model_validate(
+        {
+            "analyzed_at": _utc_now(),
+            "model": _openai_model(),
+            "summary": parsed.get("summary", ""),
+            "observations": parsed.get("observations", []),
+            "visible_text": parsed.get("visible_text", []),
+            "suggested_action": parsed.get("suggested_action"),
+        }
+    )
+
+
 def _fallback_triage(original_text: str, context: FeedbackContext) -> FeedbackTriage:
     lowered = original_text.lower()
     category = "bug"
@@ -207,8 +349,24 @@ def _fallback_triage(original_text: str, context: FeedbackContext) -> FeedbackTr
     )
 
 
-def create_feedback(data_root: Path, original_text: str, context: FeedbackContext, *, user_id: str | None = None) -> FeedbackRecord:
+def create_feedback(
+    data_root: Path,
+    original_text: str,
+    context: FeedbackContext,
+    *,
+    user_id: str | None = None,
+    screenshot_upload: tuple[str, str, bytes] | None = None,
+    screenshot_uploads: list[tuple[str, str, bytes]] | None = None,
+) -> FeedbackRecord:
     feedback_id = uuid4().hex
+    uploads = list(screenshot_uploads or [])
+    if screenshot_upload:
+        uploads.insert(0, screenshot_upload)
+    if len(uploads) > MAX_FEEDBACK_SCREENSHOTS:
+        raise ValueError(f"A feedback report may include up to {MAX_FEEDBACK_SCREENSHOTS} screenshots.")
+    screenshots = [validate_feedback_screenshot(*upload) for upload in uploads]
+    if sum(screenshot.size_bytes for screenshot in screenshots) > MAX_FEEDBACK_SCREENSHOTS_TOTAL_BYTES:
+        raise ValueError("The combined screenshot size must be 15 MB or smaller.")
     try:
         triage = _call_openai(original_text, context)
         triage_source = "openai"
@@ -234,9 +392,18 @@ def create_feedback(data_root: Path, original_text: str, context: FeedbackContex
             )
         ],
         user_id=user_id,
+        screenshots=screenshots,
     )
     path = _record_path(data_root, record)
     path.parent.mkdir(parents=True, exist_ok=True)
+    if uploads:
+        screenshot_root = _feedback_root(data_root) / _folder_segment(record.user_id, fallback="anonymous") / "attachments"
+        screenshot_root.mkdir(parents=True, exist_ok=True)
+        for index, upload in enumerate(uploads):
+            screenshot_path = _screenshot_path(data_root, record, index)
+            if screenshot_path is None:
+                raise RuntimeError("Screenshot metadata was not created.")
+            screenshot_path.write_bytes(upload[2])
     path.write_text(record.model_dump_json(indent=2), encoding="utf-8")
     if _github_auto_route_enabled():
         try:
@@ -251,6 +418,17 @@ def create_feedback(data_root: Path, original_text: str, context: FeedbackContex
     return record
 
 
+def analyze_feedback_screenshots(data_root: Path, feedback_id: str) -> FeedbackRecord:
+    source_path = _find_feedback_path(data_root, feedback_id)
+    if source_path is None:
+        raise FileNotFoundError(f"Feedback record not found: {feedback_id}")
+    record = FeedbackRecord.model_validate_json(source_path.read_text(encoding="utf-8"))
+    analysis = _call_openai_screenshot_analysis(data_root, record)
+    updated_record = record.model_copy(update={"screenshot_analysis": analysis})
+    source_path.write_text(updated_record.model_dump_json(indent=2), encoding="utf-8")
+    return updated_record
+
+
 def update_feedback_status(
     data_root: Path,
     feedback_id: str,
@@ -258,6 +436,8 @@ def update_feedback_status(
     *,
     note: str | None = None,
     changed_by: str | None = None,
+    implementation_build: str | None = None,
+    verification_instructions: str | None = None,
 ) -> FeedbackRecord:
     source_path = _find_feedback_path(data_root, feedback_id)
     if source_path is None:
@@ -265,16 +445,23 @@ def update_feedback_status(
 
     record = FeedbackRecord.model_validate_json(source_path.read_text(encoding="utf-8"))
     changed_at = _utc_now()
-    updated_record = record.model_copy(
-        update={
-            "status": status,
-            "resolution_note": note if status in {"completed", "acknowledged", "dismissed"} else record.resolution_note,
-            "status_history": [
-                *record.status_history,
-                FeedbackStatusChange(status=status, changed_at=changed_at, changed_by=changed_by, note=note),
-            ],
-        }
-    )
+    verification = record.verification
+    if status == "ready_for_testing":
+        verification = FeedbackVerification(
+            implementation_build=(implementation_build or "").strip(),
+            instructions=(verification_instructions or "").strip(),
+            requested_at=changed_at,
+            requested_by=changed_by,
+        )
+    updated_record = record.model_copy(update={
+        "status": status,
+        "resolution_note": note if status in {"completed", "acknowledged", "dismissed"} else record.resolution_note,
+        "verification": verification,
+        "status_history": [
+            *record.status_history,
+            FeedbackStatusChange(status=status, changed_at=changed_at, changed_by=changed_by, note=note),
+        ],
+    })
     destination_path = _record_path(data_root, updated_record)
     destination_path.parent.mkdir(parents=True, exist_ok=True)
     destination_path.write_text(updated_record.model_dump_json(indent=2), encoding="utf-8")
@@ -284,6 +471,54 @@ def update_feedback_status(
         _sync_github_project_status(updated_record)
     except Exception:
         logger.exception("Unable to synchronize the feedback status to GitHub Projects.")
+    return updated_record
+
+
+def submit_tester_verification(
+    data_root: Path,
+    feedback_id: str,
+    response: FeedbackTesterResponse,
+    *,
+    note: str | None = None,
+    user_id: str,
+) -> FeedbackRecord:
+    source_path = _find_feedback_path(data_root, feedback_id)
+    if source_path is None:
+        raise FileNotFoundError(f"Feedback record not found: {feedback_id}")
+
+    record = FeedbackRecord.model_validate_json(source_path.read_text(encoding="utf-8"))
+    if record.user_id != user_id:
+        raise PermissionError("This feedback report does not belong to the current user.")
+    if record.status != "ready_for_testing" or record.verification is None:
+        raise ValueError("This feedback report is not currently waiting for tester review.")
+
+    responded_at = _utc_now()
+    next_status: FeedbackStatus = "completed" if response == "verified" else "in_progress"
+    verification = record.verification.model_copy(update={
+        "response": response,
+        "response_note": note.strip() if note and note.strip() else None,
+        "responded_at": responded_at,
+        "responded_by": user_id,
+    })
+    updated_record = record.model_copy(update={
+        "status": next_status,
+        "verification": verification,
+        "status_history": [
+            *record.status_history,
+            FeedbackStatusChange(
+                status=next_status,
+                changed_at=responded_at,
+                changed_by=user_id,
+                note=note.strip() if note and note.strip() else response.replace("_", " "),
+                event_type="tester_response",
+            ),
+        ],
+    })
+    destination_path = _record_path(data_root, updated_record)
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+    destination_path.write_text(updated_record.model_dump_json(indent=2), encoding="utf-8")
+    if source_path.resolve() != destination_path.resolve():
+        source_path.unlink()
     return updated_record
 
 
@@ -396,6 +631,10 @@ def _notification_from_event(record: FeedbackRecord, event: FeedbackStatusChange
     notification_id = f"{record.id}:{event.changed_at}:{event.event_type}"
     if event.event_type == "github_linked":
         message = f"A GitHub issue was created for your feedback: {event.github_issue_url or 'view the tracked issue in your feedback history'}."
+    elif event.status == "ready_for_testing":
+        build = record.verification.implementation_build if record.verification else "the latest build"
+        instructions = record.verification.instructions if record.verification else "Please try the original scenario again."
+        message = f"This feedback was addressed in build {build}. {instructions}"
     elif event.status == "completed":
         message = f"Your feedback was completed.{f' Resolution: {event.note}' if event.note else ''}"
     elif event.status == "acknowledged":
@@ -416,6 +655,8 @@ def _notification_from_event(record: FeedbackRecord, event: FeedbackStatusChange
         created_at=event.changed_at,
         route=record.context.route,
         github_issue_url=event.github_issue_url or (record.github.issue_url if record.github else None),
+        verification_build=record.verification.implementation_build if event.status == "ready_for_testing" and record.verification else None,
+        verification_instructions=record.verification.instructions if event.status == "ready_for_testing" and record.verification else None,
     )
 
 
@@ -426,6 +667,10 @@ def list_user_notifications(data_root: Path, user_id: str, *, limit: int = 100) 
     for record in records:
         for event in record.status_history:
             if event.event_type == "status_changed" and event.changed_at == record.submitted_at:
+                continue
+            if event.event_type == "tester_response":
+                continue
+            if event.status == "ready_for_testing" and record.verification and record.verification.response:
                 continue
             notification = _notification_from_event(record, event)
             notifications.append(notification.model_copy(update={"read": notification.id in read_ids}))

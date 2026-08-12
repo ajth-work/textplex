@@ -9,6 +9,7 @@ const read = (...parts) => fs.readFileSync(path.join(repoRoot, ...parts), "utf8"
 test("beta onboarding is required before protected routes render", () => {
   const appFrame = read("apps", "web", "components", "app-frame.tsx");
   const onboarding = read("apps", "web", "components", "beta-onboarding.tsx");
+  const onboardingState = read("apps", "web", "lib", "onboarding-state.ts");
   const page = read("apps", "web", "app", "onboarding", "page.tsx");
   const inventory = read("docs", "COMPONENTS_INVENTORY.md");
 
@@ -17,6 +18,11 @@ test("beta onboarding is required before protected routes render", () => {
   assert.match(appFrame, /pathname === "\/onboarding"/);
   assert.match(appFrame, /pathname\.startsWith\("\/auth"\)/);
   assert.match(appFrame, /const onboardingCheckRoute/);
+  assert.match(appFrame, /hasCachedOnboardingCompletion/);
+  assert.match(appFrame, /cacheOnboardingCompletion/);
+  assert.match(appFrame, /if \(active && !cachedCompletion\) setOnboardingState\("error"\)/);
+  assert.match(onboardingState, /textplex:onboarding-completed:/);
+  assert.match(onboarding, /cacheOnboardingCompletion\(user\.id\)/);
   assert.match(onboarding, /onboarding\.intent/);
   assert.match(onboarding, /onboarding\.confidence/);
   assert.match(onboarding, /onboarding\.support/);

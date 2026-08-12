@@ -5,3 +5,7 @@ type TextPlexRoleUser = {
 export function isTextPlexAdmin(user: TextPlexRoleUser): boolean {
   return user?.app_metadata?.textplex_role === "admin";
 }
+
+export function isTextPlexTester(user: TextPlexRoleUser): boolean {
+  return user?.app_metadata?.textplex_role === "tester";
+}

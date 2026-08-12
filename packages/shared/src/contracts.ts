@@ -105,6 +105,71 @@ export interface AdminUsageSummary {
   activity: AdminUsageActivityPoint[];
 }
 
+export interface AnalyticsMetric {
+  key: string;
+  label: string;
+  value: number;
+  detail: string;
+}
+
+export interface AnalyticsFunnelStage {
+  key: string;
+  label: string;
+  users: number;
+  rate: number | null;
+  detail: string;
+}
+
+export type AnalyticsAccountRole = "member" | "tester" | "admin";
+
+export interface AnalyticsFeatureRoleUsage {
+  role: AnalyticsAccountRole;
+  event_count: number;
+  user_count: number;
+}
+
+export interface AnalyticsFeatureUsage {
+  feature_key: string;
+  event_count: number;
+  user_count: number;
+  last_seen_at: string | null;
+  role_breakdown: AnalyticsFeatureRoleUsage[];
+}
+
+export interface AnalyticsRetentionCohort {
+  cohort_date: string;
+  cohort_size: number;
+  returned_1d: number | null;
+  returned_7d: number | null;
+  returned_30d: number | null;
+  returned_1d_rate: number | null;
+  returned_7d_rate: number | null;
+  returned_30d_rate: number | null;
+}
+
+export interface AnalyticsWatchlistUser {
+  pseudonym: string;
+  active_days: number;
+  event_count: number;
+  repeated_value: boolean;
+  paywall_intent: boolean;
+  last_seen_at: string;
+}
+
+export interface AdminAnalyticsOverview {
+  generated_at: string;
+  data_scope: "local_data";
+  window_days: number;
+  event_count: number;
+  sample_size: number;
+  note: string;
+  metrics: AnalyticsMetric[];
+  funnel: AnalyticsFunnelStage[];
+  features: AnalyticsFeatureUsage[];
+  retention: AnalyticsRetentionCohort[];
+  watchlist: AnalyticsWatchlistUser[];
+}
+
 export interface TranslationAlignmentToken {
   token_id: number;
   text: string;
@@ -209,6 +274,7 @@ export interface GeneratedReaderArticleRequest {
   style?: string;
   curriculum_mode?: GeneratedReaderArticleCurriculumMode;
   curriculum_level?: string | null;
+  use_learner_vocabulary?: boolean;
   sentence_count?: number;
   known_lemma_limit?: number;
   recent_lemma_limit?: number;
@@ -241,6 +307,7 @@ export interface GeneratedReaderArticlePromptDetails {
   curriculum_mode: GeneratedReaderArticleCurriculumMode;
   curriculum_level?: string | null;
   curriculum_label?: string | null;
+  use_learner_vocabulary?: boolean;
   requested_sentence_count: number;
   actual_sentence_count: number;
   prompt_version: string;
@@ -963,7 +1030,9 @@ export interface ImportSurfaceResponse {
   default_language: string;
   supported_inputs: string[];
   can_upload_pdf: boolean;
+  can_upload_epub: boolean;
   can_paste_text: boolean;
+  can_import_random_wikipedia: boolean;
   recent_books: ImportRecentBook[];
 }
 

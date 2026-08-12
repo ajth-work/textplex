@@ -7,6 +7,7 @@ from app.main import app
 from app.schemas.auth import AuthMeResponse
 from app.schemas.learning import ReadingSessionCreateRequest
 from app.schemas.migration import ProfileMigrationRequest
+from app.schemas.surfaces import SettingsUpdateRequest
 from app.services import auth as auth_service
 from app.services.auth import AuthenticatedUserContext
 from app.services.learning_profile import (
@@ -18,7 +19,7 @@ from app.services.profile_migration import (
     apply_profile_migration,
     preview_profile_migration,
 )
-from app.services.themes import get_theme_catalog
+from app.services.themes import get_theme_catalog, validate_theme_settings
 from fastapi.testclient import TestClient
 from typing_extensions import Self
 
@@ -153,6 +154,43 @@ def test_tester_account_can_preview_all_themes(monkeypatch) -> None:
             permissions=["account.read", "themes.preview_all"],
         ),
         access_token="tester-token",
+    )
+
+    catalog = get_theme_catalog(context)
+
+    assert all(theme.is_owned for theme in catalog.themes)
+
+
+def test_tester_can_save_a_premium_theme_setting(monkeypatch) -> None:
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_PUBLISHABLE_KEY", raising=False)
+    context = AuthenticatedUserContext(
+        user=AuthMeResponse(
+            id="tester-user",
+            email="tester@textplex.co",
+            account_role="tester",
+            permissions=["account.read", "themes.preview_all"],
+        ),
+        access_token="tester-token",
+    )
+
+    validate_theme_settings(
+        SettingsUpdateRequest(entries=[{"key": "theme", "value": "city-hong-kong-daylight"}]),
+        context,
+    )
+
+
+def test_admin_account_can_preview_all_themes_even_without_explicit_preview_permission(monkeypatch) -> None:
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_PUBLISHABLE_KEY", raising=False)
+    context = AuthenticatedUserContext(
+        user=AuthMeResponse(
+            id="admin-user",
+            email="admin@textplex.co",
+            account_role="admin",
+            permissions=["account.read"],
+        ),
+        access_token="admin-token",
     )
 
     catalog = get_theme_catalog(context)

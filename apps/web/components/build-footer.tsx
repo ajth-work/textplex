@@ -76,14 +76,14 @@ export function BuildFooterToggle() {
       type="button"
       className={`button button-secondary button-compact build-footer-toggle ${enabled ? "is-active" : ""}`}
       aria-pressed={enabled}
-      aria-label={enabled ? "Hide the build footer" : "Show the build footer"}
-      title={enabled ? "Build footer on" : "Build footer off"}
+      aria-label={enabled ? "Hide detailed build information" : "Show detailed build information"}
+      title={enabled ? "Build details on" : "Build details off"}
       onClick={() => {
         setEnabled(!enabled);
       }}
     >
       <span className="build-footer-toggle-dot" aria-hidden="true" />
-      <span>{enabled ? "Footer on" : "Footer off"}</span>
+      <span>{enabled ? "Details on" : "Details off"}</span>
     </button>
   );
 }
@@ -91,16 +91,12 @@ export function BuildFooterToggle() {
 export function BuildFooter({ rebootedAt, version }: Readonly<{ rebootedAt: string; version: string }>) {
   const [enabled] = useBuildInfoFooterVisible();
 
-  if (!enabled) {
-    return null;
-  }
-
   return (
     <footer className="app-build-footer card" aria-label="App build information" data-inventory-id="shell.build-footer">
       <div className="app-build-footer-copy">
-        <span className="eyebrow">Latest update</span>
+        <span className="eyebrow">Current build</span>
         <p className="small-copy">
-          Version <strong>{version}</strong> - last reboot/rebuild {formatRebootedAt(rebootedAt)}
+          Build <strong>{version}</strong>{enabled ? ` · last reboot/rebuild ${formatRebootedAt(rebootedAt)}` : ""}
         </p>
       </div>
     </footer>

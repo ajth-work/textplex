@@ -1,5 +1,5 @@
 import type { SettingEntry } from "./textplex";
-import { getThemeWallpaperThumbnailPath } from "./theme-catalog";
+import { getThemeWallpaperPath, getThemeWallpaperThumbnailPath } from "./theme-catalog";
 
 export type AppTheme =
   | "neutral"
@@ -71,10 +71,11 @@ export const DEFAULT_APP_THEME_PATTERN_OPACITY = 42;
 export const APP_THEME_PATTERN_TILING_STORAGE_KEY = "textplex.themePatternTiling";
 export const DEFAULT_APP_THEME_PATTERN_TILING = false;
 export const APP_THEME_GRID_ENABLED_STORAGE_KEY = "textplex.themeGridEnabled";
-export const DEFAULT_APP_THEME_GRID_ENABLED = true;
+export const DEFAULT_APP_THEME_GRID_ENABLED = false;
 export const APP_THEME_FOLLOW_SYSTEM_STORAGE_KEY = "textplex.themeFollowSystem";
 export const APP_THEME_RECENT_STORAGE_KEY = "textplex.themeRecent";
 export const APP_THEME_RECENTS_CHANGE_EVENT = "textplex-theme-recents-change";
+let themeWallpaperLoadToken = 0;
 export const APP_THEME_RECENT_LIMIT = 8;
 
 // Browser chrome accepts one solid color, so use each theme's top-level canvas color.
@@ -813,8 +814,25 @@ export function applyAppThemePatternImage(theme: AppTheme): void {
     return;
   }
 
-  const imagePath = getThemeWallpaperThumbnailPath(theme);
-  document.documentElement.style.setProperty("--app-pattern-image", imagePath ? `url("${imagePath}")` : "none");
+  const root = document.documentElement;
+  const thumbnailPath = getThemeWallpaperThumbnailPath(theme);
+  const fullImagePath = getThemeWallpaperPath(theme);
+  const loadToken = ++themeWallpaperLoadToken;
+  root.style.setProperty("--app-pattern-image", thumbnailPath ? `url("${thumbnailPath}")` : "none");
+
+  if (!fullImagePath) {
+    return;
+  }
+
+  const fullImage = new Image();
+  fullImage.decoding = "async";
+  fullImage.onload = () => {
+    if (loadToken !== themeWallpaperLoadToken || root.dataset.appTheme !== theme) {
+      return;
+    }
+    root.style.setProperty("--app-pattern-image", `url("${fullImagePath}")`);
+  };
+  fullImage.src = fullImagePath;
 }
 
 export function applyAppThemeGridEnabled(enabled: boolean): void {

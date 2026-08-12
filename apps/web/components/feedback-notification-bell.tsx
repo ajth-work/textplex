@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   fetchJson,
   postJson,
+  submitFeedbackVerification,
   type FeedbackNotification,
   type FeedbackNotificationListResponse,
 } from "../lib/textplex";
@@ -13,7 +14,7 @@ import { useAuth } from "./auth-provider";
 
 function BellIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
       <path d="M10 21h4" />
     </svg>
@@ -21,14 +22,19 @@ function BellIcon() {
 }
 
 function statusLabel(status: FeedbackNotification["status"]): string {
+  if (status === "ready_for_testing") {
+    return "ready for tester review";
+  }
   return status.replaceAll("_", " ");
 }
 
-export function FeedbackNotificationBell() {
+export function FeedbackNotificationBell({ placement = "footer" }: { placement?: "footer" | "top" }) {
   const { configured, loading, user } = useAuth();
   const [data, setData] = useState<FeedbackNotificationListResponse>({ notifications: [], unread_count: 0 });
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+  const [reviewLoadingId, setReviewLoadingId] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -96,8 +102,23 @@ export function FeedbackNotificationBell() {
     }
   }
 
+  async function submitVerification(notification: FeedbackNotification, response: "verified" | "still_unresolved" | "partially_improved") {
+    setReviewLoadingId(notification.feedback_id);
+    setError(null);
+    try {
+      await submitFeedbackVerification(notification.feedback_id, response, reviewNotes[notification.feedback_id]);
+      const refreshed = await fetchJson<FeedbackNotificationListResponse>("/feedback/notifications");
+      setData(refreshed);
+      setReviewNotes((current) => ({ ...current, [notification.feedback_id]: "" }));
+    } catch {
+      setError("Your verification response could not be saved.");
+    } finally {
+      setReviewLoadingId(null);
+    }
+  }
+
   return (
-    <div ref={rootRef} className="feedback-notification-root" data-inventory-id="shell.feedback-notifications">
+    <div ref={rootRef} className={`feedback-notification-root feedback-notification-root-${placement}`} data-inventory-id="shell.feedback-notifications">
       <button
         type="button"
         className="button button-secondary feedback-notification-button"
@@ -131,6 +152,27 @@ export function FeedbackNotificationBell() {
                     <span className="feedback-notification-status">{statusLabel(notification.status)}</span>
                   </div>
                   <p>{notification.message}</p>
+                  {notification.status === "ready_for_testing" ? (
+                    <div className="feedback-notification-review">
+                      {notification.verification_build ? <p className="small-copy"><strong>Build to review:</strong> <code>{notification.verification_build}</code></p> : null}
+                      <label>
+                        Optional note
+                        <textarea
+                          value={reviewNotes[notification.feedback_id] ?? ""}
+                          onChange={(event) => setReviewNotes((current) => ({ ...current, [notification.feedback_id]: event.target.value }))}
+                          placeholder="What did you notice?"
+                          rows={2}
+                          maxLength={1200}
+                          disabled={reviewLoadingId === notification.feedback_id}
+                        />
+                      </label>
+                      <div className="feedback-notification-review-actions">
+                        <button type="button" className="button button-primary button-compact" onClick={() => void submitVerification(notification, "verified")} disabled={reviewLoadingId === notification.feedback_id}>Works for me</button>
+                        <button type="button" className="button button-secondary button-compact" onClick={() => void submitVerification(notification, "partially_improved")} disabled={reviewLoadingId === notification.feedback_id}>Partially improved</button>
+                        <button type="button" className="button button-secondary button-compact" onClick={() => void submitVerification(notification, "still_unresolved")} disabled={reviewLoadingId === notification.feedback_id}>Still happening</button>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="feedback-notification-links">
                     <Link href={notification.route}>View page</Link>
                     {notification.github_issue_url ? <a href={notification.github_issue_url} target="_blank" rel="noreferrer">Open GitHub issue</a> : null}
@@ -143,4 +185,29 @@ export function FeedbackNotificationBell() {
       ) : null}
     </div>
   );
+}
+
+export function FeedbackNotificationDot() {
+  const { configured, loading, user } = useAuth();
+  const [unread, setUnread] = useState(false);
+
+  useEffect(() => {
+    if (!configured || loading || !user) {
+      return undefined;
+    }
+    let active = true;
+    const refresh = () => {
+      void fetchJson<FeedbackNotificationListResponse>("/feedback/notifications")
+        .then((response) => active && setUnread(response.unread_count > 0))
+        .catch(() => undefined);
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [configured, loading, user]);
+
+  return unread ? <span className="feedback-notification-dot" aria-label="Unread feedback notification" title="Unread feedback notification" /> : null;
 }

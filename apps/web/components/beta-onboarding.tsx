@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useAuth } from "./auth-provider";
+import { cacheOnboardingCompletion } from "../lib/onboarding-state";
 import { fetchJson, putJson, type SettingsSurfaceResponse } from "../lib/textplex";
 import { languageDisplayLabel, targetLanguageOptions, type TargetLanguageCode } from "../lib/language-options";
 import { learningTrackOptions, type LearningTrackCode } from "../lib/learning-track-options";
@@ -145,6 +146,9 @@ export function BetaOnboarding() {
           { key: "onboarding.beta_acknowledged_at", value: new Date().toISOString() },
         ],
       });
+      if (user) {
+        cacheOnboardingCompletion(user.id);
+      }
       router.replace(returnTo);
       router.refresh();
     } catch (saveError) {
