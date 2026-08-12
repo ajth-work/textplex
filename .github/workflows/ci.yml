@@ -62,6 +62,9 @@ jobs:
       - name: Run static site tests
         run: npm run test:site
 
+      - name: Run Next web contract tests
+        run: npm run test:web:contracts
+
       - name: Run maintenance and backup/restore tests
         run: |
           npm run test:maintenance
