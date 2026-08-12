@@ -173,6 +173,17 @@ The reusable audit procedure and current audit record are in [`docs/AUDIT.md`](d
 - If a concept later becomes implementation work, keep the same issue as the parent tracker unless the scope splits into separately deliverable child issues; link child issues back to the parent and preserve the document path in the local tracker.
 - A markdown file that only records implementation details for an already tracked issue does not need a new issue, but its tracker row and issue notes should link to the file when the document becomes a durable project reference.
 
+## GitHub Flow
+
+Use the standard GitHub Flow lifecycle for every new feature, bug fix, documentation change, test change, or experiment:
+
+1. **Branch**: Before editing, start from the current `main` and create a focused branch named `agent/<short-description>` (or `feature/<short-description>` / `fix/<short-description>` when that convention is clearer). Never begin new work directly on `main`. If a task-specific branch already exists, confirm it is the intended branch before continuing.
+2. **Commit**: Save small, logical checkpoints locally with short imperative messages. Stage only files belonging to the current task; preserve unrelated dirty-worktree changes.
+3. **Push**: After the task is verified, push only the task branch with upstream tracking (`git push -u origin <branch>`). Do not push `main` or unrelated local changes.
+4. **Pull request**: Open a draft pull request from the pushed task branch into `main`, including the summary, rationale, affected surfaces, and verification results. Mark it ready for review only after the checks pass and the change is reviewable. Merge only through the reviewed pull request after required approvals and checks.
+
+Keep the lifecycle in this order: **Branch → Commit → Push → Pull Request**. Do not skip directly from an uncommitted working tree to a push or pull request. For an existing dirty worktree, inspect and classify changes first, then stage explicit paths for the current task.
+
 ## Commit & Pull Request Guidelines
 
 Use short imperative commit messages, such as `Add reader shell scaffold` or `Define page-processing contract`. Keep each commit scoped to one coherent change so the Git history is an exact, searchable record of what changed. The commit body should briefly capture the intent and relevant verification when the subject alone is not sufficient.

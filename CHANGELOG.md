@@ -2,6 +2,14 @@
 
 ## 2026-08-12
 
+- Documented the required GitHub Flow sequence for repository work: branch, commit, push, and draft pull request, with explicit safeguards for `main` and mixed worktrees.
+
+- Restore wallpaper artwork in the public landing-page reader and study previews by preserving their absolute image layers; verified against `landing.hero-previews`, `landing.hero-reader-preview`, and `landing.hero-study-preview`.
+
+- Clarified that image and camera reading imports should begin from the existing Import panel, with annotated image viewing available after processing (`import.form`, `docs/IMAGE_READING_AND_SCENE_IMPORT_CONCEPT.md`).
+
+- Defined the image reading and scene-text import concept for camera batches, multi-page reading items, layout-aware OCR, and linked callouts for street signs, storefronts, menus, and pamphlets; tracked as issue #100 (`docs/IMAGE_READING_AND_SCENE_IMPORT_CONCEPT.md`).
+
 - Fixed CI Ruff import-order failures across the analytics, feedback, and API test modules.
 
 - Resolved the PR #99 merge conflict with the latest `main`, preserving the Reader's Japanese Romaji/Furigana controls, furigana visibility preference, and legacy preference migration.

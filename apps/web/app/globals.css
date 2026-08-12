@@ -5381,6 +5381,11 @@ html[data-inventory-labels="on"] [data-inventory-id]::before {
   transform: scale(1.04);
 }
 
+.landing-hero-preview > .landing-hero-preview-art {
+  position: absolute;
+  z-index: 0;
+}
+
 .landing-hero-preview::after {
   content: "";
   position: absolute;

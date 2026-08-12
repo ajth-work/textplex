@@ -2,7 +2,7 @@
 
 This file mirrors the current GitHub issue board state that is visible from this workspace. Keep it updated when a board item changes. Production-candidate concept, plan, roadmap, and product-direction notes in `docs/` must have a corresponding row here and a matching issue on the `TextPlex Feature Board` (user project #2: <https://github.com/users/ajth-work/projects/2>); never use the separate BinoCart project #1. If GitHub write access is unavailable, mark the row as `Local pending` and record the synchronization limitation until the remote board can be updated.
 
-Last updated: 2026-08-11
+Last updated: 2026-08-12
 
 Issue #95 defines learner-authored sentence comprehension scoring with structured semantic feedback, server-side evaluation, and a configurable Reader threshold; it is open and placed in Todo on TextPlex Feature Board project #2.
 
@@ -65,6 +65,7 @@ Remote issue state and kanban status are now synchronized for #10, #11, #18, #19
 | Add first-run tutorial and replayable product tour | #85 | Todo. Add a route-aware, accessible onboarding tour for Home, Library, Reader, word lookup, and reader help controls; branch for an empty library, persist resumable versioned state, and add a Settings replay action. Initial inventory targets: `home.continue-reading`, `home.empty-state`, `library.search-hero`, `library.book-card`, `reader.page-card`, `reader.sentence-tools`, `reader.token-inspector`, and future `settings.tutorial-card`. |
 | Define learner-authored sentence comprehension scoring | #95 | Todo. Define a Reader free-response check that hides the translation until submission, evaluates semantic understanding through a server-side OpenAI call, returns a normalized score plus missed/misunderstood meaning elements, and supports a configurable minimum-understanding threshold. Related to #42; keep learner comprehension separate from book difficulty and mastery. |
 | Define admin analytics funnel and paid-value signals | #97 | In Progress. Local implementation covers append-only event storage, legacy backfill, protected analytics APIs, and admin-console funnel, value, paywall, feature-demand, retention, and pseudonymous watchlist surfaces. Hosted billing/conversion adapters remain future scope; see `docs/ADMIN_ANALYTICS_AND_PAID_VALUE.md`. |
+| Define image reading and scene-text import | #100 | Todo. Define an image-import entry point in the Import panel, bounded camera/upload batches, ordered multi-page reading imports, layout-aware OCR, document-versus-scene classification, and interactive callouts for multiple horizontal or vertical signs. See `docs/IMAGE_READING_AND_SCENE_IMPORT_CONCEPT.md`. |
 
 ### Frontend consolidation issue draft
 
