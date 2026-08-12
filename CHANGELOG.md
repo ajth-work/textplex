@@ -2,6 +2,8 @@
 
 ## 2026-08-12
 
+- Fixed CI Ruff import-order failures across the analytics, feedback, and API test modules.
+
 - Resolved the PR #99 merge conflict with the latest `main`, preserving the Reader's Japanese Romaji/Furigana controls, furigana visibility preference, and legacy preference migration.
 
 ## 2026-08-11

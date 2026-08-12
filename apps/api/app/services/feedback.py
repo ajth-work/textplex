@@ -24,8 +24,8 @@ from app.schemas.feedback import (
     FeedbackStatusChange,
     FeedbackTesterResponse,
     FeedbackTriage,
-    TesterRecord,
     FeedbackVerification,
+    TesterRecord,
 )
 
 logger = logging.getLogger(__name__)

@@ -4,10 +4,13 @@ import sqlite3
 from pathlib import Path
 
 from app.main import app
-from app.services import surfaces as surfaces_service
 from app.schemas.learning import StudyVocabularyItemCreateRequest
 from app.services import learning_profile as learning_profile_service
-from app.services.learning_profile import ensure_profile_database, record_study_vocabulary_item
+from app.services import surfaces as surfaces_service
+from app.services.learning_profile import (
+    ensure_profile_database,
+    record_study_vocabulary_item,
+)
 from fastapi.testclient import TestClient
 
 

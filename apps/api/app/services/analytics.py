@@ -12,8 +12,8 @@ from uuid import uuid4
 from app.core.paths import resolve_books_root, resolve_user_data_root
 from app.schemas.admin_analytics import (
     AdminAnalyticsOverview,
-    AnalyticsFeatureUsage,
     AnalyticsFeatureRoleUsage,
+    AnalyticsFeatureUsage,
     AnalyticsFunnelStage,
     AnalyticsMetric,
     AnalyticsRetentionCohort,

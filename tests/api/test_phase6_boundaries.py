@@ -10,8 +10,8 @@ from app.schemas.auth import AuthMeResponse
 from app.schemas.themes import ThemeCheckoutRequest
 from app.services import learning_sync
 from app.services.auth import AuthenticatedUserContext, get_optional_user_context
-from app.services.book_sources import write_text_fixture_source
 from app.services.book_registry import import_book_from_path
+from app.services.book_sources import write_text_fixture_source
 from app.services.commerce import (
     apply_sandbox_event,
     create_checkout_session,
