@@ -53,6 +53,9 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Report dependency and runtime drift
         run: npm run maintenance:check
 
@@ -64,6 +67,9 @@ jobs:
 
       - name: Run Next web contract tests
         run: npm run test:web:contracts
+
+      - name: Build web app for live canonical smoke checks
+        run: npm run build:web
 
       - name: Start API for live health checks
         working-directory: apps/api
@@ -77,9 +83,15 @@ jobs:
           node server.mjs > /tmp/textplex-site.log 2>&1 &
           echo $! > /tmp/textplex-site.pid
 
+      - name: Start canonical Next server
+        working-directory: apps/web
+        run: |
+          npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/textplex-next.log 2>&1 &
+          echo $! > /tmp/textplex-next.pid
+
       - name: Check live preview routes and API health
         env:
-          TEXTPLEX_WEB_BASE_URLS: http://127.0.0.1:8200
+          TEXTPLEX_WEB_BASE_URLS: http://127.0.0.1:8200 http://127.0.0.1:3000
           TEXTPLEX_API_HEALTH_URLS: http://127.0.0.1:8201/ready
         run: npm run test:web
 
@@ -88,9 +100,7 @@ jobs:
         run: |
           if test -f /tmp/textplex-site.pid; then kill "$(cat /tmp/textplex-site.pid)" || true; fi
           if test -f /tmp/textplex-api.pid; then kill "$(cat /tmp/textplex-api.pid)" || true; fi
-
-      - name: Build web app
-        run: npm run build:web
+          if test -f /tmp/textplex-next.pid; then kill "$(cat /tmp/textplex-next.pid)" || true; fi
 
       - name: Run web lint non-interactively
         env:

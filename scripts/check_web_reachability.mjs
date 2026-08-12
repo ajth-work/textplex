@@ -96,8 +96,8 @@ async function assertHtmlResponse(response, url) {
     "/settings": "Profile and app preferences",
   };
   const canonicalExpectedSnippets = {
-    "/": "Read scanned books as structured language data.",
-    "/library": "Books ready to read",
+    "/": "Read for free. Practice deeply. Create your own immersion.",
+    "/library": "Library",
     "/analysis/demo-book": "Text analysis summary",
   };
   const expectedSnippets = new URL(url).port === "8200" ? legacyExpectedSnippets : canonicalExpectedSnippets;
@@ -119,8 +119,12 @@ async function assertHealthResponse(response, url) {
   }
 
   const json = await response.json();
-  if (json?.status !== "ok") {
+  if (!["ok", "ready"].includes(json?.status)) {
     throw new Error(`${url} returned unexpected payload: ${JSON.stringify(json)}`);
+  }
+
+  if (new URL(url).pathname === "/ready" && Object.values(json.checks ?? {}).some((value) => value !== true)) {
+    throw new Error(`${url} reported an unhealthy readiness check: ${JSON.stringify(json)}`);
   }
 }
 
