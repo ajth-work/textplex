@@ -399,9 +399,9 @@ def get_study_surface(
                     data_root,
                     language_code=str(row_language_code),
                     candidates=(
-                        str(row["lemma"] or ""),
-                        str(row["display_form"] or ""),
                         str(row["source_surface_form"] or ""),
+                        str(row["display_form"] or ""),
+                        str(row["lemma"] or ""),
                     ),
                     owner_id=owner_id,
                 )
@@ -529,6 +529,8 @@ def get_progress_surface(data_root: Path, *, owner_id: str | None = None) -> Pro
         }
 
     for book_id, record in registry.items():
+        if record.owner_id != owner_id:
+            continue
         if record.archived_at is not None:
             continue
         total_pages = max(0, int(record.total_pages or 0))
@@ -801,9 +803,11 @@ def get_import_surface(
     )
     return ImportSurfaceResponse(
         default_language=default_language,
-        supported_inputs=["pdf", "paste"],
+        supported_inputs=["pdf", "epub", "paste", "wikipedia-random"],
         can_upload_pdf=True,
+        can_upload_epub=True,
         can_paste_text=True,
+        can_import_random_wikipedia=True,
         recent_books=[
             ImportRecentBook(
                 book_id=record.id,

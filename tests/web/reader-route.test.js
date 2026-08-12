@@ -80,10 +80,16 @@ test("Next reader contract keeps loading, error, extraction, lookup, and chart s
   assert.match(readerSource, /readerRussianSyllableDisplayModeStorageKey/);
   assert.match(readerSource, /readStoredRussianSyllableDisplayMode/);
   assert.match(readerSource, /persistRussianSyllableDisplayMode/);
+  assert.match(readerSource, /readerJapaneseReadingDisplayModeStorageKey/);
+  assert.match(readerSource, /resolveJapaneseReadingDisplayMode/);
+  assert.match(readerSource, /readerJapaneseReadingDisplayMode/);
   assert.match(readerSource, /data-inventory-id="reader\.mode-control"/);
   assert.match(readerSource, /data-inventory-id="reader\.token-audio-toggle"/);
   assert.match(readerSource, /reader\.pronunciation-visibility-section/);
   assert.match(readerSource, /reader\.pronunciation-visibility-toggle/);
+  assert.match(readerSource, /reader\.japanese-reading-display-section/);
+  assert.match(readerSource, /reader\.japanese-reading-romaji/);
+  assert.match(readerSource, /reader\.japanese-reading-furigana/);
   assert.match(readerSource, /reader\.speech-voice-toggle/);
   assert.match(readerSource, /readerSpeechVoiceGender/);
   assert.match(readerSource, /voice-gender-toggle-group/);
@@ -349,6 +355,27 @@ test("Next reader keeps Japanese surface, reading, lemma, and meaning aligned", 
   assert.match(readerSource, /selectedToken\.surface_form,[\s\S]*selectedToken\.lemma \?\? ""/);
   assert.match(readerSource, /Meaning withheld: this Japanese form has multiple possible readings or meanings\./);
   assert.match(readerSource, /Meaning withheld: the dictionary result belongs to a different Japanese form\./);
+});
+
+test("Next reader shows Japanese furigana for a selected kanji token", () => {
+  assert.match(readerSource, /finalizeJapaneseRomaji\(selectedTokenReading\)/);
+  assert.match(readerSource, /selectedTokenFurigana/);
+  assert.match(readerSource, /className="definition-headword-furigana"/);
+  assert.match(readerSource, /aria-label={`Furigana: \$\{selectedTokenFurigana\}`}/);
+  assert.match(stylesheetSource, /\.definition-headword-furigana\s*\{/);
+});
+
+test("Next reader lets Japanese readers switch token readings between romaji and furigana", () => {
+  assert.match(readerSource, /type JapaneseReadingDisplayMode = "romaji" \| "furigana";/);
+  assert.match(readerSource, /japaneseReadingDisplayMode: JapaneseReadingDisplayMode = "romaji"/);
+  assert.match(readerSource, /languageCode\?\.startsWith\("ja"\) && japaneseReadingDisplayMode === "furigana"/);
+  assert.match(readerSource, /const tokenReadingParts = buildTokenReadingParts\([\s\S]*readerJapaneseReadingDisplayMode,/);
+  assert.match(readerSource, /selectedTokenReading,[\s\S]*readerJapaneseReadingDisplayMode,/);
+  assert.match(readerSource, /readerJapaneseReadingDisplayMode === "furigana" && selectedTokenFurigana/);
+  assert.match(readerSource, /Choose romaji or hiragana furigana/);
+  assert.match(readerSource, />\s*Romaji\s*</);
+  assert.match(readerSource, />\s*Furigana\s*</);
+  assert.match(stylesheetSource, /\.reader-reading-mode-toggle\s*\{/);
 });
 
 test("Next reader separates page and sentence bookmarks with confirmation feedback", () => {

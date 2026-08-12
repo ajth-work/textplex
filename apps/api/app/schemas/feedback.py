@@ -4,8 +4,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-FeedbackStatus = Literal["needs_review", "in_progress", "completed", "acknowledged", "dismissed"]
-FeedbackEventType = Literal["status_changed", "github_linked"]
+FeedbackStatus = Literal["needs_review", "in_progress", "ready_for_testing", "completed", "acknowledged", "dismissed"]
+FeedbackEventType = Literal["status_changed", "github_linked", "tester_response"]
+FeedbackTesterResponse = Literal["verified", "still_unresolved", "partially_improved"]
 
 
 class FeedbackContext(BaseModel):
@@ -20,6 +21,24 @@ class FeedbackContext(BaseModel):
     viewport_width: int | None = Field(default=None, ge=1, le=10000)
     viewport_height: int | None = Field(default=None, ge=1, le=10000)
     user_agent: str | None = Field(default=None, max_length=1000)
+    feedback_target: Literal["sentence", "word"] | None = None
+    feedback_target_text: str | None = Field(default=None, max_length=5000)
+    feedback_target_order: int | None = Field(default=None, ge=1, le=100000)
+
+
+class FeedbackScreenshot(BaseModel):
+    filename: str = Field(min_length=1, max_length=160)
+    content_type: Literal["image/png", "image/jpeg", "image/webp", "image/gif"]
+    size_bytes: int = Field(ge=1, le=5_242_880)
+
+
+class FeedbackScreenshotAnalysis(BaseModel):
+    analyzed_at: str
+    model: str
+    summary: str = Field(min_length=1, max_length=2000)
+    observations: list[str] = Field(default_factory=list, max_length=12)
+    visible_text: list[str] = Field(default_factory=list, max_length=12)
+    suggested_action: str | None = Field(default=None, max_length=1200)
 
 
 class FeedbackCreateRequest(BaseModel):
@@ -36,15 +55,38 @@ class FeedbackStatusChange(BaseModel):
     github_issue_url: str | None = Field(default=None, max_length=500)
 
 
+class FeedbackVerification(BaseModel):
+    implementation_build: str = Field(min_length=1, max_length=64)
+    instructions: str = Field(min_length=1, max_length=1200)
+    requested_at: str
+    requested_by: str | None = None
+    response: FeedbackTesterResponse | None = None
+    response_note: str | None = Field(default=None, max_length=1200)
+    responded_at: str | None = None
+    responded_by: str | None = None
+
+
 class FeedbackStatusUpdateRequest(BaseModel):
     status: FeedbackStatus
     note: str | None = Field(default=None, max_length=1200)
+    implementation_build: str | None = Field(default=None, max_length=64)
+    verification_instructions: str | None = Field(default=None, max_length=1200)
 
     @model_validator(mode="after")
     def require_resolution_note(self) -> FeedbackStatusUpdateRequest:
         if self.status in {"completed", "acknowledged", "dismissed"} and not (self.note or "").strip():
             raise ValueError("A resolution note is required for this feedback status.")
+        if self.status == "ready_for_testing":
+            if not (self.implementation_build or "").strip():
+                raise ValueError("An implementation build is required before requesting tester review.")
+            if not (self.verification_instructions or "").strip():
+                raise ValueError("Verification instructions are required before requesting tester review.")
         return self
+
+
+class FeedbackTesterVerificationRequest(BaseModel):
+    response: FeedbackTesterResponse
+    note: str | None = Field(default=None, max_length=1200)
 
 
 class FeedbackPlan(BaseModel):
@@ -81,6 +123,8 @@ class FeedbackNotification(BaseModel):
     created_at: str
     route: str
     github_issue_url: str | None = None
+    verification_build: str | None = None
+    verification_instructions: str | None = None
     read: bool = False
 
 
@@ -130,8 +174,12 @@ class FeedbackRecord(BaseModel):
     status: FeedbackStatus = "needs_review"
     status_history: list[FeedbackStatusChange] = Field(default_factory=list)
     resolution_note: str | None = Field(default=None, max_length=1200)
+    verification: FeedbackVerification | None = None
     github: FeedbackGitHubLink | None = None
     user_id: str | None = None
+    screenshots: list[FeedbackScreenshot] = Field(default_factory=list, max_length=3)
+    screenshot: FeedbackScreenshot | None = None
+    screenshot_analysis: FeedbackScreenshotAnalysis | None = None
 
 
 class FeedbackListResponse(BaseModel):

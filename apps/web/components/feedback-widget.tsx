@@ -1,13 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
 
 import { appVersion } from "../lib/build-info";
-import { submitFeedback, type FeedbackContext } from "../lib/textplex";
+import { READER_FEEDBACK_REQUEST_EVENT, type ReaderFeedbackRequest } from "../lib/feedback-events";
+import { submitFeedback, submitFeedbackWithScreenshots, type FeedbackContext } from "../lib/textplex";
 
 const LAST_LANGUAGE_KEY = "textplex:last-language-code";
 const LAST_BOOK_TITLE_KEY = "textplex:last-book-title";
+const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
+const MAX_SCREENSHOTS = 3;
+const MAX_SCREENSHOTS_TOTAL_BYTES = 15 * 1024 * 1024;
+const SCREENSHOT_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 
 function normalizeParam(value: string | string[] | undefined): string | null {
   return Array.isArray(value) ? value[0] ?? null : value ?? null;
@@ -36,8 +41,11 @@ export function FeedbackWidget() {
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
+  const [screenshots, setScreenshots] = useState<File[]>([]);
+  const screenshotInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [readerFeedbackRequest, setReaderFeedbackRequest] = useState<ReaderFeedbackRequest | null>(null);
 
   const context = useMemo<FeedbackContext>(() => {
     const routeParams = params as Record<string, string | string[] | undefined>;
@@ -79,6 +87,28 @@ export function FeedbackWidget() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
+  useEffect(() => {
+    const onReaderFeedbackRequest = (event: Event) => {
+      const request = (event as CustomEvent<ReaderFeedbackRequest>).detail;
+      if (!request?.target || !request.targetText || !request.message) {
+        return;
+      }
+
+      setReaderFeedbackRequest(request);
+      setStatus("idle");
+      setErrorMessage("");
+      setMessage(request.message);
+      setScreenshots([]);
+      if (screenshotInputRef.current) {
+        screenshotInputRef.current.value = "";
+      }
+      setOpen(true);
+    };
+
+    window.addEventListener(READER_FEEDBACK_REQUEST_EVENT, onReaderFeedbackRequest);
+    return () => window.removeEventListener(READER_FEEDBACK_REQUEST_EVENT, onReaderFeedbackRequest);
+  }, []);
+
   function close() {
     if (status !== "submitting") {
       setOpen(false);
@@ -96,14 +126,69 @@ export function FeedbackWidget() {
 
     setStatus("submitting");
     setErrorMessage("");
+    const submissionContext: FeedbackContext = readerFeedbackRequest
+      ? {
+          ...context,
+          feedback_target: readerFeedbackRequest.target,
+          feedback_target_text: readerFeedbackRequest.targetText,
+          feedback_target_order: readerFeedbackRequest.targetOrder ?? null,
+        }
+      : context;
     try {
-      await submitFeedback(trimmedMessage, context);
+      if (screenshots.length > 0) {
+        await submitFeedbackWithScreenshots(trimmedMessage, submissionContext, screenshots);
+      } else {
+        await submitFeedback(trimmedMessage, submissionContext);
+      }
       setStatus("success");
       setMessage("");
+      setScreenshots([]);
+      if (screenshotInputRef.current) {
+        screenshotInputRef.current.value = "";
+      }
     } catch {
       setStatus("error");
       setErrorMessage("The report could not be sent. Please try again.");
     }
+  }
+
+  function handleScreenshotChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) {
+      setScreenshots([]);
+      return;
+    }
+    if (files.length > MAX_SCREENSHOTS) {
+      setScreenshots([]);
+      event.currentTarget.value = "";
+      setStatus("error");
+      setErrorMessage(`Please choose no more than ${MAX_SCREENSHOTS} screenshots.`);
+      return;
+    }
+    if (files.some((file) => !SCREENSHOT_TYPES.has(file.type))) {
+      setScreenshots([]);
+      event.currentTarget.value = "";
+      setStatus("error");
+      setErrorMessage("Please choose PNG, JPEG, WebP, or GIF screenshots.");
+      return;
+    }
+    if (files.some((file) => file.size > MAX_SCREENSHOT_BYTES)) {
+      setScreenshots([]);
+      event.currentTarget.value = "";
+      setStatus("error");
+      setErrorMessage("Each screenshot must be 5 MB or smaller.");
+      return;
+    }
+    if (files.reduce((total, file) => total + file.size, 0) > MAX_SCREENSHOTS_TOTAL_BYTES) {
+      setScreenshots([]);
+      event.currentTarget.value = "";
+      setStatus("error");
+      setErrorMessage("The combined screenshot size must be 15 MB or smaller.");
+      return;
+    }
+    setScreenshots(files);
+    setStatus("idle");
+    setErrorMessage("");
   }
 
   return (
@@ -115,6 +200,11 @@ export function FeedbackWidget() {
           onClick={() => {
             setStatus("idle");
             setErrorMessage("");
+            setScreenshots([]);
+            if (screenshotInputRef.current) {
+              screenshotInputRef.current.value = "";
+            }
+            setReaderFeedbackRequest(null);
             setOpen(true);
           }}
           data-inventory-id="shell.feedback-button"
@@ -161,6 +251,30 @@ export function FeedbackWidget() {
                   autoFocus
                   required
                 />
+                <div className="app-feedback-screenshot-row" data-inventory-id="shell.feedback-screenshot">
+                  <label className="button button-secondary app-feedback-screenshot-button" htmlFor="feedback-screenshot">
+                    <span aria-hidden="true">▧</span>
+                    <span>{screenshots.length > 0 ? "Change screenshots" : "Add screenshots"}</span>
+                  </label>
+                  <input
+                    id="feedback-screenshot"
+                    ref={screenshotInputRef}
+                    className="app-feedback-screenshot-input"
+                    type="file"
+                    multiple
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    onChange={handleScreenshotChange}
+                    disabled={status === "submitting"}
+                  />
+                  {screenshots.length > 0 ? (
+                    <div className="app-feedback-screenshot-file-list">
+                      {screenshots.map((file, index) => (
+                        <span className="app-feedback-screenshot-file" key={`${file.name}-${file.size}-${index}`} title={file.name}>{file.name}</span>
+                      ))}
+                      <button type="button" className="button button-secondary app-feedback-screenshot-remove" onClick={() => { setScreenshots([]); if (screenshotInputRef.current) screenshotInputRef.current.value = ""; }} disabled={status === "submitting"}>Remove</button>
+                    </div>
+                  ) : <span className="small-copy">Optional · up to 3 PNG, JPEG, WebP, or GIF files, 5 MB each</span>}
+                </div>
                 <p className="small-copy">We’ll attach the current page, build version, time, and device context. Please don’t include passwords or private book files.</p>
                 {errorMessage ? <p className="app-feedback-error" role="alert">{errorMessage}</p> : null}
                 <div className="app-feedback-dialog-actions">

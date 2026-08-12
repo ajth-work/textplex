@@ -17,6 +17,7 @@ import type {
   ThemeEntitlementResponse,
   GoogleTranslateUsageSummary,
   AdminUsageSummary,
+  AdminAnalyticsOverview,
   ProgressBookSummary,
   ProgressSurfaceResponse,
 } from "../../../packages/shared/src";
@@ -62,6 +63,7 @@ export type {
   ImportSurfaceResponse,
   GoogleTranslateUsageSummary,
   AdminUsageSummary,
+  AdminAnalyticsOverview,
   LexicalEntryResult,
   LexiconEntryRecord,
   LexiconImportRequest,
@@ -126,6 +128,24 @@ export type FeedbackContext = {
   viewport_width?: number | null;
   viewport_height?: number | null;
   user_agent?: string | null;
+  feedback_target?: "sentence" | "word" | null;
+  feedback_target_text?: string | null;
+  feedback_target_order?: number | null;
+};
+
+export type FeedbackScreenshot = {
+  filename: string;
+  content_type: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+  size_bytes: number;
+};
+
+export type FeedbackScreenshotAnalysis = {
+  analyzed_at: string;
+  model: string;
+  summary: string;
+  observations: string[];
+  visible_text: string[];
+  suggested_action?: string | null;
 };
 
 export type FeedbackRecord = {
@@ -156,16 +176,26 @@ export type FeedbackRecord = {
     };
   };
   triage_source: "openai" | "fallback";
-  status: "needs_review" | "in_progress" | "completed" | "acknowledged" | "dismissed";
+  status: "needs_review" | "in_progress" | "ready_for_testing" | "completed" | "acknowledged" | "dismissed";
   status_history: Array<{
-    status: "needs_review" | "in_progress" | "completed" | "acknowledged" | "dismissed";
+    status: "needs_review" | "in_progress" | "ready_for_testing" | "completed" | "acknowledged" | "dismissed";
     changed_at: string;
     changed_by?: string | null;
     note?: string | null;
-    event_type: "status_changed" | "github_linked";
+    event_type: "status_changed" | "github_linked" | "tester_response";
     github_issue_url?: string | null;
   }>;
   resolution_note?: string | null;
+  verification?: {
+    implementation_build: string;
+    instructions: string;
+    requested_at: string;
+    requested_by?: string | null;
+    response?: "verified" | "still_unresolved" | "partially_improved" | null;
+    response_note?: string | null;
+    responded_at?: string | null;
+    responded_by?: string | null;
+  } | null;
   github?: {
     repository: string;
     issue_number: number;
@@ -177,6 +207,9 @@ export type FeedbackRecord = {
     last_synced_at?: string | null;
   } | null;
   user_id?: string | null;
+  screenshots?: FeedbackScreenshot[];
+  screenshot?: FeedbackScreenshot | null;
+  screenshot_analysis?: FeedbackScreenshotAnalysis | null;
 };
 
 export type TesterRecord = {
@@ -190,12 +223,14 @@ export type FeedbackNotification = {
   id: string;
   feedback_id: string;
   title: string;
-  status: "needs_review" | "in_progress" | "completed" | "acknowledged" | "dismissed";
-  event_type: "status_changed" | "github_linked";
+  status: "needs_review" | "in_progress" | "ready_for_testing" | "completed" | "acknowledged" | "dismissed";
+  event_type: "status_changed" | "github_linked" | "tester_response";
   message: string;
   created_at: string;
   route: string;
   github_issue_url?: string | null;
+  verification_build?: string | null;
+  verification_instructions?: string | null;
   read: boolean;
 };
 
@@ -505,6 +540,19 @@ function joinPath(pathname: string): string {
   return `${apiBaseUrl}${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
 }
 
+async function responseErrorMessage(response: Response, pathname: string): Promise<string> {
+  try {
+    const payload = (await response.json()) as { detail?: unknown };
+    if (typeof payload.detail === "string" && payload.detail.trim()) {
+      return `${payload.detail} (request failed: ${response.status})`;
+    }
+  } catch {
+    // Fall back to the status-based message when the response is not JSON.
+  }
+
+  return `Request failed (${response.status}) for ${pathname}`;
+}
+
 export async function fetchJson<T>(pathname: string): Promise<T> {
   if (isDemoMode) {
     const response = getDemoFetchResponse(pathname);
@@ -514,9 +562,8 @@ export async function fetchJson<T>(pathname: string): Promise<T> {
     throw new Error(`Demo mode does not provide data for ${pathname}`);
   }
 
-  const response = await fetch(joinPath(pathname), {
+  const response = await fetchWithAuth(pathname, {
     cache: "no-store",
-    headers: await authHeaders(),
   });
   if (!response.ok) {
     throw new Error(`Request failed (${response.status}) for ${pathname}`);
@@ -533,13 +580,12 @@ export async function postJson<T>(pathname: string, body: unknown): Promise<T> {
     throw new Error(`Demo mode does not support ${pathname}`);
   }
 
-  const response = await fetch(joinPath(pathname), {
+  const response = await fetchWithAuth(pathname, {
     method: "POST",
-    headers: await authHeaders(true),
     body: JSON.stringify(body),
-  });
+  }, true);
   if (!response.ok) {
-    throw new Error(`Request failed (${response.status}) for ${pathname}`);
+    throw new Error(await responseErrorMessage(response, pathname));
   }
   return (await response.json()) as T;
 }
@@ -564,11 +610,10 @@ export async function putJson<T>(pathname: string, body: unknown): Promise<T> {
     throw new Error(`Demo mode does not support ${pathname}`);
   }
 
-  const response = await fetch(joinPath(pathname), {
+  const response = await fetchWithAuth(pathname, {
     method: "PUT",
-    headers: await authHeaders(true),
     body: JSON.stringify(body),
-  });
+  }, true);
   if (!response.ok) {
     throw new Error(`Request failed (${response.status}) for ${pathname}`);
   }
@@ -580,11 +625,10 @@ export async function patchJson<T>(pathname: string, body: unknown): Promise<T> 
     throw new Error("Demo mode does not support feedback administration.");
   }
 
-  const response = await fetch(joinPath(pathname), {
+  const response = await fetchWithAuth(pathname, {
     method: "PATCH",
-    headers: await authHeaders(true),
     body: JSON.stringify(body),
-  });
+  }, true);
   if (!response.ok) {
     throw new Error(`Request failed (${response.status}) for ${pathname}`);
   }
@@ -603,15 +647,51 @@ export async function postFormData<T>(pathname: string, body: FormData): Promise
     throw new Error("Demo mode does not support file uploads.");
   }
 
-  const response = await fetch(joinPath(pathname), {
+  const response = await fetchWithAuth(pathname, {
     method: "POST",
-    headers: await authHeaders(),
     body,
   });
   if (!response.ok) {
     throw new Error(`Request failed (${response.status}) for ${pathname}`);
   }
   return (await response.json()) as T;
+}
+
+export async function submitFeedbackWithScreenshots(
+  originalText: string,
+  context: FeedbackContext,
+  screenshots: File[],
+): Promise<FeedbackRecord> {
+  const body = new FormData();
+  body.append("original_text", originalText);
+  body.append("context", JSON.stringify(context));
+  for (const screenshot of screenshots) {
+    body.append("screenshots", screenshot);
+  }
+  return postFormData<FeedbackRecord>("/feedback/with-screenshot", body);
+}
+
+export async function analyzeFeedbackScreenshots(feedbackId: string): Promise<FeedbackRecord> {
+  return postJson<FeedbackRecord>(`/feedback/${encodeURIComponent(feedbackId)}/screenshot-analysis`, {});
+}
+
+export async function submitFeedbackVerification(
+  feedbackId: string,
+  response: "verified" | "still_unresolved" | "partially_improved",
+  note?: string,
+): Promise<FeedbackRecord> {
+  return postJson<FeedbackRecord>(`/feedback/${encodeURIComponent(feedbackId)}/verification`, { response, note: note?.trim() || null });
+}
+
+export async function fetchFeedbackScreenshot(feedbackId: string, screenshotIndex: number): Promise<string> {
+  const response = await fetch(joinPath(`/feedback/${encodeURIComponent(feedbackId)}/screenshots/${screenshotIndex}`), {
+    cache: "no-store",
+    headers: await authHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(`Request failed (${response.status}) for feedback screenshot`);
+  }
+  return URL.createObjectURL(await response.blob());
 }
 
 export async function syncLearningEvents(): Promise<LearningSyncResponse | null> {
@@ -663,6 +743,28 @@ async function authHeaders(includeJsonContentType = false): Promise<Headers> {
     headers.set("Authorization", `Bearer ${data.session.access_token}`);
   }
   return headers;
+}
+
+async function fetchWithAuth(pathname: string, init: RequestInit, includeJsonContentType = false): Promise<Response> {
+  let headers = await authHeaders(includeJsonContentType);
+  let response = await fetch(joinPath(pathname), { ...init, headers });
+  if (response.status !== 401 || !headers.has("Authorization")) {
+    return response;
+  }
+
+  const client = getSupabaseClient();
+  if (!client) {
+    return response;
+  }
+
+  const { data } = await client.auth.refreshSession();
+  if (!data.session?.access_token) {
+    return response;
+  }
+
+  headers = await authHeaders(includeJsonContentType);
+  response = await fetch(joinPath(pathname), { ...init, headers });
+  return response;
 }
 
 export function formatDateTime(value: string | null): string {

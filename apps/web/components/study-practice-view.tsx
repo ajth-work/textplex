@@ -15,6 +15,7 @@ import {
   type VocabularyAssessmentStateRecord,
 } from "../lib/textplex";
 import { languageDisplayLabel } from "../lib/language-options";
+import { composeJapaneseRomaji, composeJapaneseRomajiInput } from "../lib/japanese-romaji";
 import { StudyPronunciationGuide } from "./study-pronunciation-guide";
 
 type PracticeMode = "program" | "review" | "glossed" | "both";
@@ -44,6 +45,7 @@ type PracticeCardAttemptState = {
 };
 
 const INTRODUCTION_CHUNK_SIZE = 5;
+const CORRECT_AUTO_ADVANCE_DELAY_MS = 1800;
 const INTRODUCTION_AXIS_ORDER: VocabularyAssessmentAxisKey[] = [
   "form_to_meaning",
   "form_to_reading",
@@ -194,12 +196,21 @@ function classifyPracticeResult(
   promptText: string | null,
   alternateAnswers: Array<string | null>,
   languageCode?: string | null,
+  japaneseCompositionEnabled = false,
 ): AnswerResult {
   const normalizedSubmittedAnswer = normalizePracticeAnswer(submittedAnswer, languageCode);
   const normalizedExpectedAnswer = normalizePracticeAnswer(expectedAnswer ?? "", languageCode);
   const normalizedPromptText = normalizePracticeAnswer(promptText ?? "", languageCode);
   if (normalizedSubmittedAnswer.length > 0 && normalizedExpectedAnswer.length > 0 && normalizedSubmittedAnswer === normalizedExpectedAnswer) {
     return "correct";
+  }
+
+  if (japaneseCompositionEnabled) {
+    const composedSubmittedAnswer = normalizePracticeAnswer(composeJapaneseRomaji(submittedAnswer), languageCode);
+    const composedExpectedAnswer = normalizePracticeAnswer(composeJapaneseRomaji(expectedAnswer ?? ""), languageCode);
+    if (composedSubmittedAnswer.length > 0 && composedExpectedAnswer.length > 0 && composedSubmittedAnswer === composedExpectedAnswer) {
+      return "correct";
+    }
   }
 
   const wrongAxisMatches = alternateAnswers
@@ -372,6 +383,7 @@ function buildPracticePrompt(
   pronunciation: string | null,
 ): PracticePrompt {
   const sourceTermLabel = `Type the ${card.languageLabel} term`;
+  const isJapanese = normalizeLanguageCode(card.languageCode) === "ja";
   switch (card.assessmentAxisKey) {
     case "form_to_reading":
       return {
@@ -379,8 +391,8 @@ function buildPracticePrompt(
         promptLanguage: card.languageCode,
         answer: pronunciation,
         answerLanguage: "en",
-        placeholder: "Type the romanization",
-        inputLanguage: "en",
+        placeholder: isJapanese ? "Type the reading (romaji or hiragana)" : "Type the romanization",
+        inputLanguage: isJapanese ? card.languageCode : "en",
       };
     case "meaning_to_form":
       return {
@@ -673,8 +685,11 @@ export function StudyPracticeView({
   const [introductionProgressHydrated, setIntroductionProgressHydrated] = useState(initialMode !== "program");
   const [attemptsByCardKey, setAttemptsByCardKey] = useState<Record<string, PracticeCardAttemptState>>({});
   const [assessmentPending, setAssessmentPending] = useState(false);
+  const [autoAdvanceRemainingMs, setAutoAdvanceRemainingMs] = useState<number | null>(null);
+  const [autoAdvanceCancelledCardKey, setAutoAdvanceCancelledCardKey] = useState<string | null>(null);
   const [lookup, setLookup] = useState<LexiconLookupResponse | null>(null);
   const answerInputRef = useRef<HTMLInputElement>(null);
+  const pendingAnswerSelectionRef = useRef<{ start: number; end: number } | null>(null);
 
   const routeModeValue = routeSearchParams.get("mode");
   const routeMode = routeModeValue === "review" || routeModeValue === "glossed" || routeModeValue === "both" ? routeModeValue : null;
@@ -705,6 +720,8 @@ export function StudyPracticeView({
           setSelectedIndex(0);
           setIntroductionChunkIndex(0);
           setAttemptsByCardKey({});
+          setAutoAdvanceCancelledCardKey(null);
+          setAutoAdvanceRemainingMs(null);
         }
       })
       .catch((err) => {
@@ -842,6 +859,77 @@ export function StudyPracticeView({
   const currentPrompt = currentCard && currentCard.phase === "assessment" ? buildPracticePrompt(currentCard, resolvedMeaning, resolvedPronunciation) : null;
   const showPronunciationGuide = Boolean(currentCard && currentCard.phase === "intro" && resolvedPronunciation);
   const introAdvanceCard = currentCard?.phase === "intro" ? practiceCards[selectedIndex + 1] ?? null : null;
+  const japaneseCompositionEnabled = Boolean(currentPrompt && normalizeLanguageCode(currentPrompt.inputLanguage) === "ja");
+
+  function advanceToNextPracticeCard(): void {
+    if (mode !== "review" && selectedIndex === practiceCards.length - 1 && practiceChunkCount > 1) {
+      setIntroductionChunkIndex((current) => (current + 1) % practiceChunkCount);
+      setSelectedIndex(0);
+      return;
+    }
+    setSelectedIndex((current) => (current + 1) % practiceCards.length);
+  }
+
+  useEffect(() => {
+    const pendingSelection = pendingAnswerSelectionRef.current;
+    if (!pendingSelection || !currentCard || currentCard.phase !== "assessment") {
+      return;
+    }
+    const input = answerInputRef.current;
+    if (input) {
+      input.setSelectionRange(pendingSelection.start, pendingSelection.end);
+    }
+    pendingAnswerSelectionRef.current = null;
+  }, [currentAttempt.answerDraft, currentCard, currentCard?.key]);
+
+  useEffect(() => {
+    setAutoAdvanceRemainingMs(null);
+    if (
+      !currentCard ||
+      currentCard.phase !== "assessment" ||
+      currentAttempt.answerResult !== "correct" ||
+      autoAdvanceCancelledCardKey === currentCard.key
+    ) {
+      return;
+    }
+
+    const deadline = Date.now() + CORRECT_AUTO_ADVANCE_DELAY_MS;
+    setAutoAdvanceRemainingMs(CORRECT_AUTO_ADVANCE_DELAY_MS);
+    const intervalId = window.setInterval(() => {
+      setAutoAdvanceRemainingMs(Math.max(0, deadline - Date.now()));
+    }, 100);
+    const timeoutId = window.setTimeout(() => {
+      setAutoAdvanceRemainingMs(null);
+      if (mode !== "review" && selectedIndex === practiceCards.length - 1 && practiceChunkCount > 1) {
+        setIntroductionChunkIndex((current) => (current + 1) % practiceChunkCount);
+        setSelectedIndex(0);
+        return;
+      }
+      setSelectedIndex((current) => (current + 1) % practiceCards.length);
+    }, CORRECT_AUTO_ADVANCE_DELAY_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    autoAdvanceCancelledCardKey,
+    currentAttempt.answerResult,
+    currentCard,
+    currentCard?.key,
+    mode,
+    practiceCards.length,
+    practiceChunkCount,
+    selectedIndex,
+  ]);
+
+  function cancelAutoAdvance(): void {
+    if (!currentCard) {
+      return;
+    }
+    setAutoAdvanceCancelledCardKey(currentCard.key);
+    setAutoAdvanceRemainingMs(null);
+  }
 
   function updateCurrentAttempt(updater: (current: PracticeCardAttemptState) => PracticeCardAttemptState): void {
     if (!currentCard) {
@@ -906,6 +994,7 @@ export function StudyPracticeView({
       currentPrompt.prompt,
       [currentCard.term, resolvedMeaning, resolvedPronunciation],
       currentCard.languageCode,
+      japaneseCompositionEnabled,
     );
 
     setAssessmentPending(true);
@@ -1041,6 +1130,27 @@ export function StudyPracticeView({
                             ? "That answer matches a different direction"
                             : "Incorrect"}
                     </strong>
+                    {currentAttempt.answerResult === "correct" ? (
+                      <div className="study-practice-auto-advance" data-inventory-id="study.practice-auto-advance">
+                        {autoAdvanceRemainingMs !== null ? (
+                          <>
+                            <span>
+                              Next card in <strong>{Math.max(0.1, autoAdvanceRemainingMs / 1000).toFixed(1)}s</strong>
+                            </span>
+                            <button
+                              type="button"
+                              className="button button-secondary study-practice-auto-advance-cancel"
+                              onClick={cancelAutoAdvance}
+                              data-inventory-id="study.practice-auto-advance-cancel"
+                            >
+                              Stay on this card
+                            </button>
+                          </>
+                        ) : (
+                          <span>Auto-advance paused. Use Next term when you are ready.</span>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -1058,11 +1168,29 @@ export function StudyPracticeView({
                         inputMode="text"
                         autoCapitalize="off"
                         autoCorrect="off"
+                        disabled={assessmentPending || currentAttempt.answerResult === "correct"}
                         aria-label={currentPrompt?.placeholder ?? "Your answer"}
                         onChange={(event) => {
+                          const composedInput = japaneseCompositionEnabled
+                            ? composeJapaneseRomajiInput(
+                                event.target.value,
+                                event.target.selectionStart ?? event.target.value.length,
+                                event.target.selectionEnd ?? event.target.value.length,
+                              )
+                            : {
+                                value: event.target.value,
+                                selectionStart: event.target.selectionStart ?? event.target.value.length,
+                                selectionEnd: event.target.selectionEnd ?? event.target.value.length,
+                              };
+                          if (japaneseCompositionEnabled) {
+                            pendingAnswerSelectionRef.current = {
+                              start: composedInput.selectionStart,
+                              end: composedInput.selectionEnd,
+                            };
+                          }
                           updateCurrentAttempt((current) => ({
                             ...current,
-                            answerDraft: event.target.value,
+                            answerDraft: composedInput.value,
                             answerResult:
                               current.answerResult === "wrong_axis" || current.answerResult === "retry"
                                 ? "idle"
@@ -1074,6 +1202,15 @@ export function StudyPracticeView({
                         spellCheck={false}
                       />
                     </div>
+                    {japaneseCompositionEnabled ? (
+                      <div className="study-practice-input-composition" data-inventory-id="study.practice-input-composition" aria-live="polite">
+                        <div>
+                          <span className="eyebrow">Japanese input</span>
+                          <span className="small-copy">Romaji composes to hiragana as you type. Direct kana remains supported.</span>
+                        </div>
+                        <strong lang="ja">{currentAttempt.answerDraft || "—"}</strong>
+                      </div>
+                    ) : null}
                     <div className="study-practice-controls" data-inventory-id="study.practice-navigation">
                       <button
                         type="button"
@@ -1096,14 +1233,7 @@ export function StudyPracticeView({
                       <button
                         type="button"
                         className="button button-secondary study-practice-arrow"
-                        onClick={() => {
-                          if (mode !== "review" && selectedIndex === practiceCards.length - 1 && practiceChunkCount > 1) {
-                            setIntroductionChunkIndex((current) => (current + 1) % practiceChunkCount);
-                            setSelectedIndex(0);
-                            return;
-                          }
-                          setSelectedIndex((current) => (current + 1) % practiceCards.length);
-                        }}
+                        onClick={advanceToNextPracticeCard}
                         disabled={
                           practiceCards.length <= 1 ||
                           (!currentAttempt.revealed &&
@@ -1150,14 +1280,7 @@ export function StudyPracticeView({
                     <button
                       type="button"
                       className="button button-primary study-practice-check"
-                      onClick={() => {
-                        if (mode !== "review" && selectedIndex === practiceCards.length - 1 && practiceChunkCount > 1) {
-                          setIntroductionChunkIndex((current) => (current + 1) % practiceChunkCount);
-                          setSelectedIndex(0);
-                          return;
-                        }
-                        setSelectedIndex((current) => (current + 1) % practiceCards.length);
-                      }}
+                      onClick={advanceToNextPracticeCard}
                       aria-label="Next word"
                       title={introAdvanceCard?.phase === "assessment" ? "Start mixed practice" : "Next word"}
                       data-inventory-id="study.practice-next"

@@ -51,6 +51,17 @@ test("Study practice route exposes a one-card drill flow", () => {
   assert.match(practiceSource, /Type the English meaning/);
   assert.match(practiceSource, /RETRY_SIMILARITY_THRESHOLD = 0\.75/);
   assert.match(practiceSource, /function normalizePracticeAnswer\(value: string, languageCode\?: string \| null\): string/);
+  assert.match(practiceSource, /composeJapaneseRomaji/);
+  assert.match(practiceSource, /composeJapaneseRomajiInput/);
+  assert.match(practiceSource, /japaneseCompositionEnabled/);
+  assert.match(practiceSource, /Type the reading \(romaji or hiragana\)/);
+  assert.match(practiceSource, /study\.practice-input-composition/);
+  assert.match(practiceSource, /Romaji composes to hiragana as you type/);
+  assert.match(practiceSource, /CORRECT_AUTO_ADVANCE_DELAY_MS = 1800/);
+  assert.match(practiceSource, /Next card in/);
+  assert.match(practiceSource, /Stay on this card/);
+  assert.match(practiceSource, /study\.practice-auto-advance/);
+  assert.match(practiceSource, /study\.practice-auto-advance-cancel/);
   assert.match(practiceSource, /languageRoot === "ja"/);
   assert.match(practiceSource, /normalize\("NFKD"\)\.replace\(\/\\u0304\/g, ""\)/);
   assert.match(practiceSource, /currentCard\.languageCode,/);
@@ -95,4 +106,15 @@ test("Study practice route exposes a one-card drill flow", () => {
   assert.match(practiceSource, /Incorrect/);
   assert.match(practiceSource, /No practice items available/);
   assert.match(practiceSource, /Loading practice session/);
+});
+
+test("Study practice keeps validation and recovery paths around the Japanese enhancements", () => {
+  assert.match(practiceSource, /const answerResult = classifyPracticeResult\(/);
+  assert.match(practiceSource, /result: answerResult,/);
+  assert.match(practiceSource, /result: "incorrect"/);
+  assert.match(practiceSource, /answerResult: "incorrect"/);
+  assert.match(practiceSource, /current\.answerResult === "wrong_axis" \|\| current\.answerResult === "retry"/);
+  assert.match(practiceSource, /autoAdvanceRemainingMs/);
+  assert.match(practiceSource, /setAutoAdvanceCancelledCardKey\(currentCard\.key\)/);
+  assert.match(practiceSource, /window\.setTimeout/);
 });

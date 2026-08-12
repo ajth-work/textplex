@@ -11,6 +11,7 @@ from app.schemas.themes import ThemeCheckoutRequest
 from app.services import learning_sync
 from app.services.auth import AuthenticatedUserContext, get_optional_user_context
 from app.services.book_registry import import_book_from_path
+from app.services.book_sources import write_text_fixture_source
 from app.services.commerce import (
     apply_sandbox_event,
     create_checkout_session,
@@ -82,6 +83,36 @@ def test_import_surface_is_visible_only_to_owner(tmp_path: Path) -> None:
         app.dependency_overrides[get_optional_user_context] = lambda: _context("user-a")
         recent_books = client.get("/import").json()["recent_books"]
         assert [book["book_id"] for book in recent_books] == [record.id]
+    finally:
+        app.dependency_overrides.pop(get_optional_user_context, None)
+        app.state.data_root = original_root
+
+
+def test_progress_surface_is_visible_only_to_owner(tmp_path: Path) -> None:
+    source_a = write_text_fixture_source(
+        tmp_path / "source-a",
+        text="Account A reading sample.",
+        language_code="en",
+        title="Account A book",
+    )
+    source_b = write_text_fixture_source(
+        tmp_path / "source-b",
+        text="Account B reading sample.",
+        language_code="en",
+        title="Account B book",
+    )
+    record_a = import_book_from_path(source_a, language_code="en", data_root=tmp_path / "books", owner_id="user-a")
+    record_b = import_book_from_path(source_b, language_code="en", data_root=tmp_path / "books", owner_id="user-b")
+
+    original_root = app.state.data_root
+    app.state.data_root = tmp_path
+    app.dependency_overrides[get_optional_user_context] = lambda: _context("user-a")
+    try:
+        client = TestClient(app)
+        assert [book["book_id"] for book in client.get("/progress").json()["books"]] == [record_a.id]
+
+        app.dependency_overrides[get_optional_user_context] = lambda: _context("user-b")
+        assert [book["book_id"] for book in client.get("/progress").json()["books"]] == [record_b.id]
     finally:
         app.dependency_overrides.pop(get_optional_user_context, None)
         app.state.data_root = original_root

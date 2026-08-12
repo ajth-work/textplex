@@ -29,16 +29,23 @@ Unless a task explicitly calls for legacy or GitHub Pages compatibility work, im
 | `shell.header` | region | App header | `apps/web/components/app-shell.tsx` (`AppShell`) | Shared top row with back control, brand, and secondary actions. |
 | `shell.context` | region | Reading context | `apps/web/components/app-shell.tsx` | Linked active book and page context shown only on book-oriented routes. |
 | `shell.actions` | region | Shell actions | `apps/web/components/app-shell.tsx` | Theme settings and theme toggle controls for secondary routes. |
-| `shell.build-footer` | region | Build footer | `apps/web/components/build-footer.tsx` | Optional bottom-of-page version footer that shows the current web app version and last reboot/rebuild time. |
-| `shell.primary-nav` | region | Primary navigation | `apps/web/components/app-shell.tsx` | Focused app destinations: Home, Library, Read, and Study. |
-| `shell.secondary-nav` | region | More navigation | `apps/web/components/app-shell.tsx` | Overflow access to Analysis, Search, Progress, Import, Activity, Roadmap, Profile, Settings, and the signed-in or signed-out account action. |
+| `shell.build-footer` | region | Build footer | `apps/web/components/build-footer.tsx` | Shared bottom-of-page build footer that always shows the current web app version and can optionally show the last reboot/rebuild time. |
+| `shell.tester-build-update-gate` | region | Tester build update gate | `apps/web/components/tester-build-update-gate.tsx`, `apps/web/components/app-frame.tsx` | Tester-only blocking update page shown when the signed-in tester has not acknowledged the current build. |
+| `shell.tester-build-update-sections` | region | Tester build update sections | `apps/web/components/tester-build-update-gate.tsx` | Grouped, plain-language release sections covering the builds since the tester's last acknowledgement. |
+| `shell.tester-build-update-section` | region | Tester build update section | `apps/web/components/tester-build-update-gate.tsx` | One area of change, such as Reader and language support or Import and library. |
+| `shell.tester-build-update-items` | list | Tester build update items | `apps/web/components/tester-build-update-gate.tsx` | Individual tester-readable changes within one grouped area. |
+| `shell.tester-build-update-acknowledge` | button | Acknowledge and continue | `apps/web/components/tester-build-update-gate.tsx` | Records the current build for the signed-in tester and unlocks the rest of the app. |
+| `shell.primary-nav` | region | Primary navigation | `apps/web/components/app-shell.tsx` | Focused app destinations: Home, Library, Read, and Study, with grouped secondary destinations behind chevrons. |
+| `shell.primary-nav-menu` | region | Primary navigation menus | `apps/web/components/app-shell.tsx` | Contextual menus attached to Library, Read, and Study for import/search, analysis, practice, and progress destinations. |
+| `shell.secondary-nav` | region | More navigation | `apps/web/components/app-shell.tsx` | Overflow access to Activity, Roadmap, Profile, Settings, admin/tester tools when available, and the signed-in or signed-out account action. |
 | `shell.reader-nav` | region | Reader navigation behavior | `apps/web/components/app-shell.tsx` | Reader-only app shell that appears on entry, then collapses as a whole so the logo, shell controls, and primary navigation do not compete with reading. |
 | `shell.reader-nav-reveal` | button | Show app shell | `apps/web/components/app-shell.tsx` | Theme-aware reader tab that restores the full app shell after it collapses. |
 | `shell.footer` | region | Shared footer | `apps/web/components/account-footer.tsx`, `apps/web/components/account-menu.tsx` | Shared bottom footer with the authenticated account menu above the authorization/usage note and copyright mark. |
 | `shell.feedback-footer` | region | Feedback footer | `apps/web/components/feedback-widget.tsx` | Shared bottom action area that keeps feedback accessible on every route. |
 | `shell.feedback-button` | button | Send feedback | `apps/web/components/feedback-widget.tsx` | Persistent footer action that opens the feedback capture dialog from every route. |
 | `shell.feedback-dialog` | card | Feedback dialog | `apps/web/components/feedback-widget.tsx` | Free-form tester feedback capture with automatic route, build, viewport, and reading-context metadata. |
-| `shell.feedback-notifications` | region | Feedback notification bell | `apps/web/components/feedback-notification-bell.tsx` | Authenticated tester notification center showing feedback status, GitHub linkage, and resolution updates. |
+| `shell.feedback-screenshot` | button | Add screenshots | `apps/web/components/feedback-widget.tsx` | Optional multi-screenshot attachment in the feedback dialog, restricted to three common image files with a 5 MB per-file limit. |
+| `shell.feedback-notifications` | region | Feedback notification bell | `apps/web/components/app-shell.tsx`, `apps/web/components/feedback-notification-bell.tsx` | Persistent top-shell tester notification center showing feedback status, GitHub linkage, resolution updates, and in-app verification actions for implemented fixes. |
 | `shell.account-menu` | region | Account menu | `apps/web/components/account-footer.tsx`, `apps/web/components/account-menu.tsx` | Profile, settings, account switching, and sign-out control shown in the shared footer for signed-in users. |
 | `shell.account-switcher` | region | Saved account switcher | `apps/web/components/account-menu.tsx` | Trusted-device list of saved TextPlex sessions with active-account state, fast switching, add-account entry, and per-device removal. |
 | `surface.route-hero` | region | Route hero | `apps/web/components/route-page.tsx` (`RoutePage`) | Shared eyebrow, title, description, badge, route links, and metrics for data-backed surfaces. |
@@ -75,6 +82,7 @@ Unless a task explicitly calls for legacy or GitHub Pages compatibility work, im
 | `admin` | `/admin` | `apps/web/components/admin-usage-view.tsx` |
 | `admin-feedback` | `/admin/feedback` | `apps/web/app/admin/feedback/page.tsx`, `apps/web/components/admin-feedback-view.tsx` |
 | `admin-themes` | `/admin/themes` | `apps/web/components/admin-theme-console.tsx` |
+| `tester` | `/tester` | `apps/web/app/tester/page.tsx`, `apps/web/components/tester-console-view.tsx` |
 
 ### `landing` — `/`
 
@@ -197,7 +205,7 @@ Source: `apps/web/components/reader-view.tsx` (`ReaderView`)
 | --- | --- | --- | --- |
 | `reader.header` | region | Reader header | Book/page identity with adaptive two-line title sizing, compact controls, page navigation, and reading-session summary. |
 | `reader.settings-button` | button | Reader settings | Distinct reader control in the right side of the header grid that opens the reader options dialog. |
-| `reader.options-dialog` | region | Reader options | Font, interface text size, token text size and spacing, speech voice, navigation hide delay, default-on token audio, pronunciation freshness toggle, study-stage word coloring, meaning line reveal, definition trace, reading theme, focus-mode controls, Google translation fallback usage, and the moved reader utilities. |
+| `reader.options-dialog` | region | Reader options | Font, interface text size, token text size and spacing, speech voice, navigation hide delay, default-on token audio, pronunciation freshness toggle, Japanese romaji/furigana display, study-stage word coloring, meaning line reveal, definition trace, reading theme, focus-mode controls, Google translation fallback usage, and the moved reader utilities. |
 | `reader.token-display-settings` | region | Token display settings | Reader settings section for independently scaling token words/readings and tightening or relaxing the horizontal space between tokens. |
 | `reader.token-text-size-control` | control | Token text size | Range control that scales the displayed token word and its pronunciation/reading together. |
 | `reader.token-spacing-control` | control | Token spacing | Range control that adjusts horizontal gaps and token side padding so sentences can fit the available reading width. |
@@ -218,6 +226,9 @@ Source: `apps/web/components/reader-view.tsx` (`ReaderView`)
 | `reader.token-audio-toast` | status | Token audio notice | One-time first-use notice that token audio is enabled by default and can be turned off in Reader settings. |
 | `reader.pronunciation-visibility-section` | region | Pronunciation visibility | Fresh-word pronunciation controls that keep readings visible for recent study items and quieter for mature items. |
 | `reader.pronunciation-visibility-toggle` | button | Fresh words only toggle | Turns the pronunciation freshness filter on or off inside the reader options dialog. |
+| `reader.japanese-reading-display-section` | region | Japanese reading display | Japanese-only setting for choosing romaji or hiragana furigana in sentence token readings and the selected-token inspector. |
+| `reader.japanese-reading-romaji` | button | Romaji display | Shows Japanese readings in Latin-script romaji. |
+| `reader.japanese-reading-furigana` | button | Furigana display | Shows Japanese readings in hiragana/furigana. |
 | `reader.srs-color-section` | region | Study-stage coloring | Reader option that tints tokens by the weakest SRS stage so unfamiliar words and mastered words read differently at a glance. |
 | `reader.srs-color-toggle` | button | Color words by stage toggle | Turns the study-stage token coloring on or off inside the reader options dialog. |
 | `reader.sentence-help-section` | region | Sentence help | Reader options panel section for the meaning-line reveal card and token lookup trace controls. |
@@ -236,6 +247,7 @@ Source: `apps/web/components/reader-view.tsx` (`ReaderView`)
 | `reader.token-mode-button` | button | Word/character mode | Language-dependent control with a 文/字 glyph exposed for Chinese, Japanese, and Korean readers to toggle the sentence display between word and character units. |
 | `reader.sentence-audio-button` | button | Sentence audio playback | Plays the selected sentence aloud and records the pronunciation playback interaction for learner history. |
 | `reader.sentence-audio-speed` | region | Sentence audio speed | Inline speedometer control with minus/plus stepping across 0.25x, 0.5x, 0.75x, and 1x browser speech playback; new readers start at 0.75x. |
+| `reader.sentence-feedback-button` | button | Sentence correction feedback | Compact star/Sentence action at the bottom-right of the sentence token panel that opens a targeted correction report with the active sentence captured as context. |
 | `reader.page-bookmark` | button | Page bookmark | Bookmark control inside the page position segment, saving the current page to the page bookmark list. |
 | `reader.sentence-bookmark` | button | Sentence bookmark | Bookmark control inside the sentence position segment, saving the active sentence to the sentence bookmark list. |
 | `reader.source-sentence-card` | card | Source sentence | Collapsible raw source sentence panel without tokenization. |
@@ -246,10 +258,11 @@ Source: `apps/web/components/reader-view.tsx` (`ReaderView`)
 | `reader.completion-summary-card` | card | Completion summary | Congrats card shown after the final page or article sentence, with article stats and the mark-read return-to-library action. |
 | `reader.sentence` | region | Reader sentence | One readable sentence with sentence-level timing and interaction state. |
 | `reader.token` | region | Reader token | Clickable word/character unit with lookup and exposure behavior. |
-| `reader.token-inspector` | card | Token inspector | Selected token, pronunciation, audio, syllable playback, reading display toggle, level, definitions, study-save state, custom list picker, part-of-speech badge, and remembered/missed feedback actions. |
+| `reader.token-inspector` | card | Token inspector | Selected token, Japanese furigana, pronunciation, audio, syllable playback, reading display toggle, level, definitions, study-save state, custom list picker, part-of-speech badge, and remembered/missed feedback actions. |
 | `reader.word-audio-button` | button | Word audio playback | Plays the selected token aloud from the token inspector and records the pronunciation playback interaction for learner history. |
 | `reader.definition-remembered-button` | button | Remembered | Marks the selected token as remembered after lookup and records the feedback event for the learner profile. |
 | `reader.definition-missed-button` | button | Missed | Marks the selected token as missed after lookup and records the feedback event for the learner profile. |
+| `reader.definition-correction-button` | button | Word correction feedback | Compact star/Word action in the token inspector that opens a targeted correction report with the selected word, reading, definition, and source sentence captured as context. |
 | `reader.definition-segment` | button | Syllable playback chip | Plays an individual syllable from the token inspector while keeping the syllable breakdown visible. |
 | `reader.russian-syllable-toggle` | button | Russian syllable display toggle | Switches the token-inspector syllable chips between romanized and Cyrillic labels. |
 | `reader.study-save-button` | button | Study save action | Saves the selected token into the learner's study vocabulary list with source metadata. |
@@ -269,11 +282,15 @@ Source: `apps/web/app/admin/feedback/page.tsx` (`AdminOnly`), `apps/web/componen
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
 | `admin-feedback.page` | page | Feedback operations | Admin-only feedback review surface for tester identity, lifecycle, planning, and tracker alignment. |
-| `admin-feedback.filters` | region | Feedback filters | Search and status filters for narrowing reports by tester, route, language, or title. |
-| `admin-feedback.tester-list` | region | Tester directory | Current feedback submitters with stable tester IDs and editable private admin nicknames. |
+| `admin-feedback.summary` | region | Triage pulse | Compact counts for reports needing review, in progress, with screenshots, and tracked in GitHub, with quick status filters. |
+| `admin-feedback.metrics` | region | Feedback metrics | Local operational metrics for tester review backlog, review/resolution timing, total reports, routes, categories, and affected languages. |
+| `admin-feedback.filters` | region | Feedback filters | Search plus tester, status, language, route, category, severity, priority, screenshot, and GitHub-state filters. |
+| `admin-feedback.tester-list` | region | Tester directory | Compact selectable tester rows with expandable details and inline private nickname editing. |
 | `admin-feedback.record-list` | region | Feedback report list | Selectable list of tester reports with status and context summaries. |
 | `admin-feedback.detail` | card | Feedback detail | Original report, context, status controls, GitHub linkage, and lifecycle history. |
+| `admin-feedback.screenshots` | region | Screenshot review | Admin-only attachment gallery with an explicit action to request AI analysis of stored screenshots. |
 | `admin-feedback.plan` | region | AI implementation plan | Reproduction steps, tasks, acceptance criteria, suggested tests, risks, priority, and effort. |
+| `admin-feedback.resolution` | region | Resolution and tester review | Admin decision note, implementation build, and verification instructions used to send a completed feature back to its tester. |
 
 ### `admin` — `/admin`
 
@@ -281,6 +298,7 @@ Source: `apps/web/components/admin-usage-view.tsx` (`AdminUsageView`)
 
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
+| `admin.nav` | region | Admin section navigation | Shared sub-navigation across Platform usage, Feedback, Themes, and Roadmap with the current section highlighted. |
 | `admin.page` | page | Admin console | Admin-only aggregate platform usage surface. |
 | `admin.hero` | region | Admin console header | Admin navigation and local-data scope explanation. |
 | `admin.summary-grid` | region | Usage summary | High-level profile, reading, and exposure metrics. |
@@ -288,9 +306,17 @@ Source: `apps/web/components/admin-usage-view.tsx` (`AdminUsageView`)
 | `admin.reading-summary-card` | card | Reading sessions | Total reading sessions and 30-day active-profile count. |
 | `admin.reading-depth-card` | card | Reading depth | Page and sentence completion totals. |
 | `admin.exposure-summary-card` | card | Reading time | Active time and unique exposed-word totals. |
-| `admin.activity-card` | card | Reading activity | Recent aggregate reading activity by day. |
+| `admin.activity-card` | card | Reading activity | Recent aggregate reading activity by day, with toggleable bars and a smooth line view. |
 | `admin.breakdown-card` | card | Platform signals | Book, feedback, and translation usage totals. |
 | `admin.scope-note` | region | Analytics scope note | States what the local usage snapshot includes and excludes. |
+| `admin.auth-status-card` | card | Permission check | Explains the signed-in account, server-resolved TextPlex role, and global usage permission when admin access is denied. |
+| `admin.analytics-funnel-card` | card | Activation funnel | Directional user progression from activation through repeated value, paywall intent, and conversion. |
+| `admin.analytics-value-card` | card | Repeated value | Leading indicators for active users, repeated value, AI usage, and feedback participation. |
+| `admin.analytics-paywall-card` | card | AI / paywall demand | Privacy-safe early signal for users reaching limits, pricing surfaces, paywalls, or unlock actions. |
+| `admin.analytics-feature-card` | card | Feature demand | Captured feature-event volume and unique-user usage in the analytics window. |
+| `admin.analytics-feature-filter` | region | Feature-demand audience filter | Bottom-of-card role filter for comparing feature demand across members, testers, admins, or all users. |
+| `admin.analytics-retention-card` | card | Retention cohorts | Cohort return rates for one, seven, and thirty days where the cohort is mature enough. |
+| `admin.analytics-user-watchlist` | region | Users approaching conversion | Pseudonymous users showing repeated value or paywall-intent signals. |
 
 ### `admin-theme` — `/admin/themes`
 
@@ -306,6 +332,20 @@ Live source: `apps/web/components/admin-theme-console.tsx` (`AdminThemeConsole`)
 | `admin-theme.color-controls` | region | Color and surface controls | Structured token controls with native color picking, brightness adjustment, and surface/gradient value editing. |
 | `admin-theme.loading-state` | region | Theme console loading | Loading state while the hosted admin catalog is fetched. |
 | `admin-theme.error-state` | card | Theme console error | Authentication, API, or validation error for the admin theme console. |
+
+### `tester` — `/tester`
+
+Source: `apps/web/app/tester/page.tsx`, `apps/web/components/tester-console-view.tsx` (`TesterConsoleView`)
+
+| ID | Type | Visible name | Purpose |
+| --- | --- | --- | --- |
+| `tester.page` | page | Tester console | Authenticated tester workspace for reviewing submitted feedback and TextPlex responses. |
+| `tester.summary` | region | Tester feedback summary | Counts submitted reports, open reports, and fixes awaiting tester review. |
+| `tester.record-list` | region | Tester report history | Selectable list of the authenticated tester's feedback reports. |
+| `tester.detail` | card | Tester report detail | Original feedback, status, context, and response timeline for the selected report. |
+| `tester.original-feedback` | region | Original feedback | Immutable copy of the tester's submitted feedback text. |
+| `tester.verification` | region | Tester verification | Build instructions and response actions when an admin sends an implemented fix for review. |
+| `tester.timeline` | region | Feedback timeline | Status changes, GitHub linkage, and tester responses for the selected report. |
 
 ### `analysis` — `/analysis/:bookId`
 
@@ -359,8 +399,9 @@ Live source: `apps/web/components/surface-views.tsx` (`ImportSurfaceView`); demo
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
 | `import.route-hero` | region | Import hero | Supported-input, upload, and paste capability summary. |
-| `import.form` | card | Import form | Switches between paste-text and PDF-upload flows, uses a fixed target-language dropdown, surfaces translation-cost planning, and submits real API imports. |
-| `import.translation-confirmation-card` | card | Translation confirmation | Large-paste safety checkpoint that confirms translation preloading before import proceeds. |
+| `import.form` | card | Import form | Switches between paste-text and PDF/EPUB-upload flows, uses a fixed target-language dropdown, explains the bounded reader translation buffer, and submits real API imports. |
+| `import.wikipedia-random-card` | region | Random Wikipedia import | Target-language action that asks the API to select and import a random article from the selected-language Wikipedia. |
+| `import.wikipedia-random-button` | button | Import random Wikipedia article | Starts a random target-language Wikipedia import and retains the returned book in the normal import-progress flow. |
 | `import.progress-card` | card | Import progress | Shows the latest submitted book status and background extraction percentage, retained across route changes. |
 | `import.recent-books-card` | card | Recent books | Recently imported book records and processing status. |
 | `import.book-item` | region | Recent book item | One recent-book row with language, status, and timestamp. |
@@ -452,7 +493,7 @@ Live source: `apps/web/components/surface-views.tsx` (`SettingsSurfaceView`); de
 | `settings.developer-tools-card` | card | Developer controls | Admin-only inventory-labels toggle, version-footer toggle, and implementation-roadmap entry. |
 | `settings.theme-settings-link` | button | Open theme settings | Routed link from Settings to the consolidated theme settings page. |
 | `settings.inventory-labels-toggle` | control | Inventory labels | Admin-only debug toggle that shows the app's inventory label overlay for QA and code review. |
-| `settings.build-footer-toggle` | control | Version footer | Admin-only local browser preference that shows or hides the shared version footer at the bottom of pages. |
+| `settings.build-footer-toggle` | control | Build details | Admin-only local browser preference that shows or hides the optional last reboot/rebuild detail while the current build remains visible. |
 | `settings.speech-voice-toggle` | control | Speech voice | Male/female speech preference that is mirrored into the reader audio controls and persisted through the settings API. |
 | `settings.roadmap-card` | card | Vocabulary roadmap | Direct Settings entry to the language-pack implementation roadmap. |
 | `settings.loading-state` | region | Settings loading | Loading skeleton for settings. |
@@ -500,12 +541,15 @@ Live source: `apps/web/components/surface-views.tsx` (`StudySurfaceView`); demo 
 | `study.practice-card` | card | Practice card | Active practice card with ordered word introductions followed by randomized axis drills, reveal feedback, intro pronunciation, typed-answer, and progression controls. |
 | `study.practice-pronunciation-guide` | region | Pronunciation guide | Compact pronunciation line, audio button, and syllable breakdown shown only on the first introduction card for a term. |
 | `study.practice-answer-input` | region | Answer input | Single-line learner response field for the active practice term. |
+| `study.practice-input-composition` | region | Japanese input composition | Visible Japanese-only helper showing the composed answer while romaji is converted to hiragana; direct kana remains available. |
 | `study.practice-answer-submit` | button | Check answer | Submits the typed practice response against the stored meaning. |
 | `study.practice-navigation` | region | Practice navigation | Previous, next-word, check-answer, and gated next controls for the active practice card, with the intro phase advancing immediately and assessment cards unlocking after a checked answer or Not sure response. |
 | `study.practice-previous` | button | Previous term | Moves to the previous practice term. |
 | `study.practice-next` | button | Next term | Moves to the next intro or assessment card, and advances to the next introduction chunk when the current chunk is finished. |
 | `study.practice-not-sure` | button | Not sure | Reveals the meaning and allows the learner to continue when they cannot provide an answer during an assessment card. |
 | `study.practice-answer-feedback` | region | Answer feedback | Correct/incorrect feedback after checking the typed response. |
+| `study.practice-auto-advance` | region | Correct-answer auto-advance | Short, visible countdown after a correct answer before the next assessment card opens. |
+| `study.practice-auto-advance-cancel` | button | Stay on current card | Cancels the correct-answer auto-advance countdown so the learner can review the current card. |
 | `study.loading-state` | region | Study loading | Loading skeleton for the study queue. |
 | `study.error-state` | card | Study error | Study queue request error. |
 
@@ -584,18 +628,22 @@ Use this section to move from a component ID to the issue that owns its pending 
 | `preview.home.recent-analyses`, `preview.home.recent-analysis-row`, `analysis.difficulty-card`, `analysis.estimated-level-card`, `analysis.vocabulary-distribution-card`, `analysis.average-vocabulary-level-card`, `analysis.unknown-words-card`, `analysis.estimated-comprehension-card`, `analysis.recommendation-card` | [#42](https://github.com/TextPlex/textplex/issues/42) | Define the canonical difficulty/expected-HSK metric and wire the live and preview consumers. |
 | `analysis.*`, `reader.*` analytics regions | [#31](https://github.com/TextPlex/textplex/issues/31) | Broader reader-detail analytics work; #42 owns the difficulty/HSK metric contract. |
 | `reader.beginning-action` | [#93](https://github.com/TextPlex/textplex/issues/93) | Discoverable escape hatch for opening a book at its first page when the reader starts elsewhere. |
-| `admin-feedback.page`, `admin-feedback.filters`, `admin-feedback.tester-list`, `admin-feedback.record-list`, `admin-feedback.detail`, `admin-feedback.plan` | [#79](https://github.com/TextPlex/textplex/issues/79)–[#84](https://github.com/TextPlex/textplex/issues/84) | Feedback operations surface for reviewing tester reports, opening GitHub-linked issues, and maintaining private tester nicknames. |
-| `admin.page`, `admin.hero`, `admin.summary-grid`, `admin.profile-summary-card`, `admin.reading-summary-card`, `admin.reading-depth-card`, `admin.exposure-summary-card`, `admin.activity-card`, `admin.breakdown-card`, `admin.scope-note` | Untracked | Admin-only aggregate usage console backed by local profile databases, book records, feedback files, and translation usage. |
+| `study.practice-input-composition`, `study.practice-auto-advance`, `study.practice-auto-advance-cancel` | [#88](https://github.com/ajth-work/textplex/issues/88) | Japanese Study romaji-to-hiragana composition with a visible, cancellable correct-answer auto-advance. |
+| `admin-feedback.page`, `admin-feedback.summary`, `admin-feedback.metrics`, `admin-feedback.filters`, `admin-feedback.tester-list`, `admin-feedback.record-list`, `admin-feedback.detail`, `admin-feedback.screenshots`, `admin-feedback.plan`, `admin-feedback.resolution` | [#79](https://github.com/TextPlex/textplex/issues/79)–[#84](https://github.com/TextPlex/textplex/issues/84) | Feedback operations surface for reviewing tester reports, opening GitHub-linked issues, maintaining private tester nicknames, recording triage/resolution decisions, and monitoring local feedback health. Roadmap: `docs/FEEDBACK_CONSOLE_ADMIN_ROADMAP.md`. |
+| `tester.page`, `tester.summary`, `tester.record-list`, `tester.detail`, `tester.original-feedback`, `tester.verification`, `tester.timeline`, `shell.feedback-notifications` | [#79](https://github.com/TextPlex/textplex/issues/79)–[#84](https://github.com/TextPlex/textplex/issues/84) | Authenticated tester feedback console and notification-driven implementation verification loop. |
+| `admin.nav`, `admin.page`, `admin.hero`, `admin.summary-grid`, `admin.profile-summary-card`, `admin.reading-summary-card`, `admin.reading-depth-card`, `admin.exposure-summary-card`, `admin.activity-card`, `admin.breakdown-card`, `admin.scope-note`, `admin.auth-status-card`, `admin.analytics-funnel-card`, `admin.analytics-value-card`, `admin.analytics-paywall-card`, `admin.analytics-feature-card`, `admin.analytics-feature-filter`, `admin.analytics-retention-card`, `admin.analytics-user-watchlist` | [#97](https://github.com/ajth-work/textplex/issues/97) | Admin-only aggregate usage and paid-value signal console backed by local profile databases, book records, feedback files, translation usage, and append-only analytics events, with role-aware feature-demand comparison in the admin card. |
 | `admin-theme.page`, `admin-theme.list`, `admin-theme.editor`, `admin-theme.ai-assistant`, `admin-theme.preview`, `admin-theme.color-controls`, `admin-theme.loading-state`, `admin-theme.error-state` | `theme-store.admin-editor` | Admin-only theme creation and editing surface under the existing theme-store initiative; creator publishing and compensation remain future scope. |
 | `progress.*`, `study.*`, `preview.vocabulary.*` | [#27](https://github.com/TextPlex/textplex/issues/27) | Multi-path insights dashboard and assessment-family progression. |
 | `settings.theme-settings-link`, `theme-settings.app-theme-card`, `theme-settings.behavior-card`, `theme-shop.route-hero`, `theme-shop.catalog-card`, `theme-shop.selected-preview`, `theme-shop.store-controls`, `theme-shop.search`, `theme-shop.category-nav`, `theme-shop.mode-tabs`, `theme-shop.catalog-grid`, `theme-shop.theme-option`, `theme-shop.collections-carousel`, `theme-shop.collection-slide`, `theme-shop.collection-arrows`, `theme-shop.collection-dots`, `theme-shop.collection-rail`, `theme-shop.bundle-card`, `theme-shop.preview-tuning`, `theme-shop.empty-state`, `theme-shop.save-action`, `theme-shop.loading-state`, `theme-shop.error-state` | Add theme store and commerce entitlements (Local pending) | The consolidated theme settings surface now includes the app-theme picker, theme behavior controls, the owned/full theme catalog, and the same future catalog and entitlement work for bundles, checkout, and fulfillment. |
-| `home.page`, `home.header`, `home.search`, `home.continue-reading`, `home.continue-reading-card`, `home.continue-reading-list`, `home.continue-reading-row`, `home.goals`, `home.weekly-goal`, `home.exposure-goal`, `home.empty-state`, `home.error-state`, `library.search-hero`, `library.generator-settings`, `library.generator-summary`, `library.language-filter`, `library.search`, `library.document-count`, `library.shelf`, `library.skeleton-card`, `library.book-card`, `library.book-info-button`, `library.book-open-button`, `library.generate-article-button`, `library.empty-state`, `library.error-state`, `reader.unavailable-state`, `shell.primary-nav`, `shell.secondary-nav`, `shell.reader-nav`, `shell.reader-nav-reveal` | Frontend migration Phase 7 (In progress) | Canonical Next home, library, and reader recovery slices use one focused shell navigation model; the missing-reader state routes learners to the Library, import flow, or practice-article generator. |
+| `home.page`, `home.header`, `home.search`, `home.continue-reading`, `home.continue-reading-card`, `home.continue-reading-list`, `home.continue-reading-row`, `home.goals`, `home.weekly-goal`, `home.exposure-goal`, `home.empty-state`, `home.error-state`, `library.search-hero`, `library.generator-settings`, `library.generator-summary`, `library.language-filter`, `library.search`, `library.document-count`, `library.shelf`, `library.skeleton-card`, `library.book-card`, `library.book-info-button`, `library.book-open-button`, `library.generate-article-button`, `library.empty-state`, `library.error-state`, `reader.unavailable-state`, `shell.primary-nav`, `shell.primary-nav-menu`, `shell.secondary-nav`, `shell.reader-nav`, `shell.reader-nav-reveal` | Frontend migration Phase 7 (In progress) | Canonical Next home, library, and reader recovery slices use one focused shell navigation model; the missing-reader state routes learners to the Library, import flow, or practice-article generator. |
 | `reader.header`, `reader.options-dialog`, `reader.navigation-hide-delay-section`, `reader.navigation-hide-delay-slider`, `reader.theme-section`, `reader.theme-grid`, `reader.theme-more-button`, `reader.session-summary-toggle`, `reader.session-summary-details`, `reader.reading-progress-module`, `reader.lookup-fallback-section`, `reader.page-card`, `reader.navigation-card`, `reader.sentence-tools`, `reader.token-mode-button`, `reader.source-sentence-card`, `reader.sentence-translation-card`, `reader.translation-reveal-card`, `reader.sentence-help-section`, `reader.meaning-line-toggle`, `reader.meaning-line-reveal-all-toggle`, `reader.meaning-line-reveal-all-action`, `reader.definition-trace-toggle`, `reader.tools-card`, `reader.token-display-settings`, `reader.token-text-size-control`, `reader.token-spacing-control`, `reader.token-inspector`, `reader.sentence-hsk-chart` | Consolidate standalone preview features into the Next.js app (Local pending) | Phase 2 reader parity slice; Next now owns the reader metadata, compact pager, compact visual progress strip, moved options-panel utilities, reader navigation hide-delay preference, recent-first theme picker, Google fallback usage summary, language-aware sentence tools row, compact session-active bar with a swipeable subpill rail, independent token text-size and spacing preferences, and a full-reveal escape hatch for incomplete meaning-line alignment while standalone remains the compatibility reference. |
 | `reader.word-audio-button`, `reader.definition-remembered-button`, `reader.definition-missed-button`, `reader.definition-segment`, `reader.russian-syllable-toggle`, `reader.token-audio-toggle`, `reader.token-audio-toast`, `reader.sentence-audio-speed`, `reader.audio-speed-toast`, `reader.reading-profile-card` | Add pronunciation freshness controls, definition feedback, and sentence audio playback (Local pending) | Selected-token playback, remembered/missed word feedback, syllable-chip audio, the Russian syllable display toggle, default-on token-tap audio with a first-use notice, and the local reading-profile tracker details. |
-| `import.form`, `import.translation-confirmation-card`, `import.progress-card`, `book-detail.import-progress-card`, `import.recent-books-card`, `import.book-item` | Consolidate standalone preview features into the Next.js app (Local pending) | Phase 2 import slice; Next now submits pasted text and PDF uploads to the API, retains the latest background extraction across route changes, shows matching progress on book detail, and gates large translation preloads with a confirmation step. |
+| `reader.sentence-feedback-button`, `reader.definition-correction-button` | Untracked | Targeted reader correction feedback | Reuses the existing feedback dialog and persistence flow while storing whether a report targets the active sentence or selected word and capturing the exact content text. |
+| `import.form`, `import.progress-card`, `book-detail.import-progress-card`, `import.recent-books-card`, `import.book-item` | Consolidate standalone preview features into the Next.js app (Local pending) | Phase 2 import slice; Next now submits pasted text and PDF uploads to the API, retains the latest background extraction across route changes, shows matching progress on book detail, and uses a bounded Reader translation buffer instead of import-time translation preloads. |
+| `import.wikipedia-random-card`, `import.wikipedia-random-button` | Untracked | Live and demo import surfaces expose a selected-target-language Wikipedia random article action backed by the FastAPI import pipeline. |
 | `analysis.difficulty-card`, `analysis.vocabulary-distribution-card`, `analysis.summary-card`, `analysis.generation-prompt-card`, `analysis.sentence-hsk-chart`, `analysis.page-hsk-chart`, `book-detail.extraction-snapshot-card`, `book-detail.generation-prompt-card`, `book-detail.page-hsk-chart`, `reader.sentence-hsk-chart` | Frontend migration Phase 3 (Local complete) | API-backed sentence/page/book HSK analytics now render in Next analysis and book-detail routes with compatibility previews retained. |
 | `settings.roadmap-card` | Untracked | Settings discovery entry for the existing Roadmap route; create a dedicated tracker item if roadmap navigation becomes a larger product initiative. |
-| `settings.build-footer-toggle`, `shell.build-footer` | Untracked | Local browser preference and shared footer that expose the current web app version and last reboot/rebuild time at the bottom of pages. |
+| `settings.build-footer-toggle`, `shell.build-footer` | Untracked | Local browser preference and shared footer that expose the current build on every page and optionally add the last reboot/rebuild time. |
 | `settings.speech-voice-toggle`, `reader.speech-voice-toggle` | Untracked | Shared male/female speech preference for browser playback across the Settings surface and reader audio controls. |
 | `profile.hosted-account-card` | Frontend migration Phase 5 (In Progress) | Authenticated read-only hosted profile hydration; local learner metrics remain the default profile source. |
 | `profile.email-change-form` | Frontend migration Phase 5 (In Progress) | Supabase Auth email-change request with double confirmation; learner databases remain keyed by immutable user ID. |

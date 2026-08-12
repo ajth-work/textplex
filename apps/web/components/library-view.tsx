@@ -30,7 +30,7 @@ const libraryLanguageOptions: LibraryLanguageOption[] = [
 type GeneratorCurriculumMode = "auto" | "study_program" | "exam";
 type GeneratorWindowBias = "safe" | "balanced" | "stretch";
 
-const generatorSentenceOptions = [15, 30, 45, 60] as const;
+const generatorSentenceOptions = [5, 10, 15, 30] as const;
 
 const generatorGenreOptions = [
   { value: "everyday", label: "Everyday life" },
@@ -222,11 +222,16 @@ function getGeneratorLevelOptions(
   return [...(examLevelOptionsByLanguage[languageCode] ?? [])];
 }
 
+function defaultExamLevel(languageCode: string): string {
+  return examLevelOptionsByLanguage[languageCode]?.[1]?.value ?? examLevelOptionsByLanguage[languageCode]?.[0]?.value ?? "";
+}
+
 function summarizeGeneratorSettings(
   languageCode: string,
   sentenceCount: number,
   curriculumMode: GeneratorCurriculumMode,
   curriculumLevel: string,
+  useLearnerVocabulary: boolean,
   genre: string,
   tone: string,
   windowBias: GeneratorWindowBias,
@@ -240,7 +245,8 @@ function summarizeGeneratorSettings(
     ...curriculumParts,
     generatorOptionLabel(generatorGenreOptions, genre),
     generatorOptionLabel(generatorToneOptions, tone),
-    generatorOptionLabel(generatorBiasOptions, windowBias),
+    useLearnerVocabulary ? generatorOptionLabel(generatorBiasOptions, windowBias) : "Level-calibrated",
+    useLearnerVocabulary ? "Learner vocabulary" : "JLPT / exam level only",
   ];
   return parts.filter(Boolean).join(" · ");
 }
@@ -361,9 +367,10 @@ export function LibraryView() {
   const [generationMessage, setGenerationMessage] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [generatorLanguageCode, setGeneratorLanguageCode] = useState("zh");
-  const [generatorSentenceCount, setGeneratorSentenceCount] = useState<(typeof generatorSentenceOptions)[number]>(30);
+  const [generatorSentenceCount, setGeneratorSentenceCount] = useState<(typeof generatorSentenceOptions)[number]>(10);
   const [generatorCurriculumMode, setGeneratorCurriculumMode] = useState<GeneratorCurriculumMode>("auto");
   const [generatorCurriculumLevel, setGeneratorCurriculumLevel] = useState("");
+  const [generatorUseLearnerVocabulary, setGeneratorUseLearnerVocabulary] = useState(true);
   const [generatorGenre, setGeneratorGenre] = useState("everyday");
   const [generatorTone, setGeneratorTone] = useState("explanatory");
   const [generatorWindowBias, setGeneratorWindowBias] = useState<GeneratorWindowBias>("balanced");
@@ -477,6 +484,7 @@ export function LibraryView() {
     generatorSentenceCount,
     generatorCurriculumMode,
     generatorCurriculumLevel,
+    generatorUseLearnerVocabulary,
     generatorGenre,
     generatorTone,
     generatorWindowBias,
@@ -506,9 +514,9 @@ export function LibraryView() {
 
     const validValues = new Set(generatorCurriculumLevelOptions.map((option) => option.value));
     if (!validValues.has(generatorCurriculumLevel)) {
-      setGeneratorCurriculumLevel("");
+      setGeneratorCurriculumLevel(!generatorUseLearnerVocabulary && generatorCurriculumMode === "exam" ? defaultExamLevel(generatorLanguage) : "");
     }
-  }, [books, generatorCurriculumLevel, generatorCurriculumLevelOptions, generatorCurriculumMode, generatorLanguageCode, generatorLanguageTouched, languageCode, progress]);
+  }, [books, generatorCurriculumLevel, generatorCurriculumLevelOptions, generatorCurriculumMode, generatorLanguage, generatorLanguageCode, generatorLanguageTouched, generatorUseLearnerVocabulary, languageCode, progress]);
 
   async function generatePracticeArticle() {
     const generatedLanguageCode = resolveGeneratedLanguageCode();
@@ -526,6 +534,7 @@ export function LibraryView() {
         style: generatorTone,
         curriculum_mode: generatorCurriculumMode,
         curriculum_level: generatorCurriculumLevel || null,
+        use_learner_vocabulary: generatorUseLearnerVocabulary,
         sentence_count: generatorSentenceCount,
         known_lemma_limit: limits.known,
         recent_lemma_limit: limits.recent,
@@ -655,10 +664,27 @@ export function LibraryView() {
               <span>Curriculum ceiling</span>
               <select value={generatorCurriculumMode} onChange={(event) => setGeneratorCurriculumMode(event.target.value as GeneratorCurriculumMode)}>
                 {generatorCurriculumModeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
+                  <option key={option.value} value={option.value} disabled={!generatorUseLearnerVocabulary && option.value === "auto"}>
                     {option.label}
                   </option>
                 ))}
+              </select>
+            </label>
+            <label className="library-generator-field">
+              <span>Vocabulary source</span>
+              <select
+                value={generatorUseLearnerVocabulary ? "learner" : "level"}
+                onChange={(event) => {
+                  const useLearnerVocabulary = event.target.value === "learner";
+                  setGeneratorUseLearnerVocabulary(useLearnerVocabulary);
+                  if (!useLearnerVocabulary && generatorCurriculumMode === "auto") {
+                    setGeneratorCurriculumMode("exam");
+                    setGeneratorCurriculumLevel(defaultExamLevel(generatorLanguage));
+                  }
+                }}
+              >
+                <option value="learner">Learner vocabulary window</option>
+                <option value="level">JLPT / exam level only</option>
               </select>
             </label>
             <label className="library-generator-field">
@@ -698,7 +724,7 @@ export function LibraryView() {
             </label>
             <label className="library-generator-field">
               <span>Vocabulary balance</span>
-              <select value={generatorWindowBias} onChange={(event) => setGeneratorWindowBias(event.target.value as GeneratorWindowBias)}>
+              <select value={generatorWindowBias} onChange={(event) => setGeneratorWindowBias(event.target.value as GeneratorWindowBias)} disabled={!generatorUseLearnerVocabulary}>
                 {generatorBiasOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -716,7 +742,9 @@ export function LibraryView() {
               />
             </label>
             <p className="library-generator-note">
-              The level ceiling is applied where TextPlex has a matching study program or proficiency ladder; otherwise the prompt still carries the selected ceiling as guidance.
+              {generatorUseLearnerVocabulary
+                ? "The level ceiling is applied where TextPlex has a matching study program or proficiency ladder; the learner window still guides word selection."
+                : "The selected JLPT or exam level guides vocabulary and grammar. Learner-profile terms are not injected into the article."}
             </p>
           </div>
         </details>

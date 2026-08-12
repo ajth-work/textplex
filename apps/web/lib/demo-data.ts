@@ -511,9 +511,10 @@ export const demoGeneratedArticlePromptDetails: GeneratedReaderArticlePromptDeta
   curriculum_mode: "exam",
   curriculum_level: "HSK 4",
   curriculum_label: "HSK 4",
-  requested_sentence_count: 30,
-  actual_sentence_count: 30,
-  prompt_version: "reader-article-v1",
+  use_learner_vocabulary: true,
+  requested_sentence_count: 10,
+  actual_sentence_count: 10,
+          prompt_version: "reader-article-v4",
   model: "gpt-5.4-mini",
   generation_source: "template",
   max_new_lemmas: 8,
@@ -530,7 +531,7 @@ export const demoGeneratedArticlePromptDetails: GeneratedReaderArticlePromptDeta
     "Use the known terms heavily, reuse the recent terms naturally, and introduce the upcoming terms gently.\n" +
     "Do not exceed the new-lemma budget. Keep the wording concrete and readable.\n" +
     "Return a JSON object with article_text, used_known_terms, used_recent_terms, used_upcoming_terms, unknown_lemma_count, and sentence_count.\n" +
-    'Request payload: {"curriculum_level":"HSK 4","curriculum_mode":"exam","genre":"everyday","known_terms":[{"term":"是","mastery_level":"mastered","confidence_score":0.91}],"language_code":"zh","language_label":"Chinese","max_new_lemmas":8,"recent_terms":[{"term":"我们","mastery_level":"review","confidence_score":0.48}],"sentence_count":30,"topic":"daily life in a city","tone":"explanatory","upcoming_terms":[{"term":"月份","mastery_level":"HSK 4","confidence_score":0.2}]}',
+    'Request payload: {"curriculum_level":"HSK 4","curriculum_mode":"exam","genre":"everyday","known_terms":[{"term":"是","mastery_level":"mastered","confidence_score":0.91}],"language_code":"zh","language_label":"Chinese","max_new_lemmas":8,"recent_terms":[{"term":"我们","mastery_level":"review","confidence_score":0.48}],"sentence_count":10,"topic":"daily life in a city","tone":"explanatory","upcoming_terms":[{"term":"月份","mastery_level":"HSK 4","confidence_score":0.2}]}',
   known_terms: [
     { term: "是", pronunciation: "shì", definition_short: "to be", frequency_rank: 1, confidence_score: 0.91, mastery_level: "mastered" },
   ],
@@ -880,9 +881,11 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
   if (route === "/import") {
     return {
       default_language: "zh",
-      supported_inputs: ["pdf", "paste"],
+      supported_inputs: ["pdf", "epub", "paste", "wikipedia-random"],
       can_upload_pdf: true,
+      can_upload_epub: true,
       can_paste_text: true,
+      can_import_random_wikipedia: true,
       recent_books: [
         {
           book_id: demoBookRecord.id,
@@ -1576,7 +1579,7 @@ export function getDemoPostResponse(pathname: string, body: unknown): unknown | 
       title: `${titlePrefix ? `${titlePrefix} ` : ""}Practice article: ${topic}`,
       language_code: languageCode,
       topic,
-      sentence_count: request?.sentence_count ?? 30,
+      sentence_count: request?.sentence_count ?? 10,
       article_text: `This is a demo practice article about ${topic}. It uses the existing sample book in demo mode.`,
       known_terms: [],
       recent_terms: [],

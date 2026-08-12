@@ -16,6 +16,10 @@ from app.core.paths import (
     resolve_books_root,
     resolve_user_data_root,
 )
+from app.schemas.admin_analytics import (
+    AdminAnalyticsOverview,
+    AnalyticsEventCreateRequest,
+)
 from app.schemas.admin_usage import AdminUsageSummary
 from app.schemas.auth import (
     AuthMeResponse,
@@ -34,8 +38,11 @@ from app.schemas.books import (
     SentenceTranslationResponse,
     TextImportRequest,
     TextParseRequest,
+    TranslationMode,
+    WikipediaRandomImportRequest,
 )
 from app.schemas.feedback import (
+    FeedbackContext,
     FeedbackCreateRequest,
     FeedbackDigestRequest,
     FeedbackDigestResponse,
@@ -45,6 +52,7 @@ from app.schemas.feedback import (
     FeedbackNotificationReadRequest,
     FeedbackRecord,
     FeedbackStatusUpdateRequest,
+    FeedbackTesterVerificationRequest,
     TesterListResponse,
     TesterNicknameUpdateRequest,
     TesterRecord,
@@ -104,6 +112,7 @@ from app.schemas.themes import (
     ThemeEntitlementResponse,
 )
 from app.services.admin_usage import get_admin_usage_summary
+from app.services.analytics import get_admin_analytics_overview, record_analytics_event
 from app.services.auth import (
     AuthenticatedUserContext,
     get_authenticated_user_context,
@@ -123,7 +132,6 @@ from app.services.book_extraction import (
     load_page_artifact,
     parse_text_into_page_artifact,
     prefetch_book_sentence_translation_window,
-    preload_book_sentence_translations,
     recover_book_extraction_result,
     translate_page_sentence,
 )
@@ -140,14 +148,21 @@ from app.services.commerce import (
     verify_sandbox_signature,
 )
 from app.services.feedback import (
+    MAX_FEEDBACK_SCREENSHOT_BYTES,
+    MAX_FEEDBACK_SCREENSHOTS,
+    MAX_FEEDBACK_SCREENSHOTS_TOTAL_BYTES,
+    analyze_feedback_screenshots,
     create_feedback,
     create_github_issue,
+    get_feedback_screenshot_file,
     list_feedback,
     list_testers,
     list_user_notifications,
     mark_user_notifications_read,
+    submit_tester_verification,
     update_feedback_status,
     update_tester_nickname,
+    validate_feedback_screenshot,
 )
 from app.services.feedback_digest import (
     feedback_digest_enabled,
@@ -193,6 +208,7 @@ from app.services.theme_admin import (
     suggest_theme_with_ai,
 )
 from app.services.themes import get_theme_catalog, validate_theme_settings
+from app.services.wikipedia import WikipediaImportError, fetch_random_article
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -227,6 +243,8 @@ AUTHENTICATED_USER_CONTEXT = Depends(get_authenticated_user_context)
 PUBLIC_USER_CONTEXT = Depends(get_public_user_context)
 CURRENT_USER = Depends(get_current_user)
 UPLOAD_FILE = File(...)
+OPTIONAL_SCREENSHOT_FILE = File(default=None)
+OPTIONAL_SCREENSHOTS_FILE = File(default=None)
 REQUIRED_LANGUAGE_CODE = Form(...)
 OPTIONAL_TITLE = Form(default=None)
 OPTIONAL_AUTHOR = Form(default=None)
@@ -379,7 +397,6 @@ def _extract_and_persist_book(
     *,
     page_start: int,
     page_count: int | None,
-    translation_mode: str = "off",
 ) -> BookRecord:
     extraction_path, extracted_page_count = extract_book_text(
         book=book,
@@ -390,15 +407,6 @@ def _extract_and_persist_book(
         data_root=_books_root(),
         owner_id=book.owner_id,
     )
-    if translation_mode == "preload":
-        preload_book_sentence_translations(
-            book=book,
-            page_start=page_start,
-            page_count=page_count if page_count is not None else extracted_page_count,
-            data_root=_books_root(),
-            owner_id=book.owner_id,
-        )
-
     book.extraction_status = "complete"
     book.extracted_page_count = extracted_page_count
     book.extraction_path = str(extraction_path)
@@ -457,7 +465,7 @@ def _fail_book_extraction(book: BookRecord) -> None:
     _persist_book(book)
 
 
-def _start_background_extraction(book: BookRecord, *, page_start: int, page_count: int | None, translation_mode: str = "off") -> None:
+def _start_background_extraction(book: BookRecord, *, page_start: int, page_count: int | None) -> None:
     _initialize_book_extraction(book, page_count=page_count)
     _persist_book(book)
 
@@ -481,14 +489,6 @@ def _start_background_extraction(book: BookRecord, *, page_start: int, page_coun
                 owner_id=book.owner_id,
                 progress_callback=progress_callback,
             )
-            if translation_mode == "preload":
-                preload_book_sentence_translations(
-                    book=book,
-                    page_start=page_start,
-                    page_count=page_count if page_count is not None else extracted_page_count,
-                    data_root=_books_root(),
-                    owner_id=book.owner_id,
-                )
         except (OSError, RuntimeError, TypeError, ValueError):
             _fail_book_extraction(book)
             return
@@ -549,12 +549,74 @@ def submit_feedback(
     payload: FeedbackCreateRequest,
     context: AuthenticatedUserContext | None = PUBLIC_USER_CONTEXT,
 ) -> FeedbackRecord:
-    return create_feedback(
+    record = create_feedback(
         app.state.data_root,
         payload.original_text,
         payload.context,
         user_id=context.user.id if context else None,
     )
+    record_analytics_event(
+        app.state.data_root,
+        event_name="feedback_submitted",
+        account_id=context.user.id if context else None,
+        account_role=context.user.account_role if context else None,
+        feature_key="feedback",
+        route=payload.context.route,
+        metadata={"language_code": payload.context.language_code},
+    )
+    return record
+
+
+@app.post("/feedback/with-screenshot", response_model=FeedbackRecord)
+async def submit_feedback_with_screenshot(
+    original_text: str = Form(...),
+    context: str = Form(...),
+    screenshot: UploadFile | None = OPTIONAL_SCREENSHOT_FILE,
+    screenshots: list[UploadFile] | None = OPTIONAL_SCREENSHOTS_FILE,
+    user_context: AuthenticatedUserContext | None = PUBLIC_USER_CONTEXT,
+) -> FeedbackRecord:
+    try:
+        parsed_context = FeedbackContext.model_validate_json(context)
+        FeedbackCreateRequest(original_text=original_text, context=parsed_context)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    uploaded_files = list(screenshots or [])
+    if screenshot is not None:
+        uploaded_files.insert(0, screenshot)
+    if len(uploaded_files) > MAX_FEEDBACK_SCREENSHOTS:
+        raise HTTPException(status_code=422, detail=f"A feedback report may include up to {MAX_FEEDBACK_SCREENSHOTS} screenshots.")
+
+    screenshot_uploads: list[tuple[str, str, bytes]] = []
+    total_size = 0
+    for uploaded_file in uploaded_files:
+        screenshot_bytes = await uploaded_file.read(MAX_FEEDBACK_SCREENSHOT_BYTES + 1)
+        try:
+            validate_feedback_screenshot(uploaded_file.filename or "screenshot", uploaded_file.content_type or "", screenshot_bytes)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        total_size += len(screenshot_bytes)
+        if total_size > MAX_FEEDBACK_SCREENSHOTS_TOTAL_BYTES:
+            raise HTTPException(status_code=422, detail="The combined screenshot size must be 15 MB or smaller.")
+        screenshot_uploads.append((uploaded_file.filename or "screenshot", uploaded_file.content_type or "", screenshot_bytes))
+
+    record = create_feedback(
+        app.state.data_root,
+        original_text,
+        parsed_context,
+        user_id=user_context.user.id if user_context else None,
+        screenshot_uploads=screenshot_uploads,
+    )
+    record_analytics_event(
+        app.state.data_root,
+        event_name="feedback_submitted",
+        account_id=user_context.user.id if user_context else None,
+        account_role=user_context.user.account_role if user_context else None,
+        feature_key="feedback",
+        route=parsed_context.route,
+        metadata={"language_code": parsed_context.language_code, "screenshot_count": len(screenshot_uploads)},
+    )
+    return record
 
 
 @app.get("/feedback", response_model=FeedbackListResponse)
@@ -563,6 +625,36 @@ def get_feedback(
 ) -> FeedbackListResponse:
     require_permission(context, "accounts.manage")
     return FeedbackListResponse(records=list_feedback(app.state.data_root))
+
+
+@app.get("/feedback/{feedback_id}/screenshots/{screenshot_index}")
+def get_feedback_screenshot(
+    feedback_id: str,
+    screenshot_index: int,
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> FileResponse:
+    require_permission(context, "accounts.manage")
+    try:
+        _record, screenshot, screenshot_path = get_feedback_screenshot_file(app.state.data_root, feedback_id, screenshot_index)
+    except (FileNotFoundError, IndexError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(screenshot_path, media_type=screenshot.content_type, filename=screenshot.filename)
+
+
+@app.post("/feedback/{feedback_id}/screenshot-analysis", response_model=FeedbackRecord)
+def analyze_feedback_screenshot_images(
+    feedback_id: str,
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> FeedbackRecord:
+    require_permission(context, "accounts.manage")
+    try:
+        return analyze_feedback_screenshots(app.state.data_root, feedback_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.get("/feedback/testers", response_model=TesterListResponse)
@@ -627,9 +719,33 @@ def change_feedback_status(
             payload.status,
             note=payload.note,
             changed_by=context.user.id,
+            implementation_build=payload.implementation_build,
+            verification_instructions=payload.verification_instructions,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/feedback/{feedback_id}/verification", response_model=FeedbackRecord)
+def verify_feedback_fix(
+    feedback_id: str,
+    payload: FeedbackTesterVerificationRequest,
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> FeedbackRecord:
+    try:
+        return submit_tester_verification(
+            app.state.data_root,
+            feedback_id,
+            payload.response,
+            note=payload.note,
+            user_id=context.user.id,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/feedback/{feedback_id}/github-issue", response_model=FeedbackRecord)
@@ -690,17 +806,68 @@ def import_text(
     context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookRecord:
     try:
-        return import_text_into_book(
+        record = import_text_into_book(
             text=payload.text,
             language_code=payload.language_code,
             title=payload.title,
             author=payload.author,
-            translation_mode=payload.translation_mode,
             data_root=_books_root(),
             owner_id=context.user.id if context else None,
         )
+        record_analytics_event(
+            app.state.data_root,
+            event_name="book_imported",
+            account_id=context.user.id if context else None,
+            account_role=context.user.account_role if context else None,
+            feature_key="book_import",
+            route="/import",
+            metadata={"language_code": payload.language_code, "source": "text"},
+        )
+        return record
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/wikipedia/random-import", response_model=BookRecord)
+def import_random_wikipedia_article(
+    payload: WikipediaRandomImportRequest,
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
+) -> BookRecord:
+    try:
+        article = fetch_random_article(payload.language_code)
+        record = import_text_into_book(
+            text=article.text,
+            language_code=article.language_code,
+            title=article.title,
+            author="Wikipedia",
+            data_root=_books_root(),
+            owner_id=context.user.id if context else None,
+        )
+    except WikipediaImportError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Random Wikipedia article import failed for language %s", payload.language_code)
+        raise HTTPException(status_code=502, detail="Wikipedia article could not be imported. Please try again.") from exc
+
+    try:
+        record_analytics_event(
+            app.state.data_root,
+            event_name="book_imported",
+            account_id=context.user.id if context else None,
+            account_role=context.user.account_role if context else None,
+            feature_key="wikipedia_random_import",
+            route="/import",
+            metadata={
+                "language_code": article.language_code,
+                "source": "wikipedia_random",
+                "title": article.title,
+            },
+        )
+    except Exception:
+        logger.exception("Could not record analytics for random Wikipedia article import")
+    return record
 
 
 @app.post("/articles/generate", response_model=GeneratedReaderArticleResponse)
@@ -709,11 +876,21 @@ def generate_article(
     context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> GeneratedReaderArticleResponse:
     try:
-        return generate_reader_article(
+        response = generate_reader_article(
             app.state.data_root,
             payload,
             owner_id=context.user.id if context else None,
         )
+        record_analytics_event(
+            app.state.data_root,
+            event_name="practice_generated",
+            account_id=context.user.id if context else None,
+            account_role=context.user.account_role if context else None,
+            feature_key="article_generation",
+            route="/library",
+            metadata={"language_code": payload.language_code, "genre": payload.genre},
+        )
+        return response
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -780,7 +957,6 @@ def import_book(
             book,
             page_start=payload.page_start,
             page_count=payload.page_count,
-            translation_mode=payload.translation_mode,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -797,12 +973,12 @@ async def upload_book(
     page_start: int = OPTIONAL_PAGE_START,
     page_count: int | None = OPTIONAL_PAGE_COUNT,
     ocr_provider: str | None = OPTIONAL_OCR_PROVIDER,
-    translation_mode: str = TRANSLATION_MODE,
+    translation_mode: TranslationMode = TRANSLATION_MODE,
     context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookRecord:
     filename = Path(file.filename or "uploaded.pdf").name
-    if Path(filename).suffix.lower() != ".pdf":
-        raise HTTPException(status_code=400, detail="TextPlex import currently accepts PDF files only.")
+    if Path(filename).suffix.lower() not in {".pdf", ".epub"}:
+        raise HTTPException(status_code=400, detail="TextPlex import currently accepts PDF or EPUB files only.")
 
     uploads_root = app.state.data_root / "uploads"
     uploads_root.mkdir(parents=True, exist_ok=True)
@@ -817,7 +993,7 @@ async def upload_book(
             while chunk := await file.read(1024 * 1024):
                 total_bytes += len(chunk)
                 if total_bytes > _max_upload_bytes():
-                    raise HTTPException(status_code=413, detail="Uploaded PDF exceeds the configured size limit.")
+                    raise HTTPException(status_code=413, detail="Uploaded file exceeds the configured size limit.")
                 destination.write(chunk)
         book = import_book_from_path(
             upload_path,
@@ -831,7 +1007,7 @@ async def upload_book(
             data_root=_books_root(),
             owner_id=context.user.id if context else None,
         )
-        _start_background_extraction(book, page_start=page_start, page_count=page_count, translation_mode=translation_mode)
+        _start_background_extraction(book, page_start=page_start, page_count=page_count)
         succeeded = True
         return book
     except FileNotFoundError as exc:
@@ -1115,7 +1291,18 @@ def open_learning_session(
     context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> ReadingSessionRecord:
     _book_exists(payload.book_id, context)
-    return create_reading_session(app.state.data_root, payload, owner_id=context.user.id if context else None)
+    record = create_reading_session(app.state.data_root, payload, owner_id=context.user.id if context else None)
+    record_analytics_event(
+        app.state.data_root,
+        event_name="reading_session_started",
+        account_id=context.user.id if context else None,
+        account_role=context.user.account_role if context else None,
+        session_id=record.id,
+        feature_key="reader",
+        route="/reader",
+        metadata={"book_id": payload.book_id},
+    )
+    return record
 
 
 @app.post("/learning/page-reads", response_model=PageReadRecord)
@@ -1125,7 +1312,18 @@ def create_page_read(
 ) -> PageReadRecord:
     _book_exists(payload.book_id, context)
     try:
-        return record_page_read(app.state.data_root, payload, owner_id=context.user.id if context else None)
+        record = record_page_read(app.state.data_root, payload, owner_id=context.user.id if context else None)
+        record_analytics_event(
+            app.state.data_root,
+            event_name="page_read",
+            account_id=context.user.id if context else None,
+            account_role=context.user.account_role if context else None,
+            session_id=payload.session_id,
+            feature_key="reader",
+            route="/reader",
+            metadata={"book_id": payload.book_id, "page_number": payload.page_number},
+        )
+        return record
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -1137,7 +1335,18 @@ def create_sentence_read(
 ) -> SentenceReadRecord:
     _book_exists(payload.book_id, context)
     try:
-        return record_sentence_read(app.state.data_root, payload, owner_id=context.user.id if context else None)
+        record = record_sentence_read(app.state.data_root, payload, owner_id=context.user.id if context else None)
+        record_analytics_event(
+            app.state.data_root,
+            event_name="sentence_read",
+            account_id=context.user.id if context else None,
+            account_role=context.user.account_role if context else None,
+            session_id=payload.session_id,
+            feature_key="reader",
+            route="/reader",
+            metadata={"book_id": payload.book_id, "page_number": payload.page_number},
+        )
+        return record
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -1149,7 +1358,17 @@ def create_study_vocabulary_item(
 ) -> StudyVocabularyItemRecord:
     _book_exists(payload.book_id, context)
     try:
-        return record_study_vocabulary_item(app.state.data_root, payload, owner_id=context.user.id if context else None)
+        record = record_study_vocabulary_item(app.state.data_root, payload, owner_id=context.user.id if context else None)
+        record_analytics_event(
+            app.state.data_root,
+            event_name="vocabulary_saved",
+            account_id=context.user.id if context else None,
+            account_role=context.user.account_role if context else None,
+            feature_key="study",
+            route="/study",
+            metadata={"book_id": payload.book_id, "language_code": payload.language_code},
+        )
+        return record
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -1211,13 +1430,23 @@ def lookup_lexicon(
     allow_google_fallback: bool = False,
     context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> LexiconLookupResponse:
-    return lookup_lexicon_entry(
+    response = lookup_lexicon_entry(
         data_root=app.state.data_root,
         language_code=language_code,
         term=term,
         allow_google_fallback=allow_google_fallback,
         owner_id=context.user.id if context else None,
     )
+    record_analytics_event(
+        app.state.data_root,
+        event_name="translation_used" if allow_google_fallback else "definition_opened",
+        account_id=context.user.id if context else None,
+        account_role=context.user.account_role if context else None,
+        feature_key="translation" if allow_google_fallback else "dictionary",
+        route="/reader",
+        metadata={"language_code": language_code, "google_fallback": allow_google_fallback},
+    )
+    return response
 
 
 @app.get("/lexicon/google-translate/usage", response_model=GoogleTranslateUsageSummary)
@@ -1241,6 +1470,36 @@ def admin_usage(
 ) -> AdminUsageSummary:
     require_permission(context, "usage.global.read")
     return get_admin_usage_summary(app.state.data_root)
+
+
+@app.post("/analytics/events")
+def create_analytics_event(
+    payload: AnalyticsEventCreateRequest,
+    context: AuthenticatedUserContext | None = PUBLIC_USER_CONTEXT,
+) -> dict[str, str]:
+    event_id = record_analytics_event(
+        app.state.data_root,
+        event_id=payload.event_id,
+        event_name=payload.event_name,
+        occurred_at=payload.occurred_at,
+        account_id=context.user.id if context else None,
+        account_role=context.user.account_role if context else None,
+        session_id=payload.session_id,
+        route=payload.route,
+        feature_key=payload.feature_key,
+        metadata=payload.metadata,
+    )
+    if event_id is None:
+        raise HTTPException(status_code=503, detail="Analytics storage is unavailable.")
+    return {"event_id": event_id}
+
+
+@app.get("/admin/analytics/overview", response_model=AdminAnalyticsOverview)
+def admin_analytics_overview(
+    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
+) -> AdminAnalyticsOverview:
+    require_permission(context, "usage.global.read")
+    return get_admin_analytics_overview(app.state.data_root)
 
 
 @app.get("/analysis/{book_id}", response_model=BookAnalysisSurfaceResponse)

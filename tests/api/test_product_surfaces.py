@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
@@ -93,12 +94,176 @@ def test_generated_article_endpoint_uses_template_fallback_when_openai_is_unavai
     assert generation["book_id"] == payload["book"]["id"]
     assert generation["title"] == payload["title"]
     assert generation["language_code"] == "zh"
-    assert generation["prompt_version"] == "reader-article-v1"
+    assert generation["prompt_version"] == "reader-article-v4"
     assert generation["model"] == "gpt-5.4-mini"
     assert generation["requested_sentence_count"] == 8
     assert generation["actual_sentence_count"] == 8
     assert "Request payload:" in generation["prompt_text"]
     assert generation["known_terms"] == payload["known_terms"]
+
+
+def test_generated_japanese_article_prompt_and_template_follow_japanese_conventions(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    app.state.data_root = tmp_path
+    client = TestClient(app)
+
+    response = client.post(
+        "/articles/generate",
+        json={
+            "language_code": "ja",
+            "topic": "通勤",
+            "genre": "dialogue",
+            "tone": "conversational",
+            "sentence_count": 5,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["generation_source"] == "template"
+    assert "「」" in client.get(f"/books/{payload['book']['id']}/generation").json()["prompt_text"]
+    assert "朝の家" in client.get(f"/books/{payload['book']['id']}/generation").json()["prompt_text"]
+    assert "semantic brief" in client.get(f"/books/{payload['book']['id']}/generation").json()["prompt_text"]
+    assert " " not in payload["article_text"]
+    assert "。 " not in payload["article_text"]
+
+
+def test_generated_japanese_article_rejects_unidiomatic_model_output(tmp_path: Path, monkeypatch) -> None:
+    from app.services import generated_articles as generated_articles_service
+
+    app.state.data_root = tmp_path
+    monkeypatch.setattr(
+        generated_articles_service,
+        "_call_openai",
+        lambda _prompt: {
+            "output_text": json.dumps(
+                {
+                    "article_text": "私の一日は、朝の家から始まります。" * 5,
+                    "used_known_terms": [],
+                    "used_recent_terms": [],
+                    "used_upcoming_terms": [],
+                    "unknown_lemma_count": 0,
+                    "sentence_count": 5,
+                },
+                ensure_ascii=False,
+            )
+        },
+    )
+
+    response = TestClient(app).post(
+        "/articles/generate",
+        json={"language_code": "ja", "topic": "通勤", "sentence_count": 5},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["generation_source"] == "template"
+    assert "朝の家" not in payload["article_text"]
+    assert "今日は通勤について、短い文章を読みます。" in payload["article_text"]
+
+
+def test_generated_japanese_article_can_use_jlpt_level_without_learner_window(tmp_path: Path, monkeypatch) -> None:
+    from app.services import generated_articles as generated_articles_service
+
+    captured_prompt: dict[str, str] = {}
+    article_text = "今日は通勤について考えます。朝は家を出る前に予定を確認します。駅まで歩きながら短い文を読みます。電車の中で新しい表現を復習します。夜に内容をもう一度確認します。"
+
+    def fake_call_openai(prompt: str) -> dict[str, str]:
+        captured_prompt["value"] = prompt
+        return {
+            "output_text": json.dumps(
+                {
+                    "article_text": article_text,
+                    "used_known_terms": [],
+                    "used_recent_terms": [],
+                    "used_upcoming_terms": [],
+                    "unknown_lemma_count": 5,
+                    "sentence_count": 5,
+                },
+                ensure_ascii=False,
+            )
+        }
+
+    app.state.data_root = tmp_path
+    monkeypatch.setattr(generated_articles_service, "_call_openai", fake_call_openai)
+
+    response = TestClient(app).post(
+        "/articles/generate",
+        json={
+            "language_code": "ja",
+            "topic": "通勤",
+            "curriculum_mode": "exam",
+            "curriculum_level": "JLPT N3",
+            "use_learner_vocabulary": False,
+            "sentence_count": 5,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["generation_source"] == "openai"
+    details = TestClient(app).get(f"/books/{payload['book']['id']}/generation").json()
+    assert details["use_learner_vocabulary"] is False
+    assert details["curriculum_level"] == "JLPT N3"
+    assert "learner vocabulary window is disabled" in captured_prompt["value"]
+    assert '"known_terms": []' in captured_prompt["value"]
+
+
+def test_generated_article_rejects_model_sentence_count_mismatch(tmp_path: Path, monkeypatch) -> None:
+    from app.services import generated_articles as generated_articles_service
+
+    monkeypatch.setattr(
+        generated_articles_service,
+        "_call_openai",
+        lambda _prompt: {
+            "output_text": json.dumps(
+                {
+                    "article_text": "週末、私は新しい車を買うために店へ行った。",
+                    "used_known_terms": [],
+                    "used_recent_terms": [],
+                    "used_upcoming_terms": [],
+                    "unknown_lemma_count": 1,
+                    "sentence_count": 1,
+                },
+                ensure_ascii=False,
+            )
+        },
+    )
+    app.state.data_root = tmp_path
+
+    response = TestClient(app).post(
+        "/articles/generate",
+        json={"language_code": "ja", "topic": "買い物", "sentence_count": 30},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["generation_source"] == "template"
+    assert payload["sentence_count"] == 30
+    assert payload["article_text"].count("。") == 30
+
+
+def test_generated_japanese_template_treats_english_topic_as_a_brief(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    app.state.data_root = tmp_path
+
+    topic = "A new soda factory is opening in the town"
+    response = TestClient(app).post(
+        "/articles/generate",
+        json={
+            "language_code": "ja",
+            "topic": topic,
+            "use_learner_vocabulary": False,
+            "curriculum_mode": "exam",
+            "curriculum_level": "JLPT N2",
+            "sentence_count": 5,
+        },
+    )
+
+    assert response.status_code == 200
+    article_text = response.json()["article_text"]
+    assert topic not in article_text
+    assert "今日は日常生活について" in article_text
 
 
 def test_generated_article_endpoint_survives_older_study_schema(tmp_path: Path, monkeypatch) -> None:

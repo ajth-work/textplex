@@ -1,5 +1,6 @@
 import { RoutePage } from "../../components/route-page";
 import { AdminOnly } from "../../components/admin-only";
+import { AdminSubnav } from "../../components/admin-subnav";
 import { languageShortCode } from "../../lib/language-options";
 
 type PlanStep = {
@@ -113,6 +114,7 @@ const languageTracker: LanguageTrack[] = [
 export default function RoadmapPage() {
   return (
     <AdminOnly>
+      <AdminSubnav />
       <RoutePage
       eyebrow="Roadmap"
       title="Implementation tracker"

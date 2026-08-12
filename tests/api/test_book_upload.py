@@ -112,4 +112,4 @@ def test_upload_book_endpoint_rejects_non_pdf(tmp_path_factory) -> None:
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "TextPlex import currently accepts PDF files only."
+    assert response.json()["detail"] == "TextPlex import currently accepts PDF or EPUB files only."

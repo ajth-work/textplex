@@ -10,6 +10,7 @@ const layoutSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "app", "
 const themeSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "lib", "theme.ts"), "utf8");
 const themeCatalogSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "lib", "theme-catalog.ts"), "utf8");
 const themeToggleSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "theme-toggle-button.tsx"), "utf8");
+const globalThemePickerSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "global-theme-picker.tsx"), "utf8");
 const appShellSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "app-shell.tsx"), "utf8");
 const stylesheetSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "app", "globals.css"), "utf8");
 
@@ -33,6 +34,11 @@ test("Settings menu cards use the shared route card spacing", () => {
   assert.match(surfaceSource, /InventoryInspectorToggle/);
   assert.match(mockSurfaceSource, /InventoryInspectorToggle/);
   assert.match(surfaceSource, /isTextPlexAdmin/);
+  assert.match(surfaceSource, /const isAdmin = isTextPlexAdmin\(authenticatedUser\)/);
+  assert.match(surfaceSource, /isAdmin \? \{ \.\.\.item, is_owned: true, preview_available: true \} : item/);
+  assert.match(globalThemePickerSource, /useEffect\(\(\) => \{[\s\S]*setTheme\(initialTheme\)/);
+  assert.match(globalThemePickerSource, /\}, \[initialTheme\]\);/);
+  assert.match(surfaceSource, /return "Admin review"/);
   assert.match(surfaceSource, /settings\.developer-tools-card/);
   assert.match(themeToggleSource, /shell\.theme-toggle/);
   assert.match(layoutSource, /<ThemeProvider>/);
@@ -41,6 +47,13 @@ test("Settings menu cards use the shared route card spacing", () => {
   assert.match(layoutSource, /prefers-color-scheme: light/);
   assert.match(layoutSource, /prefers-color-scheme: dark/);
   assert.match(layoutSource, /localStorage\.getItem\("textplex\.themeFollowSystem"\) === "on"/);
+  assert.match(layoutSource, /localStorage\.getItem\("textplex\.themeGridEnabled"\) === "on"/);
+  assert.match(themeSource, /DEFAULT_APP_THEME_GRID_ENABLED = false/);
+  assert.match(themeSource, /getThemeWallpaperPath, getThemeWallpaperThumbnailPath/);
+  assert.match(themeSource, /const thumbnailPath = getThemeWallpaperThumbnailPath\(theme\)/);
+  assert.match(themeSource, /const fullImagePath = getThemeWallpaperPath\(theme\)/);
+  assert.match(themeSource, /const fullImage = new Image\(\)/);
+  assert.match(themeSource, /fullImage\.onload = \(\) =>/);
   assert.match(layoutSource, /document\.cookie = "textplex\.theme="/);
   assert.match(layoutSource, /meta\[name="color-scheme"\]/);
   assert.match(themeSource, /querySelectorAll<HTMLMetaElement>\('meta\[name="theme-color"\]'\)/);

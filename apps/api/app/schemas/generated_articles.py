@@ -23,7 +23,8 @@ class GeneratedReaderArticleRequest(BaseModel):
     style: str = Field(default="explanatory", min_length=1, max_length=64)
     curriculum_mode: Literal["auto", "study_program", "exam"] = "auto"
     curriculum_level: str | None = Field(default=None, max_length=48)
-    sentence_count: int = Field(default=30, ge=5, le=80)
+    use_learner_vocabulary: bool = True
+    sentence_count: int = Field(default=10, ge=5, le=80)
     known_lemma_limit: int = Field(default=12, ge=0, le=50)
     recent_lemma_limit: int = Field(default=10, ge=0, le=50)
     upcoming_lemma_limit: int = Field(default=12, ge=0, le=50)
@@ -55,8 +56,9 @@ class GeneratedReaderArticlePromptDetails(BaseModel):
     curriculum_mode: Literal["auto", "study_program", "exam"]
     curriculum_level: str | None = None
     curriculum_label: str | None = None
-    requested_sentence_count: int = Field(default=30, ge=5, le=80)
-    actual_sentence_count: int = Field(default=30, ge=1, le=80)
+    use_learner_vocabulary: bool = True
+    requested_sentence_count: int = Field(default=10, ge=5, le=80)
+    actual_sentence_count: int = Field(default=10, ge=1, le=80)
     prompt_version: str
     model: str
     generation_source: Literal["openai", "template"] = "template"

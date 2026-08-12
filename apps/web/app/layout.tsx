@@ -65,7 +65,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                   var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
                   var patternOpacity = Number(localStorage.getItem("textplex.themePatternOpacity"));
                   var patternTiling = localStorage.getItem("textplex.themePatternTiling") === "on";
-                  var gridEnabled = localStorage.getItem("textplex.themeGridEnabled") !== "off" && localStorage.getItem("textplex.themeGridEnabled") !== "false";
+                  var gridEnabled = localStorage.getItem("textplex.themeGridEnabled") === "on";
                   if (theme === "day") theme = "neutral";
                   if (theme === "night") theme = "ink";
                   if (theme === "forest") theme = "jade";

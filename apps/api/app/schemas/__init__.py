@@ -7,6 +7,7 @@ from .books import (
     PageExtractionArtifact,
     PageRecord,
     TextImportRequest,
+    WikipediaRandomImportRequest,
 )
 from .generated_articles import (
     GeneratedArticleTerm,
@@ -102,6 +103,7 @@ __all__ = [
     "VocabularyAssessmentAxisRecord",
     "VocabularyAssessmentReviewRequest",
     "VocabularyAssessmentStateRecord",
+    "WikipediaRandomImportRequest",
     "WordInteractionCreateRequest",
     "WordInteractionRecord",
 ]

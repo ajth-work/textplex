@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useParams, useSearchParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 
 import { READER_NAV_CONTEXT_CLEARED_EVENT, resolveReaderResumeHref } from "../lib/textplex";
 import {
@@ -14,6 +14,7 @@ import {
 import { useAuth } from "./auth-provider";
 import { isTextPlexAdmin } from "../lib/auth-roles";
 import { ThemeToggleButton } from "./theme-toggle-button";
+import { FeedbackNotificationBell, FeedbackNotificationDot } from "./feedback-notification-bell";
 import {
   ActivityIcon,
   AnalysisIcon,
@@ -97,6 +98,81 @@ function NavLinkContent({ icon, label }: { icon: ReactNode; label: string }) {
   );
 }
 
+type NavDropdownItem = {
+  href: string;
+  label: string;
+  icon: ReactNode;
+  activeHref?: string;
+};
+
+function NavChevronIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+function NavDropdown({
+  detailsRef,
+  pathname,
+  href,
+  activeHref = href,
+  label,
+  icon,
+  items,
+  closeMenus,
+}: {
+  detailsRef: Ref<HTMLDetailsElement>;
+  pathname: string;
+  href: string;
+  activeHref?: string;
+  label: string;
+  icon: ReactNode;
+  items: NavDropdownItem[];
+  closeMenus: (except?: HTMLDetailsElement) => void;
+}) {
+  const isActive = [activeHref, ...items.map((item) => item.activeHref ?? item.href)].some((route) => isPathActive(pathname, route));
+
+  return (
+    <div className={`app-nav-group${isActive ? " is-active" : ""}`}>
+      <Link className={navLinkClassName(pathname, href, activeHref)} href={href} onClick={() => closeMenus()} aria-current={isPathActive(pathname, activeHref) ? "page" : undefined}>
+        <NavLinkContent icon={icon} label={label} />
+      </Link>
+      <details ref={detailsRef} className="app-nav-dropdown">
+        <summary
+          className={`button ${isActive ? "button-primary" : "button-secondary"} app-nav-dropdown-trigger`}
+          aria-label={`More ${label} destinations`}
+          title={`More ${label} destinations`}
+          onClick={(event) => {
+            const details = event.currentTarget.parentElement;
+            closeMenus(details instanceof HTMLDetailsElement ? details : undefined);
+          }}
+        >
+          <NavChevronIcon />
+        </summary>
+        <div className="app-nav-dropdown-menu card" data-inventory-id="shell.primary-nav-menu">
+          {items.map((item) => {
+            const itemActive = isPathActive(pathname, item.activeHref ?? item.href);
+            return (
+              <Link
+                className="app-nav-dropdown-link"
+                href={item.href}
+                key={item.label}
+                onClick={() => closeMenus()}
+                aria-current={itemActive ? "page" : undefined}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </details>
+    </div>
+  );
+}
+
 function BackIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -124,6 +200,10 @@ function ReaderNavRevealIcon() {
   );
 }
 
+function TesterConsoleIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4H6.5A2.5 2.5 0 0 1 4 13.5Z" /><path d="m8 9 2 2 4-4" /></svg>;
+}
+
 export function AppShell() {
   const pathname = usePathname();
   const params = useParams();
@@ -134,6 +214,9 @@ export function AppShell() {
   const [storedContext, setStoredContext] = useState<NavigationContext>({ bookId: null, pageNumber: null, searchQuery: null });
   const [readerNavHideDelayMs, setReaderNavHideDelayMs] = useState(READER_NAV_HIDE_DELAY_DEFAULT_MS);
   const [readerNavCollapsed, setReaderNavCollapsed] = useState(false);
+  const libraryMenuRef = useRef<HTMLDetailsElement | null>(null);
+  const readMenuRef = useRef<HTMLDetailsElement | null>(null);
+  const studyMenuRef = useRef<HTMLDetailsElement | null>(null);
   const moreMenuRef = useRef<HTMLDetailsElement | null>(null);
   const readerNavHideTimerRef = useRef<number | null>(null);
   const readerNavHideDelayRef = useRef(READER_NAV_HIDE_DELAY_DEFAULT_MS);
@@ -222,11 +305,17 @@ export function AppShell() {
     }
   }, [pathname, routeContext]);
 
+  const closeNavMenus = useCallback((except?: HTMLDetailsElement) => {
+    [libraryMenuRef, readMenuRef, studyMenuRef, moreMenuRef].forEach((menuRef) => {
+      if (menuRef.current && menuRef.current !== except) {
+        menuRef.current.open = false;
+      }
+    });
+  }, []);
+
   useEffect(() => {
-    if (moreMenuRef.current) {
-      moreMenuRef.current.open = false;
-    }
-  }, [pathname]);
+    closeNavMenus();
+  }, [closeNavMenus, pathname]);
 
   useEffect(() => {
     clearReaderNavHideTimer();
@@ -249,18 +338,15 @@ export function AppShell() {
   const authReturnTo = pathname === "/auth" ? HOME_PATH : `${pathname}${searchKey ? `?${searchKey}` : ""}`;
   const signInHref = `/auth?returnTo=${encodeURIComponent(authReturnTo)}`;
   const brandHref = user ? HOME_PATH : "/";
-  const moreRoutes = ["/analysis", "/search", "/progress", "/activity", "/import", "/profile", "/settings"];
+  const moreRoutes = ["/activity", "/profile", "/settings"];
+  if (user) {
+    moreRoutes.push("/tester");
+  }
   if (isAdmin) {
     moreRoutes.push("/admin", "/roadmap");
   }
   const hasMoreActiveRoute = moreRoutes
     .some((href) => isPathActive(pathname, href));
-
-  function closeMoreMenu() {
-    if (moreMenuRef.current) {
-      moreMenuRef.current.open = false;
-    }
-  }
 
   const revealReaderNav = useCallback(() => {
     setReaderNavCollapsed(false);
@@ -299,6 +385,7 @@ export function AppShell() {
           </Link>
         </div>
         <div className="app-shell-actions" data-inventory-id="shell.actions">
+          <FeedbackNotificationBell placement="top" />
           <Link
             className="button button-secondary theme-toggle-button shell-icon-button app-shell-theme-settings"
             href="/profile/themes"
@@ -323,57 +410,78 @@ export function AppShell() {
         <Link className="button button-secondary nav-link nav-link-home" href={HOME_PATH}>
           <NavLinkContent icon={<HomeIcon />} label="Home" />
         </Link>
-        <Link className={navLinkClassName(pathname, "/library")} href="/library">
-          <NavLinkContent icon={<LibraryIcon />} label="Library" />
-        </Link>
-        <Link className={navLinkClassName(pathname, readerHref, "/reader")} href={readerHref}>
-          <NavLinkContent icon={<ReadIcon />} label="Read" />
-        </Link>
-        <Link className={navLinkClassName(pathname, "/study")} href="/study">
-          <NavLinkContent icon={<StudyIcon />} label="Study" />
-        </Link>
+        <NavDropdown
+          detailsRef={libraryMenuRef}
+          pathname={pathname}
+          href="/library"
+          label="Library"
+          icon={<LibraryIcon />}
+          closeMenus={closeNavMenus}
+          items={[
+            { href: "/import", label: "Import text", icon: <ImportIcon size={14} /> },
+            { href: searchHref, activeHref: "/search", label: "Search library", icon: <SearchIcon size={14} /> },
+          ]}
+        />
+        <NavDropdown
+          detailsRef={readMenuRef}
+          pathname={pathname}
+          href={readerHref}
+          activeHref="/reader"
+          label="Read"
+          icon={<ReadIcon />}
+          closeMenus={closeNavMenus}
+          items={[{ href: analysisHref, activeHref: "/analysis", label: "Analysis", icon: <AnalysisIcon size={14} /> }]}
+        />
+        <NavDropdown
+          detailsRef={studyMenuRef}
+          pathname={pathname}
+          href="/study"
+          label="Study"
+          icon={<StudyIcon />}
+          closeMenus={closeNavMenus}
+          items={[
+            { href: "/study/practice", activeHref: "/study/practice", label: "Practice", icon: <StudyIcon size={14} /> },
+            { href: "/progress", label: "Progress", icon: <ProgressIcon size={14} /> },
+          ]}
+        />
         <details ref={moreMenuRef} className="app-nav-more" data-inventory-id="shell.secondary-nav">
-          <summary className={`button ${hasMoreActiveRoute ? "button-primary" : "button-secondary"} nav-link app-nav-more-trigger`}>
+          <summary
+            className={`button ${hasMoreActiveRoute ? "button-primary" : "button-secondary"} nav-link app-nav-more-trigger`}
+            onClick={(event) => {
+              const details = event.currentTarget.parentElement;
+              closeNavMenus(details instanceof HTMLDetailsElement ? details : undefined);
+            }}
+          >
             <NavLinkContent icon={<MoreIcon />} label="More" />
           </summary>
           <div className="app-nav-more-menu card">
-            <Link className="app-nav-more-link" href={analysisHref} onClick={closeMoreMenu}>
-              <AnalysisIcon size={14} />
-              <span>Analysis</span>
-            </Link>
-            <Link className="app-nav-more-link" href={searchHref} onClick={closeMoreMenu}>
-              <SearchIcon size={14} />
-              <span>Search</span>
-            </Link>
-            <Link className="app-nav-more-link" href="/progress" onClick={closeMoreMenu}>
-              <ProgressIcon size={14} />
-              <span>Progress</span>
-            </Link>
-            <Link className="app-nav-more-link" href="/import" onClick={closeMoreMenu}>
-              <ImportIcon size={14} />
-              <span>Import text</span>
-            </Link>
-            <Link className="app-nav-more-link" href="/activity" onClick={closeMoreMenu}>
+            <Link className="app-nav-more-link" href="/activity" onClick={() => closeNavMenus()}>
               <ActivityIcon size={14} />
               <span>Activity</span>
             </Link>
             {isAdmin ? (
-              <Link className="app-nav-more-link" href="/admin" onClick={closeMoreMenu}>
+              <Link className="app-nav-more-link" href="/admin" onClick={() => closeNavMenus()}>
                 <ActivityIcon size={14} />
                 <span>Admin console</span>
               </Link>
             ) : null}
+            {user ? (
+              <Link className="app-nav-more-link app-nav-more-tester-link" href="/tester" onClick={() => closeNavMenus()}>
+                <span className="app-nav-tester-icon"><TesterConsoleIcon /><FeedbackNotificationDot /></span>
+                <span>Tester console</span>
+              </Link>
+            ) : null}
             {isAdmin ? (
-              <Link className="app-nav-more-link" href="/roadmap" onClick={closeMoreMenu}>
+              <Link className="app-nav-more-link" href="/roadmap" onClick={() => closeNavMenus()}>
                 <RoadmapIcon size={14} />
                 <span>Roadmap</span>
               </Link>
             ) : null}
-            <Link className="app-nav-more-link" href="/profile" onClick={closeMoreMenu}>
+            <Link className="app-nav-more-link" href="/profile" onClick={() => closeNavMenus()}>
               <ProfileIcon size={14} />
               <span>Profile</span>
             </Link>
-            <Link className="app-nav-more-link" href="/settings" onClick={closeMoreMenu}>
+            <Link className="app-nav-more-link" href="/settings" onClick={() => closeNavMenus()}>
               <SettingsIcon size={14} />
               <span>Settings</span>
             </Link>
@@ -383,7 +491,7 @@ export function AppShell() {
                   className="app-nav-more-action"
                   type="button"
                   onClick={async () => {
-                    closeMoreMenu();
+                    closeNavMenus();
                     await signOut();
                     router.replace(HOME_PATH);
                     router.refresh();
@@ -393,7 +501,7 @@ export function AppShell() {
                   <span>Sign out</span>
                 </button>
               ) : (
-                <Link className="app-nav-more-link" href={signInHref} onClick={closeMoreMenu}>
+                <Link className="app-nav-more-link" href={signInHref} onClick={() => closeNavMenus()}>
                   <AuthIcon size={14} />
                   <span>Sign in</span>
                 </Link>

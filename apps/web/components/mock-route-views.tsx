@@ -36,6 +36,7 @@ import { StudyDueLanguageGroups } from "./study-due-language-groups";
 import { StudyAxisRadarChart } from "./study-axis-radar-chart";
 import { InventoryInspectorToggle } from "./inventory-inspector";
 import { BuildFooterToggle } from "./build-footer";
+import { languageShortCode, targetLanguageOptions } from "../lib/language-options";
 
 const demoReadingHistory = [
   { day_index: 1, day: "2026-07-08", pages_read: 1, cumulative_pages: 1, sentences_read: 2, cumulative_sentences: 2 },
@@ -214,11 +215,14 @@ export function MockAnalysisSurfaceView({ bookId }: { bookId: string }) {
 }
 
 export function MockImportSurfaceView() {
+  const [wikipediaLanguageCode, setWikipediaLanguageCode] = useState("zh");
   const data = {
     default_language: "zh",
-    supported_inputs: ["pdf", "paste"],
+    supported_inputs: ["pdf", "epub", "paste", "wikipedia-random"],
     can_upload_pdf: true,
+    can_upload_epub: true,
     can_paste_text: true,
+    can_import_random_wikipedia: true,
     recent_books: demoLibraryBooks.map((book) => ({
       book_id: book.id,
       title: book.title,
@@ -241,10 +245,30 @@ export function MockImportSurfaceView() {
       ]}
       metrics={[
         { label: "Inputs", value: data.supported_inputs.join(", ") },
-        { label: "Uploads", value: data.can_upload_pdf ? "Enabled" : "Disabled" },
+        { label: "Uploads", value: data.can_upload_pdf || data.can_upload_epub ? "Enabled" : "Disabled" },
         { label: "Paste", value: data.can_paste_text ? "Enabled" : "Disabled" },
       ]}
     >
+      <section className="card feature-card import-form-card" data-inventory-id="import.wikipedia-random-card">
+        <div className="card-topline">
+          <h2>Try a random Wikipedia article</h2>
+          <span className="pill">Target language</span>
+        </div>
+        <p className="small-copy">TextPlex can add a random article from the selected-language Wikipedia to your library.</p>
+        <label>
+          Wikipedia language
+          <select className="text-input" value={wikipediaLanguageCode} onChange={(event) => setWikipediaLanguageCode(event.target.value)}>
+            {targetLanguageOptions.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label} ({languageShortCode(option.code)})
+              </option>
+            ))}
+          </select>
+        </label>
+        <button className="button button-secondary" type="button" data-inventory-id="import.wikipedia-random-button" disabled>
+          Import random {languageShortCode(wikipediaLanguageCode).toUpperCase()} article
+        </button>
+      </section>
       <section className="card feature-card">
         <h2>Recent books</h2>
         <div className="surface-list">
@@ -623,8 +647,8 @@ export function MockSettingsSurfaceView() {
             </div>
             <div className="settings-inspector-row" data-inventory-id="settings.build-footer-toggle">
               <div>
-                <strong>Version footer</strong>
-                <p className="small-copy">Show the current app version and last reboot/rebuild time at the bottom of every page.</p>
+                <strong>Build details</strong>
+                <p className="small-copy">The current build is always shown in the footer; optionally include the last reboot/rebuild time.</p>
               </div>
               <BuildFooterToggle />
             </div>
