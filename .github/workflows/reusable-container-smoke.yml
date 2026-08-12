@@ -1,0 +1,36 @@
+name: Reusable container smoke
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Clean container deployment smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Create disposable configuration
+        run: cp .env.example .env
+
+      - name: Build the canonical and compatibility images
+        run: docker compose --profile legacy build api web site
+
+      - name: Start the stack and verify manifest routes
+        run: |
+          set -euo pipefail
+          trap 'docker compose --profile legacy down --volumes' EXIT
+          docker compose --profile legacy up -d api web site
+          sleep 10
+          TEXTPLEX_WEB_BASE_URLS="http://127.0.0.1:8200 http://127.0.0.1:3000" \
+          TEXTPLEX_API_HEALTH_URLS="http://127.0.0.1:8201/health http://127.0.0.1:8201/ready" \
+            node scripts/check_web_reachability.mjs

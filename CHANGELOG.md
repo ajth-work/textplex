@@ -6,6 +6,8 @@
 
 - Added Dependabot coverage for npm, both Python packages, and GitHub Actions, and pinned every third-party workflow action to an immutable commit SHA.
 
+- Centralized CI quality lanes into reusable Python, web, and container workflows; added a checked-in route smoke manifest, workflow/action-pin validation, and an always-running CI gate for scalable branch protection.
+
 - Expanded CI and weekly audit coverage to build and smoke-test the canonical Next routes, accept the documented API readiness payload, fail on high-severity production npm vulnerabilities, and review dependency changes on pull requests.
 
 - Remediated the high-severity PostCSS/nanoid dependency path by updating the root PostCSS range to `^8.5.23`; production npm audit now reports zero vulnerabilities.

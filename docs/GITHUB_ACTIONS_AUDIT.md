@@ -18,6 +18,7 @@ Reviewed the five repository workflows plus the new manual integration-evidence 
 - Weekly dependency/runtime drift reporting and live API readiness checks.
 - Manual local boundary evidence for authentication, ownership, Supabase adapters, learner sync, commerce/webhooks, backup/restore, and web contracts.
 - Optional hosted probes for real API readiness, authenticated profile ownership, learner sync, entitlements, multi-user separation, and deployment-owned routes.
+- Reusable PR quality workflows for Python, web, and container lanes, plus an always-running CI gate and checked-in route smoke manifest.
 
 ## Findings
 
@@ -60,6 +61,15 @@ Implemented a manually dispatched `integration-evidence.yml` workflow. Its local
 ### P2 — Add workflow maintenance controls
 
 Implemented `.github/dependabot.yml` for npm, both Python packages, and GitHub Actions. All third-party workflow actions are now pinned to immutable commit SHAs with their major version retained in a comment; Dependabot can keep those pins current.
+
+### CI scalability implementation
+
+Implemented the first scalability slice after the P2 audit:
+
+- `.github/workflows/reusable-python-quality.yml`, `reusable-web-quality.yml`, and `reusable-container-smoke.yml` centralize the three required quality lanes. The top-level CI workflow now composes them instead of duplicating their steps.
+- `.github/workflows/ci.yml` adds an always-running `CI gate` that fails if any quality lane or workflow-validation lane fails or is skipped. This is the stable status to require as the workflow grows.
+- `config/route-smoke.json` is the source of truth for canonical and legacy route smoke coverage. The container and weekly audit checks consume it, so new routes can be added in one place.
+- `scripts/validate_workflows.mjs` verifies route-manifest integrity and rejects unpinned third-party Actions. It runs as part of the required CI gate.
 
 ## Recent evidence
 

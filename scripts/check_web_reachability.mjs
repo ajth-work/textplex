@@ -1,5 +1,9 @@
+import { readFileSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
 
+const routeManifest = JSON.parse(
+  readFileSync(new URL("../config/route-smoke.json", import.meta.url), "utf8"),
+);
 const defaultSiteUrls = [
   "http://127.0.0.1:3000",
 ];
@@ -11,17 +15,9 @@ const defaultApiHealthUrls = [
 
 const siteUrls = parseList(process.env.TEXTPLEX_WEB_BASE_URLS, defaultSiteUrls);
 const apiHealthUrls = parseList(process.env.TEXTPLEX_API_HEALTH_URLS, defaultApiHealthUrls);
-const siteChecks = parseList(process.env.TEXTPLEX_WEB_CHECK_PATHS, [
-  "/",
-  "/library",
-  "/analysis/demo-book",
-  "/search",
-  "/study",
-  "/progress",
-  "/activity",
-  "/import",
-  "/settings",
-]);
+const configuredSiteChecks = process.env.TEXTPLEX_WEB_CHECK_PATHS
+  ? parseList(process.env.TEXTPLEX_WEB_CHECK_PATHS, [])
+  : null;
 const attempts = Number(process.env.TEXTPLEX_WEB_CHECK_ATTEMPTS ?? "12");
 const retryDelayMs = Number(process.env.TEXTPLEX_WEB_CHECK_DELAY_MS ?? "500");
 const requestTimeoutMs = Number(process.env.TEXTPLEX_WEB_REQUEST_TIMEOUT_MS ?? "2500");
@@ -35,6 +31,11 @@ function parseList(rawValue, fallback) {
     .split(/[\s,]+/)
     .map((entry) => entry.trim())
     .filter(Boolean);
+}
+
+function routesForBase(baseUrl) {
+  const profile = new URL(baseUrl).port === "8200" ? "legacy" : "canonical";
+  return routeManifest[profile];
 }
 
 async function fetchWithTimeout(url) {
@@ -84,25 +85,10 @@ async function assertHtmlResponse(response, url) {
   }
 
   const body = await response.text();
-  const legacyExpectedSnippets = {
-    "/": "Vocabulary database implementation tracker",
-    "/library": "Search titles, authors, tags...",
-    "/analysis/demo-book": "Text Analysis",
-    "/search": "Texts (1)",
-    "/study": "Tap to reveal meaning",
-    "/progress": "Your Progress",
-    "/activity": "Activity",
-    "/import": "Add Content",
-    "/settings": "Profile and app preferences",
-  };
-  const canonicalExpectedSnippets = {
-    "/": "Read for free. Practice deeply. Create your own immersion.",
-    "/library": "Library",
-    "/analysis/demo-book": "Text analysis summary",
-  };
-  const expectedSnippets = new URL(url).port === "8200" ? legacyExpectedSnippets : canonicalExpectedSnippets;
   const path = new URL(url).pathname;
-  const expectedSnippet = expectedSnippets[path];
+  const expectedSnippet = routesForBase(url)
+    .find((route) => route.path === path)
+    ?.expected;
   if (expectedSnippet && !body.includes(expectedSnippet)) {
     throw new Error(`${url} did not include expected content: ${expectedSnippet}`);
   }
@@ -129,8 +115,11 @@ async function assertHealthResponse(response, url) {
 }
 
 for (const baseUrl of siteUrls) {
-  for (const path of siteChecks) {
-    const url = new URL(path, baseUrl).toString();
+  const routes = configuredSiteChecks
+    ? configuredSiteChecks.map((path) => ({ path }))
+    : routesForBase(baseUrl);
+  for (const route of routes) {
+    const url = new URL(route.path, baseUrl).toString();
     process.stdout.write(`Checking ${url}... `);
     await assertReachable(url, assertHtmlResponse);
     process.stdout.write("ok\n");

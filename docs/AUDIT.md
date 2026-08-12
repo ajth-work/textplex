@@ -34,6 +34,7 @@ This is the reusable audit record and operating procedure for TextPlex. The deta
 - P2 added immutable SHA pins for every third-party workflow action and Dependabot coverage for npm, both Python packages, and GitHub Actions.
 - P2 added a manual `integration-evidence.yml` workflow: local evidence covers auth, ownership, Supabase adapters, learner sync, commerce/webhooks, backup/restore, and web contracts; an opt-in hosted job probes readiness, authenticated profile ownership, learner sync, entitlements, optional multi-user separation, and deployment-owned routes without logging secrets.
 - Hosted commerce/webhook and production multi-user evidence remain pending until a dedicated sandbox environment and two test-account credentials are configured in the `integration` environment.
+- The CI scalability slice now centralizes Python, web, and container quality in reusable workflows, checks route coverage from `config/route-smoke.json`, validates action pins, and exposes one always-running `CI gate` status for branch protection.
 
 The audit was performed against the checkout as it existed, not a clean commit. Existing user changes were preserved. That is useful for real handoff review, but it means audit findings must identify whether a failure belongs to the baseline, the active change, or the environment.
 
