@@ -100,7 +100,7 @@ def test_upload_book_endpoint_defaults_to_openai_provider_from_env(monkeypatch, 
     assert record.ocr_provider == "openai"
 
 
-def test_upload_book_endpoint_rejects_non_pdf(tmp_path_factory) -> None:
+def test_upload_book_endpoint_rejects_unsupported_file_format(tmp_path_factory) -> None:
     data_root = tmp_path_factory.mktemp("textplex-upload-books-invalid")
     app.state.data_root = data_root
     client = TestClient(app)
@@ -108,8 +108,8 @@ def test_upload_book_endpoint_rejects_non_pdf(tmp_path_factory) -> None:
     response = client.post(
         "/books/upload",
         data={"language_code": "zh"},
-        files={"file": ("notes.txt", b"plain text", "text/plain")},
+        files={"file": ("notes.docx", b"not a supported document", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "TextPlex import currently accepts PDF or EPUB files only."
+    assert response.json()["detail"] == "TextPlex import currently accepts PDF, EPUB, or TXT files only."

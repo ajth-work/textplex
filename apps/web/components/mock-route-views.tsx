@@ -218,9 +218,10 @@ export function MockImportSurfaceView() {
   const [wikipediaLanguageCode, setWikipediaLanguageCode] = useState("zh");
   const data = {
     default_language: "zh",
-    supported_inputs: ["pdf", "epub", "paste", "wikipedia-random"],
+    supported_inputs: ["pdf", "epub", "txt", "paste", "wikipedia-random"],
     can_upload_pdf: true,
     can_upload_epub: true,
+    can_upload_txt: true,
     can_paste_text: true,
     can_import_random_wikipedia: true,
     recent_books: demoLibraryBooks.map((book) => ({
@@ -245,7 +246,7 @@ export function MockImportSurfaceView() {
       ]}
       metrics={[
         { label: "Inputs", value: data.supported_inputs.join(", ") },
-        { label: "Uploads", value: data.can_upload_pdf || data.can_upload_epub ? "Enabled" : "Disabled" },
+        { label: "Uploads", value: data.can_upload_pdf || data.can_upload_epub || data.can_upload_txt ? "Enabled" : "Disabled" },
         { label: "Paste", value: data.can_paste_text ? "Enabled" : "Disabled" },
       ]}
     >

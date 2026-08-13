@@ -268,6 +268,7 @@ class ImportSurfaceResponse(BaseModel):
     supported_inputs: list[str] = Field(default_factory=list)
     can_upload_pdf: bool = True
     can_upload_epub: bool = True
+    can_upload_txt: bool = True
     can_paste_text: bool = True
     can_import_random_wikipedia: bool = True
     recent_books: list[ImportRecentBook] = Field(default_factory=list)

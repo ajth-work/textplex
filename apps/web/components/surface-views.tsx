@@ -509,10 +509,10 @@ export function ImportSurfaceView() {
         });
       } else {
         if (!file) {
-          throw new Error("Choose a PDF or EPUB before uploading it.");
+          throw new Error("Choose a PDF, EPUB, or TXT file before uploading it.");
         }
-        if (!file.name.toLowerCase().endsWith(".pdf") && !file.name.toLowerCase().endsWith(".epub")) {
-          throw new Error("TextPlex currently accepts PDF or EPUB uploads.");
+        if (!file.name.toLowerCase().endsWith(".pdf") && !file.name.toLowerCase().endsWith(".epub") && !file.name.toLowerCase().endsWith(".txt")) {
+          throw new Error("TextPlex currently accepts PDF, EPUB, or TXT uploads.");
         }
         const formData = new FormData();
         formData.append("file", file);
@@ -576,7 +576,7 @@ export function ImportSurfaceView() {
     <RoutePage
       eyebrow="Import"
       title="Paste text or upload a book"
-      description="Import pasted text, PDF books, or EPUB books into the reader."
+      description="Import pasted text, TXT files, PDF books, or EPUB books into the reader."
       badge={data?.default_language?.toUpperCase() ?? "Live"}
       links={[
         { href: "/library", label: "Library" },
@@ -584,7 +584,7 @@ export function ImportSurfaceView() {
       ]}
       metrics={[
         { label: "Inputs", value: data ? data.supported_inputs.join(", ") : "Loading" },
-        { label: "Uploads", value: data ? (data.can_upload_pdf || data.can_upload_epub ? "Enabled" : "Disabled") : "Loading" },
+        { label: "Uploads", value: data ? (data.can_upload_pdf || data.can_upload_epub || data.can_upload_txt ? "Enabled" : "Disabled") : "Loading" },
         { label: "Paste", value: data ? (data.can_paste_text ? "Enabled" : "Disabled") : "Loading" },
       ]}
     >
@@ -595,14 +595,14 @@ export function ImportSurfaceView() {
           <section className="card feature-card import-form-card">
             <div className="card-topline">
               <h2>Add content</h2>
-              <span className="pill">{mode === "paste" ? "Paste" : "PDF / EPUB"}</span>
+              <span className="pill">{mode === "paste" ? "Paste" : "PDF / EPUB / TXT"}</span>
             </div>
             <div className="button-row" aria-label="Import method">
               <button className={`button ${mode === "paste" ? "button-primary" : "button-secondary"}`} type="button" onClick={() => setMode("paste")}>
                 Paste text
               </button>
               <button className={`button ${mode === "upload" ? "button-primary" : "button-secondary"}`} type="button" onClick={() => setMode("upload")}>
-                Upload PDF / EPUB
+                Upload PDF / EPUB / TXT
               </button>
             </div>
             <form className="surface-form" onSubmit={handleImport}>
@@ -634,8 +634,8 @@ export function ImportSurfaceView() {
                   </label>
                 ) : (
                   <label>
-                    PDF or EPUB file
-                    <input ref={fileInputRef} className="text-input" type="file" accept="application/pdf,.pdf,application/epub+zip,.epub" onChange={(event) => setFile(event.target.files?.[0] ?? null)} required />
+                    PDF, EPUB, or TXT file
+                    <input ref={fileInputRef} className="text-input" type="file" accept="application/pdf,.pdf,application/epub+zip,.epub,text/plain,.txt" onChange={(event) => setFile(event.target.files?.[0] ?? null)} required />
                   </label>
                 )}
                 {actionError ? <p className="form-error" role="alert">{actionError}</p> : null}

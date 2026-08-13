@@ -158,7 +158,7 @@ python -m pytest
 
 Build this exact path before expanding scope:
 
-1. `POST /books/import` registers a book and source PDF.
+1. `POST /books/import` registers a PDF, EPUB, or TXT book source.
 2. Processor creates page images and page records.
 3. Processor writes cleaned text and token occurrences.
 4. `GET /books/{book_id}/pages/{page_number}` returns reader data.

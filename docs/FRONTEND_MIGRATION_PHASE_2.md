@@ -21,7 +21,7 @@ Phase 2 begins with the reader because it is the highest-risk product surface an
 ## Completed Import Slice
 
 - Added real paste-text and PDF-upload forms to the Next import route.
-- Connected paste imports to `/texts/import` and PDF uploads to `/books/upload`.
+- Connected paste imports to `/texts/import` and PDF, EPUB, and TXT uploads to `/books/upload`.
 - Added explicit validation, busy, error, completion, and background extraction states.
 - Polls the imported book record until extraction progress is complete and exposes an `Open reader` action.
 - Added stable inventory markers for the import form and progress card.
@@ -34,7 +34,7 @@ Phase 2 begins with the reader because it is the highest-risk product surface an
 - [x] Match static reader definition-card action behavior and compact layout.
 - [x] Explicitly defer page/sentence/book HSK analysis charts to Phase 3.
 - [x] Reconcile Next loading, empty, and extraction-progress states with the standalone reference.
-- [x] Next import can submit pasted text and PDF uploads without opening a demo sample.
+- [x] Next import can submit pasted text and PDF, EPUB, and TXT uploads without opening a demo sample.
 - [x] Next import exposes background extraction progress and a reader handoff.
 - [x] Add route-level regression coverage for reader loading, lookup, and chart rendering.
 

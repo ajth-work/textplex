@@ -976,9 +976,9 @@ async def upload_book(
     translation_mode: TranslationMode = TRANSLATION_MODE,
     context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookRecord:
-    filename = Path(file.filename or "uploaded.pdf").name
-    if Path(filename).suffix.lower() not in {".pdf", ".epub"}:
-        raise HTTPException(status_code=400, detail="TextPlex import currently accepts PDF or EPUB files only.")
+    filename = Path(file.filename or "uploaded.txt").name
+    if Path(filename).suffix.lower() not in {".pdf", ".epub", ".txt"}:
+        raise HTTPException(status_code=400, detail="TextPlex import currently accepts PDF, EPUB, or TXT files only.")
 
     uploads_root = app.state.data_root / "uploads"
     uploads_root.mkdir(parents=True, exist_ok=True)

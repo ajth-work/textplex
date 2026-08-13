@@ -1032,6 +1032,7 @@ export interface ImportSurfaceResponse {
   supported_inputs: string[];
   can_upload_pdf: boolean;
   can_upload_epub: boolean;
+  can_upload_txt: boolean;
   can_paste_text: boolean;
   can_import_random_wikipedia: boolean;
   recent_books: ImportRecentBook[];
