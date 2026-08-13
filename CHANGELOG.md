@@ -8,6 +8,7 @@
 - Made hosted account-storage failures retryable and diagnosable rather than opaque 502s, and let learners who complete beta onboarding continue to their return route while storage recovers (#123).
 - Added a Japanese conjugation engine and read-only API endpoint that model godan, ichidan, する, and 来る families with explainable rule IDs and lexical overrides for exceptions such as 行く and ある.
 - Added the user-provided Afterlife JLPT N1/Jōyō reference workbook to the Japanese lexicon source pack with provenance notes; it remains a source workbook pending conversion into the canonical importer format.
+- Documented the Japanese lexicon import concept, including the separate Memrise Non-WK source family, source-set lineage, workbook tab selection, metadata model, and implementation phases under `docs/JAPANESE_LEXICON_IMPORT_CONCEPT.md`.
 
 - Cleared PR #150 CI failures by formatting the Python quality lane and restoring the onboarding error contract with updated Wikipedia error handling coverage.
 
