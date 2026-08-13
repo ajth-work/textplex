@@ -2,6 +2,8 @@
 
 ## 2026-08-12
 
+- Prepared the React 19 dependency upgrades with JSX compatibility fixes; deferred TypeScript 7.0.2 because the current Next ESLint toolchain does not support it yet.
+
 - Added P2 integration evidence workflow: focused local boundary suites cover auth, ownership, Supabase adapters, learner sync, commerce/webhooks, backup/restore, and web contracts; optional hosted probes cover readiness, authenticated profile ownership, learner sync, entitlements, multi-user separation, and deployment routes.
 
 - Added Dependabot coverage for npm, both Python packages, and GitHub Actions, and pinned every third-party workflow action to an immutable commit SHA.
