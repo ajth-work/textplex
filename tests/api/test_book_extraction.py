@@ -402,6 +402,37 @@ def test_parse_text_into_page_artifact_resolves_japanese_minute_counter_variants
     assert counter_tokens[-1].romanization == expected_reading
 
 
+@pytest.mark.parametrize(
+    ("text", "counter", "expected_reading"),
+    [
+        ("\u4e00\u672c\u3042\u308a\u307e\u3059\u3002", "\u672c", "ippon"),
+        ("\u4e09\u672c\u3042\u308a\u307e\u3059\u3002", "\u672c", "sanbon"),
+        ("\u516d\u672c\u3042\u308a\u307e\u3059\u3002", "\u672c", "roppon"),
+        ("\u4e00\u5339\u3044\u307e\u3059\u3002", "\u5339", "ippiki"),
+        ("\u4e09\u5339\u3044\u307e\u3059\u3002", "\u5339", "sanbiki"),
+        ("\u516d\u5339\u3044\u307e\u3059\u3002", "\u5339", "roppiki"),
+        ("\u4e00\u676f\u98f2\u307f\u307e\u3059\u3002", "\u676f", "ippai"),
+        ("\u4e09\u676f\u98f2\u307f\u307e\u3059\u3002", "\u676f", "sanbai"),
+        ("\u516d\u676f\u98f2\u307f\u307e\u3059\u3002", "\u676f", "roppai"),
+    ],
+)
+def test_parse_text_into_page_artifact_applies_japanese_h_counter_sound_changes(
+    text: str,
+    counter: str,
+    expected_reading: str,
+    tmp_path: Path,
+) -> None:
+    artifact = book_extraction_service.parse_text_into_page_artifact(
+        text=text,
+        language_code="ja",
+        title="Japanese counter sound changes",
+        data_root=tmp_path,
+    )
+
+    counter_token = next(token for token in artifact.page.sentences[0].tokens if counter in token.surface_form)
+    assert counter_token.romanization == expected_reading
+
+
 def test_parse_text_into_page_artifact_keeps_fractional_bun_distinct_from_minute_fun(
     tmp_path: Path,
 ) -> None:

@@ -113,6 +113,44 @@ _JAPANESE_MINUTE_READINGS = {
     8: "happun",
     9: "kyūfun",
 }
+_JAPANESE_COUNTER_READINGS = {
+    "本": {
+        1: "ippon",
+        2: "nihon",
+        3: "sanbon",
+        4: "yonhon",
+        5: "gohon",
+        6: "roppon",
+        7: "nanahon",
+        8: "happon",
+        9: "kyūhon",
+        10: "juppon",
+    },
+    "匹": {
+        1: "ippiki",
+        2: "nihiki",
+        3: "sanbiki",
+        4: "yonhiki",
+        5: "gohiki",
+        6: "roppiki",
+        7: "nanahiki",
+        8: "happiki",
+        9: "kyūhiki",
+        10: "juppiki",
+    },
+    "杯": {
+        1: "ippai",
+        2: "nihai",
+        3: "sanbai",
+        4: "yonhai",
+        5: "gohai",
+        6: "roppai",
+        7: "nanahai",
+        8: "happai",
+        9: "kyūhai",
+        10: "juppai",
+    },
+}
 
 
 def _parse_japanese_number(value: str) -> int | None:
@@ -140,56 +178,51 @@ def _japanese_number_romaji(value: int) -> str | None:
     return None
 
 
-def _japanese_number_before_counter(tokens: list[TokenResult], token_index: int) -> int | None:
-    token_surface = tokens[token_index].surface_form
-    if "分" not in token_surface:
-        return None
-
-    number_text = token_surface.split("分", 1)[0]
-    return _parse_japanese_number(number_text)
+def _japanese_counter_number(
+    token_surface: str,
+) -> tuple[str, int, str] | None:
+    counters = (*_JAPANESE_COUNTER_READINGS, "分")
+    for counter in sorted(counters, key=len, reverse=True):
+        if counter not in token_surface:
+            continue
+        number_text, token_tail = token_surface.split(counter, 1)
+        number = _parse_japanese_number(number_text)
+        if number is not None:
+            return counter, number, token_tail
+    return None
 
 
 def _japanese_contextual_metadata(
     tokens: list[TokenResult],
     token_index: int,
 ) -> tuple[str | None, str | None]:
-    """Resolve the small set of Japanese homographs where token context matters."""
-    token = tokens[token_index]
-    if token.surface_form != "五分":
+    """Resolve Japanese counter readings that depend on number or sense."""
+    counter_data = _japanese_counter_number(tokens[token_index].surface_form)
+    if counter_data is None:
         return None, None
+    counter, number, token_tail = counter_data
 
     next_surface = tokens[token_index + 1].surface_form if token_index + 1 < len(tokens) else None
     following_surface = tokens[token_index + 2].surface_form if token_index + 2 < len(tokens) else None
 
-    if next_surface == "五分" or (token_index > 0 and tokens[token_index - 1].surface_form == "五分"):
-        return "gobu", "evenly matched; fifty-fifty"
-    if next_surface == "の" and following_surface and following_surface[0] in "一二三四五六七八九十":
-        return "gobun", "a fifth; one fifth"
-    return "gofun", "five minutes"
-
-
-def _japanese_number_contextual_metadata(
-    tokens: list[TokenResult],
-    token_index: int,
-) -> tuple[str | None, str | None]:
-    """Resolve Japanese number + 分 readings for minutes, fractions, and idioms."""
-    number = _japanese_number_before_counter(tokens, token_index)
-    if number is None:
-        return None, None
-
-    next_surface = tokens[token_index + 1].surface_form if token_index + 1 < len(tokens) else None
-    following_surface = tokens[token_index + 2].surface_form if token_index + 2 < len(tokens) else None
-    token_tail = tokens[token_index].surface_form.split("分", 1)[1]
-
-    if number == 5 and (
+    if counter == "分" and number == 5 and (
         (next_surface is not None and next_surface.startswith("五分"))
         or (token_index > 0 and tokens[token_index - 1].surface_form.startswith("五分"))
     ):
         return "gobu", "evenly matched; fifty-fifty"
-    if not token_tail and next_surface == "の" and following_surface and following_surface[0] in "一二三四五六七八九十":
+    if (
+        counter == "分"
+        and not token_tail
+        and next_surface == "の"
+        and following_surface
+        and following_surface[0] in "一二三四五六七八九十"
+    ):
         reading = f"{_japanese_number_romaji(number)}bun"
         definition = "a fifth; one fifth" if number == 5 else None
         return reading, definition
+
+    if counter != "分":
+        return _JAPANESE_COUNTER_READINGS[counter].get(number), None
 
     minute_context = token_tail in {"間", "ぐらい", "ほど", "かかります", "かかる"} or next_surface in {
         "間",
@@ -711,7 +744,7 @@ def _enrich_page_lexicon_metadata(
 
     if not pinyin_map and not lexicon_entries and not google_romanization_map and not hebrew_romanization_map:
         has_japanese_context = _language_root(language_code) == "ja" and any(
-            _japanese_number_contextual_metadata(sentence.tokens, token_index)[0]
+            _japanese_contextual_metadata(sentence.tokens, token_index)[0]
             for sentence in page_result.sentences
             for token_index, _token in enumerate(sentence.tokens)
         )
@@ -725,7 +758,7 @@ def _enrich_page_lexicon_metadata(
             exact_entry = lexicon_entries.get(token.surface_form)
             contextual_romanization, contextual_definition = (None, None)
             if _language_root(language_code) == "ja":
-                contextual_romanization, contextual_definition = _japanese_number_contextual_metadata(sentence.tokens, token_index)
+                contextual_romanization, contextual_definition = _japanese_contextual_metadata(sentence.tokens, token_index)
             romanization = (
                 contextual_romanization
                 or token.romanization
