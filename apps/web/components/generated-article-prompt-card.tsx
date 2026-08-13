@@ -1,5 +1,6 @@
 "use client";
 
+import type { JSX } from "react";
 import { formatDateTime, type GeneratedReaderArticlePromptDetails } from "../lib/textplex";
 import { languageShortCode } from "../lib/language-options";
 
