@@ -414,7 +414,7 @@ Live source: `apps/web/components/surface-views.tsx` (`ImportSurfaceView`); demo
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
 | `import.route-hero` | region | Import hero | Supported-input, upload, and paste capability summary. |
-| `import.form` | card | Import form | Switches between paste-text and PDF/EPUB/TXT-upload flows, uses a fixed target-language dropdown, explains the bounded reader translation buffer, and submits real API imports. |
+| `import.form` | card | Import form | Switches between paste-text and PDF/EPUB/TXT-upload flows, uses a fixed target-language dropdown, explains the bounded reader translation buffer and progressive PDF page extraction, and submits real API imports. |
 | `import.photo-pages-card` | card | Photo page batch | Adds up to 12 JPG/PNG page photos one at a time, shows ordered previews, and supports reordering/removing pages before import. |
 | `import.wikipedia-random-card` | region | Random Wikipedia import | Target-language action that asks the API to select and import a random article from the selected-language Wikipedia. |
 | `import.wikipedia-random-button` | button | Import random Wikipedia article | Starts a random target-language Wikipedia import and retains the returned book in the normal import-progress flow. |
