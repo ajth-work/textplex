@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type TouchEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type TouchEvent } from "react";
 
 import {
   fetchJson,
@@ -1851,6 +1851,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [completionSaving, setCompletionSaving] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pageJumpInput, setPageJumpInput] = useState(String(pageNumber));
   const [error, setError] = useState<string | null>(null);
   const [activeSeconds, setActiveSeconds] = useState(0);
   const [readerSessionGlossedCount, setReaderSessionGlossedCount] = useState(0);
@@ -3275,6 +3276,10 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   useReaderCarouselInteractions(readingProgressRailRef);
   const canMoveToPreviousSentence = selectedSentenceIndex > 0;
 
+  useEffect(() => {
+    setPageJumpInput(String(pageNumber));
+  }, [pageNumber]);
+
   function handleToggleSessionSummaryEditing() {
     if (readerSessionSummaryEditing) {
       persistReaderSessionSummaryHiddenItemIds(
@@ -3335,6 +3340,16 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       setCompletionError(null);
       setShowCompletionSummary(true);
     }
+  }
+
+  function handlePageJump(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const targetPage = Number.parseInt(pageJumpInput, 10);
+    if (!Number.isFinite(targetPage) || !totalPages || targetPage < 1 || targetPage > totalPages) {
+      setPageJumpInput(String(pageNumber));
+      return;
+    }
+    router.push(`/reader/${bookId}/${targetPage}`);
   }
 
   async function handleMarkCompletionAndReturnToLibrary() {
@@ -4987,6 +5002,27 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   <div className="reader-tool-section-head">
                     <h3>Page navigation</h3>
                   </div>
+                  <form className="reader-page-jump-form" onSubmit={handlePageJump} data-inventory-id="reader.page-jump-control">
+                    <label className="reader-tool-label" htmlFor="reader-page-jump">
+                      Jump to page
+                    </label>
+                    <div className="button-row">
+                      <input
+                        id="reader-page-jump"
+                        className="text-input"
+                        type="number"
+                        min={1}
+                        max={totalPages ?? undefined}
+                        value={pageJumpInput}
+                        onChange={(event) => setPageJumpInput(event.target.value)}
+                        inputMode="numeric"
+                        aria-label={totalPages ? `Page number from 1 to ${totalPages}` : "Page number"}
+                      />
+                      <button className="button button-secondary button-compact" type="submit" disabled={!totalPages}>
+                        Go
+                      </button>
+                    </div>
+                  </form>
                   <div className="button-row">
                     {pageNumber > beginningPageNumber ? (
                       <Link className="button button-primary button-compact" href={`/reader/${bookId}/${beginningPageNumber}`}>

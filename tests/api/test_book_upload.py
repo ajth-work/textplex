@@ -1,5 +1,4 @@
 import os
-import time
 from pathlib import Path
 
 import pytest
@@ -45,26 +44,13 @@ def test_upload_book_endpoint_registers_uploaded_pdf(tmp_path_factory) -> None:
     assert record.title == "三体"
     assert record.author == "刘慈欣"
     assert record.source_filename == "Three-Body Problem (ZH) (ClearScan).pdf"
-    assert record.page_image_count == 4
+    assert record.page_image_count == 1
     assert record.status in {"processing", "pages_split", "extracted"}
     assert record.extraction_status in {"processing", "complete"}
-    assert record.extraction_total_pages == 4
-    assert record.extraction_pages_processed <= 4
+    assert record.extraction_total_pages == record.total_pages
+    assert record.extracted_page_count == 1
     assert record.source_path.endswith(".pdf")
     assert (data_root / "books" / record.id / "book.json").exists()
-
-    for _ in range(60):
-        current = BookRecord.model_validate(client.get(f"/books/{record.id}").json())
-        if current.extraction_status == "complete":
-            record = current
-            break
-        time.sleep(0.25)
-
-    assert record.extraction_status == "complete"
-    assert record.extracted_page_count == 4
-    assert record.status == "extracted"
-    assert record.extraction_path is not None
-    assert (data_root / "books" / record.id / "extractions" / "book-extraction.json").exists()
 
 
 def test_upload_book_endpoint_defaults_to_openai_provider_from_env(monkeypatch, tmp_path_factory) -> None:

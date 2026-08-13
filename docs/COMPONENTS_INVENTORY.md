@@ -285,6 +285,7 @@ Source: `apps/web/components/reader-view.tsx` (`ReaderView`)
 | `reader.custom-vocabulary-list-menu` | region | Custom vocabulary list menu | Local-first picker for creating or choosing custom vocabulary lists in the token inspector. |
 | `reader.sentence-hsk-chart` | card | Sentence HSK chart | HSK level plotted across the readable tokens in the selected sentence. |
 | `reader.tools-card` | region | Reader tools | Reader utility section nested inside the options dialog for sentence chart, page image control, book frequency, dictionary wiring, reading profile, and page navigation. |
+| `reader.page-jump-control` | control | Page jump | Page-number input that navigates directly to a target page while the API prepares the target and nearby buffer pages. |
 | `reader.book-frequency-card` | card | Book frequency | Nested book-wide frequency panel inside the collapsed reader tools drawer. |
 | `reader.dictionary-card` | card | Dictionary wiring | Nested dictionary/lexical-entry lookup status and source details inside the collapsed reader tools drawer. |
 | `reader.reading-profile-card` | card | Reading profile | Nested learner exposure, progress, and remembered/missed token feedback details inside the collapsed reader tools drawer. |

@@ -67,7 +67,7 @@ def test_import_book_endpoint_extracts_only_the_first_page_before_background_wor
 ) -> None:
     source_pdf = tmp_path / "progressive-reader.pdf"
     document = fitz.open()
-    for page_number in range(1, 4):
+    for page_number in range(1, 6):
         page = document.new_page()
         page.insert_text((72, 72), f"Page {page_number}. A readable sentence.")
     document.save(source_pdf)
@@ -89,16 +89,17 @@ def test_import_book_endpoint_extracts_only_the_first_page_before_background_wor
 
     assert response.status_code == 200
     book = response.json()
-    assert book["total_pages"] == 3
+    assert book["total_pages"] == 5
     assert book["page_image_count"] == 1
     assert book["extracted_page_count"] == 1
     assert book["extraction_status"] == "processing"
     assert scheduled_windows == [(2, 2)]
 
-    page_response = client.get(f"/books/{book['id']}/pages/2")
+    scheduled_windows.clear()
+    page_response = client.get(f"/books/{book['id']}/pages/3")
     assert page_response.status_code == 200
-    assert page_response.json()["extraction"]["page"]["page_number"] == 2
-    assert scheduled_windows == [(2, 2), (3, 2)]
+    assert page_response.json()["extraction"]["page"]["page_number"] == 3
+    assert scheduled_windows == [(2, 1), (4, 1)]
 
 
 def test_get_book_pages_returns_manifest_after_import(imported_real_scan: tuple[Path, BookRecord]) -> None:

@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-import fitz
 from app.core.paths import (
     get_data_root,
     get_repo_root,
@@ -23,7 +22,6 @@ from app.schemas.admin_analytics import (
 )
 from app.schemas.admin_usage import AdminUsageSummary
 from app.schemas.auth import (
-    AccountRoleUpdateRequest,
     AuthMeResponse,
     HostedProfileSurfaceResponse,
     HostedProfileUpdateRequest,
@@ -35,7 +33,6 @@ from app.schemas.books import (
     BookReaderPageResponse,
     BookRecord,
     PageExtractionArtifact,
-    PageRecord,
     SentenceTranslationPrefetchRequest,
     SentenceTranslationPrefetchResponse,
     SentenceTranslationResponse,
@@ -124,10 +121,7 @@ from app.services.auth import (
     get_hosted_settings,
     get_optional_user_context,
     get_public_user_context,
-    has_permission,
     require_permission,
-    set_hosted_account_role,
-    supabase_admin_is_configured,
     supabase_is_configured,
     update_hosted_profile,
     update_hosted_settings,
@@ -191,11 +185,7 @@ from app.services.learning_profile import (
     record_word_interaction,
 )
 from app.services.learning_sync import sync_learning_events
-from app.services.lexicon import (
-    import_lexicon_from_source,
-    lookup_lexicon_entry,
-    warm_lexicon,
-)
+from app.services.lexicon import import_lexicon_from_source, lookup_lexicon_entry
 from app.services.profile_migration import (
     apply_profile_migration,
     preview_profile_migration,
@@ -238,12 +228,6 @@ async def _feedback_digest_scheduler() -> None:
 
 @asynccontextmanager
 async def _lifespan(_application: FastAPI):
-    default_language = os.getenv("DEFAULT_LANGUAGE", "zh").strip() or "zh"
-    try:
-        await asyncio.to_thread(warm_lexicon, app.state.data_root, language_code=default_language)
-        logger.info("Lexicon warm-up completed for %s", default_language)
-    except Exception:
-        logger.exception("Lexicon warm-up failed for %s; lookups will retry on demand", default_language)
     digest_task = asyncio.create_task(_feedback_digest_scheduler()) if feedback_digest_enabled() else None
     try:
         yield
@@ -272,6 +256,8 @@ TRANSLATION_MODE = Form(default="off")
 logger = logging.getLogger("textplex.api")
 _progressive_extraction_lock = threading.Lock()
 _progressive_extraction_book_ids: set[str] = set()
+_progressive_extraction_active_windows: dict[str, tuple[int, int]] = {}
+_progressive_extraction_pending_windows: dict[str, list[tuple[int, int]]] = {}
 cors_origins = [
     origin.strip()
     for origin in os.getenv(
@@ -344,9 +330,6 @@ async def request_observability(request: Request, call_next):
     return response
 
 DEFAULT_MAX_UPLOAD_BYTES = 50 * 1024 * 1024
-MAX_IMAGE_IMPORT_PAGES = 12
-MAX_IMAGE_IMPORT_PAGE_BYTES = 20 * 1024 * 1024
-SUPPORTED_IMAGE_IMPORT_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 
 
 def _books_root() -> Path:
@@ -377,159 +360,6 @@ def _max_upload_bytes() -> int:
         return max(1, int(raw_value))
     except ValueError:
         return DEFAULT_MAX_UPLOAD_BYTES
-
-
-async def _save_photo_import_as_pdf(images: list[UploadFile], upload_dir: Path) -> Path:
-    if not images:
-        raise HTTPException(status_code=400, detail="Add at least one page photo before importing.")
-    if len(images) > MAX_IMAGE_IMPORT_PAGES:
-        raise HTTPException(status_code=400, detail=f"Photo imports are limited to {MAX_IMAGE_IMPORT_PAGES} pages.")
-
-    pdf_path = upload_dir / "photo-import.pdf"
-    pdf_document = fitz.open()
-    total_bytes = 0
-    try:
-        for page_number, image in enumerate(images, start=1):
-            filename = Path(image.filename or "page.jpg").name
-            extension = Path(filename).suffix.lower()
-            if extension not in SUPPORTED_IMAGE_IMPORT_EXTENSIONS:
-                raise HTTPException(status_code=400, detail="Photo imports currently accept JPG or PNG images.")
-            image_bytes = await image.read()
-            if not image_bytes:
-                raise HTTPException(status_code=400, detail=f"Page {page_number} is empty.")
-            if len(image_bytes) > MAX_IMAGE_IMPORT_PAGE_BYTES:
-                raise HTTPException(status_code=413, detail=f"Page {page_number} exceeds the 20 MB image limit.")
-            total_bytes += len(image_bytes)
-            if total_bytes > _max_upload_bytes():
-                raise HTTPException(status_code=413, detail="The photo batch exceeds the configured upload size limit.")
-            try:
-                image_document = fitz.open(stream=image_bytes, filetype=extension[1:])
-                image_pdf = fitz.open("pdf", image_document.convert_to_pdf())
-                pdf_document.insert_pdf(image_pdf)
-                image_pdf.close()
-                image_document.close()
-            except Exception as exc:
-                raise HTTPException(status_code=400, detail=f"Page {page_number} is not a readable JPG or PNG image.") from exc
-        pdf_document.save(str(pdf_path))
-    finally:
-        pdf_document.close()
-        for image in images:
-            await image.close()
-    return pdf_path
-
-
-async def _save_photo_import_as_images(
-    images: list[UploadFile],
-    *,
-    book_id: str,
-    source_path: str,
-    pages_dir: Path,
-    start_page: int,
-    upload_dir: Path,
-) -> BookPageManifest:
-    if not images:
-        raise HTTPException(status_code=400, detail="Add at least one page photo before importing.")
-    if len(images) > MAX_IMAGE_IMPORT_PAGES:
-        raise HTTPException(status_code=400, detail=f"Photo imports are limited to {MAX_IMAGE_IMPORT_PAGES} pages.")
-
-    pages_dir.mkdir(parents=True, exist_ok=True)
-    staged_pages_dir = upload_dir / "pages"
-    staged_pages_dir.mkdir(parents=True, exist_ok=True)
-    total_bytes = 0
-    staged_paths: list[tuple[Path, Path]] = []
-    try:
-        for page_offset, image in enumerate(images):
-            filename = Path(image.filename or "page.jpg").name
-            extension = Path(filename).suffix.lower()
-            if extension not in SUPPORTED_IMAGE_IMPORT_EXTENSIONS:
-                raise HTTPException(status_code=400, detail="Photo imports currently accept JPG or PNG images.")
-            image_bytes = await image.read()
-            if not image_bytes:
-                raise HTTPException(status_code=400, detail=f"Page {page_offset + 1} is empty.")
-            if len(image_bytes) > MAX_IMAGE_IMPORT_PAGE_BYTES:
-                raise HTTPException(status_code=413, detail=f"Page {page_offset + 1} exceeds the 20 MB image limit.")
-            total_bytes += len(image_bytes)
-            if total_bytes > _max_upload_bytes():
-                raise HTTPException(status_code=413, detail="The photo batch exceeds the configured upload size limit.")
-
-            staged_path = staged_pages_dir / f"page-{start_page + page_offset:04d}.png"
-            try:
-                with fitz.open(stream=image_bytes, filetype=extension[1:]) as image_document:
-                    if image_document.page_count != 1:
-                        raise ValueError("The uploaded image did not contain exactly one page.")
-                    pixmap = image_document[0].get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
-                    pixmap.save(str(staged_path))
-            except Exception as exc:
-                raise HTTPException(status_code=400, detail=f"Page {page_offset + 1} is not a readable JPG or PNG image.") from exc
-            staged_paths.append((staged_path, pages_dir / staged_path.name))
-    finally:
-        for image in images:
-            await image.close()
-
-    moved_paths: list[Path] = []
-    try:
-        for staged_path, final_path in staged_paths:
-            os.replace(staged_path, final_path)
-            moved_paths.append(final_path)
-
-        manifest_path = pages_dir / "manifest.json"
-        manifest = (
-            BookPageManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
-            if manifest_path.exists()
-            else BookPageManifest(
-                book_id=book_id,
-                source_path=source_path,
-                total_pages=0,
-                page_count=0,
-                pages=[],
-            )
-        )
-        existing_pages = {page.page_number: page for page in manifest.pages}
-        for _, final_path in staged_paths:
-            page_number = int(final_path.stem.removeprefix("page-"))
-            existing_pages[page_number] = PageRecord(
-                page_number=page_number,
-                image_filename=final_path.name,
-                image_path=str(final_path),
-                status="ready",
-                created_at=_utc_now(),
-            )
-        updated_total_pages = max(manifest.total_pages, start_page + len(images) - 1)
-        updated_manifest = BookPageManifest(
-            book_id=manifest.book_id,
-            source_path=manifest.source_path,
-            total_pages=updated_total_pages,
-            page_count=len(existing_pages),
-            pages=[existing_pages[number] for number in sorted(existing_pages)],
-        )
-        manifest_path.write_text(updated_manifest.model_dump_json(indent=2), encoding="utf-8")
-        return updated_manifest
-    except Exception:
-        for final_path in moved_paths:
-            final_path.unlink(missing_ok=True)
-        raise
-
-
-async def _append_photo_pages_to_book(book: BookRecord, images: list[UploadFile], upload_dir: Path) -> BookRecord:
-    if book.source_type != "page-by-page":
-        raise HTTPException(status_code=400, detail="Only page-by-page books can receive more photo pages.")
-
-    original_page_count = book.total_pages
-    pages_dir = Path(book.pages_path) if book.pages_path else _books_root() / book.id / "pages"
-    manifest = await _save_photo_import_as_images(
-        images,
-        book_id=book.id,
-        source_path=book.source_path,
-        pages_dir=pages_dir,
-        start_page=original_page_count + 1,
-        upload_dir=upload_dir,
-    )
-    book.total_pages = original_page_count + len(images)
-    book.page_split_status = "complete"
-    book.page_image_count = manifest.page_count
-    book.status = "pages_split"
-    book.processed_at = _utc_now()
-    return book
 
 
 def _registry_path() -> Path:
@@ -617,15 +447,26 @@ def _update_book_extraction_progress(book: BookRecord, *, current_page: int, pag
     _persist_book(book)
 
 
+def _extracted_page_numbers(book: BookRecord) -> set[int]:
+    page_artifact_root = _books_root() / book.id / "extractions" / "pages"
+    page_numbers: set[int] = set()
+    for artifact_path in page_artifact_root.glob("page-*.json"):
+        try:
+            page_numbers.add(int(artifact_path.stem.removeprefix("page-")))
+        except ValueError:
+            continue
+    return page_numbers
+
+
 def _complete_book_extraction(book: BookRecord, *, extraction_path: Path, extracted_page_count: int, page_start: int) -> None:
-    extracted_through_page = min(book.total_pages, page_start + extracted_page_count - 1)
+    extracted_pages = _extracted_page_numbers(book)
     book.extraction_total_pages = book.total_pages
-    book.extraction_pages_processed = max(book.extraction_pages_processed, extracted_through_page)
-    book.extracted_page_count = max(book.extracted_page_count, extracted_through_page)
-    book.extraction_current_page = book.extracted_page_count
+    book.extraction_pages_processed = len(extracted_pages)
+    book.extracted_page_count = len(extracted_pages)
+    book.extraction_current_page = max(extracted_pages) if extracted_pages else None
     book.extraction_updated_at = _utc_now()
     book.extraction_path = str(extraction_path)
-    if book.extracted_page_count >= book.total_pages:
+    if len(extracted_pages) >= book.total_pages:
         book.extraction_status = "complete"
         book.status = "extracted"
     else:
@@ -642,64 +483,86 @@ def _fail_book_extraction(book: BookRecord) -> None:
     _persist_book(book)
 
 
-def _start_background_extraction(
-    book: BookRecord,
-    *,
-    page_start: int,
-    page_count: int | None,
-    force: bool = True,
-) -> None:
-    page_start = max(page_start, book.extracted_page_count + 1)
+def _start_background_extraction(book: BookRecord, *, page_start: int, page_count: int | None) -> None:
+    page_start = max(1, page_start)
     if page_start > book.total_pages:
         return
     page_count = min(page_count or 2, book.total_pages - page_start + 1)
     with _progressive_extraction_lock:
         if book.id in _progressive_extraction_book_ids:
+            requested_end = page_start + page_count - 1
+            active_window = _progressive_extraction_active_windows.get(book.id)
+            pending_windows = _progressive_extraction_pending_windows.setdefault(book.id, [])
+            window = (page_start, page_count)
+            known_windows = ([active_window] if active_window else []) + pending_windows
+            if any(start <= page_start and start + count - 1 >= requested_end for start, count in known_windows):
+                return
+            if window not in pending_windows:
+                pending_windows.append(window)
             return
         _progressive_extraction_book_ids.add(book.id)
-    _initialize_book_extraction(book, page_count=page_count)
-    _persist_book(book)
-
-    def progress_callback(current_page: int, pages_processed: int, total_pages: int) -> None:
-        _update_book_extraction_progress(
-            book,
-            current_page=current_page,
-            pages_processed=pages_processed,
-            total_pages=total_pages,
-        )
+        _progressive_extraction_active_windows[book.id] = (page_start, page_count)
 
     def worker() -> None:
+        window: tuple[int, int] | None = (page_start, page_count)
         try:
-            manifest = split_source_into_page_images(
-                book.source_path,
-                book_id=book.id,
-                total_pages=book.total_pages,
-                page_start=page_start,
-                page_count=page_count,
-                display_title=book.title,
-                data_root=_books_root(),
-            )
-            book.page_image_count = manifest.page_count
-            book.page_split_status = "partial" if manifest.page_count < book.total_pages else "complete"
-            _persist_book(book)
-            extraction_path, extracted_page_count = extract_book_text(
-                book=book,
-                page_start=page_start,
-                page_count=page_count,
-                force=force,
-                ocr_provider=book.ocr_provider,
-                data_root=_books_root(),
-                owner_id=book.owner_id,
-                progress_callback=progress_callback,
-            )
-        except Exception:
-            logger.exception("Background book extraction failed for %s", book.id)
+            while window is not None:
+                window_start, window_count = window
+                _initialize_book_extraction(book, page_count=window_count)
+                _persist_book(book)
+
+                def progress_callback(current_page: int, pages_processed: int, total_pages: int) -> None:
+                    _update_book_extraction_progress(
+                        book,
+                        current_page=current_page,
+                        pages_processed=pages_processed,
+                        total_pages=total_pages,
+                    )
+
+                manifest = split_source_into_page_images(
+                    book.source_path,
+                    book_id=book.id,
+                    total_pages=book.total_pages,
+                    page_start=window_start,
+                    page_count=window_count,
+                    display_title=book.title,
+                    data_root=_books_root(),
+                )
+                book.page_image_count = manifest.page_count
+                book.page_split_status = "partial" if manifest.page_count < book.total_pages else "complete"
+                _persist_book(book)
+                extraction_path, extracted_page_count = extract_book_text(
+                    book=book,
+                    page_start=window_start,
+                    page_count=window_count,
+                    force=True,
+                    ocr_provider=book.ocr_provider,
+                    data_root=_books_root(),
+                    owner_id=book.owner_id,
+                    progress_callback=progress_callback,
+                )
+                _complete_book_extraction(
+                    book,
+                    extraction_path=extraction_path,
+                    extracted_page_count=extracted_page_count,
+                    page_start=window_start,
+                )
+                with _progressive_extraction_lock:
+                    pending_windows = _progressive_extraction_pending_windows.get(book.id, [])
+                    window = pending_windows.pop(0) if pending_windows else None
+                    if window is not None:
+                        _progressive_extraction_active_windows[book.id] = window
+                    else:
+                        _progressive_extraction_active_windows.pop(book.id, None)
+                    if not pending_windows:
+                        _progressive_extraction_pending_windows.pop(book.id, None)
+        except (OSError, RuntimeError, TypeError, ValueError):
             _fail_book_extraction(book)
-        else:
-            _complete_book_extraction(book, extraction_path=extraction_path, extracted_page_count=extracted_page_count, page_start=page_start)
         finally:
             with _progressive_extraction_lock:
                 _progressive_extraction_book_ids.discard(book.id)
+                _progressive_extraction_active_windows.pop(book.id, None)
+                _progressive_extraction_pending_windows.pop(book.id, None)
 
     thread = threading.Thread(target=worker, name=f"textplex-extract-{book.id}", daemon=True)
     thread.start()
@@ -719,14 +582,6 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.put("/auth/account-role", response_model=AuthMeResponse)
-def put_account_role(
-    payload: AccountRoleUpdateRequest,
-    context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
-) -> AuthMeResponse:
-    return set_hosted_account_role(context, payload.account_role)
-
-
 def _storage_ready(path: Path) -> bool:
     try:
         return path.exists() and path.is_dir() and os.access(path, os.R_OK | os.W_OK)
@@ -742,7 +597,7 @@ def _production_configuration_ready() -> bool:
         origin.startswith(("http://localhost", "http://127.", "http://192.168."))
         for origin in configured_origins
     )
-    return bool(configured_origins) and not has_insecure_origin and supabase_is_configured() and supabase_admin_is_configured()
+    return bool(configured_origins) and not has_insecure_origin and supabase_is_configured()
 
 
 @app.get("/ready")
@@ -769,7 +624,6 @@ def submit_feedback(
         payload.original_text,
         payload.context,
         user_id=context.user.id if context else None,
-        account_role=context.user.account_role if context else None,
     )
     record_analytics_event(
         app.state.data_root,
@@ -821,7 +675,6 @@ async def submit_feedback_with_screenshot(
         original_text,
         parsed_context,
         user_id=user_context.user.id if user_context else None,
-        account_role=user_context.user.account_role if user_context else None,
         screenshot_uploads=screenshot_uploads,
     )
     record_analytics_event(
@@ -870,6 +723,8 @@ def analyze_feedback_screenshot_images(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.get("/feedback/testers", response_model=TesterListResponse)
@@ -969,13 +824,7 @@ def post_feedback_github_issue(
     payload: FeedbackGitHubCreateRequest,
     context: AuthenticatedUserContext = AUTHENTICATED_USER_CONTEXT,
 ) -> FeedbackRecord:
-    if not has_permission(context, "accounts.manage"):
-        owns_feedback = any(
-            record.id == feedback_id and record.user_id == context.user.id
-            for record in list_feedback(app.state.data_root, limit=1000)
-        )
-        if not owns_feedback:
-            raise HTTPException(status_code=403, detail="Only the feedback author or an admin can send feedback to GitHub.")
+    require_permission(context, "accounts.manage")
     try:
         return create_github_issue(
             app.state.data_root,
@@ -1047,8 +896,6 @@ def import_text(
         return record
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.post("/wikipedia/random-import", response_model=BookRecord)
@@ -1219,9 +1066,9 @@ async def upload_book(
     translation_mode: TranslationMode = TRANSLATION_MODE,
     context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookRecord:
-    filename = Path(file.filename or "uploaded.txt").name
-    if Path(filename).suffix.lower() not in {".pdf", ".epub", ".txt"}:
-        raise HTTPException(status_code=400, detail="TextPlex import currently accepts PDF, EPUB, or TXT files only.")
+    filename = Path(file.filename or "uploaded.pdf").name
+    if Path(filename).suffix.lower() not in {".pdf", ".epub"}:
+        raise HTTPException(status_code=400, detail="TextPlex import currently accepts PDF or EPUB files only.")
 
     uploads_root = app.state.data_root / "uploads"
     uploads_root.mkdir(parents=True, exist_ok=True)
@@ -1278,73 +1125,6 @@ async def upload_book(
             shutil.rmtree(upload_dir, ignore_errors=True)
 
 
-@app.post("/books/upload-images", response_model=BookRecord)
-async def upload_image_pages(
-    images: list[UploadFile] = File(...),  # noqa: B008
-    language_code: str = REQUIRED_LANGUAGE_CODE,
-    title: str | None = OPTIONAL_TITLE,
-    author: str | None = OPTIONAL_AUTHOR,
-    ocr_provider: str | None = OPTIONAL_OCR_PROVIDER,
-    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
-) -> BookRecord:
-    uploads_root = app.state.data_root / "uploads"
-    uploads_root.mkdir(parents=True, exist_ok=True)
-    upload_dir = uploads_root / uuid4().hex
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    succeeded = False
-    try:
-        pdf_path = await _save_photo_import_as_pdf(images, upload_dir)
-        book = import_book_from_path(
-            pdf_path,
-            language_code=language_code,
-            source_type="page-by-page",
-            ocr_provider=ocr_provider,
-            title=title,
-            author=author,
-            source_filename="photo-import.pdf",
-            data_root=_books_root(),
-            owner_id=context.user.id if context else None,
-        )
-        _start_background_extraction(book, page_start=1, page_count=book.total_pages)
-        succeeded = True
-        return book
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    finally:
-        if not succeeded:
-            shutil.rmtree(upload_dir, ignore_errors=True)
-
-
-@app.post("/books/{book_id}/append-images", response_model=BookRecord)
-async def append_image_pages(
-    book_id: str,
-    images: list[UploadFile] = File(...),  # noqa: B008
-    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
-) -> BookRecord:
-    book = _book_exists(book_id, context)
-    uploads_root = app.state.data_root / "uploads"
-    uploads_root.mkdir(parents=True, exist_ok=True)
-    upload_dir = uploads_root / uuid4().hex
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        updated_book = await _append_photo_pages_to_book(book, images, upload_dir)
-        _start_background_extraction(
-            updated_book,
-            page_start=1,
-            page_count=updated_book.total_pages,
-            force=False,
-        )
-        return updated_book
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    finally:
-        shutil.rmtree(upload_dir, ignore_errors=True)
-
-
 @app.get("/books/{book_id}", response_model=BookRecord)
 def get_book(
     book_id: str,
@@ -1372,6 +1152,9 @@ def get_book_page(
     context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookReaderPageResponse:
     book = _book_exists(book_id, context)
+
+    if page_number < 1 or page_number > book.total_pages:
+        raise HTTPException(status_code=404, detail=f"Page not found: {page_number}")
 
     pages_path = _books_root() / book_id / "pages" / "manifest.json"
     if not pages_path.exists():
@@ -1406,7 +1189,33 @@ def get_book_page(
         raise HTTPException(status_code=404, detail=f"Page not found: {page_number}") from exc
 
     extraction = load_page_artifact(book_id=book_id, page_number=page_number, data_root=_books_root(), owner_id=book.owner_id)
-    _start_background_extraction(book, page_start=page_number + 1, page_count=2)
+    if extraction is None:
+        extraction_path, extracted_page_count = extract_book_text(
+            book=book,
+            page_start=page_number,
+            page_count=1,
+            force=True,
+            ocr_provider=book.ocr_provider,
+            data_root=_books_root(),
+            owner_id=book.owner_id,
+        )
+        _complete_book_extraction(book, extraction_path=extraction_path, extracted_page_count=extracted_page_count, page_start=page_number)
+        extraction = load_page_artifact(book_id=book_id, page_number=page_number, data_root=_books_root(), owner_id=book.owner_id)
+
+    previous_extraction = (
+        load_page_artifact(book_id=book_id, page_number=page_number - 1, data_root=_books_root(), owner_id=book.owner_id)
+        if page_number > 1
+        else None
+    )
+    if page_number > 1 and previous_extraction is None:
+        _start_background_extraction(book, page_start=page_number - 1, page_count=1)
+    next_extraction = (
+        load_page_artifact(book_id=book_id, page_number=page_number + 1, data_root=_books_root(), owner_id=book.owner_id)
+        if page_number < book.total_pages
+        else None
+    )
+    if page_number < book.total_pages and next_extraction is None:
+        _start_background_extraction(book, page_start=page_number + 1, page_count=1)
     image_url = f"/books/{book_id}/pages/{page_number}/image"
     return BookReaderPageResponse(
         book=book,
@@ -1566,6 +1375,8 @@ def extract_book(
     payload: BookExtractionRequest,
     context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> dict[str, str]:
+    registry_path = _registry_path()
+    registry = _load_book_registry()
     book = _book_exists(book_id, context)
 
     try:
@@ -1584,14 +1395,16 @@ def extract_book(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    _complete_book_extraction(
-        book,
-        extraction_path=extraction_path,
-        extracted_page_count=extracted_page_count,
-    )
+    book.extraction_status = "complete"
+    book.extracted_page_count = extracted_page_count
+    book.extraction_path = str(extraction_path)
+    book.status = "extracted"
+    registry[book_id] = book
+
+    save_registry(registry_path, registry)
+    book_path = _books_root() / book_id / "book.json"
+    book_path.write_text(book.model_dump_json(indent=2), encoding="utf-8")
     return {"status": "complete", "extraction_path": str(extraction_path)}
 
 

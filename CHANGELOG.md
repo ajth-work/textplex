@@ -3,6 +3,7 @@
 ## 2026-08-18
 
 - Changed PDF imports to progressive extraction: file metadata and the first readable page are ready before the upload returns, then the API maintains a two-page reader-driven extraction window instead of processing an entire book immediately (`import.form`).
+- Added direct reader page jumps with a target-first extraction path and queued previous/next page buffers for non-sequential reading (`reader.page-jump-control`).
 
 - Made hosted account-storage failures retryable and diagnosable rather than opaque 502s, and let learners who complete beta onboarding continue to their return route while storage recovers (#123).
 
