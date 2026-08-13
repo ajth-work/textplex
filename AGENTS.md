@@ -132,6 +132,8 @@ The reusable audit procedure and current audit record are in [`docs/AUDIT.md`](d
 - Run live checks on audit-owned ports and processes. Do not infer route reachability from a static file fetch or reuse an unknown service already bound to the port.
 - Record warnings and known limitations separately from passes. A local workflow review is not a substitute for a successful CI run.
 - The Sunday workflow in `.github/workflows/weekly-audit.yml` is automated evidence, not a replacement for human review of new security boundaries, configuration, warnings, or sensitive-data handling.
+- Keep canonical and legacy deployment smoke coverage in `config/route-smoke.json`; when adding or removing a user-facing route, update the manifest and its focused contract test in the same change.
+- Treat the `CI gate` status from `.github/workflows/ci.yml` as the stable required PR check. Reusable workflow lanes may evolve, but the gate must continue to require every active quality and validation lane.
 
 ### Python test isolation and dependencies
 

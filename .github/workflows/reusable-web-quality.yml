@@ -1,0 +1,65 @@
+name: Reusable web quality
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Site tests, web build, and lint
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NODE_PATH: ${{ github.workspace }}/apps/web/node_modules
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Run static site tests
+        run: npm run test:site
+
+      - name: Run Next web contract tests
+        run: npm run test:web:contracts
+
+      - name: Run maintenance and backup/restore tests
+        run: |
+          npm run test:maintenance
+          node --test tests/maintenance/data-backup.test.mjs
+
+      - name: Start preview reachability server
+        working-directory: site
+        run: |
+          node server.mjs > /tmp/textplex-site.log 2>&1 &
+          echo $! > /tmp/textplex-site.pid
+
+      - name: Check preview routes
+        env:
+          TEXTPLEX_WEB_BASE_URLS: http://127.0.0.1:8200
+          TEXTPLEX_SKIP_API_HEALTH: "1"
+        run: npm run test:web
+
+      - name: Stop preview reachability server
+        if: always()
+        run: kill "$(cat /tmp/textplex-site.pid)" || true
+
+      - name: Build web app
+        run: npm run build:web
+
+      - name: Run web lint non-interactively
+        env:
+          CI: "1"
+        run: npm run lint:web
