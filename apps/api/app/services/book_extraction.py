@@ -608,22 +608,23 @@ def _enrich_page_lexicon_metadata(
             if _language_root(language_code) == "ja":
                 contextual_romanization, contextual_definition = _japanese_contextual_metadata(sentence.tokens, token_index)
             romanization = (
-                token.romanization
+                contextual_romanization
+                or token.romanization
                 or token.pronunciation
-                or contextual_romanization
                 or (exact_entry.pinyin if exact_entry else None)
                 or pinyin_map.get(token.surface_form)
                 or google_romanization_map.get(token.surface_form)
                 or hebrew_romanization_map.get(token.surface_form)
             )
-            definition_short = token.definition_short or contextual_definition or (exact_entry.definition if exact_entry else None)
+            definition_short = contextual_definition or token.definition_short or (exact_entry.definition if exact_entry else None)
             proficiency_level = token.proficiency_level or (exact_entry.hsk_level if exact_entry else None)
             proficiency_system = token.proficiency_system or ("HSK" if exact_entry and exact_entry.hsk_level else None)
             tokens.append(
                 token.model_copy(
                     update={
                         "romanization": romanization,
-                        "pronunciation": romanization if romanization and not token.pronunciation else token.pronunciation,
+                        "pronunciation": contextual_romanization
+                        or (romanization if romanization and not token.pronunciation else token.pronunciation),
                         "definition_short": definition_short,
                         "proficiency_level": proficiency_level,
                         "proficiency_system": proficiency_system,

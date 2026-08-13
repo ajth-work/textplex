@@ -345,6 +345,28 @@ def test_parse_text_into_page_artifact_resolves_japanese_gofun_by_context(
     assert sentences[2].tokens[0].romanization == "gobun"
     assert sentences[2].tokens[0].definition_short == "a fifth; one fifth"
 
+    stale_page = artifact.page.model_copy(
+        update={
+            "sentences": [
+                sentences[0].model_copy(
+                    update={
+                        "tokens": [
+                            token.model_copy(update={"romanization": "Gobu", "pronunciation": "Gobu"})
+                            if token.surface_form == "五分"
+                            else token
+                            for token in sentences[0].tokens
+                        ]
+                    }
+                ),
+                *sentences[1:],
+            ]
+        }
+    )
+    refreshed_page = book_extraction_service._enrich_page_lexicon_metadata(stale_page, data_root=tmp_path)
+    refreshed_time_token = next(token for token in refreshed_page.sentences[0].tokens if token.surface_form == "五分")
+    assert refreshed_time_token.romanization == "gofun"
+    assert refreshed_time_token.pronunciation == "gofun"
+
 
 def test_parse_text_into_page_artifact_uses_google_romanization_when_local_readings_are_missing(
     monkeypatch: pytest.MonkeyPatch,
