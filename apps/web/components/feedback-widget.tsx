@@ -222,7 +222,7 @@ export function FeedbackWidget() {
                 <span className="eyebrow">Help improve TextPlex</span>
                 <h2 id="feedback-dialog-title">What happened?</h2>
               </div>
-              <button type="button" className="button button-secondary app-feedback-close-button" onClick={close} disabled={status === "submitting"} aria-label="Close feedback dialog" title="Close feedback dialog">
+              <button type="button" className="button button-secondary app-feedback-close-button" onClick={close} disabled={status === "submitting"} aria-label="Close feedback dialog" title="Close feedback dialog" data-inventory-id="shell.feedback-close-button">
                 <CloseIcon />
               </button>
             </div>
