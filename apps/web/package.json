@@ -9,7 +9,7 @@
     "lint": "node ../../node_modules/eslint/bin/eslint.js app components lib --max-warnings=0"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.109.0",
+    "@supabase/supabase-js": "2.112.2",
     "next": "16.2.11",
     "react": "18.2.0",
     "react-dom": "18.2.0"
