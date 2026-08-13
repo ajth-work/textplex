@@ -19,6 +19,7 @@ test("beta feedback loop wires authenticated submission to the protected admin r
   const buildFooter = read("apps", "web", "components", "build-footer.tsx");
   const reader = read("apps", "web", "components", "reader-view.tsx");
   const feedbackEvents = read("apps", "web", "lib", "feedback-events.ts");
+  const stylesheet = read("apps", "web", "app", "globals.css");
   const inventory = read("docs", "COMPONENTS_INVENTORY.md");
 
   assert.match(widget, /submitFeedback\(trimmedMessage, submissionContext\)/);
@@ -28,6 +29,10 @@ test("beta feedback loop wires authenticated submission to the protected admin r
   assert.match(widget, /type="file"/);
   assert.match(widget, /multiple/);
   assert.match(widget, /accept="image\/png,image\/jpeg,image\/webp,image\/gif"/);
+  assert.match(widget, /aria-label="Close feedback dialog"/);
+  assert.match(widget, /data-inventory-id="shell\.feedback-close-button"/);
+  assert.match(stylesheet, /\.app-feedback-close-button\s*\{[\s\S]*?flex: 0 0 3rem;[\s\S]*?min-width: 3rem;[\s\S]*?min-height: 3rem;/);
+  assert.match(stylesheet, /\.app-feedback-close-button svg\s*\{[\s\S]*?width: 1\.25rem;[\s\S]*?height: 1\.25rem;/);
   assert.match(client, /postJson<FeedbackRecord>\("\/feedback", \{ original_text: originalText, context \}\)/);
   assert.match(client, /postFormData<FeedbackRecord>\("\/feedback\/with-screenshot", body\)/);
   assert.match(client, /screenshot-analysis/);
@@ -72,4 +77,6 @@ test("beta feedback loop wires authenticated submission to the protected admin r
   assert.match(inventory, /`admin-feedback\.page`[^\n]*Admin-only feedback review surface/);
   assert.match(inventory, /`reader\.sentence-feedback-button`/);
   assert.match(inventory, /`reader\.definition-correction-button`/);
+  assert.match(inventory, /`shell\.feedback-close-button`[^\n]*Close feedback dialog/);
+  assert.match(inventory, /`shell\.feedback-close-button`[^\n]*\[#124\]/);
 });
