@@ -11464,18 +11464,18 @@ html[data-app-theme="season-fall-harvest-night"] {
   text-align: left;
 }
 
-.reader-session-pill-carousel {
+.reader-carousel {
   position: relative;
   overflow: visible;
 }
 
-.reader-session-pill-rail:focus-visible {
+.reader-carousel-rail:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.reader-session-pill-rail:hover,
-.reader-session-pill-rail:focus-within {
+.reader-carousel-rail:hover,
+.reader-carousel-rail:focus-within {
   background: color-mix(in srgb, var(--accent) 5%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
 }
@@ -11484,13 +11484,13 @@ html[data-app-theme="season-fall-harvest-night"] {
   display: none;
 }
 
-.reader-session-pill-rail.is-dragging {
+.reader-carousel-rail.is-dragging {
   cursor: grabbing;
   user-select: none;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .reader-session-pill-rail {
+  .reader-carousel-rail {
     cursor: grab;
   }
 
@@ -11517,8 +11517,8 @@ html[data-app-theme="season-fall-harvest-night"] {
     white-space: nowrap;
   }
 
-  .reader-session-pill-carousel:hover .reader-carousel-hint,
-  .reader-session-pill-carousel:focus-within .reader-carousel-hint {
+  .reader-carousel:hover .reader-carousel-hint,
+  .reader-carousel:focus-within .reader-carousel-hint {
     opacity: 1;
     transform: translateY(0);
   }
@@ -11744,10 +11744,49 @@ html[data-app-theme="season-fall-harvest-night"] {
 
 .reader-progress-compact {
   display: grid;
-  gap: 0.2rem;
   grid-column: 1 / -1;
   min-width: 0;
   padding: 0.08rem 0.15rem 0.1rem;
+}
+
+.reader-progress-carousel {
+  min-width: 0;
+}
+
+.reader-progress-rail {
+  display: flex;
+  gap: 0.45rem;
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.08rem 0.12rem 0.2rem;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 0.12rem;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
+
+.reader-progress-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.reader-progress-card {
+  flex: 0 0 clamp(12.5rem, 34%, 17rem);
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+  padding: 0.4rem 0.5rem 0.48rem;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: 0.72rem;
+  background: color-mix(in srgb, var(--surface-soft) 88%, transparent);
+  scroll-snap-align: start;
+}
+
+.reader-progress-carousel-hint {
+  right: 0.45rem;
 }
 
 .reader-progress-compact-head {

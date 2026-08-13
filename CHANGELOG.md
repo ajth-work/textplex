@@ -12,6 +12,8 @@
 
 ## 2026-08-12
 
+- Added sentence, page, and book progress cards to a horizontally scrollable Reader visual-progress carousel, with desktop wheel/drag and keyboard/touch fallbacks scoped to the carousel (#91; `reader.reading-progress-module`, `reader.progress-carousel`, `reader.progress-card`).
+
 - Prepared the React 19 dependency upgrades with JSX compatibility fixes; deferred TypeScript 7.0.2 because the current Next ESLint toolchain does not support it yet.
 
 - Added P2 integration evidence workflow: focused local boundary suites cover auth, ownership, Supabase adapters, learner sync, commerce/webhooks, backup/restore, and web contracts; optional hosted probes cover readiness, authenticated profile ownership, learner sync, entitlements, multi-user separation, and deployment routes.

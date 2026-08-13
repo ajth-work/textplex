@@ -1714,6 +1714,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const sentenceTouchStartRef = useRef<{ x: number; y: number } | null>(null);
   const customVocabularyMenuRef = useRef<HTMLDivElement | null>(null);
   const sessionSummaryRailRef = useRef<HTMLDivElement | null>(null);
+  const readingProgressRailRef = useRef<HTMLDivElement | null>(null);
 
   const markReaderInteraction = useCallback(() => {
     lastReaderInteractionAtRef.current = Date.now();
@@ -2801,28 +2802,40 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const selectedSentenceSecondsPerToken = selectedSentenceTokenCount > 0 ? sentenceActiveSeconds / selectedSentenceTokenCount : null;
   const pagePillLabel = totalPages ? `P${pageNumber}/${totalPages}` : `P${pageNumber}`;
   const sentencePillLabel = `S${selectedSentencePosition || 1}/${page?.sentences.length ?? 0}`;
-  const readerVisualProgress = useMemo(() => {
+  const readerVisualProgressItems = useMemo(() => {
     const sentenceCount = page?.sentences.length ?? 0;
-    if (totalPages === 1 && sentenceCount > 0) {
-      const sentencePosition = Math.max(1, selectedSentencePosition || 1);
-      const percent = Math.min(100, Math.round((sentencePosition / sentenceCount) * 100));
-      return {
+    const sentencePosition = Math.max(1, selectedSentencePosition || 1);
+    const items: Array<{ id: "sentence" | "page" | "book"; label: string; value: string; percent: number; valueText?: string }> = [];
+
+    if (sentenceCount > 0) {
+      items.push({
+        id: "sentence",
         label: "Sentence progress",
         value: `S${sentencePosition}/${sentenceCount}`,
-        percent,
-      };
+        percent: Math.min(100, Math.round((sentencePosition / sentenceCount) * 100)),
+      });
     }
 
     if (totalPages && totalPages > 0) {
-      return {
+      items.push({
+        id: "page",
         label: "Page progress",
         value: pagePillLabel,
         percent: Math.min(100, Math.round((pageNumber / totalPages) * 100)),
-      };
+      });
     }
 
-    return null;
-  }, [page?.sentences.length, pageNumber, pagePillLabel, selectedSentencePosition, totalPages]);
+    const bookPercent = bookProgressSummary?.progress_percent ?? 0;
+    items.push({
+      id: "book",
+      label: "Book progress",
+      value: bookProgressLoading ? "Loading" : `${bookPercent}%`,
+      percent: Math.min(100, Math.max(0, bookPercent)),
+      valueText: bookProgressLoading ? "Book progress is loading" : `${bookPercent}% complete`,
+    });
+
+    return items;
+  }, [bookProgressLoading, bookProgressSummary?.progress_percent, page?.sentences.length, pageNumber, pagePillLabel, selectedSentencePosition, totalPages]);
   const sessionLabel = sessionReady ? "Session active" : "Session starting";
   const averageSessionLengthSeconds = profileSummary?.average_seconds_per_session ?? null;
   const sessionSummaryItems = useMemo(
@@ -2884,6 +2897,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     [sessionSummaryHiddenItemIdSet, sessionSummaryItems],
   );
   useReaderCarouselInteractions(sessionSummaryRailRef);
+  useReaderCarouselInteractions(readingProgressRailRef);
   const canMoveToPreviousSentence = selectedSentenceIndex > 0;
 
   function handleToggleSessionSummaryEditing() {
@@ -4611,9 +4625,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   </button>
                 </div>
                 <div className="reader-session-stats" aria-label="Current session stats">
-                  <div className="session-pill reader-session-pill reader-session-pill-carousel" data-inventory-id="reader.session-summary-toggle">
+                  <div className="session-pill reader-session-pill reader-session-pill-carousel reader-carousel" data-inventory-id="reader.session-summary-toggle">
                     <div
-                      className="reader-session-pill-rail"
+                      className="reader-session-pill-rail reader-carousel-rail"
                       aria-roledescription="carousel"
                       aria-label="Session summary carousel"
                       aria-keyshortcuts="ArrowLeft ArrowRight"
@@ -4719,21 +4733,46 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     </span>
                   </div>
                 </div>
-                {readerVisualProgress ? (
+                {readerVisualProgressItems.length > 0 ? (
                   <div className="reader-progress-compact" data-inventory-id="reader.reading-progress-module" aria-label="Reading progress">
-                    <div className="reader-progress-compact-head">
-                      <span>{readerVisualProgress.label}</span>
-                      <strong>{readerVisualProgress.value}</strong>
-                    </div>
                     <div
-                      className="reader-progress-compact-track"
-                      role="progressbar"
-                      aria-label={readerVisualProgress.label}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={readerVisualProgress.percent}
+                      className="reader-progress-carousel reader-carousel"
+                      data-inventory-id="reader.progress-carousel"
                     >
-                      <span style={{ width: `${readerVisualProgress.percent}%` }} />
+                      <div
+                        className="reader-progress-rail reader-carousel-rail"
+                        aria-roledescription="carousel"
+                        aria-label="Reading progress carousel"
+                        aria-keyshortcuts="ArrowLeft ArrowRight"
+                        aria-describedby="reader-progress-carousel-hint"
+                        data-inventory-id="reader.progress-carousel"
+                        ref={readingProgressRailRef}
+                        tabIndex={0}
+                      >
+                        {readerVisualProgressItems.map((item) => (
+                          <section className="reader-progress-card" data-inventory-id="reader.progress-card" key={item.id} aria-label={item.label}>
+                            <div className="reader-progress-compact-head">
+                              <span>{item.label}</span>
+                              <strong>{item.value}</strong>
+                            </div>
+                            <div
+                              className="reader-progress-compact-track"
+                              role="progressbar"
+                              aria-label={item.label}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-valuenow={item.percent}
+                              aria-valuetext={item.valueText}
+                              aria-busy={item.id === "book" && bookProgressLoading}
+                            >
+                              <span style={{ width: `${item.percent}%` }} />
+                            </div>
+                          </section>
+                        ))}
+                      </div>
+                      <span id="reader-progress-carousel-hint" className="reader-carousel-hint reader-progress-carousel-hint" role="note">
+                        Drag or scroll to compare progress
+                      </span>
                     </div>
                   </div>
                 ) : null}
