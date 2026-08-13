@@ -368,6 +368,56 @@ def test_parse_text_into_page_artifact_resolves_japanese_gofun_by_context(
     assert refreshed_time_token.pronunciation == "gofun"
 
 
+@pytest.mark.parametrize(
+    ("text", "expected_reading"),
+    [
+        ("一分かかります。", "ippun"),
+        ("二分かかります。", "nifun"),
+        ("三分かかります。", "sanpun"),
+        ("四分かかります。", "yonpun"),
+        ("五分かかります。", "gofun"),
+        ("六分かかります。", "roppun"),
+        ("七分かかります。", "nanafun"),
+        ("八分かかります。", "happun"),
+        ("九分かかります。", "kyūfun"),
+        ("十分かかります。", "juppun"),
+        ("十五分かかります。", "gofun"),
+        ("二十分かかります。", "nijuppun"),
+    ],
+)
+def test_parse_text_into_page_artifact_resolves_japanese_minute_counter_variants(
+    text: str,
+    expected_reading: str,
+    tmp_path: Path,
+) -> None:
+    artifact = book_extraction_service.parse_text_into_page_artifact(
+        text=text,
+        language_code="ja",
+        title="日本語の分の数え方",
+        data_root=tmp_path,
+    )
+
+    counter_tokens = [token for token in artifact.page.sentences[0].tokens if "分" in token.surface_form]
+    assert counter_tokens
+    assert counter_tokens[-1].romanization == expected_reading
+
+
+def test_parse_text_into_page_artifact_keeps_fractional_bun_distinct_from_minute_fun(
+    tmp_path: Path,
+) -> None:
+    artifact = book_extraction_service.parse_text_into_page_artifact(
+        text="四分の一です。五分の一です。",
+        language_code="ja",
+        title="日本語の分数",
+        data_root=tmp_path,
+    )
+
+    first_fraction = artifact.page.sentences[0].tokens[0]
+    second_fraction = artifact.page.sentences[1].tokens[0]
+    assert first_fraction.romanization == "yonbun"
+    assert second_fraction.romanization == "gobun"
+
+
 def test_parse_text_into_page_artifact_uses_google_romanization_when_local_readings_are_missing(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
