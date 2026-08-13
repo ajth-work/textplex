@@ -2,6 +2,8 @@
 
 ## 2026-08-18
 
+- Made hosted account-storage failures retryable and diagnosable rather than opaque 502s, and let learners who complete beta onboarding continue to their return route while storage recovers (#123).
+
 - Cleared PR #150 CI failures by formatting the Python quality lane and restoring the onboarding error contract with updated Wikipedia error handling coverage.
 
 - Fixed mobile feedback screenshot uploads by accepting trusted JPEG MIME aliases or missing MIME metadata, and surfaced API validation details in the feedback dialog.
