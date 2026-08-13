@@ -45,6 +45,7 @@ from processor.contracts import (
     BookExtractionResult,
     PageExtractionResult,
     SentenceResult,
+    TokenResult,
 )
 from pypdf import PdfReader
 
@@ -76,6 +77,25 @@ def _lexicon_root(data_root: Path) -> Path:
 
 def _language_root(language_code: str) -> str:
     return (language_code or "").strip().lower().split("-", 1)[0]
+
+
+def _japanese_contextual_metadata(
+    tokens: list[TokenResult],
+    token_index: int,
+) -> tuple[str | None, str | None]:
+    """Resolve the small set of Japanese homographs where token context matters."""
+    token = tokens[token_index]
+    if token.surface_form != "五分":
+        return None, None
+
+    next_surface = tokens[token_index + 1].surface_form if token_index + 1 < len(tokens) else None
+    following_surface = tokens[token_index + 2].surface_form if token_index + 2 < len(tokens) else None
+
+    if next_surface == "五分" or (token_index > 0 and tokens[token_index - 1].surface_form == "五分"):
+        return "gobu", "evenly matched; fifty-fifty"
+    if next_surface == "の" and following_surface and following_surface[0] in "一二三四五六七八九十":
+        return "gobun", "a fifth; one fifth"
+    return "gofun", "five minutes"
 
 
 def _is_punctuation_surface(surface_form: str) -> bool:
@@ -582,17 +602,21 @@ def _enrich_page_lexicon_metadata(
     sentences = []
     for sentence in page_result.sentences:
         tokens = []
-        for token in sentence.tokens:
+        for token_index, token in enumerate(sentence.tokens):
             exact_entry = lexicon_entries.get(token.surface_form)
+            contextual_romanization, contextual_definition = (None, None)
+            if _language_root(language_code) == "ja":
+                contextual_romanization, contextual_definition = _japanese_contextual_metadata(sentence.tokens, token_index)
             romanization = (
                 token.romanization
                 or token.pronunciation
+                or contextual_romanization
                 or (exact_entry.pinyin if exact_entry else None)
                 or pinyin_map.get(token.surface_form)
                 or google_romanization_map.get(token.surface_form)
                 or hebrew_romanization_map.get(token.surface_form)
             )
-            definition_short = token.definition_short or (exact_entry.definition if exact_entry else None)
+            definition_short = token.definition_short or contextual_definition or (exact_entry.definition if exact_entry else None)
             proficiency_level = token.proficiency_level or (exact_entry.hsk_level if exact_entry else None)
             proficiency_system = token.proficiency_system or ("HSK" if exact_entry and exact_entry.hsk_level else None)
             tokens.append(

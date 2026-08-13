@@ -300,6 +300,52 @@ def test_parse_text_into_page_artifact_keeps_japanese_okurigana_reading_together
     assert tokens[0].romanization == "reading-\u98f2\u307f\u307e\u3059"
 
 
+def test_parse_text_into_page_artifact_resolves_japanese_gofun_by_context(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        book_extraction_service,
+        "lookup_lexicon_entry_map",
+        lambda *, terms, **_kwargs: {
+            "\u4e94\u5206": LexiconEntryRecord(
+                id=1,
+                language_code="ja",
+                entry_type="word",
+                surface_form="\u4e94\u5206",
+                pinyin="gofun",
+                definition="five minutes",
+            )
+        }
+        if "\u4e94\u5206" in terms
+        else {},
+    )
+    monkeypatch.setattr(
+        book_extraction_service,
+        "lookup_lexicon_pinyin_map",
+        lambda *, terms, **_kwargs: {"\u4e94\u5206": "gofun"} if "\u4e94\u5206" in terms else {},
+    )
+
+    artifact = book_extraction_service.parse_text_into_page_artifact(
+        text="\u99c5\u307e\u3067\u6b69\u304f\u3068\u3001\u5341\u4e94\u5206\u3050\u3089\u3044\u304b\u304b\u308a\u307e\u3059\u3002\u4e94\u5206\u4e94\u5206\u306e\u52dd\u8ca0\u3067\u3059\u3002\u4e94\u5206\u306e\u4e00\u3067\u3059\u3002",
+        language_code="ja",
+        title="\u65e5\u672c\u8a9e\u306e\u5206",
+        data_root=tmp_path,
+    )
+
+    sentences = artifact.page.sentences
+    time_token = next(token for token in sentences[0].tokens if token.surface_form == "\u4e94\u5206")
+    assert time_token.romanization == "gofun"
+    assert time_token.definition_short == "five minutes"
+    assert [token.romanization for token in sentences[1].tokens[:2]] == ["gobu", "gobu"]
+    assert [token.definition_short for token in sentences[1].tokens[:2]] == [
+        "evenly matched; fifty-fifty",
+        "evenly matched; fifty-fifty",
+    ]
+    assert sentences[2].tokens[0].romanization == "gobun"
+    assert sentences[2].tokens[0].definition_short == "a fifth; one fifth"
+
+
 def test_parse_text_into_page_artifact_uses_google_romanization_when_local_readings_are_missing(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

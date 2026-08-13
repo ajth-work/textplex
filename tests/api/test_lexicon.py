@@ -148,6 +148,10 @@ def test_import_and_lookup_japanese_context_entries(tmp_path: Path) -> None:
     assert noun_lookup.entries[0].pinyin == "ha"
     assert noun_lookup.entries[0].definition == "tooth; teeth"
 
+    time_lookup = lookup_lexicon_entry(data_root=data_root, language_code="ja", term="\u4e94\u5206")
+    assert time_lookup.entries[0].pinyin == "gofun"
+    assert time_lookup.entries[0].definition == "five minutes"
+
 
 def test_import_and_lookup_lexicon_from_russian_pack(tmp_path: Path) -> None:
     source_root = Path(__file__).resolve().parents[2] / "resources" / "lexicon" / "russian"
