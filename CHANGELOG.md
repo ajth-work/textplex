@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-13
+
+- Enlarged the feedback-dialog close control to a 48px target with a legible icon and stable responsive sizing; added focused contract coverage for `shell.feedback-close-button` (#124).
+
 ## 2026-08-12
 
 - Prepared the React 19 dependency upgrades with JSX compatibility fixes; deferred TypeScript 7.0.2 because the current Next ESLint toolchain does not support it yet.
