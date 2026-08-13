@@ -21,9 +21,23 @@ from .extraction import (
     stitch_page_sentence_carryover,
     tokenize_sentence,
 )
+from .japanese_conjugation import (
+    FORM_SLOTS,
+    JapaneseConjugationClass,
+    JapaneseConjugationResult,
+    JapaneseFormSlot,
+    JapaneseVerbRecord,
+    classify_japanese_verb,
+    conjugate_japanese_verb,
+)
 
 __all__ = [
+    "FORM_SLOTS",
     "BookExtractionResult",
+    "JapaneseConjugationClass",
+    "JapaneseConjugationResult",
+    "JapaneseFormSlot",
+    "JapaneseVerbRecord",
     "LexicalEntryResult",
     "PageExtractionResult",
     "SentenceResult",
@@ -33,6 +47,8 @@ __all__ = [
     "build_page_extraction_result",
     "calculate_book_hsk_metrics",
     "calculate_hsk_series",
+    "classify_japanese_verb",
+    "conjugate_japanese_verb",
     "format_hsk_level",
     "is_hanzi",
     "normalize_text",

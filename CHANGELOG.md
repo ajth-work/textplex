@@ -6,6 +6,7 @@
 - Added direct reader page jumps with a target-first extraction path and queued previous/next page buffers for non-sequential reading (`reader.page-jump-control`).
 
 - Made hosted account-storage failures retryable and diagnosable rather than opaque 502s, and let learners who complete beta onboarding continue to their return route while storage recovers (#123).
+- Added a Japanese conjugation engine and read-only API endpoint that model godan, ichidan, する, and 来る families with explainable rule IDs and lexical overrides for exceptions such as 行く and ある.
 
 - Cleared PR #150 CI failures by formatting the Python quality lane and restoring the onboarding error contract with updated Wikipedia error handling coverage.
 
