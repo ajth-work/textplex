@@ -27,3 +27,7 @@ Recommended mapping for the current compatibility schema:
 - `definition`: short English gloss
 
 Keep source conversion scripts alongside this pack once the first generated database exists.
+
+## Imported Reference Workbook
+
+`Afterlife - JLPT N1 and Jōyō Kanji (Database).xlsx` is a user-provided reference workbook imported from Google Drive on 2026-08-13. It is preserved as source material for future Japanese lexicon and kanji-pack work; the runtime importer does not consume the workbook directly yet.
