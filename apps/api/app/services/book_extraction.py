@@ -49,6 +49,7 @@ from processor.contracts import (
     BookExtractionResult,
     PageExtractionResult,
     SentenceResult,
+    TokenResult,
 )
 from pypdf import PdfReader
 
@@ -80,6 +81,171 @@ def _lexicon_root(data_root: Path) -> Path:
 
 def _language_root(language_code: str) -> str:
     return (language_code or "").strip().lower().split("-", 1)[0]
+
+
+_JAPANESE_NUMBER_VALUES = {
+    "一": 1,
+    "二": 2,
+    "三": 3,
+    "四": 4,
+    "五": 5,
+    "六": 6,
+    "七": 7,
+    "八": 8,
+    "九": 9,
+    "十": 10,
+}
+_JAPANESE_NUMBER_ROMAJI = {
+    1: "ichi",
+    2: "ni",
+    3: "san",
+    4: "yon",
+    5: "go",
+    6: "roku",
+    7: "nana",
+    8: "hachi",
+    9: "kyū",
+}
+_JAPANESE_MINUTE_READINGS = {
+    1: "ippun",
+    2: "nifun",
+    3: "sanpun",
+    4: "yonpun",
+    5: "gofun",
+    6: "roppun",
+    7: "nanafun",
+    8: "happun",
+    9: "kyūfun",
+}
+_JAPANESE_COUNTER_READINGS = {
+    "本": {
+        1: "ippon",
+        2: "nihon",
+        3: "sanbon",
+        4: "yonhon",
+        5: "gohon",
+        6: "roppon",
+        7: "nanahon",
+        8: "happon",
+        9: "kyūhon",
+        10: "juppon",
+    },
+    "匹": {
+        1: "ippiki",
+        2: "nihiki",
+        3: "sanbiki",
+        4: "yonhiki",
+        5: "gohiki",
+        6: "roppiki",
+        7: "nanahiki",
+        8: "happiki",
+        9: "kyūhiki",
+        10: "juppiki",
+    },
+    "杯": {
+        1: "ippai",
+        2: "nihai",
+        3: "sanbai",
+        4: "yonhai",
+        5: "gohai",
+        6: "roppai",
+        7: "nanahai",
+        8: "happai",
+        9: "kyūhai",
+        10: "juppai",
+    },
+}
+
+
+def _parse_japanese_number(value: str) -> int | None:
+    if not value or any(character not in _JAPANESE_NUMBER_VALUES for character in value):
+        return None
+    if value == "十":
+        return 10
+    if "十" in value:
+        tens, ones = value.split("十", 1)
+        if len(tens) > 1 or len(ones) > 1:
+            return None
+        return (_JAPANESE_NUMBER_VALUES.get(tens, 1) * 10) + _JAPANESE_NUMBER_VALUES.get(ones, 0)
+    return _JAPANESE_NUMBER_VALUES[value]
+
+
+def _japanese_number_romaji(value: int) -> str | None:
+    if value in _JAPANESE_NUMBER_ROMAJI:
+        return _JAPANESE_NUMBER_ROMAJI[value]
+    if value == 10:
+        return "jū"
+    if 10 < value < 100:
+        tens, ones = divmod(value, 10)
+        tens_text = "jū" if tens == 1 else f"{_JAPANESE_NUMBER_ROMAJI.get(tens, '')}jū"
+        return f"{tens_text}{_JAPANESE_NUMBER_ROMAJI.get(ones, '')}"
+    return None
+
+
+def _japanese_counter_number(
+    token_surface: str,
+) -> tuple[str, int, str] | None:
+    counters = (*_JAPANESE_COUNTER_READINGS, "分")
+    for counter in sorted(counters, key=len, reverse=True):
+        if counter not in token_surface:
+            continue
+        number_text, token_tail = token_surface.split(counter, 1)
+        number = _parse_japanese_number(number_text)
+        if number is not None:
+            return counter, number, token_tail
+    return None
+
+
+def _japanese_contextual_metadata(
+    tokens: list[TokenResult],
+    token_index: int,
+) -> tuple[str | None, str | None]:
+    """Resolve Japanese counter readings that depend on number or sense."""
+    counter_data = _japanese_counter_number(tokens[token_index].surface_form)
+    if counter_data is None:
+        return None, None
+    counter, number, token_tail = counter_data
+
+    next_surface = tokens[token_index + 1].surface_form if token_index + 1 < len(tokens) else None
+    following_surface = tokens[token_index + 2].surface_form if token_index + 2 < len(tokens) else None
+
+    if counter == "分" and number == 5 and (
+        (next_surface is not None and next_surface.startswith("五分"))
+        or (token_index > 0 and tokens[token_index - 1].surface_form.startswith("五分"))
+    ):
+        return "gobu", "evenly matched; fifty-fifty"
+    if (
+        counter == "分"
+        and not token_tail
+        and next_surface == "の"
+        and following_surface
+        and following_surface[0] in "一二三四五六七八九十"
+    ):
+        reading = f"{_japanese_number_romaji(number)}bun"
+        definition = "a fifth; one fifth" if number == 5 else None
+        return reading, definition
+
+    if counter != "分":
+        return _JAPANESE_COUNTER_READINGS[counter].get(number), None
+
+    minute_context = token_tail in {"間", "ぐらい", "ほど", "かかります", "かかる"} or next_surface in {
+        "間",
+        "ぐらい",
+        "ほど",
+        "かかります",
+        "かかる",
+    }
+    if number == 10 and not minute_context:
+        return None, None
+
+    number_romaji = _japanese_number_romaji(number)
+    if not number_romaji:
+        return None, None
+    if number % 10 == 0:
+        return ("juppun" if number == 10 else f"{number_romaji.removesuffix('jū')}juppun"), None
+    if number > 10:
+        return f"{number_romaji.removesuffix('jū')}{_JAPANESE_MINUTE_READINGS[number % 10]}", None
+    return _JAPANESE_MINUTE_READINGS[number], "five minutes" if number == 5 else None
 
 
 def _is_punctuation_surface(surface_form: str) -> bool:
@@ -581,29 +747,40 @@ def _enrich_page_lexicon_metadata(
             }
 
     if not pinyin_map and not lexicon_entries and not google_romanization_map and not hebrew_romanization_map:
-        return page_result
+        has_japanese_context = _language_root(language_code) == "ja" and any(
+            _japanese_contextual_metadata(sentence.tokens, token_index)[0]
+            for sentence in page_result.sentences
+            for token_index, _token in enumerate(sentence.tokens)
+        )
+        if not has_japanese_context:
+            return page_result
 
     sentences = []
     for sentence in page_result.sentences:
         tokens = []
-        for token in sentence.tokens:
+        for token_index, token in enumerate(sentence.tokens):
             exact_entry = lexicon_entries.get(token.surface_form)
+            contextual_romanization, contextual_definition = (None, None)
+            if _language_root(language_code) == "ja":
+                contextual_romanization, contextual_definition = _japanese_contextual_metadata(sentence.tokens, token_index)
             romanization = (
-                token.romanization
+                contextual_romanization
+                or token.romanization
                 or token.pronunciation
                 or (exact_entry.pinyin if exact_entry else None)
                 or pinyin_map.get(token.surface_form)
                 or google_romanization_map.get(token.surface_form)
                 or hebrew_romanization_map.get(token.surface_form)
             )
-            definition_short = token.definition_short or (exact_entry.definition if exact_entry else None)
+            definition_short = contextual_definition or token.definition_short or (exact_entry.definition if exact_entry else None)
             proficiency_level = token.proficiency_level or (exact_entry.hsk_level if exact_entry else None)
             proficiency_system = token.proficiency_system or ("HSK" if exact_entry and exact_entry.hsk_level else None)
             tokens.append(
                 token.model_copy(
                     update={
                         "romanization": romanization,
-                        "pronunciation": romanization if romanization and not token.pronunciation else token.pronunciation,
+                        "pronunciation": contextual_romanization
+                        or (romanization if romanization and not token.pronunciation else token.pronunciation),
                         "definition_short": definition_short,
                         "proficiency_level": proficiency_level,
                         "proficiency_system": proficiency_system,
