@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-14
+
+- Made the TXT import regression fixture byte-stable across Windows and Linux so CRLF normalization is tested consistently.
+
 ## 2026-08-12
 
 - Prepared the React 19 dependency upgrades with JSX compatibility fixes; deferred TypeScript 7.0.2 because the current Next ESLint toolchain does not support it yet.

@@ -16,7 +16,7 @@ def restore_app_data_root():
 
 def test_import_txt_preserves_form_feed_pages_and_extracts_text(tmp_path: Path) -> None:
     txt_path = tmp_path / "reading-sample.txt"
-    txt_path.write_text("First page.\r\nKeep this paragraph.\fSecond page.\n", encoding="utf-8")
+    txt_path.write_bytes(b"First page.\r\nKeep this paragraph.\fSecond page.\n")
     data_root = tmp_path / "books"
 
     book = import_book_from_path(txt_path, language_code="en", data_root=data_root)
@@ -27,7 +27,7 @@ def test_import_txt_preserves_form_feed_pages_and_extracts_text(tmp_path: Path) 
     assert book.total_pages == 2
     assert book.page_image_count == 2
     assert [artifact.text_source for artifact in artifacts] == ["txt", "txt"]
-    assert artifacts[0].page.raw_text == "First page.\n\nKeep this paragraph."
+    assert artifacts[0].page.raw_text == "First page.\nKeep this paragraph."
     assert artifacts[1].page.raw_text == "Second page."
     assert (data_root / book.id / "pages" / "page-0001.png").exists()
     assert (data_root / book.id / "pages" / "page-0002.png").exists()
