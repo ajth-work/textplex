@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-14
+
+- Made the TXT import regression fixture byte-stable across Windows and Linux so CRLF normalization is tested consistently.
+
 ## 2026-08-13
 
 - Generalized Japanese number-counter readings and sound-change handling, with focused extraction and lexicon regression coverage.

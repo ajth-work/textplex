@@ -881,9 +881,10 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
   if (route === "/import") {
     return {
       default_language: "zh",
-      supported_inputs: ["pdf", "epub", "paste", "wikipedia-random"],
+      supported_inputs: ["pdf", "epub", "txt", "paste", "wikipedia-random"],
       can_upload_pdf: true,
       can_upload_epub: true,
+      can_upload_txt: true,
       can_paste_text: true,
       can_import_random_wikipedia: true,
       recent_books: [

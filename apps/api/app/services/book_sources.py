@@ -17,6 +17,8 @@ from processor import normalize_text
 
 EPUB_TEXT_SOURCE = "epub"
 EPUB_TEXT_SOURCE_SIGNATURE = "epub-text-v1"
+TXT_TEXT_SOURCE = "txt"
+TXT_TEXT_SOURCE_SIGNATURE = "txt-text-v1"
 
 
 @dataclass(frozen=True)
@@ -95,6 +97,27 @@ class _EpubTextParser(HTMLParser):
 
 def is_epub_source(source_path: Path) -> bool:
     return source_path.is_file() and source_path.suffix.lower() == ".epub"
+
+
+def is_txt_source(source_path: Path) -> bool:
+    return source_path.is_file() and source_path.suffix.lower() == ".txt"
+
+
+def load_txt_pages(source_path: Path) -> list[tuple[int, str, str]]:
+    try:
+        raw_text = source_path.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValueError("The TXT file must be valid UTF-8 text.") from exc
+
+    normalized_text = raw_text.replace("\r\n", "\n").replace("\r", "\n")
+    pages = [page.strip() for page in normalized_text.split("\f") if page.strip()]
+    if not pages:
+        raise ValueError("The TXT file does not contain readable text.")
+    return [(index, source_path.name, page) for index, page in enumerate(pages, start=1)]
+
+
+def hash_txt_source(source_path: Path) -> str:
+    return hashlib.sha256(source_path.read_bytes()).hexdigest()
 
 
 def _xml_local_name(tag: str) -> str:

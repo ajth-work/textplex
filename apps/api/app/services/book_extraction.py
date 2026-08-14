@@ -19,10 +19,14 @@ from app.services.book_registry import (
 from app.services.book_sources import (
     EPUB_TEXT_SOURCE,
     EPUB_TEXT_SOURCE_SIGNATURE,
+    TXT_TEXT_SOURCE,
+    TXT_TEXT_SOURCE_SIGNATURE,
     is_epub_source,
     is_text_fixture_source,
+    is_txt_source,
     load_epub_pages,
     load_text_fixture_pages,
+    load_txt_pages,
     write_text_fixture_source,
 )
 from app.services.google_translate import (
@@ -1092,12 +1096,15 @@ def extract_book_pages(
     total_to_process = max(0, end_page - start_page + 1)
     fixture_pages = load_text_fixture_pages(source_path) if is_text_fixture_source(source_path) else None
     epub_pages = load_epub_pages(source_path) if is_epub_source(source_path) else None
-    reader = None if fixture_pages is not None or epub_pages is not None else PdfReader(str(source_path))
+    txt_pages = load_txt_pages(source_path) if is_txt_source(source_path) else None
+    reader = None if fixture_pages is not None or epub_pages is not None or txt_pages is not None else PdfReader(str(source_path))
     current_text_source, current_text_source_signature = (
         (FIXTURE_TEXT_SOURCE, FIXTURE_TEXT_SIGNATURE)
         if fixture_pages is not None
         else (EPUB_TEXT_SOURCE, EPUB_TEXT_SOURCE_SIGNATURE)
         if epub_pages is not None
+        else (TXT_TEXT_SOURCE, TXT_TEXT_SOURCE_SIGNATURE)
+        if txt_pages is not None
         else get_text_source_signature(ocr_provider or book.ocr_provider)
     )
 
@@ -1140,6 +1147,15 @@ def extract_book_pages(
             raw_text = epub_pages[page_number - 1][2]
             text_source = EPUB_TEXT_SOURCE
             text_source_signature = EPUB_TEXT_SOURCE_SIGNATURE
+            sentence_texts = None
+            sentence_translations = None
+            page_translation = None
+            page_ends = None
+            token_hints = None
+        elif txt_pages is not None:
+            raw_text = txt_pages[page_number - 1][2]
+            text_source = TXT_TEXT_SOURCE
+            text_source_signature = TXT_TEXT_SOURCE_SIGNATURE
             sentence_texts = None
             sentence_translations = None
             page_translation = None

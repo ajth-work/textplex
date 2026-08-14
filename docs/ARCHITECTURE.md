@@ -6,7 +6,7 @@ The product has four runtime concerns.
 
 ### A. Import and processing
 
-Accepts a PDF or ordered page-image set, creates normalized page assets, extracts text, segments tokens, enriches lexical entries, detects entities/grammar candidates, and writes a self-contained book database.
+Accepts PDF, EPUB, TXT, or ordered page-image sources, creates normalized page assets, extracts text, segments tokens, enriches lexical entries, detects entities/grammar candidates, and writes a self-contained book database.
 
 ### B. Book API
 

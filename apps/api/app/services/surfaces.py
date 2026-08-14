@@ -803,9 +803,10 @@ def get_import_surface(
     )
     return ImportSurfaceResponse(
         default_language=default_language,
-        supported_inputs=["pdf", "epub", "paste", "wikipedia-random"],
+        supported_inputs=["pdf", "epub", "txt", "paste", "wikipedia-random"],
         can_upload_pdf=True,
         can_upload_epub=True,
+        can_upload_txt=True,
         can_paste_text=True,
         can_import_random_wikipedia=True,
         recent_books=[

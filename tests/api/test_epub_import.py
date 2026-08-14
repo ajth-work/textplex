@@ -102,8 +102,8 @@ def test_upload_endpoint_rejects_unsupported_file_format(tmp_path: Path) -> None
     response = client.post(
         "/books/upload",
         data={"language_code": "en"},
-        files={"file": ("notes.txt", b"plain text", "text/plain")},
+        files={"file": ("notes.docx", b"not a supported document", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "TextPlex import currently accepts PDF or EPUB files only."
+    assert response.json()["detail"] == "TextPlex import currently accepts PDF, EPUB, or TXT files only."
