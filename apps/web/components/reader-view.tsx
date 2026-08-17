@@ -742,13 +742,48 @@ function isKoreanText(value: string): boolean {
   return /[\p{Script=Hangul}]/u.test(value);
 }
 
-function resolveTokenLanguageCode(surface: string, fallbackLanguageCode?: string | null): string | null {
+function resolveTokenLanguageCode(
+  surface: string,
+  fallbackLanguageCode?: string | null,
+  tokenLanguageCode?: string | null,
+): string | null {
+  const normalizedTokenLanguage = tokenLanguageCode?.trim().toLowerCase();
+  if (normalizedTokenLanguage) {
+    return normalizedTokenLanguage;
+  }
+
   if (isKoreanText(surface)) {
     return "ko";
   }
 
+  if (/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(surface)) {
+    return "ja";
+  }
+
+  if (/[\p{Script=Cyrillic}]/u.test(surface)) {
+    return "ru";
+  }
+
+  if (/[\p{Script=Hebrew}]/u.test(surface)) {
+    return "he";
+  }
+
+  if (/[\p{Script=Arabic}]/u.test(surface)) {
+    return "ar";
+  }
+
+  if (/[\p{Script=Han}]/u.test(surface)) {
+    const normalizedFallback = fallbackLanguageCode?.trim().toLowerCase().split("-", 1)[0];
+    return normalizedFallback === "ja" || normalizedFallback === "zh" ? normalizedFallback : "zh";
+  }
+
+  if (/[A-Za-z]/u.test(surface)) {
+    const normalizedFallback = fallbackLanguageCode?.trim().toLowerCase().split("-", 1)[0];
+    return normalizedFallback === "en" || normalizedFallback === "yo" ? normalizedFallback : "en";
+  }
+
   const normalizedFallback = fallbackLanguageCode?.trim().toLowerCase();
-  return normalizedFallback || null;
+  return normalizedFallback?.split("-", 1)[0] || null;
 }
 
 function splitKoreanParticleChain(surface: string): string[] {
@@ -2201,7 +2236,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             setDefinitionLookupTrace([...trace]);
           }
         };
-        const languageCode = resolveTokenLanguageCode(selectedToken.surface_form, pageData.book.language_code) ?? pageData.book.language_code;
+        const languageCode = resolveTokenLanguageCode(
+          selectedToken.surface_form,
+          pageData.book.language_code,
+          selectedToken.language_code,
+        ) ?? pageData.book.language_code;
         const lookupTerms = selectedToken
           ? [
               ...(languageCode.startsWith("ko") ? [splitKoreanParticleChain(selectedToken.surface_form)[0] ?? ""] : []),
@@ -2602,7 +2641,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const lifetimeGlossedCount = profileSummary?.glossed_vocabulary_items ?? 0;
   const selectedTokenPronunciationOverride = selectedToken ? tokenPronunciationOverrides[selectedToken.order] ?? null : null;
   const selectedTokenLanguageCode = selectedToken
-    ? resolveTokenLanguageCode(selectedToken.surface_form, pageData?.book.language_code)
+    ? resolveTokenLanguageCode(selectedToken.surface_form, pageData?.book.language_code, selectedToken.language_code)
     : null;
   const selectedTokenReading = normalizeDisplayReading(
     lexiconEntry?.pronunciation ??
@@ -3476,7 +3515,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     utterance.pitch = 1;
     applyPreferredSpeechVoice(
       utterance,
-      resolveTokenLanguageCode(token.surface_form, pageData.book.language_code),
+      resolveTokenLanguageCode(token.surface_form, pageData.book.language_code, token.language_code),
       readerSpeechVoiceGender,
     );
     utterance.onstart = () => {
@@ -3514,7 +3553,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     utterance.pitch = 1;
     applyPreferredSpeechVoice(
       utterance,
-      selectedToken ? resolveTokenLanguageCode(selectedToken.surface_form, pageData.book.language_code) : pageData.book.language_code,
+      selectedToken
+        ? resolveTokenLanguageCode(selectedToken.surface_form, pageData.book.language_code, selectedToken.language_code)
+        : pageData.book.language_code,
       readerSpeechVoiceGender,
     );
     utterance.onstart = () => {
@@ -4924,7 +4965,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   const isSelected = selectedToken?.surface_form === token.surface_form && selectedToken?.order === token.order;
                   const isAudioActive = sentenceAudioPlaying && sentenceAudioTokenOrder === token.order;
                   const languageCode = pageData?.book.language_code ?? null;
-                  const tokenLanguageCode = resolveTokenLanguageCode(token.surface_form, languageCode);
+                  const tokenLanguageCode = resolveTokenLanguageCode(token.surface_form, languageCode, token.language_code);
                   const tokenStudyItem = getStudyVocabularyItem(token);
                   const tokenReadingParts = buildTokenReadingParts(
                     token,

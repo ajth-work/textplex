@@ -51,6 +51,7 @@ export interface BoundingBox {
 export interface TokenResult {
   order: number;
   surface_form: string;
+  language_code?: string | null;
   lemma: string | null;
   part_of_speech: string | null;
   pronunciation: string | null;

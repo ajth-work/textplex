@@ -76,6 +76,30 @@ def _language_root(language_code: str) -> str:
     return (language_code or "").strip().lower().split("-", 1)[0]
 
 
+def detect_token_language_code(surface_form: str, fallback_language_code: str) -> str | None:
+    """Infer a token language from its writing system, falling back to the book language."""
+    surface = surface_form.strip()
+    fallback = _language_root(fallback_language_code)
+    if not surface or _is_punctuation_token(surface):
+        return None
+
+    if re.search(r"[\uac00-\ud7a3\u3131-\u318e]", surface):
+        return "ko"
+    if re.search(r"[\u3041-\u309f\u30a1-\u30ff\uff66-\uff9f]", surface):
+        return "ja"
+    if re.search(r"[\u0400-\u04ff\u0500-\u052f]", surface):
+        return "ru"
+    if re.search(r"[\u0590-\u05ff\ufb1d-\ufb4f]", surface):
+        return "he"
+    if re.search(r"[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]", surface):
+        return "ar"
+    if re.search(r"[\u4e00-\u9fff]", surface):
+        return fallback if fallback in {"zh", "ja"} else "zh"
+    if re.search(r"[A-Za-z]", surface):
+        return fallback if fallback in {"en", "yo"} else "en"
+    return fallback or None
+
+
 def _merge_sentence_text(left: str, right: str, language_code: str) -> str:
     if not left:
         return right
@@ -426,6 +450,7 @@ def tokenize_sentence(sentence: str, language_code: str) -> list[TokenResult]:
             TokenResult(
                 order=index,
                 surface_form=surface_form,
+                language_code=detect_token_language_code(surface_form, language_code),
                 lemma=None if _is_punctuation_token(surface_form) else _normalize_token_surface(surface_form, language_code),
             )
         )

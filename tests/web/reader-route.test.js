@@ -362,16 +362,19 @@ test("Next reader romanizes Korean token readings instead of falling back to Han
 });
 
 test("Next reader detects Korean tokens inside another language and routes their lookup and audio correctly", () => {
-  assert.match(readerSource, /function resolveTokenLanguageCode\(surface: string, fallbackLanguageCode\?: string \| null\): string \| null/);
+  assert.match(readerSource, /function resolveTokenLanguageCode\([\s\S]*tokenLanguageCode\?: string \| null,[\s\S]*\): string \| null/);
+  assert.match(readerSource, /const normalizedTokenLanguage = tokenLanguageCode\?\.trim\(\)\.toLowerCase\(\);/);
   assert.match(readerSource, /if \(isKoreanText\(surface\)\) \{\s+return "ko";/);
-  assert.match(readerSource, /const tokenLanguageCode = resolveTokenLanguageCode\(token\.surface_form, languageCode\)/);
+  assert.match(readerSource, /const tokenLanguageCode = resolveTokenLanguageCode\(token\.surface_form, languageCode, token\.language_code\)/);
+  assert.match(readerSource, /return "ru";[\s\S]*return "he";[\s\S]*return "ar";/);
+  assert.match(readerSource, /return normalizedFallback === "en" \|\| normalizedFallback === "yo" \? normalizedFallback : "en";/);
   assert.match(readerSource, /lang=\{tokenLanguageCode \|\| undefined\}/);
-  assert.match(readerSource, /const languageCode = resolveTokenLanguageCode\(selectedToken\.surface_form, pageData\.book\.language_code\)/);
+  assert.match(readerSource, /const languageCode = resolveTokenLanguageCode\([\s\S]*selectedToken\.language_code,[\s\S]*\) \?\? pageData\.book\.language_code;/);
   assert.match(readerSource, /language_code=\$\{encodeURIComponent\(languageCode\)\}/);
   const playWordAudio = readerSource.match(/function playWordAudio\(token: TokenResult\): void \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function playDefinitionSegmentAudio/)?.[0] ?? "";
-  assert.match(playWordAudio, /resolveTokenLanguageCode\(token\.surface_form, pageData\.book\.language_code\)/);
+  assert.match(playWordAudio, /resolveTokenLanguageCode\(token\.surface_form, pageData\.book\.language_code, token\.language_code\)/);
   const playDefinitionSegmentAudio = readerSource.match(/function playDefinitionSegmentAudio\(part: TokenReadingPart\): void \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function handlePlaySelectedTokenAudio/)?.[0] ?? "";
-  assert.match(playDefinitionSegmentAudio, /resolveTokenLanguageCode\(selectedToken\.surface_form, pageData\.book\.language_code\)/);
+  assert.match(playDefinitionSegmentAudio, /resolveTokenLanguageCode\(selectedToken\.surface_form, pageData\.book\.language_code, selectedToken\.language_code\)/);
 });
 
 test("Next reader keeps Japanese surface, reading, lemma, and meaning aligned", () => {

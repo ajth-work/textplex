@@ -104,6 +104,14 @@ def test_tokenize_sentence_keeps_latin_words_together() -> None:
     tokens = tokenize_sentence("OpenAI builds tools.", "en")
 
     assert [token.surface_form for token in tokens] == ["OpenAI", "builds", "tools"]
+    assert [token.language_code for token in tokens] == ["en", "en", "en"]
+
+
+def test_tokenize_sentence_assigns_language_per_script_for_mixed_text() -> None:
+    tokens = tokenize_sentence("Привет OpenAI 이선중.", "ru")
+
+    assert [token.surface_form for token in tokens] == ["Привет", "OpenAI", "이선중"]
+    assert [token.language_code for token in tokens] == ["ru", "en", "ko"]
 
 
 def test_tokenize_sentence_uses_chinese_segmenter_when_available(monkeypatch) -> None:
