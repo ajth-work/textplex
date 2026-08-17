@@ -69,6 +69,7 @@ import {
 import { LoadingSkeleton, ReaderLoadingSkeleton } from "./loading-skeleton";
 import { useAuth } from "./auth-provider";
 import { isTextPlexAdmin } from "../lib/auth-roles";
+import { PhotoPageAppendCard } from "./photo-page-append-card";
 
 type ReaderTokenMode = "word" | "character";
 type ReaderMode = "sentence" | "page" | "token";
@@ -155,6 +156,7 @@ const readerGoogleTranslateFallbackStorageKey = "textplex.readerGoogleTranslateF
 const readerMeaningLineEnabledStorageKey = "textplex.readerMeaningLineEnabled";
 const readerMeaningLineRevealAllStorageKey = "textplex.readerMeaningLineRevealAll";
 const readerDefinitionTraceEnabledStorageKey = "textplex.readerDefinitionTraceEnabled";
+const readerMixedLanguageSentenceAudioStorageKey = "textplex.readerMixedLanguageSentenceAudio";
 const readerTokenAudioIntroSeenStorageKey = "textplex.readerTokenAudioIntroSeen";
 const readerSessionGlossedCountStorageKey = (bookId: string) => `textplex.readerSessionGlossedCount:${bookId}`;
 const readerSessionSummaryLayoutStorageKey = (bookId: string) => `textplex.readerSessionSummaryLayout:${bookId}`;
@@ -412,6 +414,11 @@ function getSrsStageColor(stage: number): string {
 }
 
 type SpeechTokenRange = { order: number; start: number; end: number };
+type MixedLanguageSpeechSegment = {
+  languageCode: string;
+  text: string;
+  tokenRanges: SpeechTokenRange[];
+};
 
 function buildSpeechTokenRanges(text: string, tokens: TokenResult[]): SpeechTokenRange[] {
   if (!text || !tokens.length) {
@@ -447,6 +454,88 @@ function getSpeechTokenOrderAtCharIndex(ranges: SpeechTokenRange[], charIndex: n
   }
 
   return ranges.find((range) => range.start >= charIndex)?.order ?? null;
+}
+
+function buildMixedLanguageSpeechSegments(
+  text: string,
+  tokens: TokenResult[],
+  fallbackLanguageCode: string,
+): MixedLanguageSpeechSegment[] {
+  if (!text || !tokens.length) {
+    return [];
+  }
+
+  const allRanges = buildSpeechTokenRanges(text, tokens);
+  const rangeByOrder = new Map(allRanges.map((range) => [range.order, range]));
+  const segments: MixedLanguageSpeechSegment[] = [];
+  let searchStart = 0;
+  let segmentStart = 0;
+  let segmentEnd = 0;
+  let segmentLanguageCode: string | null = null;
+  let segmentTokenOrders: number[] = [];
+  let leadingPunctuationStart: number | null = null;
+
+  const flushSegment = () => {
+    if (!segmentLanguageCode || segmentEnd <= segmentStart) {
+      return;
+    }
+
+    const segmentText = text.slice(segmentStart, segmentEnd);
+    const segmentRanges = segmentTokenOrders
+      .map((order) => rangeByOrder.get(order))
+      .filter((range): range is SpeechTokenRange => Boolean(range))
+      .map((range) => ({
+        ...range,
+        start: range.start - segmentStart,
+        end: range.end - segmentStart,
+      }));
+    if (segmentText.trim()) {
+      segments.push({ languageCode: segmentLanguageCode, text: segmentText, tokenRanges: segmentRanges });
+    }
+  };
+
+  tokens.forEach((token, index) => {
+    const surface = token.surface_form?.trim() ?? "";
+    if (!surface) {
+      return;
+    }
+
+    const start = text.indexOf(surface, searchStart);
+    if (start < 0) {
+      return;
+    }
+    const end = start + surface.length;
+    searchStart = end;
+
+    if (isSentencePunctuation(surface)) {
+      if (segmentLanguageCode) {
+        segmentEnd = end;
+      } else {
+        leadingPunctuationStart ??= start;
+        segmentEnd = end;
+      }
+      return;
+    }
+
+    const languageCode = resolveTokenLanguageCode(surface, fallbackLanguageCode, token.language_code) ?? fallbackLanguageCode;
+    if (!segmentLanguageCode) {
+      segmentLanguageCode = languageCode;
+      segmentStart = leadingPunctuationStart ?? start;
+      leadingPunctuationStart = null;
+    } else if (segmentLanguageCode !== languageCode) {
+      segmentEnd = start;
+      flushSegment();
+      segmentLanguageCode = languageCode;
+      segmentStart = start;
+      segmentTokenOrders = [];
+    }
+
+    segmentEnd = end;
+    segmentTokenOrders.push(token.order ?? index + 1);
+  });
+
+  flushSegment();
+  return segments;
 }
 
 function resolveReaderTitleScale(title: string | null | undefined): number {
@@ -1684,6 +1773,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [readerTokenScale, setReaderTokenScale] = useState(readerTokenScaleDefault);
   const [readerTokenSpacing, setReaderTokenSpacing] = useState(readerTokenSpacingDefault);
   const [readerGoogleTranslateFallback, setReaderGoogleTranslateFallback] = useState(false);
+  const [readerMixedLanguageSentenceAudio, setReaderMixedLanguageSentenceAudio] = useState(false);
   const [readerNavHideDelayMs, setReaderNavHideDelayMs] = useState(READER_NAV_HIDE_DELAY_DEFAULT_MS);
   const [readerMeaningLineEnabled, setReaderMeaningLineEnabled] = useState(true);
   const [readerMeaningLineRevealAll, setReaderMeaningLineRevealAll] = useState(false);
@@ -1778,6 +1868,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     setReaderTokenScale(resolveReaderTokenScale(window.localStorage.getItem(readerTokenScaleStorageKey)));
     setReaderTokenSpacing(resolveReaderTokenSpacing(window.localStorage.getItem(readerTokenSpacingStorageKey)));
     setReaderGoogleTranslateFallback(window.localStorage.getItem(readerGoogleTranslateFallbackStorageKey) === "true");
+    setReaderMixedLanguageSentenceAudio(window.localStorage.getItem(readerMixedLanguageSentenceAudioStorageKey) === "true");
     setReaderNavHideDelayMs(readReaderNavHideDelayMs());
     setReaderMeaningLineEnabled(window.localStorage.getItem(readerMeaningLineEnabledStorageKey) !== "false");
     setReaderMeaningLineRevealAll(window.localStorage.getItem(readerMeaningLineRevealAllStorageKey) === "true");
@@ -2052,6 +2143,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     }
     window.localStorage.setItem(readerGoogleTranslateFallbackStorageKey, String(readerGoogleTranslateFallback));
   }, [readerGoogleTranslateFallback]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(readerMixedLanguageSentenceAudioStorageKey, String(readerMixedLanguageSentenceAudio));
+  }, [readerMixedLanguageSentenceAudio]);
 
   useEffect(() => {
     const syncReaderNavHideDelay = () => {
@@ -2518,6 +2616,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const canMoveToNextSentence = selectedSentenceIndex >= 0 && selectedSentenceIndex < (page?.sentences.length ?? 0) - 1;
   const canMoveToNextPage = totalPages !== null && pageNumber < totalPages;
   const isCompletionPoint = !canMoveToNextSentence && !canMoveToNextPage && (page?.sentences.length ?? 0) > 0;
+  const isPageByPageSource = pageData?.book.source_type === "page-by-page";
   const currentPageGlossedCount = useMemo(() => {
     if (!currentPageSentenceList.length) {
       return 0;
@@ -3471,30 +3570,43 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     }
 
     cancelReaderSpeechPlayback();
-    const utterance = new SpeechSynthesisUtterance(activeSentence.text);
-    utterance.rate = sentenceAudioRate;
-    utterance.pitch = 1;
-    applyPreferredSpeechVoice(utterance, pageData.book.language_code, readerSpeechVoiceGender);
-    utterance.onstart = () => {
-      setSentenceAudioPlaying(true);
-      setSentenceAudioTokenOrder(null);
-    };
-    utterance.onboundary = (event) => {
-      const tokenOrder = getSpeechTokenOrderAtCharIndex(speechTokenRanges, event.charIndex);
-      if (tokenOrder !== null) {
-        setSentenceAudioTokenOrder(tokenOrder);
-      }
-    };
-    utterance.onend = () => {
-      setSentenceAudioPlaying(false);
-      setSentenceAudioTokenOrder(null);
-    };
-    utterance.onerror = () => {
-      setSentenceAudioPlaying(false);
-      setSentenceAudioTokenOrder(null);
-    };
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
+    const mixedLanguageSegments = readerMixedLanguageSentenceAudio
+      ? buildMixedLanguageSpeechSegments(activeSentence.text, displayedSentenceTokens, pageData.book.language_code)
+      : [];
+    const speechSegments: MixedLanguageSpeechSegment[] = mixedLanguageSegments.length
+      ? mixedLanguageSegments
+      : [{
+          languageCode: pageData.book.language_code,
+          text: activeSentence.text,
+          tokenRanges: speechTokenRanges,
+        }];
+
+    speechSegments.forEach((segment, index) => {
+      const utterance = new SpeechSynthesisUtterance(segment.text);
+      utterance.rate = sentenceAudioRate;
+      utterance.pitch = 1;
+      applyPreferredSpeechVoice(utterance, segment.languageCode, readerSpeechVoiceGender);
+      utterance.onstart = () => {
+        setSentenceAudioPlaying(true);
+        setSentenceAudioTokenOrder(null);
+      };
+      utterance.onboundary = (event) => {
+        const tokenOrder = getSpeechTokenOrderAtCharIndex(segment.tokenRanges, event.charIndex);
+        if (tokenOrder !== null) {
+          setSentenceAudioTokenOrder(tokenOrder);
+        }
+      };
+      utterance.onend = () => {
+        if (index === speechSegments.length - 1) {
+          setSentenceAudioPlaying(false);
+          setSentenceAudioTokenOrder(null);
+        }
+      };
+      utterance.onerror = () => {
+        cancelReaderSpeechPlayback();
+      };
+      window.speechSynthesis.speak(utterance);
+    });
     void recordSentenceAudioPlayback(activeSentence);
   }
 
@@ -4134,6 +4246,23 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                 ))}
               </div>
               <p className="small-copy">Applies to sentence audio, token audio, syllable playback, and pronunciation guides when the browser offers matching voices.</p>
+            </section>
+            <section className="reader-options-section" data-inventory-id="reader.mixed-language-audio-toggle">
+              <div className="reader-options-section-head">
+                <div>
+                  <span className="eyebrow">Sentence audio prototype</span>
+                  <h3>Switch voices for mixed languages</h3>
+                </div>
+                <button
+                  type="button"
+                  className={`button button-secondary button-compact ${readerMixedLanguageSentenceAudio ? "is-active" : ""}`}
+                  onClick={() => setReaderMixedLanguageSentenceAudio((value) => !value)}
+                  aria-pressed={readerMixedLanguageSentenceAudio}
+                >
+                  {readerMixedLanguageSentenceAudio ? "On" : "Off"}
+                </button>
+              </div>
+              <p className="small-copy">When on, sentence playback chains adjacent token languages together; when off, it uses the book language for the whole sentence.</p>
             </section>
             <section className="reader-options-section" data-inventory-id="reader.pronunciation-visibility-section">
               <div className="reader-options-section-head">
@@ -5485,10 +5614,16 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       {showCompletionSummary && isCompletionPoint ? (
         <article className="card reader-completion-card" data-inventory-id="reader.completion-summary-card" aria-live="polite">
           <div className="reader-completion-header">
-            <span className="eyebrow">Congrats</span>
-            <h2>You finished this article</h2>
-            <p>This summary is the last step. Saving it marks the content as read and returns you to the library.</p>
+            <span className="eyebrow">{isPageByPageSource ? "Last uploaded page" : "Congrats"}</span>
+            <h2>{isPageByPageSource ? "Add the next page when you are ready" : "You finished this article"}</h2>
+            <p>{isPageByPageSource ? "This reading item can grow as you photograph more of the book. Add the next page below, or save this session and return to your library." : "This summary is the last step. Saving it marks the content as read and returns you to the library."}</p>
           </div>
+          {isPageByPageSource ? (
+            <PhotoPageAppendCard
+              bookId={bookId}
+              onAppended={(updatedBook) => router.push(`/reader/${bookId}/${updatedBook.total_pages}`)}
+            />
+          ) : null}
           <div className="reader-completion-stats" aria-label="Article completion summary">
             <div className="reader-completion-stat">
               <span>Reading time</span>

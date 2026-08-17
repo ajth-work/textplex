@@ -222,6 +222,7 @@ Source: `apps/web/components/reader-view.tsx` (`ReaderView`)
 | `reader.progress-card` | card | Reading progress card | Individual sentence, page, or book progress card with a label, readable value, and compact visual progress bar. |
 | `reader.session-glossed-count` | status | Glossed words this session | Compact badge showing how many new glossed vocabulary items were added during the current reader session. |
 | `reader.speech-voice-toggle` | control | Speech voice | Reader-side male/female voice preference that applies to sentence, token, and syllable audio playback. |
+| `reader.mixed-language-audio-toggle` | control | Mixed-language sentence audio | Reader setting that switches sentence playback between the book-level voice and the experimental chained per-language token audio prototype. |
 | `reader.theme-section` | region | Reading themes | Recent-first reader theme picker with a More expansion control for the full theme catalog. |
 | `reader.theme-grid` | region | Theme grid | Collapsed or expanded grid of reader theme options. |
 | `reader.theme-more-button` | button | More themes | Expands or collapses the full reader theme catalog. |

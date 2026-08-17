@@ -361,6 +361,16 @@ test("Next reader romanizes Korean token readings instead of falling back to Han
   assert.match(themeSource, /persistAppThemeRecents/);
 });
 
+test("Next reader can chain sentence audio by adjacent token language while preserving book-level audio", () => {
+  assert.match(readerSource, /readerMixedLanguageSentenceAudioStorageKey/);
+  assert.match(readerSource, /data-inventory-id="reader\.mixed-language-audio-toggle"/);
+  assert.match(readerSource, /function buildMixedLanguageSpeechSegments\(/);
+  assert.match(readerSource, /const mixedLanguageSegments = readerMixedLanguageSentenceAudio/);
+  assert.match(readerSource, /applyPreferredSpeechVoice\(utterance, segment\.languageCode, readerSpeechVoiceGender\)/);
+  assert.match(readerSource, /speechSegments\.forEach\(\(segment, index\) =>/);
+  assert.match(readerSource, /text: activeSentence\.text,\s+tokenRanges: speechTokenRanges/);
+});
+
 test("Next reader detects Korean tokens inside another language and routes their lookup and audio correctly", () => {
   assert.match(readerSource, /function resolveTokenLanguageCode\([\s\S]*tokenLanguageCode\?: string \| null,[\s\S]*\): string \| null/);
   assert.match(readerSource, /const normalizedTokenLanguage = tokenLanguageCode\?\.trim\(\)\.toLowerCase\(\);/);
