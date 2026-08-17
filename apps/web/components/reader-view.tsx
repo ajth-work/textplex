@@ -742,6 +742,15 @@ function isKoreanText(value: string): boolean {
   return /[\p{Script=Hangul}]/u.test(value);
 }
 
+function resolveTokenLanguageCode(surface: string, fallbackLanguageCode?: string | null): string | null {
+  if (isKoreanText(surface)) {
+    return "ko";
+  }
+
+  const normalizedFallback = fallbackLanguageCode?.trim().toLowerCase();
+  return normalizedFallback || null;
+}
+
 function splitKoreanParticleChain(surface: string): string[] {
   const trimmed = surface.trim();
   if (!trimmed || !isKoreanText(trimmed)) {
@@ -2192,7 +2201,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             setDefinitionLookupTrace([...trace]);
           }
         };
-        const languageCode = pageData.book.language_code.toLowerCase();
+        const languageCode = resolveTokenLanguageCode(selectedToken.surface_form, pageData.book.language_code) ?? pageData.book.language_code;
         const lookupTerms = selectedToken
           ? [
               ...(languageCode.startsWith("ko") ? [splitKoreanParticleChain(selectedToken.surface_form)[0] ?? ""] : []),
@@ -2201,17 +2210,17 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             ].filter((term, index, terms) => term && terms.indexOf(term) === index)
           : [];
         pushTrace(`Selected token: ${selectedToken.surface_form}`);
-        pushTrace(`Language: ${languageShortCode(pageData.book.language_code)}`);
+        pushTrace(`Language: ${languageShortCode(languageCode)}`);
         pushTrace(`Google fallback: ${readerGoogleTranslateFallback ? "enabled" : "disabled"}`);
         pushTrace(`Lookup terms: ${lookupTerms.join(" -> ") || "none"}`);
         let lookup: LexiconLookupResponse | null = null;
         for (const lookupTerm of lookupTerms) {
           pushTrace(`Requesting /lexicon/lookup for "${lookupTerm}"`);
           const response = await fetchJson<LexiconLookupResponse>(
-            `/lexicon/lookup?language_code=${encodeURIComponent(pageData.book.language_code)}&term=${encodeURIComponent(lookupTerm)}&allow_google_fallback=${readerGoogleTranslateFallback ? "true" : "false"}`,
+            `/lexicon/lookup?language_code=${encodeURIComponent(languageCode)}&term=${encodeURIComponent(lookupTerm)}&allow_google_fallback=${readerGoogleTranslateFallback ? "true" : "false"}`,
           );
           pushTrace(`Response for "${lookupTerm}": ${response.entries.length} entr${response.entries.length === 1 ? "y" : "ies"}`);
-          const selection = selectLexiconEntryForToken(selectedToken, response, pageData.book.language_code);
+          const selection = selectLexiconEntryForToken(selectedToken, response, languageCode);
           if (selection.entry) {
             lookup = response;
             const selectedEntry = selection.entry;
@@ -2238,7 +2247,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             lookup = response;
           }
         }
-        const finalSelection = selectLexiconEntryForToken(selectedToken, lookup, pageData.book.language_code);
+        const finalSelection = selectLexiconEntryForToken(selectedToken, lookup, languageCode);
         if (lookup && !lookup.entries.length) {
           pushTrace("No dictionary entry matched; falling back to book frequency or token metadata.");
         } else if (lookup?.entries.length && !finalSelection.entry) {
@@ -2592,6 +2601,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const languageGlossedCount = studySurface?.study_item_count ?? 0;
   const lifetimeGlossedCount = profileSummary?.glossed_vocabulary_items ?? 0;
   const selectedTokenPronunciationOverride = selectedToken ? tokenPronunciationOverrides[selectedToken.order] ?? null : null;
+  const selectedTokenLanguageCode = selectedToken
+    ? resolveTokenLanguageCode(selectedToken.surface_form, pageData?.book.language_code)
+    : null;
   const selectedTokenReading = normalizeDisplayReading(
     lexiconEntry?.pronunciation ??
       lexiconEntry?.pinyin ??
@@ -2602,15 +2614,17 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const selectedTokenReadingParts = selectedToken
       ? buildTokenReadingParts(
         selectedToken,
-        pageData?.book.language_code ?? null,
+        selectedTokenLanguageCode,
         selectedTokenPronunciationOverride,
         selectedTokenReading,
         readerJapaneseReadingDisplayMode,
       )
     : [];
-  const selectedTokenSurfaceParts = selectedToken ? splitKoreanParticleChain(selectedToken.surface_form) : [];
+  const selectedTokenSurfaceParts = selectedTokenLanguageCode?.startsWith("ko") && selectedToken
+    ? splitKoreanParticleChain(selectedToken.surface_form)
+    : [];
   const selectedTokenReadingDisplayParts = selectedToken
-    ? pageData?.book.language_code?.startsWith("ru") && readerRussianSyllableDisplayMode === "original"
+    ? selectedTokenLanguageCode?.startsWith("ru") && readerRussianSyllableDisplayMode === "original"
       ? selectedTokenReadingParts.map((part) => ({
           ...part,
           text: part.surface,
@@ -2619,7 +2633,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     : [];
   const selectedTokenPronunciationLine = selectedTokenReadingParts.map((part) => part.text).join(" ");
   const selectedTokenFurigana = selectedToken &&
-    pageData?.book.language_code?.startsWith("ja") &&
+    selectedTokenLanguageCode?.startsWith("ja") &&
     /[\p{Script=Han}]/u.test(selectedToken.surface_form) &&
     selectedTokenReading
     ? finalizeJapaneseRomaji(selectedTokenReading).replace(/\s+/gu, "")
@@ -3460,7 +3474,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     const utterance = new SpeechSynthesisUtterance(token.surface_form);
     utterance.rate = sentenceAudioRate;
     utterance.pitch = 1;
-    applyPreferredSpeechVoice(utterance, pageData.book.language_code, readerSpeechVoiceGender);
+    applyPreferredSpeechVoice(
+      utterance,
+      resolveTokenLanguageCode(token.surface_form, pageData.book.language_code),
+      readerSpeechVoiceGender,
+    );
     utterance.onstart = () => {
       setSelectedTokenAudioPlaying(true);
     };
@@ -3494,7 +3512,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     const utterance = new SpeechSynthesisUtterance(speechText);
     utterance.rate = sentenceAudioRate;
     utterance.pitch = 1;
-    applyPreferredSpeechVoice(utterance, pageData.book.language_code, readerSpeechVoiceGender);
+    applyPreferredSpeechVoice(
+      utterance,
+      selectedToken ? resolveTokenLanguageCode(selectedToken.surface_form, pageData.book.language_code) : pageData.book.language_code,
+      readerSpeechVoiceGender,
+    );
     utterance.onstart = () => {
       setSelectedTokenSegmentAudioPlaying(true);
       setSelectedTokenSegmentAudioText(speechText);
@@ -4902,17 +4924,18 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   const isSelected = selectedToken?.surface_form === token.surface_form && selectedToken?.order === token.order;
                   const isAudioActive = sentenceAudioPlaying && sentenceAudioTokenOrder === token.order;
                   const languageCode = pageData?.book.language_code ?? null;
+                  const tokenLanguageCode = resolveTokenLanguageCode(token.surface_form, languageCode);
                   const tokenStudyItem = getStudyVocabularyItem(token);
                   const tokenReadingParts = buildTokenReadingParts(
                     token,
-                    languageCode,
+                    tokenLanguageCode,
                     tokenPronunciationOverrides[token.order] ?? null,
                     undefined,
                     readerJapaneseReadingDisplayMode,
                   );
                   const isTokenPronunciationMuted =
                     readerPronunciationFreshOnly && !studySurfaceLoading && !isFreshStudyItem(tokenStudyItem) && tokenReadingParts.length > 0;
-                  const tokenSurfaceParts = languageCode?.startsWith("ko") ? splitKoreanParticleChain(token.surface_form) : [];
+                  const tokenSurfaceParts = tokenLanguageCode?.startsWith("ko") ? splitKoreanParticleChain(token.surface_form) : [];
                   const isPunctuation = isSentencePunctuation(token.surface_form);
                   const tokenStudyStage = readerSrsColoring && !isPunctuation ? getStudyItemSrsStage(tokenStudyItem) : null;
                   const tokenStudyColor = tokenStudyStage !== null ? getSrsStageColor(tokenStudyStage) : null;
@@ -4936,6 +4959,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       disabled={isPunctuation}
                       aria-label={isPunctuation ? `Punctuation ${token.surface_form}` : `Inspect ${token.surface_form}${isAudioActive ? " (currently speaking)" : ""}`}
                       aria-current={isAudioActive ? "true" : undefined}
+                      lang={tokenLanguageCode || undefined}
                       title={tokenStudyStage !== null ? `SRS stage ${tokenStudyStage} of 12` : undefined}
                       style={tokenStyle}
                       data-study-stage={tokenStudyStage ?? undefined}
