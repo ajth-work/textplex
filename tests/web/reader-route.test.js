@@ -204,6 +204,19 @@ test("Next reader makes the desktop session rail discoverable and draggable", ()
   assert.match(stylesheetSource, /@media \(hover: hover\) and \(pointer: fine\)/);
 });
 
+test("Next reader exposes sentence, page, and book progress in a draggable visual carousel", () => {
+  assert.match(readerSource, /const readerVisualProgressItems = useMemo/);
+  assert.match(readerSource, /id: "sentence"[\s\S]*label: "Sentence progress"/);
+  assert.match(readerSource, /id: "page"[\s\S]*label: "Page progress"/);
+  assert.match(readerSource, /id: "book"[\s\S]*label: "Book progress"/);
+  assert.match(readerSource, /useReaderCarouselInteractions\(readingProgressRailRef\)/);
+  assert.match(readerSource, /data-inventory-id="reader\.progress-carousel"/);
+  assert.match(readerSource, /data-inventory-id="reader\.progress-card"/);
+  assert.match(readerSource, /Drag or scroll to compare progress/);
+  assert.match(stylesheetSource, /\.reader-progress-rail\s*\{[\s\S]*overflow-x: auto/);
+  assert.match(stylesheetSource, /\.reader-progress-card\s*\{[\s\S]*scroll-snap-align: start/);
+});
+
 test("Next reader lets learners hide and restore session statistics with keyboard support", () => {
   assert.match(readerSource, /readerSessionSummaryLayoutStorageKey\(bookId\)/);
   assert.match(readerSource, /persistReaderSessionSummaryHiddenItemIds/);
@@ -232,12 +245,12 @@ test("Next reader keeps reading profile statistics legible and selectable", () =
   assert.match(stylesheetSource, /\[data-profile-statistics-view="simple"\][\s\S]*data-profile-metric-id="seconds-per-word"/);
 });
 
-test("Next reader keeps the compact pager as the primary progress signal", () => {
+test("Next reader keeps the compact pager alongside the visual progress carousel", () => {
   assert.match(readerSource, /className="reader-sentence-pager"/);
   assert.match(readerSource, /const pagePillLabel = totalPages/);
   assert.match(readerSource, /reader\.reading-progress-module/);
   assert.match(readerSource, /reader-progress-compact/);
-  assert.doesNotMatch(readerSource, /reader-progress-card/);
+  assert.match(readerSource, /reader-progress-card/);
 });
 
 test("Next reader gives a later-page opening a visible path back to the beginning", () => {
