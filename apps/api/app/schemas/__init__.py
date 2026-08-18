@@ -31,6 +31,8 @@ from .learning import (
     WordInteractionRecord,
 )
 from .lexicon import (
+    JapaneseConjugationRequest,
+    JapaneseConjugationResponse,
     LexiconEntryRecord,
     LexiconImportRequest,
     LexiconImportSummary,
@@ -74,6 +76,8 @@ __all__ = [
     "GoogleTranslateUsageSummary",
     "ImportRecentBook",
     "ImportSurfaceResponse",
+    "JapaneseConjugationRequest",
+    "JapaneseConjugationResponse",
     "LearningProfileSummary",
     "LexiconEntryRecord",
     "LexiconImportRequest",

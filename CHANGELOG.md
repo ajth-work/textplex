@@ -4,8 +4,12 @@
 
 - Changed PDF imports to progressive extraction: file metadata and the first readable page are ready before the upload returns, then the API maintains a two-page reader-driven extraction window instead of processing an entire book immediately (`import.form`).
 - Added direct reader page jumps with a target-first extraction path and queued previous/next page buffers for non-sequential reading (`reader.page-jump-control`).
+- Created issue #153 for the user-facing Japanese conjugation experience and linked it to the lexicon concept and tracker; project-board placement remains pending the `project` GitHub scope.
 
 - Made hosted account-storage failures retryable and diagnosable rather than opaque 502s, and let learners who complete beta onboarding continue to their return route while storage recovers (#123).
+- Added a Japanese conjugation engine and read-only API endpoint that model godan, ichidan, する, and 来る families with explainable rule IDs and lexical overrides for exceptions such as 行く and ある.
+- Added the user-provided Afterlife JLPT N1/Jōyō reference workbook to the Japanese lexicon source pack with provenance notes; it remains a source workbook pending conversion into the canonical importer format.
+- Documented the Japanese lexicon import concept, including the separate Memrise Non-WK source family, source-set lineage, workbook tab selection, metadata model, and implementation phases under `docs/JAPANESE_LEXICON_IMPORT_CONCEPT.md`.
 
 - Cleared PR #150 CI failures by formatting the Python quality lane and restoring the onboarding error contract with updated Wikipedia error handling coverage.
 

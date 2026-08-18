@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Literal
 
+from processor.japanese_conjugation import (
+    JapaneseConjugationClass,
+    JapaneseConjugationResult,
+)
 from pydantic import BaseModel, Field
 
 
@@ -36,6 +40,16 @@ class LexiconLookupResponse(BaseModel):
     resolution_source: Literal["local", "google_translate_live", "google_translate_cache"] = "local"
     match_confidence: float | None = None
     matched_term: str | None = None
+
+
+class JapaneseConjugationRequest(BaseModel):
+    lemma: str = Field(min_length=1)
+    reading: str | None = None
+    conjugation_class: JapaneseConjugationClass | None = None
+
+
+class JapaneseConjugationResponse(JapaneseConjugationResult):
+    pass
 
 
 class LexiconImportSummary(BaseModel):

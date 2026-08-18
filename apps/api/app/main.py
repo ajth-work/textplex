@@ -83,6 +83,8 @@ from app.schemas.learning import (
     WordInteractionRecord,
 )
 from app.schemas.lexicon import (
+    JapaneseConjugationRequest,
+    JapaneseConjugationResponse,
     LexiconImportRequest,
     LexiconImportSummary,
     LexiconLookupResponse,
@@ -223,6 +225,7 @@ from app.services.wikipedia import WikipediaImportError, fetch_random_article
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from processor import conjugate_japanese_verb
 from processor.contracts import BookExtractionResult
 
 
@@ -1833,6 +1836,20 @@ def lookup_lexicon(
         metadata={"language_code": language_code, "google_fallback": allow_google_fallback},
     )
     return response
+
+
+@app.post("/lexicon/japanese/conjugate", response_model=JapaneseConjugationResponse)
+def conjugate_japanese(payload: JapaneseConjugationRequest) -> JapaneseConjugationResponse:
+    try:
+        return JapaneseConjugationResponse.model_validate(
+            conjugate_japanese_verb(
+                payload.lemma,
+                reading=payload.reading,
+                conjugation_class=payload.conjugation_class,
+            ).model_dump()
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/lexicon/google-translate/usage", response_model=GoogleTranslateUsageSummary)
