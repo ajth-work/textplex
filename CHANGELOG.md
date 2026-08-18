@@ -10,6 +10,8 @@
 
 - Enlarged the feedback-dialog close control to a 48px target with a legible icon and stable responsive sizing; added focused contract coverage for `shell.feedback-close-button` (#124).
 
+- Added five confirmed tester-feedback issues to the TextPlex Feature Board in Todo and linked the matching local records: hosted-profile 502 (#123), feedback close control (#124), Japanese `五分` reading (#125), mobile notification clipping (#126), and Activity graph proportions (#127).
+
 ## 2026-08-12
 
 - Added sentence, page, and book progress cards to a horizontally scrollable Reader visual-progress carousel, with desktop wheel/drag and keyboard/touch fallbacks scoped to the carousel (#91; `reader.reading-progress-module`, `reader.progress-carousel`, `reader.progress-card`).
