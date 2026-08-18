@@ -53,6 +53,7 @@ test("Phase 5 exposes an authenticated hosted profile read path", () => {
   assert.match(main, /@app\.get\("\/profile\/migration"/);
   assert.match(main, /@app\.get\("\/themes\/catalog"/);
   assert.match(appFrame, /router\.replace\(`\/auth\?returnTo=/);
+  assert.match(appFrame, /router\.replace\(`\/onboarding\?returnTo=/);
   assert.match(appFrame, /pathname\.startsWith\("\/auth"\)/);
   assert.match(authPage, /Signed in as/);
   assert.match(accountMenu, /Profile/);
@@ -81,6 +82,13 @@ test("Phase 5 exposes an authenticated hosted profile read path", () => {
   assert.match(sharedContracts, /HostedProfileSurfaceResponse/);
   assert.match(authPage, /data-inventory-id="auth\.public-return"/);
   assert.match(authPage, /Explore TextPlex/);
+  const onboarding = read("apps", "web", "components", "beta-onboarding.tsx");
+  assert.match(onboarding, /Continue while account saving is unavailable/);
+  assert.match(onboarding, /cacheOnboardingCompletion\(user\.id\)/);
+  assert.match(authService, /set_hosted_account_role/);
+  assert.match(main, /@app\.put\("\/auth\/account-role"/);
+  assert.match(authService, /SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(authService, /auth\/v1\/admin\/users/);
 });
 
 test("Phase 5 prevents imports from racing the Supabase session", () => {

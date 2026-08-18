@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import re
 import sqlite3
+import threading
 from collections.abc import Iterable
 from contextlib import closing, suppress
 from datetime import datetime, timezone
@@ -22,6 +23,9 @@ from app.services.google_translate import (
     translate_text,
 )
 from app.services.google_translate_usage import record_google_translate_usage
+
+_lexicon_seed_lock = threading.Lock()
+_warmed_lexicon_keys: set[tuple[str, str]] = set()
 
 
 def _utc_now() -> str:
@@ -107,6 +111,20 @@ def _ensure_seeded_lexicon_if_available(data_root: Path, *, language_code: str) 
     except FileNotFoundError:
         return False
     return True
+
+
+def warm_lexicon(data_root: Path, *, language_code: str) -> bool:
+    normalized_language_code = _normalized_language_code(language_code)
+    cache_key = (str(data_root.resolve()), normalized_language_code)
+    if cache_key in _warmed_lexicon_keys:
+        return True
+
+    with _lexicon_seed_lock:
+        if cache_key in _warmed_lexicon_keys:
+            return True
+        available = _ensure_seeded_lexicon_if_available(data_root, language_code=normalized_language_code)
+        _warmed_lexicon_keys.add(cache_key)
+        return available
 
 
 def _connect(data_root: Path) -> sqlite3.Connection:
@@ -749,7 +767,7 @@ def lookup_lexicon_entry(
     owner_id: str | None = None,
 ) -> LexiconLookupResponse:
     normalized_language_code = _normalized_language_code(language_code)
-    _ensure_seeded_lexicon_if_available(data_root, language_code=normalized_language_code)
+    warm_lexicon(data_root, language_code=normalized_language_code)
     db_path = ensure_lexicon_database(data_root)
     entries: list[LexiconEntryRecord] = []
     resolution_source: str = "local"

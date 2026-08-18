@@ -5,13 +5,15 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 LearningTrackCode = Literal["local", "hsk", "jlpt", "topik", "trki", "cefr", "custom", "not_sure"]
+AccountRole = Literal["member", "tester", "admin"]
+SignupAccountRole = Literal["member", "tester"]
 
 
 class AuthMeResponse(BaseModel):
     id: str
     email: str | None = None
     role: str = "authenticated"
-    account_role: Literal["member", "tester", "admin"] = "member"
+    account_role: AccountRole = "member"
     permissions: list[str] = Field(default_factory=list)
     display_name: str | None = None
 
@@ -44,3 +46,7 @@ class HostedProfileUpdateRequest(BaseModel):
     target_language: str | None = None
     learning_track: LearningTrackCode | None = None
     proficiency_level: str | None = None
+
+
+class AccountRoleUpdateRequest(BaseModel):
+    account_role: SignupAccountRole

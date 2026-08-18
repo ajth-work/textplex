@@ -66,6 +66,7 @@ import {
   resolveAppThemeGridEnabledFromSettings,
   resolveAppThemePatternOpacityFromSettings,
   resolveAppThemePatternTilingFromSettings,
+  resolveAppThemeOpposite,
   themeBundles,
   type AppTheme,
 } from "../lib/theme";
@@ -103,6 +104,11 @@ type LexicalEntryDetail = {
 type ImportLanguageOption = (typeof targetLanguageOptions)[number];
 
 const importLanguageOptions: ImportLanguageOption[] = [...targetLanguageOptions];
+
+function createPhotoPageId(file: File): string {
+  const randomPart = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${file.name}-${file.lastModified}-${randomPart}`;
+}
 
 type ActivityBookGroup = {
   bookId: string;
@@ -444,18 +450,20 @@ export function ImportSurfaceView() {
   const { activeImport, trackImport } = useImportProgress();
   const [data, setData] = useState<ImportSurfaceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"paste" | "upload">("paste");
+  const [mode, setMode] = useState<"paste" | "upload" | "photos">("paste");
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [languageCode, setLanguageCode] = useState("zh");
   const [wikipediaLanguageCode, setWikipediaLanguageCode] = useState("zh");
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [photoPages, setPhotoPages] = useState<Array<{ id: string; file: File; previewUrl: string }>>([]);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [wikipediaSubmitting, setWikipediaSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (authLoading || (authConfigured && !authSession?.access_token)) {
@@ -507,7 +515,7 @@ export function ImportSurfaceView() {
           title: title.trim() || null,
           author: author.trim() || null,
         });
-      } else {
+      } else if (mode === "upload") {
         if (!file) {
           throw new Error("Choose a PDF, EPUB, or TXT file before uploading it.");
         }
@@ -520,6 +528,16 @@ export function ImportSurfaceView() {
         if (title.trim()) formData.append("title", title.trim());
         if (author.trim()) formData.append("author", author.trim());
         book = await postFormData<BookRecord>("/books/upload", formData);
+      } else {
+        if (!photoPages.length) {
+          throw new Error("Add at least one page photo before importing.");
+        }
+        const formData = new FormData();
+        photoPages.forEach((page) => formData.append("images", page.file, page.file.name));
+        formData.append("language_code", languageCode);
+        if (title.trim()) formData.append("title", title.trim());
+        if (author.trim()) formData.append("author", author.trim());
+        book = await postFormData<BookRecord>("/books/upload-images", formData);
       }
 
       trackImport(book);
@@ -530,7 +548,10 @@ export function ImportSurfaceView() {
       );
       setText("");
       setFile(null);
+      photoPages.forEach((page) => URL.revokeObjectURL(page.previewUrl));
+      setPhotoPages([]);
       if (fileInputRef.current) fileInputRef.current.value = "";
+      if (photoInputRef.current) photoInputRef.current.value = "";
       const refreshed = await fetchJson<ImportSurfaceResponse>("/import");
       setData(refreshed);
     } catch (err) {
@@ -574,6 +595,8 @@ export function ImportSurfaceView() {
 
   return (
     <RoutePage
+      className="import-route-hero"
+      inventoryId="import.route-hero"
       eyebrow="Import"
       title="Paste text or upload a book"
       description="Import pasted text, TXT files, PDF books, or EPUB books into the reader."
@@ -583,8 +606,9 @@ export function ImportSurfaceView() {
         { href: "/progress", label: "Progress" },
       ]}
       metrics={[
-        { label: "Inputs", value: data ? data.supported_inputs.join(", ") : "Loading" },
+        { label: "Inputs", value: data ? `${data.supported_inputs.length} formats` : "Loading" },
         { label: "Uploads", value: data ? (data.can_upload_pdf || data.can_upload_epub || data.can_upload_txt ? "Enabled" : "Disabled") : "Loading" },
+        { label: "Photo pages", value: data ? (data.can_upload_images ? "Enabled" : "Disabled") : "Loading" },
         { label: "Paste", value: data ? (data.can_paste_text ? "Enabled" : "Disabled") : "Loading" },
       ]}
     >
@@ -595,7 +619,7 @@ export function ImportSurfaceView() {
           <section className="card feature-card import-form-card">
             <div className="card-topline">
               <h2>Add content</h2>
-              <span className="pill">{mode === "paste" ? "Paste" : "PDF / EPUB / TXT"}</span>
+              <span className="pill">{mode === "paste" ? "Paste" : mode === "upload" ? "PDF / EPUB / TXT" : "Photo pages"}</span>
             </div>
             <div className="button-row" aria-label="Import method">
               <button className={`button ${mode === "paste" ? "button-primary" : "button-secondary"}`} type="button" onClick={() => setMode("paste")}>
@@ -603,6 +627,9 @@ export function ImportSurfaceView() {
               </button>
               <button className={`button ${mode === "upload" ? "button-primary" : "button-secondary"}`} type="button" onClick={() => setMode("upload")}>
                 Upload PDF / EPUB / TXT
+              </button>
+              <button className={`button ${mode === "photos" ? "button-primary" : "button-secondary"}`} type="button" onClick={() => setMode("photos")}>
+                Add photos page by page
               </button>
             </div>
             <form className="surface-form" onSubmit={handleImport}>
@@ -632,16 +659,57 @@ export function ImportSurfaceView() {
                     Article text
                     <textarea className="text-input import-textarea" value={text} onChange={(event) => setText(event.target.value)} placeholder="Paste an article or passage here..." required />
                   </label>
-                ) : (
+                ) : mode === "upload" ? (
                   <label>
                     PDF, EPUB, or TXT file
                     <input ref={fileInputRef} className="text-input" type="file" accept="application/pdf,.pdf,application/epub+zip,.epub,text/plain,.txt" onChange={(event) => setFile(event.target.files?.[0] ?? null)} required />
                   </label>
+                ) : (
+                  <div className="photo-import-panel" data-inventory-id="import.photo-pages-card">
+                    <div className="card-topline">
+                      <div>
+                        <h3>Build your reading item</h3>
+                        <p className="small-copy">Add up to 12 JPG or PNG page photos in order. You can reorder or remove pages before processing.</p>
+                      </div>
+                      <span className="pill">{photoPages.length}/12 pages</span>
+                    </div>
+                    <input
+                      ref={photoInputRef}
+                      className="visually-hidden"
+                      type="file"
+                      accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+                      onChange={(event) => {
+                        const selected = event.target.files?.[0];
+                        if (selected && photoPages.length < 12) {
+                          setPhotoPages((current) => [...current, { id: createPhotoPageId(selected), file: selected, previewUrl: URL.createObjectURL(selected) }]);
+                        }
+                        event.target.value = "";
+                      }}
+                    />
+                    <button className="button button-secondary" type="button" onClick={() => photoInputRef.current?.click()} disabled={photoPages.length >= 12}>
+                      Add next page photo
+                    </button>
+                    {photoPages.length ? (
+                      <div className="photo-page-list" aria-label="Photo pages">
+                        {photoPages.map((page, index) => (
+                          <article className="photo-page-item" key={page.id}>
+                            <Image src={page.previewUrl} alt={`Page ${index + 1} preview`} width={120} height={160} unoptimized />
+                            <strong>Page {index + 1}</strong>
+                            <div className="button-row">
+                              <button className="button button-secondary" type="button" disabled={index === 0} onClick={() => setPhotoPages((current) => { const next = [...current]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; })}>Move left</button>
+                              <button className="button button-secondary" type="button" disabled={index === photoPages.length - 1} onClick={() => setPhotoPages((current) => { const next = [...current]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; return next; })}>Move right</button>
+                              <button className="button button-secondary" type="button" onClick={() => { URL.revokeObjectURL(page.previewUrl); setPhotoPages((current) => current.filter((candidate) => candidate.id !== page.id)); }}>Remove</button>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    ) : <p className="small-copy">No page photos added yet.</p>}
+                  </div>
                 )}
                 {actionError ? <p className="form-error" role="alert">{actionError}</p> : null}
                 {actionMessage ? <p className="form-message" role="status">{actionMessage}</p> : null}
                 <button className="button button-primary" type="submit" disabled={submitting}>
-                  {submitting ? "Processing..." : mode === "paste" ? "Process text" : "Upload and process"}
+                  {submitting ? "Processing..." : mode === "paste" ? "Process text" : mode === "photos" ? "Import photo pages" : "Upload and process"}
                 </button>
               </form>
               {data.can_import_random_wikipedia ? (
@@ -1102,7 +1170,119 @@ export function ProfileSurfaceView() {
   );
 }
 
+type ThemeShopCatalogItem = {
+  id: string;
+  title: string;
+  description: string;
+  price_cents: number;
+  is_free: boolean;
+  is_owned: boolean;
+  preview_available: boolean;
+};
+
+function groupThemeShopItems(items: ThemeShopCatalogItem[]): ThemeShopCatalogItem[][] {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const seen = new Set<string>();
+
+  return items.flatMap((item) => {
+    if (seen.has(item.id)) {
+      return [];
+    }
+
+    const oppositeId = resolveAppThemeOpposite(item.id as AppTheme);
+    const opposite = byId.get(oppositeId);
+    const itemMode = getThemeCatalogMode(item.id);
+    const oppositeMode = opposite ? getThemeCatalogMode(opposite.id) : null;
+    const variants = opposite && itemMode && oppositeMode
+      ? [item, opposite].sort((left, right) => (getThemeCatalogMode(left.id) === "daylight" ? -1 : 1) - (getThemeCatalogMode(right.id) === "daylight" ? -1 : 1))
+      : [item];
+
+    variants.forEach((variant) => seen.add(variant.id));
+    return [variants];
+  });
+}
+
+function ThemeShopProductCard({
+  variants,
+  selectedTheme,
+  onSelect,
+  themeStatus,
+}: {
+  variants: ThemeShopCatalogItem[];
+  selectedTheme: AppTheme;
+  onSelect: (theme: AppTheme) => void;
+  themeStatus: (item: ThemeShopCatalogItem) => string;
+}) {
+  const selectedVariant = variants.find((item) => item.id === selectedTheme) ?? variants[0];
+  const selectedMode = getThemeCatalogMode(selectedVariant.id);
+  const thumbnailPath = getThemeWallpaperThumbnailPath(selectedVariant.id);
+  const knownOption = appThemeOptions.find((option) => option.value === selectedVariant.id);
+
+  return (
+    <article className={`theme-shop-product-card${selectedVariant.id === selectedTheme ? " is-selected" : ""}`} data-inventory-id="theme-shop.theme-option">
+      <button
+        className={`theme-shop-product-swatch${thumbnailPath ? " theme-shop-product-swatch--wallpaper" : " global-theme-swatch"}`}
+        type="button"
+        data-theme={selectedVariant.id}
+        style={thumbnailPath ? { backgroundImage: `url("${thumbnailPath}")` } : undefined}
+        aria-label={`Preview ${appThemeLabels[selectedVariant.id as AppTheme] ?? selectedVariant.title}`}
+        onClick={() => knownOption && selectedVariant.preview_available ? onSelect(knownOption.value) : undefined}
+        disabled={!knownOption || !selectedVariant.preview_available}
+      >
+        {thumbnailPath ? (
+          <Image className="theme-shop-product-swatch-image" src={thumbnailPath} alt="" aria-hidden="true" width={304} height={540} loading="lazy" decoding="async" draggable={false} />
+        ) : null}
+        <span className="theme-shop-product-swatch-label">{selectedMode === "night" ? "Night" : selectedMode === "daylight" ? "Day" : "Preview"}</span>
+      </button>
+      <div className="theme-shop-product-copy">
+        <span className="theme-shop-option-meta">
+          <span>{themeCatalogCategories.find((entry) => entry.value === getThemeCatalogCategory(selectedVariant.id, selectedVariant.is_free))?.label}</span>
+          {selectedMode ? <span>{selectedMode === "daylight" ? "Daylight" : "Night"}</span> : null}
+        </span>
+        <strong>{selectedVariant.title.replace(/\s+—\s+(Daylight|Night)$/u, "")}</strong>
+        <span>{selectedVariant.description}</span>
+        <span className="theme-shop-product-price">{themeStatus(selectedVariant)}</span>
+      </div>
+      {variants.length > 1 ? (
+        <div className="theme-shop-mode-toggle" role="group" aria-label={`${selectedVariant.title} day and night variants`}>
+          {variants.map((variant) => {
+            const variantMode = getThemeCatalogMode(variant.id);
+            const variantOption = appThemeOptions.find((option) => option.value === variant.id);
+            return (
+              <button
+                key={variant.id}
+                type="button"
+                className={`theme-shop-mode-button${variant.id === selectedVariant.id ? " is-active" : ""}`}
+                aria-pressed={variant.id === selectedVariant.id}
+                onClick={() => variantOption && variant.preview_available ? onSelect(variantOption.value) : undefined}
+                disabled={!variantOption || !variant.preview_available}
+              >
+                {variantMode === "night" ? "Night" : "Day"}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+type ThemeExperienceMode = "settings" | "shop";
+
 export function ThemeSettingsSurfaceView() {
+  return <ThemeExperienceSurfaceView mode="settings" />;
+}
+
+export function ThemeShopSurfaceView({ categorySlug }: { categorySlug?: string } = {}) {
+  return <ThemeExperienceSurfaceView mode="shop" categorySlug={categorySlug} />;
+}
+
+function ThemeExperienceSurfaceView({ mode: surfaceMode, categorySlug }: { mode: ThemeExperienceMode; categorySlug?: string }) {
+  const isShop = surfaceMode === "shop";
+  const dedicatedCategory = Boolean(categorySlug);
+  const initialCategory = themeCatalogCategories.some((item) => item.value === categorySlug)
+    ? categorySlug as ThemeCatalogCategory
+    : "all";
   const { user: authenticatedUser } = useAuth();
   const isAdmin = isTextPlexAdmin(authenticatedUser);
   const [data, setData] = useState<SettingsSurfaceResponse | null>(null);
@@ -1116,7 +1296,7 @@ export function ThemeSettingsSurfaceView() {
   const [patternOpacity, setPatternOpacity] = useState(DEFAULT_APP_THEME_PATTERN_OPACITY);
   const [patternTiling, setPatternTiling] = useState(DEFAULT_APP_THEME_PATTERN_TILING);
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<ThemeCatalogCategory>("all");
+  const [category, setCategory] = useState<ThemeCatalogCategory>(initialCategory);
   const [mode, setMode] = useState<ThemeCatalogMode>("all");
   const [bundleIndex, setBundleIndex] = useState(0);
   const [wallpaperMode, setWallpaperMode] = useState<"full" | "crop" | "manual">("full");
@@ -1125,7 +1305,6 @@ export function ThemeSettingsSurfaceView() {
   const [wallpaperPositionY, setWallpaperPositionY] = useState(50);
   const [wallpaperFrame, setWallpaperFrame] = useState<"2 / 3" | "9 / 16" | "1 / 1">("2 / 3");
   const [selectedWallpaperLoaded, setSelectedWallpaperLoaded] = useState(false);
-  const railRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     setTheme(readStoredAppTheme() ?? "neutral");
@@ -1252,6 +1431,7 @@ export function ThemeSettingsSurfaceView() {
   const catalogBundles = catalog?.bundles ?? fallbackBundles;
   const activeBundleIndex = catalogBundles.length ? Math.min(bundleIndex, catalogBundles.length - 1) : 0;
   const activeBundle = catalogBundles[activeBundleIndex];
+  const activeCategory = themeCatalogCategories.find((item) => item.value === category);
   const formatPrice = (price: number) => `$${price.toFixed(2)}`;
 
   function moveBundle(direction: number) {
@@ -1259,10 +1439,6 @@ export function ThemeSettingsSurfaceView() {
       return;
     }
     setBundleIndex((current) => (current + direction + catalogBundles.length) % catalogBundles.length);
-  }
-
-  function scrollRail(collection: string, direction: number) {
-    railRefs.current[collection]?.scrollBy({ left: direction * 280, behavior: "smooth" });
   }
 
   function themeStatus(item: (typeof catalogThemes)[number]) {
@@ -1283,29 +1459,55 @@ export function ThemeSettingsSurfaceView() {
 
   return (
     <RoutePage
-      eyebrow="Settings"
-      title="Theme settings and owned themes"
-      description="Tune the app theme and reading canvas in one place, then browse the owned and available theme catalog below."
-      badge={`${catalog?.themes.length ?? appThemeOptions.length} themes`}
-      links={[
-        { href: "/settings", label: "Back to Settings" },
-        { href: "/profile", label: "Profile" },
-      ]}
-      metrics={[
-        { label: "Collection", value: `${catalog?.themes.length ?? appThemeOptions.length} themes` },
-        { label: "Selected", value: appThemeLabels[theme] },
-        { label: "Storage", value: catalog ? "Server catalog" : "Local preview" },
-      ]}
+      eyebrow={isShop ? "Theme Shop" : "My Themes"}
+      title={isShop
+        ? dedicatedCategory && activeCategory ? `${activeCategory.label} themes` : "Find your next reading atmosphere"
+        : "Theme settings"}
+      description={isShop
+        ? dedicatedCategory && activeCategory
+          ? `${activeCategory.value === "all" ? "Browse the full TextPlex theme collection." : themeCatalogCollectionDescriptions[activeCategory.value]} Browse the full collection in a scrollable grid and switch day or night variants on each paired theme.`
+          : "Browse visual themes made for long reading sessions, preview every collection, and keep purchased themes ready across TextPlex."
+        : "Tune how your selected theme behaves across the app and reading canvas."}
+      badge={isShop ? `${catalog?.themes.length ?? appThemeOptions.length} themes` : appThemeLabels[theme]}
+      links={isShop ? (dedicatedCategory
+        ? [
+          { href: "/themes", label: "Back to Theme Shop" },
+          { href: "#theme-catalog", label: "Jump to themes" },
+        ]
+        : [
+          { href: "#theme-catalog", label: "Browse the catalog" },
+          { href: "/profile/themes", label: "My Themes" },
+        ]) : [
+          { href: "/settings", label: "Back to Settings" },
+          { href: "/themes", label: "Open Theme Shop" },
+        ]}
+      metrics={isShop ? (dedicatedCategory && activeCategory
+        ? [
+          { label: "Collection", value: `${collectionGroups[0]?.themes.length ?? 0} themes` },
+          { label: "View", value: "Full grid" },
+          { label: "Previewing", value: appThemeLabels[theme] },
+        ]
+        : [
+          { label: "Catalog", value: `${catalog?.themes.length ?? appThemeOptions.length} themes` },
+          { label: "Collections", value: `${catalog?.bundles.length ?? themeBundles.length} bundles` },
+          { label: "Previewing", value: appThemeLabels[theme] },
+        ]) : [
+          { label: "Selected", value: appThemeLabels[theme] },
+          { label: "Device mode", value: followSystem ? "Following device" : "Manual" },
+          { label: "Preferences", value: "Saved profile" },
+        ]}
+      className={isShop ? "theme-shop-route-hero" : "theme-settings-route-hero"}
+      inventoryId={isShop ? "theme-shop.route-hero" : "theme-settings.route-hero"}
     >
-      {error ? <section className="card feature-card">{error}</section> : null}
-      {!data && !error ? <LoadingSkeleton label="Loading theme settings" /> : null}
-      {data ? (
+      {error && !isShop ? <section className="card feature-card" data-inventory-id="theme-settings.error-state">{error}</section> : null}
+      {!data && !error && !isShop ? <div data-inventory-id="theme-settings.loading-state"><LoadingSkeleton label="Loading theme settings" /></div> : null}
+      {data || isShop ? (
         <>
-          <section className="feature-grid">
+          {!isShop && data ? <section className="feature-grid">
             <GlobalThemePicker
               initialTheme={theme}
               entries={data.entries}
-              catalogHref="#theme-catalog"
+              catalogHref="/themes#theme-catalog"
               inventoryId="theme-settings.app-theme-card"
               onThemeChange={setTheme}
               onSaved={setTheme}
@@ -1390,11 +1592,29 @@ export function ThemeSettingsSurfaceView() {
                 {saving ? "Saving theme settings..." : saved ? "Theme settings saved" : "Save theme settings"}
               </button>
             </article>
-          </section>
-          <section className="card feature-card theme-shop-card">
+          </section> : (
+            <section className="card theme-shop-storefront-intro" data-inventory-id="theme-shop.storefront-intro">
+              <div>
+                <span className="eyebrow">Preview freely</span>
+                <strong>Try the full atmosphere</strong>
+                <p>See each theme against the live TextPlex canvas before choosing it.</p>
+              </div>
+              <div>
+                <span className="eyebrow">Made for reading</span>
+                <strong>Artwork behind the words</strong>
+                <p>Every collection is designed to preserve contrast and keep the text primary.</p>
+              </div>
+              <div>
+                <span className="eyebrow">Your collection</span>
+                <strong>Own once, use anywhere</strong>
+                <p>Included and purchased themes stay organized in My Themes.</p>
+              </div>
+            </section>
+          )}
+          {isShop ? <section className="card feature-card theme-shop-card theme-shop-storefront-card">
           <div className="card-topline">
             <div>
-              <span className="eyebrow">Your current preview</span>
+              <span className="eyebrow">{isShop ? "Store preview" : "Your current preview"}</span>
               <h2>{selectedOption.title}</h2>
             </div>
             <span className="pill">Live preview</span>
@@ -1558,7 +1778,7 @@ export function ThemeSettingsSurfaceView() {
               </button>
             </div>
           </details> : null}
-          <div className="theme-bundle-carousel" data-inventory-id="theme-shop.collections-carousel" aria-roledescription="carousel" aria-label="All theme collections">
+          {!dedicatedCategory ? <div className="theme-bundle-carousel" data-inventory-id="theme-shop.collections-carousel" aria-roledescription="carousel" aria-label="All theme collections">
             <div className="theme-bundle-carousel-heading">
               <div>
                 <span className="eyebrow">Browse by collection</span>
@@ -1621,7 +1841,7 @@ export function ThemeSettingsSurfaceView() {
                 </div>
               </>
             ) : <p className="small-copy">No collections are available yet.</p>}
-          </div>
+          </div> : null}
           <section className="theme-shop-collections" id="theme-catalog" data-inventory-id="theme-shop.catalog-card">
             <div className="theme-shop-catalog-heading">
               <div>
@@ -1631,62 +1851,20 @@ export function ThemeSettingsSurfaceView() {
               <span className="small-copy">{collectionGroups.reduce((total, collection) => total + collection.themes.length, 0)} themes</span>
             </div>
             {collectionGroups.length ? collectionGroups.map((collection) => (
-              <section key={collection.value} className="theme-shop-rail" data-inventory-id="theme-shop.collection-rail">
+              <section key={collection.value} className={`theme-shop-rail${dedicatedCategory ? " theme-shop-rail-dedicated" : ""}`} data-inventory-id="theme-shop.collection-rail">
                 <div className="theme-shop-rail-heading">
                   <div>
                     <h4>{collection.label}</h4>
                     <p>{collection.description}</p>
                   </div>
-                  <button className="theme-shop-rail-arrow" type="button" onClick={() => scrollRail(collection.value, 1)} aria-label={`Next ${collection.label} themes`}>
+                  {!dedicatedCategory && groupThemeShopItems(collection.themes).length > 5 ? <Link className="theme-shop-rail-arrow" href={`/themes/${collection.value}`} aria-label={`View all ${collection.label} themes`}>
                     <span aria-hidden="true">→</span>
-                  </button>
+                  </Link> : null}
                 </div>
-                <div className="theme-shop-rail-track" ref={(element) => { railRefs.current[collection.value] = element; }} data-inventory-id="theme-shop.catalog-grid" aria-label={`${collection.label} themes`}>
-                  {collection.themes.map((item) => {
-                  const knownOption = appThemeOptions.find((option) => option.value === item.id);
-                  const isSelected = theme === item.id;
-                  const itemMode = getThemeCatalogMode(item.id);
-                  const itemCategory = getThemeCatalogCategory(item.id, item.is_free);
-                  const wallpaperThumbnailPath = getThemeWallpaperThumbnailPath(item.id);
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={`theme-shop-product-card ${isSelected ? "is-selected" : ""}`}
-                      onClick={() => knownOption && item.preview_available ? selectTheme(knownOption.value) : undefined}
-                      aria-pressed={isSelected}
-                      disabled={!knownOption || !item.preview_available}
-                    >
-                      <span
-                        className={`theme-shop-product-swatch global-theme-swatch ${wallpaperThumbnailPath ? "theme-shop-product-swatch--wallpaper" : ""}`}
-                        data-theme={item.id}
-                        aria-hidden="true"
-                      >
-                        {wallpaperThumbnailPath ? (
-                          <Image
-                            className="theme-shop-product-swatch-image"
-                            src={wallpaperThumbnailPath}
-                            alt=""
-                            aria-hidden="true"
-                            width={304}
-                            height={540}
-                            loading="lazy"
-                            decoding="async"
-                            draggable={false}
-                            onContextMenu={(event: MouseEvent<HTMLImageElement>) => event.preventDefault()}
-                            onDragStart={(event: MouseEvent<HTMLImageElement>) => event.preventDefault()}
-                          />
-                        ) : null}
-                      </span>
-                      <span className="theme-shop-product-copy">
-                        <span className="theme-shop-option-meta"><span>{themeCatalogCategories.find((entry) => entry.value === itemCategory)?.label}</span>{itemMode ? <span>{itemMode === "daylight" ? "Daylight" : "Night"}</span> : null}</span>
-                        <strong>{item.title}</strong>
-                        <span>{item.description}</span>
-                        <span className="theme-shop-product-price">{themeStatus(item)}</span>
-                      </span>
-                    </button>
-                  );
-                  })}
+                <div className={`theme-shop-rail-track${dedicatedCategory ? " theme-shop-category-grid" : ""}`} data-inventory-id={dedicatedCategory ? "theme-shop.category-grid" : "theme-shop.catalog-grid"} aria-label={`${collection.label} themes`}>
+                  {groupThemeShopItems(collection.themes).slice(0, dedicatedCategory ? undefined : 5).map((variants) => (
+                    <ThemeShopProductCard key={variants[0].id} variants={variants} selectedTheme={theme} onSelect={selectTheme} themeStatus={themeStatus} />
+                  ))}
                 </div>
               </section>
             )) : (
@@ -1698,7 +1876,7 @@ export function ThemeSettingsSurfaceView() {
               </div>
             )}
           </section>
-          </section>
+          </section> : null}
         </>
       ) : null}
     </RoutePage>
@@ -1975,7 +2153,7 @@ export function SettingsSurfaceView() {
           <div className="settings-inspector-row" data-inventory-id="settings.build-footer-toggle">
             <div>
               <strong>Build details</strong>
-              <p className="small-copy">The current build is always shown in the footer; optionally include the last reboot/rebuild time.</p>
+            <p className="small-copy">The build card always shows the version, build timestamp, and time since build; this toggle adds a local diagnostic note.</p>
             </div>
             <BuildFooterToggle />
           </div>

@@ -13,6 +13,7 @@ from app.services.lexicon import (
     lookup_lexicon_entry,
     lookup_lexicon_entry_map,
     lookup_lexicon_pinyin_map,
+    warm_lexicon,
 )
 from typing_extensions import Self
 
@@ -208,6 +209,20 @@ def test_lookup_lexicon_entry_falls_back_without_seed_pack(tmp_path: Path, monke
     assert lookup.entries
     assert lookup.entries[0].definition == "good morning"
     assert lookup.resolution_source == "google_translate_live"
+
+
+def test_warm_lexicon_only_initializes_each_data_root_and_language_once(tmp_path: Path, monkeypatch) -> None:
+    calls: list[tuple[Path, str]] = []
+
+    def fake_seed(data_root: Path, *, language_code: str) -> bool:
+        calls.append((data_root, language_code))
+        return True
+
+    monkeypatch.setattr("app.services.lexicon._ensure_seeded_lexicon_if_available", fake_seed)
+
+    assert warm_lexicon(tmp_path, language_code="zh-CN") is True
+    assert warm_lexicon(tmp_path, language_code="zh") is True
+    assert calls == [(tmp_path, "zh")]
 
 
 def test_lookup_seeds_missing_language_into_existing_database(tmp_path: Path) -> None:

@@ -21,12 +21,13 @@ from app.schemas.generated_articles import (
 from app.services.book_extraction import import_text_into_book
 from app.services.learning_profile import ensure_profile_database
 from app.services.lexicon import ensure_lexicon_database, lookup_lexicon_entry_map
+from app.services.openai_config import get_openai_api_key, get_openai_api_key_env
 from app.services.study_programs import build_study_program_groups
 
 logger = logging.getLogger(__name__)
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
-DEFAULT_GENERATION_MODEL = "gpt-5.4-mini"
+DEFAULT_GENERATION_MODEL = "gpt-5.6-luna"
 DEFAULT_MAX_OUTPUT_TOKENS = 4096
 ARTICLE_PROMPT_VERSION = "reader-article-v4"
 GENERATED_ARTICLE_PROMPT_FILENAME = "generation.json"
@@ -272,7 +273,7 @@ def _within_curriculum_ceiling(
 
 
 def _openai_api_key() -> str:
-    return os.getenv("OPENAI_API_KEY", "").strip()
+    return get_openai_api_key("practice_articles")
 
 
 def _openai_model() -> str:
@@ -721,7 +722,7 @@ def load_generated_article_prompt_details(
 def _call_openai(prompt: str) -> dict[str, Any]:
     api_key = _openai_api_key()
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured.")
+        raise RuntimeError(f"{get_openai_api_key_env('practice_articles')} is not configured.")
 
     payload = {
         "model": _openai_model(),

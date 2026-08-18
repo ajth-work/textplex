@@ -34,6 +34,9 @@ test("Next reader meaning line preserves spacing, offers a complete reveal escap
   assert.match(readerSource, /Reveal all/);
   assert.match(readerSource, /function splitAttachedTranslationPunctuation\(token: TranslationAlignmentToken\)/);
   assert.match(readerSource, /normalizeTranslationPunctuation/);
+  assert.match(readerSource, /function translationAlignmentMatchesText\(/);
+  assert.match(readerSource, /activeSentenceTranslationAlignment = translationAlignmentMatchesText\(/);
+  assert.match(readerSource, /translation_alignment: translation\.translation_alignment/);
   assert.match(readerSource, /if \(!pageData \|\| isSentencePunctuation\(token\.surface_form\)\)/);
   assert.match(readerSource, /disabled=\{isPunctuation\}/);
   assert.match(readerSource, /Punctuation \$\{token\.surface_form\}/);
@@ -43,6 +46,10 @@ test("Next reader meaning line preserves spacing, offers a complete reveal escap
   assert.match(stylesheetSource, /\.reader-translation-reveal-part\.is-space\s*\{[\s\S]*display: inline-block;/);
   assert.match(stylesheetSource, /\.reader-translation-reveal-actions \.button\s*\{[\s\S]*width: auto;/);
   assert.match(stylesheetSource, /\.token-inline\.is-punct:hover,[\s\S]*box-shadow: none;/);
+});
+
+test("Next reader keeps CJK token text at normal weight and style", () => {
+  assert.match(stylesheetSource, /\.token-inline\.is-cjk\s*\{[\s\S]*font-weight: 400;[\s\S]*font-style: normal;/);
 });
 
 test("Next reader contract keeps loading, error, extraction, lookup, and chart states", () => {
@@ -124,6 +131,15 @@ test("Next reader contract keeps loading, error, extraction, lookup, and chart s
   assert.match(readerSource, /new Set\(sentenceRevealWordSlots\)/);
 });
 
+test("Next reader prefetches adjacent lexicon terms and shares requests with token taps", () => {
+  assert.match(readerSource, /readerLexiconPrefetchLookahead = 3/);
+  assert.match(readerSource, /lexiconCacheRef = useRef\(new Map/);
+  assert.match(readerSource, /lexiconPrefetchRequestsRef = useRef\(new Map/);
+  assert.match(readerSource, /requestLexiconLookup/);
+  assert.match(readerSource, /selectedSentenceIndex \+ readerLexiconPrefetchLookahead \+ 1/);
+  assert.match(readerSource, /allowGoogleFallback \? "true" : "false"/);
+});
+
 test("Next reader defaults token audio on without overriding an explicit off choice", () => {
   assert.match(readerSource, /useState\(\(\) => readStoredReaderTokenAudioOnTap\(\)\)/);
   const textplexSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "lib", "textplex.ts"), "utf8");
@@ -191,6 +207,12 @@ test("Next reader expands the session summary into book-scoped stats", () => {
     assert.match(stylesheetSource, /\.reader-session-stats\s*\{[\s\S]*grid-column: 1 \/ -1;[\s\S]*width: 100%;/);
     assert.match(stylesheetSource, /\.reader-session-pill-rail\s*\{[\s\S]*overflow-x: auto/);
   });
+
+test("Next reader keeps completion summary fallback labels readable", () => {
+  assert.match(readerSource, /bookCoveragePercent == null \? "\\u2014"/);
+  assert.match(readerSource, /completionSaving \? "Saving\.\.\." : "Mark as read and return to library"/);
+  assert.doesNotMatch(readerSource, /bookCoveragePercent == null \? "ÃƒÆ’/);
+});
 
 test("Next reader makes the desktop session rail discoverable and draggable", () => {
   assert.match(readerSource, /formatReaderEstimatedDuration/);
@@ -308,6 +330,15 @@ test("Next reader definition card stays compact and exposes the save action", ()
   assert.match(stylesheetSource, /\.definition-feedback-missed\s*\{[\s\S]*color: #b42318;/);
 });
 
+test("Next reader keeps definition load timing admin-only", () => {
+  assert.match(readerSource, /type DefinitionLookupTiming/);
+  assert.match(readerSource, /definitionLookupTiming/);
+  assert.match(readerSource, /isAdmin && definitionLookupTiming/);
+  assert.match(readerSource, /Lexicon \{definitionLookupTiming\.lexiconMs\} ms/);
+  assert.match(readerSource, /Google Translate \{definitionLookupTiming\.googleTranslateMs\} ms/);
+  assert.match(stylesheetSource, /\.definition-load-timing\s*\{/);
+});
+
 test("Next reader romanizes Korean token readings instead of falling back to Hangul", () => {
   assert.match(readerSource, /function romanizeHangulText\(text: string\): string/);
   assert.match(readerSource, /function splitKoreanParticleChain\(surface: string\): string\[\]/);
@@ -323,7 +354,7 @@ test("Next reader romanizes Korean token readings instead of falling back to Han
   assert.match(readerSource, /const selectedTokenReading = normalizeDisplayReading\(/);
   assert.match(readerSource, /const selectedTokenReadingDisplayParts = selectedToken/);
   assert.match(readerSource, /const lexiconEntry = lexiconSelection\.entry/);
-  assert.match(readerSource, /const tokenSurfaceParts = languageCode\?\.startsWith\("ko"\) \? splitKoreanParticleChain\(token\.surface_form\) : \[\];/);
+  assert.match(readerSource, /const tokenSurfaceParts = tokenLanguageCode\?\.startsWith\("ko"\) \? splitKoreanParticleChain\(token\.surface_form\) : \[\];/);
   assert.match(readerSource, /const tokenReadingParts = buildTokenReadingParts\(/);
   assert.match(readerSource, /const isTokenPronunciationMuted =/);
   assert.match(readerSource, /<span className="token-surface">[\s\S]*token\.surface_form/);
@@ -359,6 +390,32 @@ test("Next reader romanizes Korean token readings instead of falling back to Han
   assert.match(themeSource, /APP_THEME_RECENTS_CHANGE_EVENT/);
   assert.match(themeSource, /readStoredAppThemeRecents/);
   assert.match(themeSource, /persistAppThemeRecents/);
+});
+
+test("Next reader can chain sentence audio by adjacent token language while preserving book-level audio", () => {
+  assert.match(readerSource, /readerMixedLanguageSentenceAudioStorageKey/);
+  assert.match(readerSource, /data-inventory-id="reader\.mixed-language-audio-toggle"/);
+  assert.match(readerSource, /function buildMixedLanguageSpeechSegments\(/);
+  assert.match(readerSource, /const mixedLanguageSegments = readerMixedLanguageSentenceAudio/);
+  assert.match(readerSource, /applyPreferredSpeechVoice\(utterance, segment\.languageCode, readerSpeechVoiceGender\)/);
+  assert.match(readerSource, /speechSegments\.forEach\(\(segment, index\) =>/);
+  assert.match(readerSource, /text: activeSentence\.text,\s+tokenRanges: speechTokenRanges/);
+});
+
+test("Next reader detects Korean tokens inside another language and routes their lookup and audio correctly", () => {
+  assert.match(readerSource, /function resolveTokenLanguageCode\([\s\S]*tokenLanguageCode\?: string \| null,[\s\S]*\): string \| null/);
+  assert.match(readerSource, /const normalizedTokenLanguage = tokenLanguageCode\?\.trim\(\)\.toLowerCase\(\);/);
+  assert.match(readerSource, /if \(isKoreanText\(surface\)\) \{\s+return "ko";/);
+  assert.match(readerSource, /const tokenLanguageCode = resolveTokenLanguageCode\(token\.surface_form, languageCode, token\.language_code\)/);
+  assert.match(readerSource, /return "ru";[\s\S]*return "he";[\s\S]*return "ar";/);
+  assert.match(readerSource, /return normalizedFallback === "en" \|\| normalizedFallback === "yo" \? normalizedFallback : "en";/);
+  assert.match(readerSource, /lang=\{tokenLanguageCode \|\| undefined\}/);
+  assert.match(readerSource, /const languageCode = resolveTokenLanguageCode\([\s\S]*selectedToken\.language_code,[\s\S]*\) \?\? pageData\.book\.language_code;/);
+  assert.match(readerSource, /language_code=\$\{encodeURIComponent\(languageCode\)\}/);
+  const playWordAudio = readerSource.match(/function playWordAudio\(token: TokenResult\): void \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function playDefinitionSegmentAudio/)?.[0] ?? "";
+  assert.match(playWordAudio, /resolveTokenLanguageCode\(token\.surface_form, pageData\.book\.language_code, token\.language_code\)/);
+  const playDefinitionSegmentAudio = readerSource.match(/function playDefinitionSegmentAudio\(part: TokenReadingPart\): void \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function handlePlaySelectedTokenAudio/)?.[0] ?? "";
+  assert.match(playDefinitionSegmentAudio, /resolveTokenLanguageCode\(selectedToken\.surface_form, pageData\.book\.language_code, selectedToken\.language_code\)/);
 });
 
 test("Next reader keeps Japanese surface, reading, lemma, and meaning aligned", () => {
@@ -446,15 +503,21 @@ test("Next reader illuminates translation and source tools only while their card
   assert.match(stylesheetSource, /\.reader-sentence-tool-button:not\(\.is-active\):focus-visible[\s\S]*outline-color: var\(--line\)/);
 });
 
-test("Next reader reveals quiet help hints for icon-only controls", () => {
+test("Next reader applies one bounded tooltip behavior across reader controls", () => {
   assert.match(readerSource, /reader-tooltip-target/);
   assert.match(readerSource, /data-tooltip="Back"/);
   assert.match(readerSource, /data-tooltip="Reader settings"/);
   assert.match(readerSource, /data-tooltip=\{readerPageBookmarked \? "Remove page bookmark"/);
   assert.match(readerSource, /reader-tooltip-target--compact/);
+  assert.match(readerSource, /readerTooltipTouchDismissDelayMs = 1400/);
+  assert.match(readerSource, /readerTooltipTimersRef/);
+  assert.match(readerSource, /data-tooltip-open/);
   assert.match(stylesheetSource, /\.reader-tooltip-target::after[\s\S]*content: attr\(data-tooltip\)/);
   assert.match(stylesheetSource, /\.reader-tooltip-target:hover::after,[\s\S]*\.reader-tooltip-target:focus-visible::after/);
-  assert.match(stylesheetSource, /@media \(max-width: 520px\)[\s\S]*\.reader-tooltip-target--compact:focus-visible::after/);
+  assert.match(stylesheetSource, /\.reader-tooltip-target\[data-tooltip-open="true"\]::after/);
+  assert.match(stylesheetSource, /@media \(hover: none\), \(pointer: coarse\)/);
+  assert.match(stylesheetSource, /\.reader-page\s*\{[\s\S]*overflow: visible/);
+  assert.doesNotMatch(readerSource, /aria-label="Play sentence audio"[\s\S]{0,260}title=/);
 });
 
 test("Next reader adapts long titles to a balanced two-line header", () => {

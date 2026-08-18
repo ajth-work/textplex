@@ -2,7 +2,7 @@
 
 This is the repository's technology-stack source of truth. It records the tools used by TextPlex and the version or version constraint currently declared by the project.
 
-**Last verified:** 2026-07-22  
+**Last verified:** 2026-08-18
 **Canonical version sources:** `package.json`, `apps/web/package.json`, `package-lock.json`, Python `pyproject.toml` files, Dockerfiles, `.nvmrc`, `docker-compose.yml`, CI workflows, and `supabase/config.toml`.
 
 ## System shape
@@ -90,7 +90,10 @@ The API and processor are installed together during local development and CI wit
 | Supabase Postgres | Local major version `17` | Hosted profile/settings schema and ownership RLS foundation. |
 | Supabase Storage | Supabase project service | Configured in local Supabase; intended for hosted user-owned book/page storage. |
 | Supabase Realtime | Enabled in local Supabase config | Available for future realtime product behavior. |
-| OpenAI Responses API | API endpoint `/v1/responses`; default OCR model `gpt-5.6-luna` | Optional OCR path. No OpenAI Python SDK is declared; the API uses the standard library HTTP client. |
+| OpenAI Responses API | API endpoint `/v1/responses`; default model `gpt-5.6-luna` | OCR, translation alignment, article generation, feedback analysis, and theme suggestions. No OpenAI Python SDK is declared; the API uses the standard library HTTP client. |
+| Google Cloud Translation | Basic v2 translation and Advanced v3 romanization | User-facing lexicon and extraction enrichment; service-account authentication and local usage ledger. |
+
+For the complete billable-provider inventory, credential boundary, and monitoring plan, see [`BILLABLE_SERVICES.md`](BILLABLE_SERVICES.md).
 
 ## Versioning and upgrade procedure
 

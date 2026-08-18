@@ -5,6 +5,7 @@ export type ReaderFeedbackRequest = {
   targetText: string;
   message: string;
   targetOrder?: number | null;
+  quickFeedback?: boolean;
 };
 
 export const READER_FEEDBACK_REQUEST_EVENT = "textplex:reader-feedback-request";

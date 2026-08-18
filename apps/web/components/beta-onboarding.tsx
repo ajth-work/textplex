@@ -5,10 +5,12 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useAuth } from "./auth-provider";
+import { appVersion } from "../lib/build-info";
 import { cacheOnboardingCompletion } from "../lib/onboarding-state";
-import { fetchJson, putJson, type SettingsSurfaceResponse } from "../lib/textplex";
+import { ApiRequestError, fetchJson, putJson, submitFeedback, type SettingsSurfaceResponse } from "../lib/textplex";
 import { languageDisplayLabel, targetLanguageOptions, type TargetLanguageCode } from "../lib/language-options";
 import { learningTrackOptions, type LearningTrackCode } from "../lib/learning-track-options";
+import { getSupabaseClient } from "../lib/supabase";
 
 const ONBOARDING_VERSION = "beta-1";
 const ONBOARDING_COMPLETED_KEY = "onboarding.completed";
@@ -18,6 +20,8 @@ const ONBOARDING_KEYS = new Set([
   "onboarding.target_language",
   "onboarding.target_language_other",
   "onboarding.learning_track",
+  "onboarding.account_type",
+  "onboarding.tester_feedback_submitted_at",
   "onboarding.intent",
   "onboarding.confidence",
   "onboarding.support",
@@ -26,6 +30,7 @@ const ONBOARDING_KEYS = new Set([
 ]);
 
 type OnboardingForm = {
+  accountType: "member" | "tester";
   targetLanguage: TargetLanguageCode | "other";
   targetLanguageOther: string;
   intent: string;
@@ -37,6 +42,7 @@ type OnboardingForm = {
 };
 
 const initialForm: OnboardingForm = {
+  accountType: "member",
   targetLanguage: "zh",
   targetLanguageOther: "",
   intent: "",
@@ -58,6 +64,10 @@ function settingValue(entries: SettingsSurfaceResponse["entries"], key: string):
   return entries.find((entry) => entry.key === key)?.value ?? "";
 }
 
+function isRetryableStorageFailure(error: unknown): boolean {
+  return !(error instanceof ApiRequestError) || error.status >= 500;
+}
+
 export function BetaOnboarding() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -66,6 +76,7 @@ export function BetaOnboarding() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [storageUnavailable, setStorageUnavailable] = useState(false);
   const [existingEntries, setExistingEntries] = useState<SettingsSurfaceResponse["entries"]>([]);
   const returnTo = normalizeReturnTo(searchParams.get("returnTo"));
   const signupLearningTrack = useMemo(() => {
@@ -101,13 +112,17 @@ export function BetaOnboarding() {
           support: settingValue(settings.entries, "onboarding.support") || "balanced",
           firstGoal: settingValue(settings.entries, "onboarding.first_goal"),
           learningTrack: learningTrackOptions.find((option) => option.code === settingValue(settings.entries, "onboarding.learning_track"))?.code ?? signupLearningTrack,
+          accountType: settingValue(settings.entries, "onboarding.account_type") === "tester" ? "tester" : "member",
           betaAcknowledged: settingValue(settings.entries, ONBOARDING_COMPLETED_KEY) === "true",
         }));
         setLoading(false);
       })
       .catch((loadError) => {
         if (active) {
-          setError(loadError instanceof Error ? loadError.message : "Unable to load beta onboarding.");
+          setError(isRetryableStorageFailure(loadError)
+            ? "We couldn't load saved setup details. Complete the questions and we'll retry saving when the account service is available."
+            : loadError instanceof Error ? loadError.message : "Unable to load beta onboarding.");
+          setStorageUnavailable(isRetryableStorageFailure(loadError));
           setLoading(false);
         }
       });
@@ -123,29 +138,54 @@ export function BetaOnboarding() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    if (!form.targetLanguage || (form.targetLanguage === "other" && !form.targetLanguageOther.trim()) || !form.intent || !form.confidence || !form.support || !form.learningTrack || !form.betaAcknowledged) {
+    setStorageUnavailable(false);
+    if (!form.accountType || !form.targetLanguage || (form.targetLanguage === "other" && !form.targetLanguageOther.trim()) || !form.intent || !form.confidence || !form.support || !form.learningTrack || !form.betaAcknowledged) {
       setError("Choose a target language, answer the setup questions, and acknowledge the beta expectations before continuing.");
       return;
     }
 
     setSaving(true);
     try {
+      await putJson("/auth/account-role", { account_role: form.accountType });
+      const client = getSupabaseClient();
+      if (!client) {
+        throw new Error("Supabase is not configured for account role setup.");
+      }
+      const refreshedSession = await client.auth.refreshSession();
+      if (refreshedSession.error) {
+        throw refreshedSession.error;
+      }
       const preservedEntries = existingEntries.filter((entry) => !ONBOARDING_KEYS.has(entry.key));
-      await putJson<SettingsSurfaceResponse>("/settings", {
-        entries: [
+      const onboardingEntries = [
           ...preservedEntries,
           { key: "onboarding.version", value: ONBOARDING_VERSION },
           { key: "onboarding.target_language", value: form.targetLanguage },
           { key: "onboarding.target_language_other", value: form.targetLanguage === "other" ? form.targetLanguageOther.trim() : "" },
           { key: "onboarding.learning_track", value: form.learningTrack },
+          { key: "onboarding.account_type", value: form.accountType },
           { key: ONBOARDING_COMPLETED_KEY, value: "true" },
           { key: "onboarding.intent", value: form.intent },
           { key: "onboarding.confidence", value: form.confidence },
           { key: "onboarding.support", value: form.support },
           { key: "onboarding.first_goal", value: form.firstGoal.trim() },
           { key: "onboarding.beta_acknowledged_at", value: new Date().toISOString() },
-        ],
-      });
+        ];
+      await putJson<SettingsSurfaceResponse>("/settings", { entries: onboardingEntries });
+      if (form.accountType === "tester" && !settingValue(existingEntries, "onboarding.tester_feedback_submitted_at")) {
+        await submitFeedback(
+          "Automated tester-role verification: this report confirms that the onboarding-selected tester role is carried from the account into the TextPlex admin feedback console.",
+          {
+            route: "/onboarding",
+            page_title: "Tester role verification",
+            language_code: form.targetLanguage === "other" ? "other" : form.targetLanguage,
+            app_version: appVersion,
+            automated_check: "tester_role_verification",
+          },
+        );
+        await putJson<SettingsSurfaceResponse>("/settings", {
+          entries: [...onboardingEntries, { key: "onboarding.tester_feedback_submitted_at", value: new Date().toISOString() }],
+        });
+      }
       if (user) {
         cacheOnboardingCompletion(user.id);
       }
@@ -153,9 +193,26 @@ export function BetaOnboarding() {
       router.refresh();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save beta onboarding.");
+      setStorageUnavailable(isRetryableStorageFailure(saveError));
     } finally {
       setSaving(false);
     }
+  }
+
+  function continueWithoutSaving() {
+    if (form.accountType === "tester") {
+      setError("Tester setup must be saved so your role and verification report can reach the admin console.");
+      return;
+    }
+    if (!form.accountType || !form.targetLanguage || (form.targetLanguage === "other" && !form.targetLanguageOther.trim()) || !form.intent || !form.confidence || !form.support || !form.learningTrack || !form.betaAcknowledged) {
+      setError("Complete the setup questions and acknowledge the beta expectations before continuing.");
+      return;
+    }
+    if (user) {
+      cacheOnboardingCompletion(user.id);
+    }
+    router.replace(returnTo);
+    router.refresh();
   }
 
   if (loading) {
@@ -181,6 +238,18 @@ export function BetaOnboarding() {
         </div>
 
         <form className="onboarding-form" onSubmit={submit} data-inventory-id="onboarding.form">
+          <fieldset data-inventory-id="onboarding.account-type-question">
+            <legend>How will you use TextPlex?</legend>
+            <label className="onboarding-choice">
+              <input type="radio" name="accountType" value="member" checked={form.accountType === "member"} onChange={() => updateForm("accountType", "member")} />
+              <span><strong>Member</strong> — I&apos;m here to build my own reading practice.</span>
+            </label>
+            <label className="onboarding-choice">
+              <input type="radio" name="accountType" value="tester" checked={form.accountType === "tester"} onChange={() => updateForm("accountType", "tester")} />
+              <span><strong>Tester</strong> — I&apos;m evaluating TextPlex and will share product feedback.</span>
+            </label>
+            <span className="small-copy">Tester accounts receive the tester workspace, and TextPlex sends one automatic role-verification report to the admin console.</span>
+          </fieldset>
           <label className="onboarding-field" data-inventory-id="onboarding.target-language-question">
             Which language are you here to read?
             <select className="text-input" value={form.targetLanguage} onChange={(event) => updateForm("targetLanguage", event.target.value as TargetLanguageCode | "other")} required>
@@ -264,6 +333,11 @@ export function BetaOnboarding() {
           <button className="button button-primary" type="submit" disabled={saving} data-inventory-id="onboarding.continue-action">
             {saving ? "Saving setup…" : "Continue to TextPlex"}
           </button>
+          {storageUnavailable ? (
+            <button className="button button-secondary" type="button" onClick={continueWithoutSaving} disabled={saving}>
+              Continue while account saving is unavailable
+            </button>
+          ) : null}
         </form>
       </section>
     </main>

@@ -27,11 +27,12 @@ from app.schemas.feedback import (
     FeedbackVerification,
     TesterRecord,
 )
+from app.services.openai_config import get_openai_api_key, get_openai_api_key_env
 
 logger = logging.getLogger(__name__)
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
-DEFAULT_FEEDBACK_MODEL = "gpt-5.4-mini"
+DEFAULT_FEEDBACK_MODEL = "gpt-5.6-luna"
 DEFAULT_FEEDBACK_MAX_OUTPUT_TOKENS = 768
 FEEDBACK_PROMPT_VERSION = "feedback-triage-v2"
 GITHUB_API_URL = "https://api.github.com"
@@ -44,6 +45,16 @@ FEEDBACK_SCREENSHOT_TYPES = {
     "image/jpeg": (".jpg", (b"\xff\xd8\xff",)),
     "image/webp": (".webp", (b"RIFF",)),
     "image/gif": (".gif", (b"GIF87a", b"GIF89a")),
+}
+FEEDBACK_SCREENSHOT_TYPE_ALIASES = {
+    "image/jpg": "image/jpeg",
+}
+FEEDBACK_SCREENSHOT_EXTENSION_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
 }
 
 
@@ -93,6 +104,9 @@ def _screenshot_path(data_root: Path, record: FeedbackRecord, index: int) -> Pat
 
 def validate_feedback_screenshot(filename: str, content_type: str, content: bytes) -> FeedbackScreenshot:
     normalized_type = content_type.strip().lower()
+    normalized_type = FEEDBACK_SCREENSHOT_TYPE_ALIASES.get(normalized_type, normalized_type)
+    if normalized_type in {"", "application/octet-stream"}:
+        normalized_type = FEEDBACK_SCREENSHOT_EXTENSION_TYPES.get(Path(filename).suffix.lower(), normalized_type)
     type_details = FEEDBACK_SCREENSHOT_TYPES.get(normalized_type)
     if type_details is None:
         raise ValueError("Screenshots must be PNG, JPEG, WebP, or GIF images.")
@@ -184,9 +198,9 @@ def _response_text(payload: dict[str, object]) -> str:
 
 
 def _call_openai(original_text: str, context: FeedbackContext) -> FeedbackTriage:
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    api_key = get_openai_api_key("feedback_analysis")
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured.")
+        raise RuntimeError(f"{get_openai_api_key_env('feedback_analysis')} is not configured.")
 
     prompt_payload = {
         "feedback": original_text,
@@ -238,9 +252,9 @@ def _call_openai(original_text: str, context: FeedbackContext) -> FeedbackTriage
 
 
 def _call_openai_screenshot_analysis(data_root: Path, record: FeedbackRecord) -> FeedbackScreenshotAnalysis:
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    api_key = get_openai_api_key("feedback_analysis")
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured.")
+        raise RuntimeError(f"{get_openai_api_key_env('feedback_analysis')} is not configured.")
 
     screenshots = _record_screenshots(record)
     if not screenshots:
@@ -355,9 +369,18 @@ def create_feedback(
     context: FeedbackContext,
     *,
     user_id: str | None = None,
+    account_role: str | None = None,
     screenshot_upload: tuple[str, str, bytes] | None = None,
     screenshot_uploads: list[tuple[str, str, bytes]] | None = None,
 ) -> FeedbackRecord:
+    if user_id and context.automated_check:
+        for existing_record in list_feedback(data_root, limit=10000):
+            if (
+                existing_record.user_id == user_id
+                and existing_record.context.automated_check == context.automated_check
+            ):
+                return existing_record
+
     feedback_id = uuid4().hex
     uploads = list(screenshot_uploads or [])
     if screenshot_upload:
@@ -393,6 +416,7 @@ def create_feedback(
         ],
         user_id=user_id,
         screenshots=screenshots,
+        account_role=account_role if account_role in {"member", "tester", "admin"} else None,
     )
     path = _record_path(data_root, record)
     path.parent.mkdir(parents=True, exist_ok=True)

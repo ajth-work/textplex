@@ -203,6 +203,7 @@ class ProgressBookSummary(BaseModel):
 class ProgressSurfaceResponse(BaseModel):
     profile: LearningProfileSummary
     books: list[ProgressBookSummary] = Field(default_factory=list)
+    weekly_page_reads: int = Field(default=0, ge=0)
 
 
 class SettingEntry(BaseModel):

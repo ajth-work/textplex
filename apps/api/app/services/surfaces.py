@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.core.paths import resolve_books_root
@@ -505,6 +505,12 @@ def get_progress_surface(data_root: Path, *, owner_id: str | None = None) -> Pro
 
     with sqlite3.connect(db_path) as connection:
         connection.row_factory = sqlite3.Row
+        current_date = datetime.now(timezone.utc).date()
+        week_start = current_date - timedelta(days=current_date.weekday())
+        weekly_page_reads = int(connection.execute(
+            "SELECT COUNT(*) FROM page_reads WHERE counted_as_read = 1 AND date(completed_at) >= ?",
+            (week_start.isoformat(),),
+        ).fetchone()[0])
         progress_rows = {
             str(row["book_id"]): row
             for row in connection.execute(
@@ -582,7 +588,7 @@ def get_progress_surface(data_root: Path, *, owner_id: str | None = None) -> Pro
 
     books = sorted(books, key=lambda item: item.title)
     books = sorted(books, key=lambda item: item.last_read_at or "", reverse=True)
-    return ProgressSurfaceResponse(profile=profile, books=books)
+    return ProgressSurfaceResponse(profile=profile, books=books, weekly_page_reads=weekly_page_reads)
 
 
 def get_profile_surface(data_root: Path, *, owner_id: str | None = None) -> ProfileSurfaceResponse:
@@ -803,10 +809,11 @@ def get_import_surface(
     )
     return ImportSurfaceResponse(
         default_language=default_language,
-        supported_inputs=["pdf", "epub", "txt", "paste", "wikipedia-random"],
+        supported_inputs=["pdf", "epub", "txt", "photo-pages", "paste", "wikipedia-random"],
         can_upload_pdf=True,
         can_upload_epub=True,
         can_upload_txt=True,
+        can_upload_images=True,
         can_paste_text=True,
         can_import_random_wikipedia=True,
         recent_books=[

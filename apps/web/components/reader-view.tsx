@@ -23,6 +23,7 @@ import {
   readStoredReaderSpeechVoiceGender,
   type BookExtractionResult,
   type BookReaderPageResponse,
+  type BookRecord,
   type LearningProfileSummary,
   type GoogleTranslateUsageSummary,
   type LexiconEntryRecord,
@@ -69,6 +70,7 @@ import {
 import { LoadingSkeleton, ReaderLoadingSkeleton } from "./loading-skeleton";
 import { useAuth } from "./auth-provider";
 import { isTextPlexAdmin } from "../lib/auth-roles";
+import { PhotoPageAppendCard, type PageUploadInputMode } from "./photo-page-append-card";
 
 type ReaderTokenMode = "word" | "character";
 type ReaderMode = "sentence" | "page" | "token";
@@ -99,6 +101,11 @@ type SentenceTranslationPrefetchResponse = {
 type TranslationRevealToken = TranslationAlignmentToken & {
   revealed: boolean;
 };
+type DefinitionLookupTiming = {
+  lexiconMs: number | null;
+  googleTranslateMs: number | null;
+  googleTranslateSource: "live" | "cached" | null;
+};
 type SessionSummaryItem = {
   id: string;
   label: string;
@@ -116,6 +123,12 @@ const readerJapaneseReadingDisplayModeStorageKey = "textplex.readerJapaneseReadi
 const readerAnnotationModeStorageKey = "textplex.readerAnnotationMode";
 const furiganaVisibilityStorageKey = "textplex.furiganaVisibility";
 const readerModeStorageKey = "textplex.readerMode";
+const readerPageUploadInputModeStorageKey = "textplex.readerPageUploadInputMode";
+const readerPageUploadInputModeLabels: Record<PageUploadInputMode, string> = {
+  auto: "Auto (camera on mobile)",
+  camera: "Camera",
+  file: "File picker",
+};
 const readerModeLabels: Record<ReaderMode, string> = {
   sentence: "Sentence",
   page: "Page",
@@ -147,6 +160,9 @@ const readerTokenSpacingDefault = 1;
 const readerTokenSpacingMin = 0.55;
 const readerTokenSpacingMax = 1.25;
 const pronunciationFreshWindowMs = 30 * 24 * 60 * 60 * 1000;
+const readerTooltipTouchDismissDelayMs = 1400;
+const readerLexiconPrefetchLookahead = 3;
+const readerLexiconPrefetchConcurrency = 3;
 
 const readerPageBookmarksStorageKey = "textplex.readerPageBookmarks";
 const readerSentenceBookmarksStorageKey = "textplex.readerSentenceBookmarks";
@@ -155,6 +171,7 @@ const readerGoogleTranslateFallbackStorageKey = "textplex.readerGoogleTranslateF
 const readerMeaningLineEnabledStorageKey = "textplex.readerMeaningLineEnabled";
 const readerMeaningLineRevealAllStorageKey = "textplex.readerMeaningLineRevealAll";
 const readerDefinitionTraceEnabledStorageKey = "textplex.readerDefinitionTraceEnabled";
+const readerMixedLanguageSentenceAudioStorageKey = "textplex.readerMixedLanguageSentenceAudio";
 const readerTokenAudioIntroSeenStorageKey = "textplex.readerTokenAudioIntroSeen";
 const readerSessionGlossedCountStorageKey = (bookId: string) => `textplex.readerSessionGlossedCount:${bookId}`;
 const readerSessionSummaryLayoutStorageKey = (bookId: string) => `textplex.readerSessionSummaryLayout:${bookId}`;
@@ -412,6 +429,11 @@ function getSrsStageColor(stage: number): string {
 }
 
 type SpeechTokenRange = { order: number; start: number; end: number };
+type MixedLanguageSpeechSegment = {
+  languageCode: string;
+  text: string;
+  tokenRanges: SpeechTokenRange[];
+};
 
 function buildSpeechTokenRanges(text: string, tokens: TokenResult[]): SpeechTokenRange[] {
   if (!text || !tokens.length) {
@@ -447,6 +469,88 @@ function getSpeechTokenOrderAtCharIndex(ranges: SpeechTokenRange[], charIndex: n
   }
 
   return ranges.find((range) => range.start >= charIndex)?.order ?? null;
+}
+
+function buildMixedLanguageSpeechSegments(
+  text: string,
+  tokens: TokenResult[],
+  fallbackLanguageCode: string,
+): MixedLanguageSpeechSegment[] {
+  if (!text || !tokens.length) {
+    return [];
+  }
+
+  const allRanges = buildSpeechTokenRanges(text, tokens);
+  const rangeByOrder = new Map(allRanges.map((range) => [range.order, range]));
+  const segments: MixedLanguageSpeechSegment[] = [];
+  let searchStart = 0;
+  let segmentStart = 0;
+  let segmentEnd = 0;
+  let segmentLanguageCode: string | null = null;
+  let segmentTokenOrders: number[] = [];
+  let leadingPunctuationStart: number | null = null;
+
+  const flushSegment = () => {
+    if (!segmentLanguageCode || segmentEnd <= segmentStart) {
+      return;
+    }
+
+    const segmentText = text.slice(segmentStart, segmentEnd);
+    const segmentRanges = segmentTokenOrders
+      .map((order) => rangeByOrder.get(order))
+      .filter((range): range is SpeechTokenRange => Boolean(range))
+      .map((range) => ({
+        ...range,
+        start: range.start - segmentStart,
+        end: range.end - segmentStart,
+      }));
+    if (segmentText.trim()) {
+      segments.push({ languageCode: segmentLanguageCode, text: segmentText, tokenRanges: segmentRanges });
+    }
+  };
+
+  tokens.forEach((token, index) => {
+    const surface = token.surface_form?.trim() ?? "";
+    if (!surface) {
+      return;
+    }
+
+    const start = text.indexOf(surface, searchStart);
+    if (start < 0) {
+      return;
+    }
+    const end = start + surface.length;
+    searchStart = end;
+
+    if (isSentencePunctuation(surface)) {
+      if (segmentLanguageCode) {
+        segmentEnd = end;
+      } else {
+        leadingPunctuationStart ??= start;
+        segmentEnd = end;
+      }
+      return;
+    }
+
+    const languageCode = resolveTokenLanguageCode(surface, fallbackLanguageCode, token.language_code) ?? fallbackLanguageCode;
+    if (!segmentLanguageCode) {
+      segmentLanguageCode = languageCode;
+      segmentStart = leadingPunctuationStart ?? start;
+      leadingPunctuationStart = null;
+    } else if (segmentLanguageCode !== languageCode) {
+      segmentEnd = start;
+      flushSegment();
+      segmentLanguageCode = languageCode;
+      segmentStart = start;
+      segmentTokenOrders = [];
+    }
+
+    segmentEnd = end;
+    segmentTokenOrders.push(token.order ?? index + 1);
+  });
+
+  flushSegment();
+  return segments;
 }
 
 function resolveReaderTitleScale(title: string | null | undefined): number {
@@ -740,6 +844,50 @@ const koreanParticleGlosses: Record<string, string> = {
 
 function isKoreanText(value: string): boolean {
   return /[\p{Script=Hangul}]/u.test(value);
+}
+
+function resolveTokenLanguageCode(
+  surface: string,
+  fallbackLanguageCode?: string | null,
+  tokenLanguageCode?: string | null,
+): string | null {
+  const normalizedTokenLanguage = tokenLanguageCode?.trim().toLowerCase();
+  if (normalizedTokenLanguage) {
+    return normalizedTokenLanguage;
+  }
+
+  if (isKoreanText(surface)) {
+    return "ko";
+  }
+
+  if (/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(surface)) {
+    return "ja";
+  }
+
+  if (/[\p{Script=Cyrillic}]/u.test(surface)) {
+    return "ru";
+  }
+
+  if (/[\p{Script=Hebrew}]/u.test(surface)) {
+    return "he";
+  }
+
+  if (/[\p{Script=Arabic}]/u.test(surface)) {
+    return "ar";
+  }
+
+  if (/[\p{Script=Han}]/u.test(surface)) {
+    const normalizedFallback = fallbackLanguageCode?.trim().toLowerCase().split("-", 1)[0];
+    return normalizedFallback === "ja" || normalizedFallback === "zh" ? normalizedFallback : "zh";
+  }
+
+  if (/[A-Za-z]/u.test(surface)) {
+    const normalizedFallback = fallbackLanguageCode?.trim().toLowerCase().split("-", 1)[0];
+    return normalizedFallback === "en" || normalizedFallback === "yo" ? normalizedFallback : "en";
+  }
+
+  const normalizedFallback = fallbackLanguageCode?.trim().toLowerCase();
+  return normalizedFallback?.split("-", 1)[0] || null;
 }
 
 function splitKoreanParticleChain(surface: string): string[] {
@@ -1503,6 +1651,27 @@ function normalizeTranslationPunctuation(tokens: TranslationAlignmentToken[]): T
   return tokens.flatMap(splitAttachedTranslationPunctuation);
 }
 
+function resolveLexiconLookupTerms(token: TokenResult, languageCode: string): string[] {
+  return [
+    ...(languageCode.startsWith("ko") ? [splitKoreanParticleChain(token.surface_form)[0] ?? ""] : []),
+    token.surface_form,
+    token.lemma ?? "",
+  ].filter((term, index, terms) => term && terms.indexOf(term) === index);
+}
+
+function translationAlignmentMatchesText(
+  alignment: SentenceTranslationAlignment | null | undefined,
+  translation: string | null | undefined,
+): boolean {
+  if (!alignment || !translation?.trim()) {
+    return false;
+  }
+
+  const normalize = (value: string) => value.normalize("NFKC").replace(/\s+/gu, "").toLocaleLowerCase();
+  const alignedText = alignment.target_tokens.map((token) => token.text).join("");
+  return Boolean(alignedText) && normalize(alignedText) === normalize(translation);
+}
+
 function buildTranslationRevealTokens(
   tokens: TranslationAlignmentToken[],
   revealedTokenIds: Set<number>,
@@ -1640,7 +1809,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [readerTokenScale, setReaderTokenScale] = useState(readerTokenScaleDefault);
   const [readerTokenSpacing, setReaderTokenSpacing] = useState(readerTokenSpacingDefault);
   const [readerGoogleTranslateFallback, setReaderGoogleTranslateFallback] = useState(false);
+  const [readerMixedLanguageSentenceAudio, setReaderMixedLanguageSentenceAudio] = useState(false);
   const [readerNavHideDelayMs, setReaderNavHideDelayMs] = useState(READER_NAV_HIDE_DELAY_DEFAULT_MS);
+  const [readerPageUploadInputMode, setReaderPageUploadInputMode] = useState<PageUploadInputMode>("auto");
   const [readerMeaningLineEnabled, setReaderMeaningLineEnabled] = useState(true);
   const [readerMeaningLineRevealAll, setReaderMeaningLineRevealAll] = useState(false);
   const [readerDefinitionTraceEnabled, setReaderDefinitionTraceEnabled] = useState(false);
@@ -1659,6 +1830,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [sentenceTranslationResolutionSource, setSentenceTranslationResolutionSource] = useState<string | null>(null);
   const translationPrefetchContextRef = useRef<string | null>(null);
   const translationPrefetchRequestsRef = useRef(new Map<string, Promise<SentenceTranslationPrefetchResponse>>());
+  const lexiconCacheRef = useRef(new Map<string, LexiconLookupResponse>());
+  const lexiconPrefetchRequestsRef = useRef(new Map<string, Promise<LexiconLookupResponse>>());
   const [sentenceAudioPlaying, setSentenceAudioPlaying] = useState(false);
   const [sentenceAudioRate, setSentenceAudioRate] = useState<SentenceAudioRate>(0.75);
   const [sentenceAudioTokenOrder, setSentenceAudioTokenOrder] = useState<number | null>(null);
@@ -1671,6 +1844,10 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [tokenAudioToast, setTokenAudioToast] = useState<string | null>(null);
   const [audioSpeedToast, setAudioSpeedToast] = useState<string | null>(null);
   const [showCompletionSummary, setShowCompletionSummary] = useState(false);
+  const [showPageAppendFlow, setShowPageAppendFlow] = useState(false);
+  const [pageAppendBook, setPageAppendBook] = useState<BookRecord | null>(null);
+  const [pageAppendReady, setPageAppendReady] = useState(false);
+  const [pageAppendProcessing, setPageAppendProcessing] = useState(false);
   const [completionSaving, setCompletionSaving] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1685,6 +1862,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [readerSessionSummaryEditing, setReaderSessionSummaryEditing] = useState(false);
   const [lexiconResult, setLexiconResult] = useState<LexiconLookupResponse | null>(null);
   const [lexiconLoading, setLexiconLoading] = useState(false);
+  const [definitionLookupTiming, setDefinitionLookupTiming] = useState<DefinitionLookupTiming | null>(null);
   const [definitionLookupTrace, setDefinitionLookupTrace] = useState<string[]>([]);
   const [googleTranslateUsage, setGoogleTranslateUsage] = useState<GoogleTranslateUsageSummary | null>(null);
   const [googleTranslateUsageLoading, setGoogleTranslateUsageLoading] = useState(true);
@@ -1715,9 +1893,100 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const customVocabularyMenuRef = useRef<HTMLDivElement | null>(null);
   const sessionSummaryRailRef = useRef<HTMLDivElement | null>(null);
   const readingProgressRailRef = useRef<HTMLDivElement | null>(null);
+  const readerShellRef = useRef<HTMLElement | null>(null);
+  const readerTooltipTimersRef = useRef(new Map<HTMLElement, number>());
+  const readerTimersPaused = showCompletionSummary || pageAppendProcessing;
 
   const markReaderInteraction = useCallback(() => {
     lastReaderInteractionAtRef.current = Date.now();
+  }, []);
+
+  useEffect(() => {
+    const readerShell = readerShellRef.current;
+    if (!readerShell || typeof window === "undefined") {
+      return;
+    }
+
+    const tooltipTimers = readerTooltipTimersRef.current;
+    const touchLikePointer = window.matchMedia("(hover: none), (pointer: coarse)");
+    const getTooltipTarget = (eventTarget: EventTarget | null): HTMLElement | null => {
+      if (!(eventTarget instanceof Element)) {
+        return null;
+      }
+
+      const target = eventTarget.closest<HTMLElement>(".reader-tooltip-target");
+      return target && readerShell.contains(target) && target.dataset.tooltip ? target : null;
+    };
+    const hideTooltip = (target: HTMLElement): void => {
+      const timer = tooltipTimers.get(target);
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+        tooltipTimers.delete(target);
+      }
+      target.removeAttribute("data-tooltip-open");
+    };
+    const showTooltip = (target: HTMLElement): void => {
+      readerShell.querySelectorAll<HTMLElement>('.reader-tooltip-target[data-tooltip-open="true"]').forEach((openTarget) => {
+        if (openTarget !== target) {
+          hideTooltip(openTarget);
+        }
+      });
+
+      hideTooltip(target);
+      target.setAttribute("data-tooltip-open", "true");
+      if (!touchLikePointer.matches) {
+        return;
+      }
+
+      const timer = window.setTimeout(() => hideTooltip(target), readerTooltipTouchDismissDelayMs);
+      tooltipTimers.set(target, timer);
+    };
+    const handlePointerDown = (event: PointerEvent): void => {
+      if (!touchLikePointer.matches || event.pointerType === "mouse") {
+        return;
+      }
+
+      const target = getTooltipTarget(event.target);
+      if (target) {
+        showTooltip(target);
+      }
+    };
+    const handleFocusIn = (event: FocusEvent): void => {
+      if (!touchLikePointer.matches) {
+        return;
+      }
+
+      const target = getTooltipTarget(event.target);
+      if (target) {
+        showTooltip(target);
+      }
+    };
+    const handleFocusOut = (event: FocusEvent): void => {
+      const target = getTooltipTarget(event.target);
+      if (!target) {
+        return;
+      }
+
+      const relatedTarget = event.relatedTarget instanceof Node ? event.relatedTarget : null;
+      if (!relatedTarget || !target.contains(relatedTarget)) {
+        hideTooltip(target);
+      }
+    };
+
+    readerShell.addEventListener("pointerdown", handlePointerDown);
+    readerShell.addEventListener("focusin", handleFocusIn);
+    readerShell.addEventListener("focusout", handleFocusOut);
+
+    return () => {
+      readerShell.removeEventListener("pointerdown", handlePointerDown);
+      readerShell.removeEventListener("focusin", handleFocusIn);
+      readerShell.removeEventListener("focusout", handleFocusOut);
+      tooltipTimers.forEach((timer) => window.clearTimeout(timer));
+      tooltipTimers.clear();
+      readerShell.querySelectorAll<HTMLElement>('[data-tooltip-open="true"]').forEach((target) => {
+        target.removeAttribute("data-tooltip-open");
+      });
+    };
   }, []);
 
   useEffect(() => {
@@ -1734,7 +2003,10 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     setReaderTokenScale(resolveReaderTokenScale(window.localStorage.getItem(readerTokenScaleStorageKey)));
     setReaderTokenSpacing(resolveReaderTokenSpacing(window.localStorage.getItem(readerTokenSpacingStorageKey)));
     setReaderGoogleTranslateFallback(window.localStorage.getItem(readerGoogleTranslateFallbackStorageKey) === "true");
+    setReaderMixedLanguageSentenceAudio(window.localStorage.getItem(readerMixedLanguageSentenceAudioStorageKey) === "true");
     setReaderNavHideDelayMs(readReaderNavHideDelayMs());
+    const storedPageUploadInputMode = window.localStorage.getItem(readerPageUploadInputModeStorageKey);
+    setReaderPageUploadInputMode(storedPageUploadInputMode === "camera" || storedPageUploadInputMode === "file" ? storedPageUploadInputMode : "auto");
     setReaderMeaningLineEnabled(window.localStorage.getItem(readerMeaningLineEnabledStorageKey) !== "false");
     setReaderMeaningLineRevealAll(window.localStorage.getItem(readerMeaningLineRevealAllStorageKey) === "true");
     setReaderDefinitionTraceEnabled(window.localStorage.getItem(readerDefinitionTraceEnabledStorageKey) === "true");
@@ -1965,6 +2237,10 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const averageSessionSeconds = profileSummary?.average_seconds_per_session ?? null;
 
   useEffect(() => {
+    if (readerTimersPaused) {
+      return;
+    }
+
     const timer = window.setInterval(() => {
       const isVisibleAndFocused = document.visibilityState === "visible" && document.hasFocus();
       if (!isVisibleAndFocused) {
@@ -1987,7 +2263,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     return () => {
       window.clearInterval(timer);
     };
-  }, [averageSessionSeconds]);
+  }, [averageSessionSeconds, readerTimersPaused]);
 
   useEffect(() => {
     activeSecondsRef.current = 0;
@@ -2008,6 +2284,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     }
     window.localStorage.setItem(readerGoogleTranslateFallbackStorageKey, String(readerGoogleTranslateFallback));
   }, [readerGoogleTranslateFallback]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(readerMixedLanguageSentenceAudioStorageKey, String(readerMixedLanguageSentenceAudio));
+  }, [readerMixedLanguageSentenceAudio]);
 
   useEffect(() => {
     const syncReaderNavHideDelay = () => {
@@ -2063,6 +2346,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     }
     window.localStorage.setItem(readerModeStorageKey, readerMode);
   }, [readerMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(readerPageUploadInputModeStorageKey, readerPageUploadInputMode);
+  }, [readerPageUploadInputMode]);
 
   useEffect(() => {
     persistReaderTokenAudioOnTap(readerTokenAudioOnTap);
@@ -2165,6 +2455,46 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     };
   }, [bookId, pageNumber, selectedSentenceOrder]);
 
+  const requestLexiconLookup = useCallback(
+    (languageCode: string, term: string, allowGoogleFallback: boolean): Promise<LexiconLookupResponse> => {
+      const cacheKey = `${languageCode}:${allowGoogleFallback ? "google" : "local"}:${term}`;
+      const cachedResponse = lexiconCacheRef.current.get(cacheKey);
+      if (cachedResponse) {
+        return Promise.resolve(cachedResponse);
+      }
+
+      const pendingRequest = lexiconPrefetchRequestsRef.current.get(cacheKey);
+      if (pendingRequest) {
+        return pendingRequest;
+      }
+
+      const request = fetchJson<LexiconLookupResponse>(
+        `/lexicon/lookup?language_code=${encodeURIComponent(languageCode)}&term=${encodeURIComponent(term)}&allow_google_fallback=${allowGoogleFallback ? "true" : "false"}`,
+      );
+      lexiconPrefetchRequestsRef.current.set(cacheKey, request);
+      void request
+        .then((response) => {
+          lexiconCacheRef.current.set(cacheKey, response);
+          if (lexiconCacheRef.current.size > 512) {
+            const oldestKey = lexiconCacheRef.current.keys().next().value;
+            if (oldestKey) {
+              lexiconCacheRef.current.delete(oldestKey);
+            }
+          }
+        })
+        .catch(() => {
+          // The caller handles the failed lookup; keep the cache request deduplicator clean.
+        })
+        .finally(() => {
+          if (lexiconPrefetchRequestsRef.current.get(cacheKey) === request) {
+            lexiconPrefetchRequestsRef.current.delete(cacheKey);
+          }
+        });
+      return request;
+    },
+    [],
+  );
+
   useEffect(() => {
     let active = true;
 
@@ -2173,6 +2503,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
         if (active) {
           setLexiconResult(null);
           setLexiconLoading(false);
+          setDefinitionLookupTiming(null);
           setDefinitionLookupTrace([]);
         }
         return;
@@ -2181,8 +2512,15 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       if (active) {
         setLexiconLoading(true);
         setLexiconResult(null);
+        setDefinitionLookupTiming(null);
         setDefinitionLookupTrace([]);
       }
+
+      let lexiconMs = 0;
+      let lexiconRequestCount = 0;
+      let googleTranslateMs = 0;
+      let googleTranslateRequestCount = 0;
+      let googleTranslateSource: DefinitionLookupTiming["googleTranslateSource"] = null;
 
       try {
         const trace: string[] = [];
@@ -2192,7 +2530,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             setDefinitionLookupTrace([...trace]);
           }
         };
-        const languageCode = pageData.book.language_code.toLowerCase();
+        const languageCode = resolveTokenLanguageCode(
+          selectedToken.surface_form,
+          pageData.book.language_code,
+          selectedToken.language_code,
+        ) ?? pageData.book.language_code;
         const lookupTerms = selectedToken
           ? [
               ...(languageCode.startsWith("ko") ? [splitKoreanParticleChain(selectedToken.surface_form)[0] ?? ""] : []),
@@ -2201,17 +2543,25 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             ].filter((term, index, terms) => term && terms.indexOf(term) === index)
           : [];
         pushTrace(`Selected token: ${selectedToken.surface_form}`);
-        pushTrace(`Language: ${languageShortCode(pageData.book.language_code)}`);
+        pushTrace(`Language: ${languageShortCode(languageCode)}`);
         pushTrace(`Google fallback: ${readerGoogleTranslateFallback ? "enabled" : "disabled"}`);
         pushTrace(`Lookup terms: ${lookupTerms.join(" -> ") || "none"}`);
         let lookup: LexiconLookupResponse | null = null;
         for (const lookupTerm of lookupTerms) {
           pushTrace(`Requesting /lexicon/lookup for "${lookupTerm}"`);
-          const response = await fetchJson<LexiconLookupResponse>(
-            `/lexicon/lookup?language_code=${encodeURIComponent(pageData.book.language_code)}&term=${encodeURIComponent(lookupTerm)}&allow_google_fallback=${readerGoogleTranslateFallback ? "true" : "false"}`,
-          );
+          const requestStartedAt = performance.now();
+          const response = await requestLexiconLookup(languageCode, lookupTerm, readerGoogleTranslateFallback);
+          const requestDurationMs = performance.now() - requestStartedAt;
+          if (response.resolution_source === "local") {
+            lexiconMs += requestDurationMs;
+            lexiconRequestCount += 1;
+          } else if (response.resolution_source === "google_translate_live" || response.resolution_source === "google_translate_cache") {
+            googleTranslateMs += requestDurationMs;
+            googleTranslateRequestCount += 1;
+            googleTranslateSource = response.resolution_source === "google_translate_live" ? "live" : "cached";
+          }
           pushTrace(`Response for "${lookupTerm}": ${response.entries.length} entr${response.entries.length === 1 ? "y" : "ies"}`);
-          const selection = selectLexiconEntryForToken(selectedToken, response, pageData.book.language_code);
+          const selection = selectLexiconEntryForToken(selectedToken, response, languageCode);
           if (selection.entry) {
             lookup = response;
             const selectedEntry = selection.entry;
@@ -2238,7 +2588,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             lookup = response;
           }
         }
-        const finalSelection = selectLexiconEntryForToken(selectedToken, lookup, pageData.book.language_code);
+        const finalSelection = selectLexiconEntryForToken(selectedToken, lookup, languageCode);
         if (lookup && !lookup.entries.length) {
           pushTrace("No dictionary entry matched; falling back to book frequency or token metadata.");
         } else if (lookup?.entries.length && !finalSelection.entry) {
@@ -2268,6 +2618,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       } finally {
         if (active) {
           setLexiconLoading(false);
+          if (isAdmin) {
+            setDefinitionLookupTiming({
+              lexiconMs: lexiconRequestCount > 0 ? Math.max(1, Math.round(lexiconMs)) : null,
+              googleTranslateMs: googleTranslateRequestCount > 0 ? Math.max(1, Math.round(googleTranslateMs)) : null,
+              googleTranslateSource,
+            });
+          }
         }
       }
     }
@@ -2277,7 +2634,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     return () => {
       active = false;
     };
-  }, [pageData, readerGoogleTranslateFallback, selectedToken]);
+  }, [isAdmin, pageData, readerGoogleTranslateFallback, requestLexiconLookup, selectedToken]);
 
   useEffect(() => {
     setSelectedTokenSaved(false);
@@ -2365,6 +2722,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   useEffect(() => {
     pageReadSubmissionRef.current = false;
     setShowCompletionSummary(false);
+    setShowPageAppendFlow(false);
+    setPageAppendBook(null);
+    setPageAppendReady(false);
     setCompletionError(null);
     setCompletionSaving(false);
 
@@ -2394,7 +2754,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     : { entry: null, state: "unmatched" as const };
   const lexiconEntry = lexiconSelection.entry;
   const imageUrl = pageData ? resolveResourceUrl(pageData.image_url) : "";
-  const totalPages = pageData?.book.total_pages ?? summary?.page_end ?? null;
+  const totalPages = pageAppendBook?.total_pages ?? pageData?.book.total_pages ?? summary?.page_end ?? null;
   const beginningPageNumber = 1;
   const pageTranslation = page?.page_translation?.trim() || null;
   const selectedSentence = useMemo(
@@ -2407,7 +2767,12 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const activeSentenceTranslationSource = activeSentence?.translation_source ?? null;
   const activeSentenceTranslationText = activeSentence?.translation?.trim() || pageTranslation || null;
   const activeSentenceHasSentenceTranslation = Boolean(activeSentence?.translation?.trim());
-  const activeSentenceTranslationAlignment = activeSentence?.translation_alignment ?? null;
+  const activeSentenceTranslationAlignment = translationAlignmentMatchesText(
+    activeSentence?.translation_alignment,
+    activeSentenceTranslationText,
+  )
+    ? activeSentence?.translation_alignment ?? null
+    : null;
   const activeSentenceHasTranslationAlignment = Boolean(
     activeSentenceTranslationAlignment?.target_tokens.length && activeSentenceTranslationAlignment.segments.length,
   );
@@ -2470,6 +2835,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const canMoveToNextSentence = selectedSentenceIndex >= 0 && selectedSentenceIndex < (page?.sentences.length ?? 0) - 1;
   const canMoveToNextPage = totalPages !== null && pageNumber < totalPages;
   const isCompletionPoint = !canMoveToNextSentence && !canMoveToNextPage && (page?.sentences.length ?? 0) > 0;
+  const isPageByPageSource = pageData?.book.source_type === "page-by-page";
   const currentPageGlossedCount = useMemo(() => {
     if (!currentPageSentenceList.length) {
       return 0;
@@ -2592,6 +2958,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const languageGlossedCount = studySurface?.study_item_count ?? 0;
   const lifetimeGlossedCount = profileSummary?.glossed_vocabulary_items ?? 0;
   const selectedTokenPronunciationOverride = selectedToken ? tokenPronunciationOverrides[selectedToken.order] ?? null : null;
+  const selectedTokenLanguageCode = selectedToken
+    ? resolveTokenLanguageCode(selectedToken.surface_form, pageData?.book.language_code, selectedToken.language_code)
+    : null;
   const selectedTokenReading = normalizeDisplayReading(
     lexiconEntry?.pronunciation ??
       lexiconEntry?.pinyin ??
@@ -2602,15 +2971,17 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const selectedTokenReadingParts = selectedToken
       ? buildTokenReadingParts(
         selectedToken,
-        pageData?.book.language_code ?? null,
+        selectedTokenLanguageCode,
         selectedTokenPronunciationOverride,
         selectedTokenReading,
         readerJapaneseReadingDisplayMode,
       )
     : [];
-  const selectedTokenSurfaceParts = selectedToken ? splitKoreanParticleChain(selectedToken.surface_form) : [];
+  const selectedTokenSurfaceParts = selectedTokenLanguageCode?.startsWith("ko") && selectedToken
+    ? splitKoreanParticleChain(selectedToken.surface_form)
+    : [];
   const selectedTokenReadingDisplayParts = selectedToken
-    ? pageData?.book.language_code?.startsWith("ru") && readerRussianSyllableDisplayMode === "original"
+    ? selectedTokenLanguageCode?.startsWith("ru") && readerRussianSyllableDisplayMode === "original"
       ? selectedTokenReadingParts.map((part) => ({
           ...part,
           text: part.surface,
@@ -2619,7 +2990,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     : [];
   const selectedTokenPronunciationLine = selectedTokenReadingParts.map((part) => part.text).join(" ");
   const selectedTokenFurigana = selectedToken &&
-    pageData?.book.language_code?.startsWith("ja") &&
+    selectedTokenLanguageCode?.startsWith("ja") &&
     /[\p{Script=Han}]/u.test(selectedToken.surface_form) &&
     selectedTokenReading
     ? finalizeJapaneseRomaji(selectedTokenReading).replace(/\s+/gu, "")
@@ -2688,6 +3059,10 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   }, [bookId, pageNumber]);
 
   useEffect(() => {
+    if (readerTimersPaused) {
+      return;
+    }
+
     if (!page || selectedSentenceOrder == null || !selectedSentence) {
       sentenceTimerRef.current = null;
       setSentenceActiveSeconds(0);
@@ -2749,7 +3124,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
         // Sentence tracking is best-effort so the reader stays usable offline.
       });
     };
-  }, [averageSessionSeconds, bookId, page, pageNumber, selectedSentence, selectedSentenceOrder]);
+  }, [averageSessionSeconds, bookId, page, pageNumber, readerTimersPaused, selectedSentence, selectedSentenceOrder]);
 
   const tokenLabel = selectedToken?.surface_form ?? lexiconEntry?.surface_form ?? "";
   const tokenDefinition = selectedTokenEnglishMeaning;
@@ -2836,7 +3211,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
     return items;
   }, [bookProgressLoading, bookProgressSummary?.progress_percent, page?.sentences.length, pageNumber, pagePillLabel, selectedSentencePosition, totalPages]);
-  const sessionLabel = sessionReady ? "Session active" : "Session starting";
+  const sessionLabel = readerTimersPaused ? "Session paused" : sessionReady ? "Session active" : "Session starting";
   const averageSessionLengthSeconds = profileSummary?.average_seconds_per_session ?? null;
   const sessionSummaryItems = useMemo(
     () => [
@@ -2954,6 +3329,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     }
 
     if (isCompletionPoint) {
+      if (isPageByPageSource) {
+        return;
+      }
       setCompletionError(null);
       setShowCompletionSummary(true);
     }
@@ -2988,7 +3366,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       await triggerBookExtraction(bookId, {
         page_start: 1,
         page_count: pageData.book.total_pages,
-        force: true,
+        force: false,
       });
       setRefreshNonce((value) => value + 1);
     } catch (err) {
@@ -3324,6 +3702,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       target: "word",
       targetText: selectedToken.surface_form,
       targetOrder: selectedToken.order,
+      quickFeedback: true,
       message: `Word correction\n\nWord: ${selectedToken.surface_form}\nReading: ${reading}\nCurrent definition: ${definition}\nSentence: ${activeSentence.text}\n\nPlease describe the correction, such as a definition, conjugation, particle, segmentation, romanization, or furigana issue.`,
     });
   }
@@ -3418,30 +3797,43 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     }
 
     cancelReaderSpeechPlayback();
-    const utterance = new SpeechSynthesisUtterance(activeSentence.text);
-    utterance.rate = sentenceAudioRate;
-    utterance.pitch = 1;
-    applyPreferredSpeechVoice(utterance, pageData.book.language_code, readerSpeechVoiceGender);
-    utterance.onstart = () => {
-      setSentenceAudioPlaying(true);
-      setSentenceAudioTokenOrder(null);
-    };
-    utterance.onboundary = (event) => {
-      const tokenOrder = getSpeechTokenOrderAtCharIndex(speechTokenRanges, event.charIndex);
-      if (tokenOrder !== null) {
-        setSentenceAudioTokenOrder(tokenOrder);
-      }
-    };
-    utterance.onend = () => {
-      setSentenceAudioPlaying(false);
-      setSentenceAudioTokenOrder(null);
-    };
-    utterance.onerror = () => {
-      setSentenceAudioPlaying(false);
-      setSentenceAudioTokenOrder(null);
-    };
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
+    const mixedLanguageSegments = readerMixedLanguageSentenceAudio
+      ? buildMixedLanguageSpeechSegments(activeSentence.text, displayedSentenceTokens, pageData.book.language_code)
+      : [];
+    const speechSegments: MixedLanguageSpeechSegment[] = mixedLanguageSegments.length
+      ? mixedLanguageSegments
+      : [{
+          languageCode: pageData.book.language_code,
+          text: activeSentence.text,
+          tokenRanges: speechTokenRanges,
+        }];
+
+    speechSegments.forEach((segment, index) => {
+      const utterance = new SpeechSynthesisUtterance(segment.text);
+      utterance.rate = sentenceAudioRate;
+      utterance.pitch = 1;
+      applyPreferredSpeechVoice(utterance, segment.languageCode, readerSpeechVoiceGender);
+      utterance.onstart = () => {
+        setSentenceAudioPlaying(true);
+        setSentenceAudioTokenOrder(null);
+      };
+      utterance.onboundary = (event) => {
+        const tokenOrder = getSpeechTokenOrderAtCharIndex(segment.tokenRanges, event.charIndex);
+        if (tokenOrder !== null) {
+          setSentenceAudioTokenOrder(tokenOrder);
+        }
+      };
+      utterance.onend = () => {
+        if (index === speechSegments.length - 1) {
+          setSentenceAudioPlaying(false);
+          setSentenceAudioTokenOrder(null);
+        }
+      };
+      utterance.onerror = () => {
+        cancelReaderSpeechPlayback();
+      };
+      window.speechSynthesis.speak(utterance);
+    });
     void recordSentenceAudioPlayback(activeSentence);
   }
 
@@ -3460,7 +3852,11 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     const utterance = new SpeechSynthesisUtterance(token.surface_form);
     utterance.rate = sentenceAudioRate;
     utterance.pitch = 1;
-    applyPreferredSpeechVoice(utterance, pageData.book.language_code, readerSpeechVoiceGender);
+    applyPreferredSpeechVoice(
+      utterance,
+      resolveTokenLanguageCode(token.surface_form, pageData.book.language_code, token.language_code),
+      readerSpeechVoiceGender,
+    );
     utterance.onstart = () => {
       setSelectedTokenAudioPlaying(true);
     };
@@ -3494,7 +3890,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     const utterance = new SpeechSynthesisUtterance(speechText);
     utterance.rate = sentenceAudioRate;
     utterance.pitch = 1;
-    applyPreferredSpeechVoice(utterance, pageData.book.language_code, readerSpeechVoiceGender);
+    applyPreferredSpeechVoice(
+      utterance,
+      selectedToken
+        ? resolveTokenLanguageCode(selectedToken.surface_form, pageData.book.language_code, selectedToken.language_code)
+        : pageData.book.language_code,
+      readerSpeechVoiceGender,
+    );
     utterance.onstart = () => {
       setSelectedTokenSegmentAudioPlaying(true);
       setSelectedTokenSegmentAudioText(speechText);
@@ -3585,7 +3987,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     ...sentence,
                     translation: translation.translation,
                     translation_source: translation.translation_source,
-                    translation_alignment: translation.translation_alignment ?? sentence.translation_alignment,
+                    translation_alignment: translation.translation_alignment,
                   }
                 : sentence;
             }),
@@ -3636,6 +4038,75 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       cancelled = true;
     };
   }, [activeSentenceOrder, applyPrefetchedSentenceTranslations, bookId, loadedPageNumber, pageNumber]);
+
+  useEffect(() => {
+    if (!pageData || loadedPageNumber !== pageNumber || selectedSentenceIndex < 0) {
+      return;
+    }
+
+    const terms = new Map<string, { languageCode: string; term: string }>();
+    const bufferedSentences = currentPageSentenceList.slice(
+      selectedSentenceIndex,
+      selectedSentenceIndex + readerLexiconPrefetchLookahead + 1,
+    );
+    for (const sentence of bufferedSentences) {
+      for (const token of sentence.tokens) {
+        if (isSentencePunctuation(token.surface_form)) {
+          continue;
+        }
+
+        const languageCode =
+          resolveTokenLanguageCode(token.surface_form, pageData.book.language_code, token.language_code) ?? pageData.book.language_code;
+        for (const term of resolveLexiconLookupTerms(token, languageCode)) {
+          terms.set(`${languageCode}:${term}`, { languageCode, term });
+        }
+      }
+    }
+
+    const pendingTerms = [...terms.values()].filter(({ languageCode, term }) => {
+      const cacheKey = `${languageCode}:${readerGoogleTranslateFallback ? "google" : "local"}:${term}`;
+      return !lexiconCacheRef.current.has(cacheKey) && !lexiconPrefetchRequestsRef.current.has(cacheKey);
+    });
+    if (!pendingTerms.length) {
+      return;
+    }
+
+    let nextIndex = 0;
+    let cancelled = false;
+    async function prefetchWorker(): Promise<void> {
+      while (!cancelled) {
+        const item = pendingTerms[nextIndex];
+        nextIndex += 1;
+        if (!item) {
+          return;
+        }
+        try {
+          await requestLexiconLookup(item.languageCode, item.term, readerGoogleTranslateFallback);
+        } catch {
+          // Background lookup is opportunistic; a tap can retry the term later.
+        }
+      }
+    }
+
+    void Promise.all(
+      Array.from(
+        { length: Math.min(readerLexiconPrefetchConcurrency, pendingTerms.length) },
+        () => prefetchWorker(),
+      ),
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    currentPageSentenceList,
+    loadedPageNumber,
+    pageData,
+    pageNumber,
+    readerGoogleTranslateFallback,
+    requestLexiconLookup,
+    selectedSentenceIndex,
+  ]);
 
   function updateReaderCustomVocabularyLists(
     updater: (lists: ReaderCustomVocabularyList[]) => ReaderCustomVocabularyList[],
@@ -3808,6 +4279,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
   return (
     <section
+      ref={readerShellRef}
       className={`reader-shell reader-font-${readerFont}`}
       data-reader-font={readerFont}
       data-reader-theme={readerTheme}
@@ -3824,7 +4296,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
           className="reader-back-button reader-tooltip-target"
           onClick={handleBack}
           aria-label="Back"
-          title="Back"
           data-tooltip="Back"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -3851,7 +4322,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
           aria-expanded={showReaderOptions}
           aria-controls="reader-options-panel"
           aria-label="Reader settings"
-          title="Reader settings"
           data-tooltip="Reader settings"
           data-inventory-id="reader.settings-button"
         >
@@ -4032,6 +4502,27 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                 ))}
               </select>
             </section>
+            <section className="reader-options-section" data-inventory-id="reader.page-upload-input-mode">
+              <div className="reader-options-section-head">
+                <div>
+                  <span className="eyebrow">Page-by-page import</span>
+                  <h3>Next page input</h3>
+                </div>
+              </div>
+              <select
+                className="text-input"
+                value={readerPageUploadInputMode}
+                onChange={(event) => setReaderPageUploadInputMode(event.target.value as PageUploadInputMode)}
+                aria-label="Next page input"
+              >
+                {(Object.keys(readerPageUploadInputModeLabels) as PageUploadInputMode[]).map((mode) => (
+                  <option key={mode} value={mode}>
+                    {readerPageUploadInputModeLabels[mode]}
+                  </option>
+                ))}
+              </select>
+              <p className="small-copy">At the end of the current page, the plus button opens the camera on touch devices or the file picker on computers. Long-press the button to choose multiple files.</p>
+            </section>
             <section className="reader-options-section" data-inventory-id="reader.token-audio-toggle">
               <div className="reader-options-section-head">
                 <div>
@@ -4071,6 +4562,23 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                 ))}
               </div>
               <p className="small-copy">Applies to sentence audio, token audio, syllable playback, and pronunciation guides when the browser offers matching voices.</p>
+            </section>
+            <section className="reader-options-section" data-inventory-id="reader.mixed-language-audio-toggle">
+              <div className="reader-options-section-head">
+                <div>
+                  <span className="eyebrow">Sentence audio prototype</span>
+                  <h3>Switch voices for mixed languages</h3>
+                </div>
+                <button
+                  type="button"
+                  className={`button button-secondary button-compact ${readerMixedLanguageSentenceAudio ? "is-active" : ""}`}
+                  onClick={() => setReaderMixedLanguageSentenceAudio((value) => !value)}
+                  aria-pressed={readerMixedLanguageSentenceAudio}
+                >
+                  {readerMixedLanguageSentenceAudio ? "On" : "Off"}
+                </button>
+              </div>
+              <p className="small-copy">When on, sentence playback chains adjacent token languages together; when off, it uses the book language for the whole sentence.</p>
             </section>
             <section className="reader-options-section" data-inventory-id="reader.pronunciation-visibility-section">
               <div className="reader-options-section-head">
@@ -4564,7 +5072,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     onClick={() => focusSentence(selectedSentenceIndex - 1)}
                     disabled={!canMoveToPreviousSentence}
                     aria-label="Previous sentence"
-                    title="Previous sentence"
                     data-tooltip="Previous sentence"
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -4580,7 +5087,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                         disabled={!pageData}
                         aria-pressed={readerPageBookmarked}
                         aria-label={readerPageBookmarked ? "Remove page bookmark" : "Save page bookmark"}
-                        title={readerPageBookmarked ? "Remove page bookmark" : "Save page bookmark"}
                         data-tooltip={readerPageBookmarked ? "Remove page bookmark" : "Save page bookmark"}
                         data-inventory-id="reader.page-bookmark"
                       >
@@ -4600,7 +5106,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                         disabled={!activeSentence}
                         aria-pressed={readerSentenceBookmarked}
                         aria-label={readerSentenceBookmarked ? "Remove sentence bookmark" : "Save sentence bookmark"}
-                        title={readerSentenceBookmarked ? "Remove sentence bookmark" : "Save sentence bookmark"}
                         data-tooltip={readerSentenceBookmarked ? "Remove sentence bookmark" : "Save sentence bookmark"}
                         data-inventory-id="reader.sentence-bookmark"
                       >
@@ -4610,19 +5115,45 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       </button>
                     </span>
                   </span>
-                  <button
-                    type="button"
-                    className="button button-secondary button-compact reader-pager-button reader-tooltip-target"
-                    onClick={handleAdvanceSentence}
-                    disabled={!canMoveToNextSentence && !canMoveToNextPage && !isCompletionPoint}
-                    aria-label={isCompletionPoint ? "Finish reading" : canMoveToNextPage && !canMoveToNextSentence ? "Next page" : "Next sentence"}
-                    title={isCompletionPoint ? "Finish reading" : canMoveToNextPage && !canMoveToNextSentence ? "Next page" : "Next sentence"}
-                    data-tooltip={isCompletionPoint ? "Finish reading" : canMoveToNextPage && !canMoveToNextSentence ? "Next page" : "Next sentence"}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M9 18l6-6-6-6" />
-                    </svg>
-                  </button>
+                  {isPageByPageSource && isCompletionPoint ? (
+                    <PhotoPageAppendCard
+                      compact
+                      bookId={bookId}
+                      knownPageCount={pageNumber}
+                      initialBook={pageData.book}
+                      inputMode={readerPageUploadInputMode}
+                      onProcessingChange={(state) => setPageAppendProcessing(state === "uploading" || state === "processing")}
+                      onFirstPageReady={(updatedBook) => {
+                        setPageAppendBook(updatedBook);
+                        setPageAppendReady(true);
+                        setPageAppendProcessing(false);
+                      }}
+                      onAppended={(updatedBook) => {
+                        setPageAppendBook(updatedBook);
+                        setPageAppendProcessing(false);
+                        showBookmarkToast("All uploaded pages in this batch are ready.");
+                      }}
+                      onContinue={(updatedBook) => {
+                        setPageAppendBook(updatedBook);
+                        setPageAppendReady(false);
+                        setPageAppendProcessing(false);
+                        router.push(`/reader/${bookId}/${pageNumber + 1}`);
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="button button-secondary button-compact reader-pager-button reader-tooltip-target"
+                      onClick={handleAdvanceSentence}
+                      disabled={!canMoveToNextSentence && !canMoveToNextPage && !isCompletionPoint}
+                      aria-label={isCompletionPoint ? "Finish reading" : canMoveToNextPage && !canMoveToNextSentence ? "Next page" : "Next sentence"}
+                      data-tooltip={isCompletionPoint ? "Finish reading" : canMoveToNextPage && !canMoveToNextSentence ? "Next page" : "Next sentence"}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M9 18l6-6-6-6" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
                 <div className="reader-session-stats" aria-label="Current session stats">
                   <div className="session-pill reader-session-pill reader-session-pill-carousel reader-carousel" data-inventory-id="reader.session-summary-toggle">
@@ -4793,7 +5324,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       disabled={!pageData}
                       aria-pressed={effectiveReaderTokenMode === "character"}
                       aria-label={effectiveReaderTokenMode === "character" ? "Switch to word mode" : "Switch to character mode"}
-                      title={effectiveReaderTokenMode === "character" ? "Switch to word mode" : "Switch to character mode"}
                       data-tooltip={effectiveReaderTokenMode === "character" ? "Switch to word mode" : "Switch to character mode"}
                       data-inventory-id="reader.token-mode-button"
                     >
@@ -4810,7 +5340,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     disabled={!activeSentence}
                     aria-pressed={sentenceAudioPlaying}
                     aria-label={sentenceAudioPlaying ? "Stop sentence audio" : "Play sentence audio"}
-                    title={sentenceAudioPlaying ? "Stop sentence audio" : "Play sentence audio"}
                     data-tooltip={sentenceAudioPlaying ? "Stop sentence audio" : "Play sentence audio"}
                     data-inventory-id="reader.sentence-audio-button"
                   >
@@ -4828,7 +5357,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     disabled={sentenceTranslationLoading}
                     aria-pressed={showSentenceTranslation}
                     aria-label="Toggle sentence translation"
-                    title="Toggle sentence translation"
                     data-tooltip="Toggle sentence translation"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -4845,7 +5373,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     onClick={() => setShowSourceSentence((value) => !value)}
                     aria-pressed={showSourceSentence}
                     aria-label="Toggle source sentence"
-                    title="Toggle source sentence"
                     data-tooltip="Toggle source sentence"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -4870,7 +5397,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       onClick={() => adjustSentenceAudioRate(-1)}
                       disabled={sentenceAudioRate === sentenceAudioRateOptions[0]}
                       aria-label="Decrease sentence audio speed"
-                      title="Decrease sentence audio speed"
                       data-tooltip="Decrease sentence audio speed"
                     >
                       -
@@ -4884,7 +5410,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       onClick={() => adjustSentenceAudioRate(1)}
                       disabled={sentenceAudioRate === sentenceAudioRateOptions[sentenceAudioRateOptions.length - 1]}
                       aria-label="Increase sentence audio speed"
-                      title="Increase sentence audio speed"
                       data-tooltip="Increase sentence audio speed"
                     >
                       +
@@ -4902,17 +5427,18 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   const isSelected = selectedToken?.surface_form === token.surface_form && selectedToken?.order === token.order;
                   const isAudioActive = sentenceAudioPlaying && sentenceAudioTokenOrder === token.order;
                   const languageCode = pageData?.book.language_code ?? null;
+                  const tokenLanguageCode = resolveTokenLanguageCode(token.surface_form, languageCode, token.language_code);
                   const tokenStudyItem = getStudyVocabularyItem(token);
                   const tokenReadingParts = buildTokenReadingParts(
                     token,
-                    languageCode,
+                    tokenLanguageCode,
                     tokenPronunciationOverrides[token.order] ?? null,
                     undefined,
                     readerJapaneseReadingDisplayMode,
                   );
                   const isTokenPronunciationMuted =
                     readerPronunciationFreshOnly && !studySurfaceLoading && !isFreshStudyItem(tokenStudyItem) && tokenReadingParts.length > 0;
-                  const tokenSurfaceParts = languageCode?.startsWith("ko") ? splitKoreanParticleChain(token.surface_form) : [];
+                  const tokenSurfaceParts = tokenLanguageCode?.startsWith("ko") ? splitKoreanParticleChain(token.surface_form) : [];
                   const isPunctuation = isSentencePunctuation(token.surface_form);
                   const tokenStudyStage = readerSrsColoring && !isPunctuation ? getStudyItemSrsStage(tokenStudyItem) : null;
                   const tokenStudyColor = tokenStudyStage !== null ? getSrsStageColor(tokenStudyStage) : null;
@@ -4936,6 +5462,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                       disabled={isPunctuation}
                       aria-label={isPunctuation ? `Punctuation ${token.surface_form}` : `Inspect ${token.surface_form}${isAudioActive ? " (currently speaking)" : ""}`}
                       aria-current={isAudioActive ? "true" : undefined}
+                      lang={tokenLanguageCode || undefined}
                       title={tokenStudyStage !== null ? `SRS stage ${tokenStudyStage} of 12` : undefined}
                       style={tokenStyle}
                       data-study-stage={tokenStudyStage ?? undefined}
@@ -4986,7 +5513,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   onClick={handleSentenceFeedback}
                   disabled={!activeSentence}
                   aria-label="Report a sentence correction"
-                  title="Report a sentence correction"
                   data-tooltip="Report sentence correction"
                   data-inventory-id="reader.sentence-feedback-button"
                 >
@@ -5121,7 +5647,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                             disabled={!selectedToken || isSentencePunctuation(selectedToken.surface_form)}
                             aria-pressed={selectedTokenAudioPlaying}
                             aria-label={selectedTokenAudioPlaying ? "Stop word audio" : "Play word audio"}
-                            title={selectedTokenAudioPlaying ? "Stop word audio" : "Play word audio"}
                             data-tooltip={selectedTokenAudioPlaying ? "Stop word audio" : "Play word audio"}
                           >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill={selectedTokenAudioPlaying ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -5143,7 +5668,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                               disabled={!selectedToken || isSentencePunctuation(selectedToken.surface_form)}
                               aria-pressed={selectedTokenSaved}
                               aria-label={selectedTokenSaved ? "Saved to default list" : "Save to default list"}
-                              title={selectedTokenSaved ? "Saved to default list" : "Save to default list"}
                               data-tooltip={selectedTokenSaved ? "Saved to default list" : "Save to default list"}
                             >
                               <svg width="16" height="16" viewBox="0 0 24 24" fill={selectedTokenSaved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -5164,7 +5688,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                               aria-expanded={showCustomVocabularyLists}
                               aria-controls="reader-custom-vocabulary-lists"
                               aria-label="Choose a custom list"
-                              title="Choose a custom list"
                               data-tooltip="Choose a custom list"
                             >
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -5239,6 +5762,18 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                         <p className="definition-copy definition-meaning">{tokenDefinition || "Definition unavailable."}</p>
                       )}
                     </div>
+                    {isAdmin && definitionLookupTiming ? (
+                      <div className="definition-load-timing" aria-label="Definition load timing">
+                        {definitionLookupTiming.lexiconMs !== null ? (
+                          <span className="pill definition-load-timing-pill">Lexicon {definitionLookupTiming.lexiconMs} ms</span>
+                        ) : null}
+                        {definitionLookupTiming.googleTranslateMs !== null ? (
+                          <span className="pill definition-load-timing-pill">
+                            Google Translate {definitionLookupTiming.googleTranslateMs} ms ({definitionLookupTiming.googleTranslateSource})
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {!lexiconLoading && lexiconResult?.entries.length && !lexiconEntry ? (
                       <p className="small-copy definition-context-notice" role="note">
                         {lexiconSelection.state === "ambiguous"
@@ -5417,13 +5952,82 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
           ) : null}
         </div>
       ) : null}
-      {showCompletionSummary && isCompletionPoint ? (
+      {showPageAppendFlow && isPageByPageSource ? (
+        <article className="card reader-end-of-content-page" data-inventory-id="reader.end-of-content-page" aria-live="polite">
+          <div className="reader-completion-header">
+            <p className="reader-end-of-content-description">Your reading session is paused at the end of this page. Add the next page to continue, go back to review, or exit the reader.</p>
+            <span className="eyebrow">End of available content</span>
+            <h2>{pageAppendReady ? "The next page is ready" : "You’ve reached the end of the uploaded pages"}</h2>
+            <p>Your session statistics remain visible, but the reading timer is paused while this page is uploaded and prepared. When it is ready, press the reader’s right arrow to continue.</p>
+          </div>
+          <div className="reader-end-of-content-stats" aria-label="Session statistics so far">
+            <div className="reader-completion-stat">
+              <span>Reading time</span>
+              <strong>{formatElapsed(cumulativeBookSeconds)}</strong>
+            </div>
+            <div className="reader-completion-stat">
+              <span>Page</span>
+              <strong>{pagePillLabel}</strong>
+            </div>
+            <div className="reader-completion-stat">
+              <span>Sentences</span>
+              <strong>{page?.sentences.length ?? 0}</strong>
+            </div>
+            <div className="reader-completion-stat">
+              <span>Words</span>
+              <strong>{currentPageTotalMetrics.words}</strong>
+            </div>
+            <div className="reader-completion-stat">
+              <span>Glossed</span>
+              <strong>{readerSessionGlossedCount}</strong>
+            </div>
+          </div>
+          <PhotoPageAppendCard
+            bookId={bookId}
+            onAppended={(updatedBook) => {
+              setPageAppendBook(updatedBook);
+              setPageAppendReady(true);
+            }}
+          />
+          {pageAppendReady ? (
+            <p className="form-message reader-end-of-content-ready" role="status">Ready. Continue to the next page when you’re ready.</p>
+          ) : null}
+          {pageAppendReady ? (
+            <p className="form-message" role="status">Ready. Press the right arrow above to open page {pageAppendBook?.total_pages} and resume the session timer.</p>
+          ) : null}
+          <div className="button-row reader-completion-actions reader-end-of-content-actions">
+            {pageAppendReady ? (
+              <button type="button" className="button button-primary" onClick={() => router.push(`/reader/${bookId}/${pageAppendBook?.total_pages ?? pageNumber + 1}`)}>
+                Continue to next page
+              </button>
+            ) : null}
+            <button type="button" className="button button-secondary" onClick={() => router.push(`/reader/${bookId}/${Math.max(beginningPageNumber, pageNumber - 1)}`)} disabled={pageNumber <= beginningPageNumber}>
+              Go to previous page
+            </button>
+            <button type="button" className="button button-secondary" onClick={() => router.push("/library")}>
+              Exit reader
+            </button>
+          </div>
+          <div className="button-row reader-completion-actions">
+            <button type="button" className="button button-secondary" onClick={() => setShowPageAppendFlow(false)}>
+              Cancel and keep reading this page
+            </button>
+          </div>
+        </article>
+      ) : null}
+      {showCompletionSummary && isCompletionPoint && !isPageByPageSource ? (
         <article className="card reader-completion-card" data-inventory-id="reader.completion-summary-card" aria-live="polite">
           <div className="reader-completion-header">
-            <span className="eyebrow">Congrats</span>
-            <h2>You finished this article</h2>
-            <p>This summary is the last step. Saving it marks the content as read and returns you to the library.</p>
+            <span className="eyebrow">{isPageByPageSource ? "Last uploaded page" : "Congrats"}</span>
+            <h2>{isPageByPageSource ? "Add the next page when you are ready" : "You finished this article"}</h2>
+            <p>{isPageByPageSource ? "This reading item can grow as you photograph more of the book. Add the next page below, or save this session and return to your library." : "This summary is the last step. Saving it marks the content as read and returns you to the library."}</p>
           </div>
+          {isPageByPageSource ? (
+            <PhotoPageAppendCard
+              bookId={bookId}
+              onAppended={(updatedBook) => router.push(`/reader/${bookId}/${updatedBook.total_pages}`)}
+            />
+          ) : null}
           <div className="reader-completion-stats" aria-label="Article completion summary">
             <div className="reader-completion-stat">
               <span>Reading time</span>
@@ -5447,13 +6051,13 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             </div>
               <div className="reader-completion-stat">
                 <span>Read without glosses</span>
-                <strong>{bookCoveragePercent == null ? "ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â" : `${bookCoveragePercent}%`}</strong>
+                <strong>{bookCoveragePercent == null ? "\u2014" : `${bookCoveragePercent}%`}</strong>
               </div>
           </div>
           {completionError ? <p className="reader-completion-error" role="alert">{completionError}</p> : null}
           <div className="button-row reader-completion-actions">
             <button type="button" className="button button-primary" onClick={() => void handleMarkCompletionAndReturnToLibrary()} disabled={completionSaving}>
-              {completionSaving ? "SavingÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦" : "Mark as read and return to library"}
+              {completionSaving ? "Saving..." : "Mark as read and return to library"}
             </button>
             <button type="button" className="button button-secondary" onClick={() => setShowCompletionSummary(false)} disabled={completionSaving}>
               Keep reading

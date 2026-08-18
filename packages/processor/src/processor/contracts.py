@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-CURRENT_PIPELINE_VERSION = "textplex-3"
+CURRENT_PIPELINE_VERSION = "textplex-4"
 
 
 class BoundingBox(BaseModel):
@@ -17,6 +17,7 @@ class BoundingBox(BaseModel):
 class TokenResult(BaseModel):
     order: int = Field(ge=1)
     surface_form: str
+    language_code: str | None = None
     lemma: str | None = None
     part_of_speech: str | None = None
     pronunciation: str | None = None

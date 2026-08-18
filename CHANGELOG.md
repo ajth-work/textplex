@@ -1,20 +1,174 @@
 # Changelog
 
+## 2026-08-18
+
+- Cleared PR #150 CI failures by formatting the Python quality lane and restoring the onboarding error contract with updated Wikipedia error handling coverage.
+
+- Fixed mobile feedback screenshot uploads by accepting trusted JPEG MIME aliases or missing MIME metadata, and surfaced API validation details in the feedback dialog.
+
+- Added a billable-services inventory and provider credential-monitoring plan covering OpenAI feature costs, Google Cloud Translation, Supabase, project boundaries, and the next steps for feature-scoped keys.
+
+- Added feature-specific OpenAI key resolution for OCR, translation alignment, practice articles, feedback analysis, and theme generation, with the named development key and legacy shared-key migration fallback.
+
+- Split Google Cloud Translation credentials between `GOOGLE_TEXTPLEX_PROD_TRANSLATION` and `GOOGLE_TEXTPLEX_PROD_ROMANIZATION`, including separate Docker mounts and the legacy shared credential fallback.
+
+- Switched all TextPlex OpenAI runtime defaults and generated-surface fixtures to GPT-5.6 Luna; OCR was already on Luna.
+
+- Fixed photographed page extraction failures caused by OCR responses exhausting the output budget, prevented progress from advertising a page before its artifact was readable, and repaired the affected `兄弟` page 7 locally.
+
+## 2026-08-17
+
+- Increased page-photo OCR output capacity to prevent reasoning-heavy responses from exhausting the transcription budget, and made page artifacts atomic and recoverable when a background extraction fails.
+
+- Streamlined page-by-page reading with an inline plus/arrow upload control, viewport-aware camera or file-picker selection, circular OCR progress, first-page continuation, and background batch completion feedback.
+
+- Made page-by-page extraction recoverable when OpenAI returns an empty response: OCR retries once, API failures return a provider-specific error instead of an unhandled 500, and Reader refresh resumes uncached pages without reprocessing successful pages.
+
+- Made one-tap quick feedback non-blocking: the dialog closes immediately, background submission reports “Feedback sent!” in a brief toast, and failures receive an actionable error toast.
+
+- Made quick feedback submission visibly stateful: the selected option now shows a spinner and “Sending…” state, success stays in the dialog, and the delayed footer toast is removed.
+
+- Warmed the default Lexicon during API startup and serialized first-use initialization so background reader prefetches do not make the first definition lookup wait on concurrent SQLite seeding.
+
+- Portaled feedback dialogs to the document body and locked background scrolling so every feedback action opens as a viewport modal instead of expanding inside the build footer card.
+
+- Added an admin-only definition-card timing pill for Lexicon lookup and Google Translate live/cached fallback latency.
+
+- Prefetched Lexicon lookups for the focused sentence and the next three sentences, sharing cached and in-flight results with token taps while honoring the Google Translate fallback setting.
+
+- Standardized Reader tooltips across navigation, sentence tools, bookmarks, audio controls, and token actions with a shared stacking layer, native-title removal, and a short touch dismissal window for mobile.
+
+- Kept the Reader meaning line aligned with the active translation by rejecting stale translation alignments and repairing mismatched cached alignment data.
+
+- Fixed escaped OCR line breaks being rendered as visible escaped line-break tokens and bumped the extraction pipeline version to rebuild affected page artifacts.
+
+- Tightened the feedback dialog layout and shortened its quick-report copy for faster scanning.
+
+- Added one-tap common issue choices to the Reader word-feedback dialog, including missing or incorrect pinyin/reading, meaning, and segmentation reports with structured feedback reasons and an optional detailed note path.
+
+- Changed the page-by-page reader boundary into a dedicated end-of-content transition state instead of rendering the upload flow below the current sentence; session stats remain visible with explicit continue, previous-page, and exit actions.
+
+- Replaced corrupted completion-summary fallback strings with bounded readable labels so `reader.completion-summary-card` no longer renders mojibake when coverage is unavailable or completion is saving.
+
+- Prevented empty page-by-page imports by resizing large camera images for OpenAI OCR, rejecting image-only pages without usable OCR text, and rebuilding the affected page summary.
+
+- Fixed page-by-page extraction stalls by processing appended page images independently of the original PDF, marking unexpected background errors as failed, and synchronizing completed extraction progress counters.
+
+- Added a paused reader upload state for page-by-page books: session stats remain visible, the timer stops during upload and processing, detailed OCR/local-storage stages are shown, and the right arrow resumes reading only after the next page is ready.
+
+- Changed page-by-page append processing to store new page images and extract only uncached pages; the original source PDF remains unchanged and cached page text/artifacts are reused for book summaries.
+
+- Added a durable page-by-page source role with append-page API and reader/book-detail controls so photographed books can grow as the learner reads.
+
+- Routed local web-to-API traffic through same-origin `/api` and added loopback URL fallback so page-by-page uploads work from phones on the LAN.
+
+- Kept page-by-page photo imports usable from non-secure mobile LAN previews by falling back when `crypto.randomUUID()` is unavailable during gallery selection.
+
+- Added an opt-in Reader Settings prototype for chained mixed-language sentence audio, preserving book-level sentence speech when the toggle is off.
+
+- Added script-aware per-token language metadata during sentence tokenization, with reader fallback support for mixed Russian, English, Korean, Chinese, Japanese, Hebrew, and Arabic text.
+
+## 2026-08-16
+
+- Routed mixed-language reader tokens such as Korean text inside Chinese books through their detected language for HTML labeling, lexicon lookup, and token pronunciation audio.
+
+## 2026-08-15
+
+- Added the proposed TextPlex dynamic-pricing report, mapping hyper-growth pricing principles to a free core reader, usage-aligned hosted assistance, premium generated practice, theme/content commerce, expansion signals, and implementation guardrails; tracked as issue #140 in the TextPlex Feature Board Todo column (`docs/TEXTPLEX_DYNAMIC_PRICING_REPORT.md`).
+
+- Rendered the collapsed-reader navigation reveal as a document-level overlay so transformed mobile reader containers cannot pull it over the title.
+
+- Anchored the collapsed-reader navigation reveal tab to the viewport’s top edge so it no longer covers long book titles.
+
+- Tightened the mobile reader header inset so the book title sits closer to the top of the reading space.
+
+- Kept mobile hamburger navigation rows visually neutral after route selection, while preserving hover, focus, and expanded-menu feedback.
+
+- Clarified the agent workflow to rebuild and reboot Docker web/API services after every runtime-visible change before announcing it is ready for verification.
+
+- Corrected the mobile hamburger panel’s CSS cascade so its centered absolute positioning is not overridden by the shared app-shell card rule.
+
+- Corrected the hamburger alignment follow-up by centering the panel against the full mobile shell action row while preserving click access to the shell controls.
+
+- Contained hamburger-menu feedback notifications within the mobile panel and wrapped long report titles and messages instead of clipping them horizontally.
+
+- Condensed feedback notifications to report titles with Admin Feedback and GitHub actions; GitHub issue generation now shows progress before redirecting to the created issue.
+
+- Made notification-to-Admin Feedback links smoothly scroll to the selected report below the sticky shell instead of opening at the console header.
+
+- Centered the mobile hamburger navigation panel within the app shell instead of aligning it to the menu toggle.
+
+- Refetched the authenticated Library data after account hydration and account switching so each account sees its own books and progress.
+
+- Recovered missing library registry entries from durable per-book metadata so existing account books remain visible after a stale registry file.
+
 ## 2026-08-14
 
-- Made the TXT import regression fixture byte-stable across Windows and Linux so CRLF normalization is tested consistently.
+- Switched the weekly goal card to current-week page counts and added a short end-of-week reset date.
+
+- Made weekly page goals open-ended and show `100%+` when reading exceeds the configured target.
+
+- Kept the Library filter button right-aligned when its filter panel opens.
+
+- Made Home goal cards share one compact mobile row and added an inline editor that persists the weekly page goal through settings.
+
+- Moved Send feedback into the build card, added the build timestamp, and added a live time-since-build indicator before the account and copyright footer.
+
+- Refined the build card into distinct build, built-at, and time-since-build rows, with Send feedback right-aligned at half width.
+
+- Compressed the mobile home surface so the headline, search, empty states, and goals appear with less vertical padding.
+
+- Tightened the mobile `/import` hero so its capability summary and navigation use less vertical space.
+
+- Right-aligned the Library, Read, and Study chevron markers in the mobile hamburger menu to match Markets and More.
+
+- Closed GitHub issue #135 after verifying the Settings feedback button source renders only the decorative star and `Send feedback` label; synchronized the feedback record and tracker to Done.
+
+- Limited each Theme Shop collection rail to five paired theme cards, added category-specific scrollable grid pages behind the rail arrows, and added inline Day/Night controls for paired themes.
+
+- Split `/themes` into a dedicated Theme Shop storefront with shop-specific navigation, catalog metrics, preview promises, collections, ownership, and pricing, while keeping personal behavior controls under My Themes at `/profile/themes`.
+
+- Corrected the mobile hamburger panel sizing so it opens as a full-width dropdown beneath the sticky shell instead of collapsing inside the transformed action area.
+
+- Kept the mobile hamburger panel below the sticky TextPlex header and added a Markets group above More with Theme Shop plus coming-soon Book, Course, and Translation shops.
+
+- Unified every hamburger navigation group under one inline expansion state so Library, Read, Study, and More share the same row treatment and only one group opens at a time.
+
+- Aligned Library, Read, and Study with the More menu behavior so each navigation row expands below itself without shifting the shell controls.
+
+- Documented Docker Compose as the authoritative local runtime for phone/browser QA, including the required web and API container restart workflow.
+
+- Linked five new actionable feedback reports to GitHub issues #135–#139 and placed them in Todo on the TextPlex Feature Board; issue bodies were sanitized to omit tester identifiers and internal record IDs.
+
+- Replaced the persistent two-row app navigation with a compact hamburger shell menu that keeps Library, Read, Study, and secondary destinations available through expandable chevron groups.
+
+- Raised the feedback notification overlay above shell controls, made its scroll track explicit, and added direct GitHub routing for feedback authors from the notification panel.
 
 ## 2026-08-13
 
-- Generalized Japanese number-counter readings and sound-change handling, with focused extraction and lexicon regression coverage.
+- Added member/tester onboarding role selection backed by the server-only Supabase Auth Admin API; tester onboarding refreshes the trusted role and sends one idempotent verification report to the admin feedback console with the authenticated account role attached.
+
+- Added first-class TXT upload support with UTF-8 validation, form-feed page boundaries, deterministic page images, normalized extraction artifacts, API/shared capability metadata, and Import UI coverage.
+
+- Linked four actionable feedback groups to GitHub issues #128–#131, consolidating duplicate percentage and `楽しそう` reports; excluded two feedback-tool test submissions from the issue tracker.
+
+- Reworked the Library hero with an upper-right filter menu for language, reading progress, and book status, and replaced the practice-article generator controls with a single Import action routed to `/import`.
+
+- Removed the heavier CJK token weight in the Reader so Japanese, Chinese, and Korean characters use the same normal text weight as the surrounding sentence.
+
+- Made hosted account-storage failures retryable and diagnosable rather than opaque 502s, and let learners who complete beta onboarding continue to their return route while storage recovers (#123).
+
+- Corrected Japanese `五分` Reader enrichment to use `gofun` for five-minute expressions while preserving contextual `gobu` and `gobun` readings and definitions; added regression coverage (#125).
+
+- Kept the top-shell feedback notification panel within narrow mobile viewports by using safe-area-aware viewport anchoring at 640px and below; added focused 384px responsive contract coverage (#126).
+
+- Kept the top-shell feedback notification panel in a fixed viewport layer at wider phone and tablet widths as well, so opening it never expands or clips the app shell.
+
+- Rendered the top-shell feedback notification panel through a document-level portal so it remains a true viewport overlay above the glass shell on mobile; added responsive contract coverage.
 
 - Enlarged the feedback-dialog close control to a 48px target with a legible icon and stable responsive sizing; added focused contract coverage for `shell.feedback-close-button` (#124).
 
-- Added five confirmed tester-feedback issues to the TextPlex Feature Board in Todo and linked the matching local records: hosted-profile 502 (#123), feedback close control (#124), Japanese `五分` reading (#125), mobile notification clipping (#126), and Activity graph proportions (#127).
-
 ## 2026-08-12
-
-- Added sentence, page, and book progress cards to a horizontally scrollable Reader visual-progress carousel, with desktop wheel/drag and keyboard/touch fallbacks scoped to the carousel (#91; `reader.reading-progress-module`, `reader.progress-carousel`, `reader.progress-card`).
 
 - Prepared the React 19 dependency upgrades with JSX compatibility fixes; deferred TypeScript 7.0.2 because the current Next ESLint toolchain does not support it yet.
 
@@ -682,3 +836,4 @@ The entries below were recovered from the repository's local Git history and ear
 - `e7bd5c4` - Add PDF import registry and endpoint
 - `40d5917` - Complete issue #1 local dev baseline
 - `2399849` - Initial TextPlex scaffold
+- Added the first page-by-page photo import flow: ordered JPG/PNG batches, thumbnail previews with reorder/remove controls, bounded API packaging into a multi-page reading item, and focused contract coverage.

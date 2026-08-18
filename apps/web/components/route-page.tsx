@@ -20,6 +20,7 @@ interface RoutePageProps {
   links?: RouteLink[];
   metrics?: Metric[];
   className?: string;
+  inventoryId?: string;
   children?: ReactNode;
 }
 
@@ -31,11 +32,12 @@ export function RoutePage({
   links = [],
   metrics = [],
   className,
+  inventoryId,
   children,
 }: RoutePageProps) {
   return (
     <main className="app-shell">
-      <section className={`home-hero card${className ? ` ${className}` : ""}`}>
+      <section className={`home-hero card${className ? ` ${className}` : ""}`} data-inventory-id={inventoryId}>
         <span className="eyebrow">{eyebrow}</span>
         <div className="card-topline">
           <h1>{title}</h1>

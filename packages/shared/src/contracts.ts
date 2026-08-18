@@ -4,6 +4,7 @@ export interface BookRecord {
   title: string;
   author: string | null;
   language_code: string;
+  source_type?: "static" | "page-by-page";
   ocr_provider?: "local" | "openai";
   source_filename: string;
   source_path: string;
@@ -51,6 +52,7 @@ export interface BoundingBox {
 export interface TokenResult {
   order: number;
   surface_form: string;
+  language_code?: string | null;
   lemma: string | null;
   part_of_speech: string | null;
   pronunciation: string | null;
@@ -865,6 +867,7 @@ export interface ProgressBookSummary {
 export interface ProgressSurfaceResponse {
   profile: LearningProfileSummary;
   books: ProgressBookSummary[];
+  weekly_page_reads?: number;
 }
 
 export interface ProfileSurfaceResponse {
@@ -1033,6 +1036,7 @@ export interface ImportSurfaceResponse {
   can_upload_pdf: boolean;
   can_upload_epub: boolean;
   can_upload_txt: boolean;
+  can_upload_images: boolean;
   can_paste_text: boolean;
   can_import_random_wikipedia: boolean;
   recent_books: ImportRecentBook[];

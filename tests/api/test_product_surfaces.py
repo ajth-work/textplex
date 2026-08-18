@@ -95,7 +95,7 @@ def test_generated_article_endpoint_uses_template_fallback_when_openai_is_unavai
     assert generation["title"] == payload["title"]
     assert generation["language_code"] == "zh"
     assert generation["prompt_version"] == "reader-article-v4"
-    assert generation["model"] == "gpt-5.4-mini"
+    assert generation["model"] == "gpt-5.6-luna"
     assert generation["requested_sentence_count"] == 8
     assert generation["actual_sentence_count"] == 8
     assert "Request payload:" in generation["prompt_text"]

@@ -9,9 +9,9 @@ services:
         NEXT_PUBLIC_TEXTPLEX_LEGACY_URL: ${TEXTPLEX_LEGACY_URL:-http://127.0.0.1:8200/legacy/index.html}
         NEXT_PUBLIC_SUPABASE_URL: ${SUPABASE_URL:-}
         NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
-        TEXTPLEX_API_ORIGIN: ${TEXTPLEX_API_ORIGIN:-http://api:8000}
+        TEXTPLEX_API_ORIGIN: ${TEXTPLEX_WEB_API_ORIGIN:-http://api:8000}
     environment:
-      TEXTPLEX_API_ORIGIN: ${TEXTPLEX_API_ORIGIN:-http://api:8000}
+      TEXTPLEX_API_ORIGIN: ${TEXTPLEX_WEB_API_ORIGIN:-http://api:8000}
     depends_on:
       - api
     ports:
@@ -39,6 +39,8 @@ services:
       USER_DATA_DIR: /workspace/data/user
       DEFAULT_LANGUAGE: zh
       AI_PROVIDER: openai
+      GOOGLE_TEXTPLEX_PROD_TRANSLATION: /run/secrets/textplex-translation.json
+      GOOGLE_TEXTPLEX_PROD_ROMANIZATION: /run/secrets/textplex-romanization.json
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/textplex-google-translate-sa.json
       TEXTPLEX_CORS_ORIGINS: ${TEXTPLEX_CORS_ORIGINS:-http://127.0.0.1:3000,http://localhost:3000,http://127.0.0.1:8200,https://ajth-work.github.io}
       TEXTPLEX_CORS_ORIGIN_REGEX: ${TEXTPLEX_CORS_ORIGIN_REGEX:-}
@@ -46,4 +48,6 @@ services:
       - "8201:8000"
     volumes:
       - ./data:/workspace/data
+      - ${GOOGLE_TEXTPLEX_PROD_TRANSLATION:-./.secrets/textplex-translation.json}:/run/secrets/textplex-translation.json:ro
+      - ${GOOGLE_TEXTPLEX_PROD_ROMANIZATION:-./.secrets/textplex-romanization.json}:/run/secrets/textplex-romanization.json:ro
       - ${GOOGLE_APPLICATION_CREDENTIALS:-./.secrets/textplex-google-translate-sa.json}:/run/secrets/textplex-google-translate-sa.json:ro

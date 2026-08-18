@@ -17,6 +17,8 @@ TextPlex is a local-first language-learning system built from a web reader, an A
 
 Default implementation work targets the Next.js app in `apps/web/` on port `3000`. Treat the standalone site on `8200` as a legacy reference shell only; do not change its source unless the task explicitly asks for GitHub Pages or legacy-compatibility work.
 
+For local phone and browser testing, Docker Compose is the authoritative runtime. After every implemented change that can affect the running web app or API, rebuild and restart the Docker `web` and `api` containers before announcing the implementation is ready to view, so the first user-visible preview reflects the change. Do not treat standalone Node or Uvicorn processes as the user-visible deployment. The Docker mappings are web `3000 -> 3000` and API `8201 -> 8000`.
+
 ## App-wide UI inventory workflow
 
 [`docs/COMPONENTS_INVENTORY.md`](docs/COMPONENTS_INVENTORY.md) is the canonical framework reference for the app's pages, regions, cards, panels, lists, and repeated item types. Agents making UI changes must:
@@ -84,7 +86,7 @@ cd apps/web
 npm run build
 ```
 
-After code changes that affect the running API or the Next app, reboot both services before QA so the live preview reflects the current code.
+After every code change that affects the running API or the Next app, rebuild and reboot both Docker services before QA and before the implementation notice so the live preview reflects the current code on its first refresh.
 
 For dependency and environment maintenance, use `docs/UPDATE_REPAIR_CYCLE.md` and the root `maintenance:check`, `maintenance:repair`, and `maintenance:update` scripts. Run the read-only report before dependency work; use update mode only deliberately, review its lockfile diff, and do not treat a failed verification cycle as complete.
 

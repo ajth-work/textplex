@@ -16,7 +16,7 @@ test("Next import surface exposes random Wikipedia import for the selected targe
   assert.match(surfaceSource, /data-inventory-id="import\.wikipedia-random-card"/);
   assert.match(surfaceSource, /data-inventory-id="import\.wikipedia-random-button"/);
   assert.match(surfaceSource, /Import random \$\{languageShortCode\(wikipediaLanguageCode\)\.toUpperCase\(\)\} article/);
-  assert.match(clientSource, /throw new Error\(await responseErrorMessage\(response, pathname\)\)/);
+  assert.match(clientSource, /throw await apiRequestError\(response, pathname\)/);
   assert.match(mockSource, /data-inventory-id="import\.wikipedia-random-button"/);
   assert.match(inventorySource, /`import\.wikipedia-random-card`/);
   assert.match(inventorySource, /`import\.wikipedia-random-button`/);

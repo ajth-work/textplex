@@ -1,8 +1,15 @@
+"use client";
+
 import Link from "next/link";
-import type { CSSProperties } from "react";
+import type { CSSProperties, FormEvent } from "react";
+import { useEffect, useState } from "react";
 
 import type { BookRecord, ProgressBookSummary, ProgressSurfaceResponse } from "../../../packages/shared/src";
 import { languageShortCode } from "../lib/language-options";
+import { fetchJson, putJson, type SettingsSurfaceResponse, type SettingsUpdateRequest } from "../lib/textplex";
+
+const WEEKLY_PAGE_GOAL_KEY = "home.weeklyPageGoal";
+const DEFAULT_WEEKLY_PAGE_GOAL = 6;
 
 type HomeSurfaceProps = {
   books: BookRecord[];
@@ -50,6 +57,31 @@ function readerHref(item: HomeReadingItem): string {
 }
 
 export function HomeSurface({ books, progress }: Readonly<HomeSurfaceProps>) {
+  const [weeklyPageGoal, setWeeklyPageGoal] = useState(DEFAULT_WEEKLY_PAGE_GOAL);
+  const [goalDraft, setGoalDraft] = useState(String(DEFAULT_WEEKLY_PAGE_GOAL));
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [savingGoal, setSavingGoal] = useState(false);
+  const [goalError, setGoalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void fetchJson<SettingsSurfaceResponse>("/settings")
+      .then((result) => {
+        const saved = result.entries.find((entry) => entry.key === WEEKLY_PAGE_GOAL_KEY);
+        const parsed = saved ? Number(saved.value) : DEFAULT_WEEKLY_PAGE_GOAL;
+        if (active && Number.isSafeInteger(parsed) && parsed >= 1) {
+          setWeeklyPageGoal(parsed);
+          setGoalDraft(String(parsed));
+        }
+      })
+      .catch(() => {
+        // The default remains usable when settings storage is unavailable.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const bookById = new Map(books.map((book) => [book.id, book]));
   const progressByBookId = new Map(progress.books.map((entry) => [entry.book_id, entry]));
   const recentlyReadItems: HomeReadingItem[] = progress.books.flatMap((entry) => {
@@ -67,8 +99,42 @@ export function HomeSurface({ books, progress }: Readonly<HomeSurfaceProps>) {
   const readingItems = [...recentlyReadItems, ...fallbackItems];
   const continueItem = readingItems[0] ?? null;
   const continuationItems = readingItems.slice(1, 5);
-  const goalCount = Math.min(progress.profile.page_reads ?? 0, 6);
-  const goalPercent = Math.min(100, Math.round((goalCount / 6) * 100));
+  const goalCount = progress.weekly_page_reads ?? progress.profile.page_reads ?? 0;
+  const goalPercent = Math.min(100, Math.round((goalCount / weeklyPageGoal) * 100));
+  const goalLabel = goalCount > weeklyPageGoal ? "100%+" : `${goalPercent}%`;
+  const resetDate = new Date();
+  resetDate.setDate(resetDate.getDate() + (7 - resetDate.getDay()) % 7);
+  const resetDateLabel = `${resetDate.getMonth() + 1}/${resetDate.getDate()}`;
+
+  async function saveWeeklyGoal(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextGoal = Number(goalDraft);
+    if (!Number.isSafeInteger(nextGoal) || nextGoal < 1) {
+      setGoalError("Choose a whole-number goal of at least 1 page.");
+      return;
+    }
+
+    setSavingGoal(true);
+    setGoalError(null);
+    try {
+      const settings = await fetchJson<SettingsSurfaceResponse>("/settings");
+      const result = await putJson<SettingsSurfaceResponse>("/settings", {
+        entries: [
+          ...settings.entries.filter((entry) => entry.key !== WEEKLY_PAGE_GOAL_KEY),
+          { key: WEEKLY_PAGE_GOAL_KEY, value: String(nextGoal) },
+        ],
+      } satisfies SettingsUpdateRequest);
+      const saved = result.entries.find((entry) => entry.key === WEEKLY_PAGE_GOAL_KEY);
+      const savedGoal = saved ? Number(saved.value) : nextGoal;
+      setWeeklyPageGoal(savedGoal);
+      setGoalDraft(String(savedGoal));
+      setEditingGoal(false);
+    } catch (error) {
+      setGoalError(error instanceof Error ? error.message : "Unable to save your weekly goal.");
+    } finally {
+      setSavingGoal(false);
+    }
+  }
 
   return (
     <main className="preview-home" data-inventory-id="home.page">
@@ -149,8 +215,22 @@ export function HomeSurface({ books, progress }: Readonly<HomeSurfaceProps>) {
         <div className="preview-section-head"><h2>Goals</h2><Link href="/progress">See All</Link></div>
         <div className="preview-goals">
           <article className="preview-goal-card" data-inventory-id="home.weekly-goal">
-            <div><h3>Weekly Reading Goal</h3><p><strong>{goalCount}</strong> / 6 pages</p></div>
-            <div className="preview-goal-ring" style={{ "--goal": `${goalPercent}%` } as CSSProperties}><span>{goalPercent}%</span></div>
+            {editingGoal ? (
+              <form className="preview-goal-editor" onSubmit={saveWeeklyGoal}>
+                <label htmlFor="weekly-page-goal">Weekly page goal</label>
+                <input id="weekly-page-goal" className="text-input" type="number" min="1" value={goalDraft} onChange={(event) => setGoalDraft(event.target.value)} autoFocus />
+                {goalError ? <span className="preview-goal-error" role="alert">{goalError}</span> : null}
+                <div className="preview-goal-editor-actions">
+                  <button type="button" className="button button-secondary" onClick={() => { setGoalDraft(String(weeklyPageGoal)); setGoalError(null); setEditingGoal(false); }}>Cancel</button>
+                  <button type="submit" className="button button-primary" disabled={savingGoal}>{savingGoal ? "Saving…" : "Save"}</button>
+                </div>
+              </form>
+            ) : (
+              <button className="preview-goal-card-button" type="button" onClick={() => { setGoalError(null); setEditingGoal(true); }} aria-label="Edit weekly reading goal">
+                <div><h3>Weekly Reading Goal</h3><p><strong>{goalCount}</strong> / {weeklyPageGoal} pages</p><span className="preview-goal-reset">Resets on {resetDateLabel}</span></div>
+                <div className="preview-goal-ring" style={{ "--goal": `${goalPercent}%` } as CSSProperties}><span>{goalLabel}</span></div>
+              </button>
+            )}
           </article>
           <article className="preview-goal-card preview-streak" data-inventory-id="home.exposure-goal">
             <h3>Reading exposure</h3><p><strong>{progress.profile.sentence_reads ?? 0}</strong></p><span>sentences read</span>

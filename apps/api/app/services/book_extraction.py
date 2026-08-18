@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import sqlite3
 from collections.abc import Callable
@@ -38,7 +39,10 @@ from app.services.google_translate_usage import record_google_translate_usage
 from app.services.hebrew_transliteration import transliterate_hebrew_text
 from app.services.lexicon import lookup_lexicon_entry_map, lookup_lexicon_pinyin_map
 from app.services.ocr import get_text_source_signature, resolve_page_ocr
-from app.services.translation_alignment import build_sentence_translation_alignment
+from app.services.translation_alignment import (
+    build_sentence_translation_alignment,
+    translation_alignment_matches_text,
+)
 from processor import (
     build_book_extraction_result,
     build_page_extraction_result,
@@ -51,6 +55,9 @@ from processor.contracts import (
     SentenceResult,
     TokenResult,
 )
+from pydantic import ValidationError
+
+logger = logging.getLogger(__name__)
 from pypdf import PdfReader
 
 FIXTURE_TEXT_SOURCE = "fixture"
@@ -261,7 +268,11 @@ def _load_page_artifact(
 ) -> PageExtractionArtifact | None:
     if not path.exists():
         return None
-    artifact = PageExtractionArtifact.model_validate_json(path.read_text(encoding="utf-8"))
+    try:
+        artifact = PageExtractionArtifact.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, ValidationError) as exc:
+        logger.warning("Skipping invalid page artifact %s: %s", path, exc)
+        return None
     recovered = _recover_page_artifact(artifact, data_root=data_root, owner_id=owner_id)
     if recovered is not artifact:
         _save_page_artifact(path, recovered)
@@ -644,7 +655,12 @@ def import_text_into_book(
 
 def _save_page_artifact(path: Path, artifact: PageExtractionArtifact) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(artifact.model_dump_json(indent=2), encoding="utf-8")
+    temporary_path = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        temporary_path.write_text(artifact.model_dump_json(indent=2), encoding="utf-8")
+        temporary_path.replace(path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 def _persist_book_record(book: BookRecord, *, data_root: Path) -> None:
@@ -702,7 +718,7 @@ def _enrich_page_lexicon_metadata(
         pinyin_map = {}
 
     google_romanization_map: dict[str, str] = {}
-    if is_google_translate_configured():
+    if is_google_translate_configured("romanization"):
         missing_pronunciations = []
         for sentence in page_result.sentences:
             for token in sentence.tokens:
@@ -819,7 +835,7 @@ def _attach_sentence_translation_alignment(
     if not existing_sentence.translation:
         return page_result, existing_sentence, "unavailable"
 
-    if existing_sentence.translation_alignment is not None:
+    if translation_alignment_matches_text(existing_sentence.translation_alignment, existing_sentence.translation):
         return page_result, existing_sentence, "page_artifact"
 
     alignment = build_sentence_translation_alignment(
@@ -842,7 +858,7 @@ def preload_page_sentence_translations(
     data_root: Path,
     owner_id: str | None = None,
 ) -> PageExtractionResult:
-    if not is_google_translate_configured():
+    if not is_google_translate_configured("translation"):
         return page_result
 
     sentences: list[SentenceResult] = []
@@ -930,7 +946,7 @@ def translate_page_sentence(
             return aligned_page, aligned_sentence, resolution_source
         return page_result, existing_sentence, resolution_source
 
-    if not is_google_translate_configured():
+    if not is_google_translate_configured("translation"):
         return page_result, existing_sentence, "unavailable"
 
     translated = _translate_text_with_google(
@@ -1094,10 +1110,11 @@ def extract_book_pages(
     start_page = max(1, page_start)
     end_page = book.total_pages if page_count is None else min(book.total_pages, start_page + page_count - 1)
     total_to_process = max(0, end_page - start_page + 1)
+    is_page_by_page_source = getattr(book, "source_type", "static") == "page-by-page"
     fixture_pages = load_text_fixture_pages(source_path) if is_text_fixture_source(source_path) else None
     epub_pages = load_epub_pages(source_path) if is_epub_source(source_path) else None
     txt_pages = load_txt_pages(source_path) if is_txt_source(source_path) else None
-    reader = None if fixture_pages is not None or epub_pages is not None or txt_pages is not None else PdfReader(str(source_path))
+    reader = None if is_page_by_page_source or fixture_pages is not None or epub_pages is not None or txt_pages is not None else PdfReader(str(source_path))
     current_text_source, current_text_source_signature = (
         (FIXTURE_TEXT_SOURCE, FIXTURE_TEXT_SIGNATURE)
         if fixture_pages is not None
@@ -1128,6 +1145,10 @@ def extract_book_pages(
             page_results.append(page_result)
             artifact_meta.append(
                 (page_hash, existing_artifact.text_source, existing_artifact.text_source_signature, page_result)
+            )
+            _save_page_artifact(
+                artifact_path,
+                existing_artifact.model_copy(update={"page": page_result}),
             )
             processed_count += 1
             if progress_callback:
@@ -1162,8 +1183,7 @@ def extract_book_pages(
             page_ends = None
             token_hints = None
         else:
-            assert reader is not None
-            fallback_text = reader.pages[page_number - 1].extract_text() or ""
+            fallback_text = reader.pages[page_number - 1].extract_text() if reader is not None and page_number <= len(reader.pages) else ""
             ocr_result = resolve_page_ocr(
                 fallback_text=fallback_text,
                 page_image_path=page_image_path,
@@ -1196,6 +1216,17 @@ def extract_book_pages(
         page_result = _enrich_page_lexicon_metadata(page_result, data_root=lexicon_root, owner_id=owner_id)
         page_results.append(page_result)
         artifact_meta.append((page_hash, text_source, text_source_signature, page_result))
+        _save_page_artifact(
+            artifact_path,
+            PageExtractionArtifact(
+                source_page_sha256=page_hash,
+                text_source=text_source,
+                text_source_signature=text_source_signature,
+                processor_version=page_result.processor_version,
+                pipeline_version=page_result.pipeline_version,
+                page=page_result,
+            ),
+        )
         processed_count += 1
         if progress_callback:
             progress_callback(page_number, processed_count, total_to_process)

@@ -3,6 +3,7 @@ from pathlib import Path
 
 from app.main import app
 from app.schemas.books import BookRecord
+from app.services.book_registry import load_registry
 from app.services.lexicon import import_lexicon_from_source
 from fastapi.testclient import TestClient
 
@@ -18,6 +19,30 @@ def test_list_books_returns_imported_sample(imported_real_scan: tuple[Path, Book
     assert response.status_code == 200
     books = response.json()
     assert any(book["id"] == record.id for book in books)
+
+
+def test_registry_recovers_book_records_from_book_json(tmp_path: Path) -> None:
+    books_root = tmp_path / "books"
+    book_dir = books_root / "book-recovered"
+    book_dir.mkdir(parents=True)
+    record = BookRecord(
+        id="book-recovered",
+        title="Recovered book",
+        language_code="en",
+        source_filename="recovered.txt",
+        source_path="recovered.txt",
+        source_sha256="a" * 64,
+        total_pages=1,
+        status="pages_split",
+        created_at="2026-08-15T00:00:00Z",
+        processed_at="2026-08-15T00:00:00Z",
+    )
+    (book_dir / "book.json").write_text(record.model_dump_json(), encoding="utf-8")
+    (books_root / "registry.json").write_text("{}", encoding="utf-8")
+
+    recovered = load_registry(books_root / "registry.json")
+
+    assert recovered[record.id].title == record.title
 
 
 def test_get_reader_page_returns_page_payload_and_image(imported_real_scan: tuple[Path, BookRecord]) -> None:
@@ -166,7 +191,7 @@ def test_sentence_translation_endpoint_persists_google_translation_cache(tmp_pat
     def translate_text_stub(source_text: str, source_language_code: str, target_language_code: str = "en") -> str:
       return f"{source_text} (translated)"
 
-    monkeypatch.setattr("app.services.book_extraction.is_google_translate_configured", lambda: True)
+    monkeypatch.setattr("app.services.book_extraction.is_google_translate_configured", lambda _feature="translation": True)
     monkeypatch.setattr("app.services.book_extraction.translate_text", translate_text_stub)
     monkeypatch.setattr("app.services.book_extraction.record_google_translate_usage", lambda **_: None)
 
@@ -211,7 +236,7 @@ def test_sentence_translation_buffer_prefetches_current_and_next_three_sentences
         translated_texts.append(source_text)
         return f"{source_text} (translated)"
 
-    monkeypatch.setattr("app.services.book_extraction.is_google_translate_configured", lambda: True)
+    monkeypatch.setattr("app.services.book_extraction.is_google_translate_configured", lambda _feature="translation": True)
     monkeypatch.setattr("app.services.book_extraction.translate_text", translate_text_stub)
     monkeypatch.setattr("app.services.book_extraction.record_google_translate_usage", lambda **_: None)
 
@@ -305,7 +330,7 @@ def test_sentence_translation_endpoint_persists_translation_alignment(tmp_path: 
         return FakeOpenAIResponse()
 
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setattr("app.services.book_extraction.is_google_translate_configured", lambda: True)
+    monkeypatch.setattr("app.services.book_extraction.is_google_translate_configured", lambda _feature="translation": True)
     monkeypatch.setattr("app.services.book_extraction.translate_text", translate_text_stub)
     monkeypatch.setattr("app.services.book_extraction.record_google_translate_usage", lambda **_: None)
     monkeypatch.setattr("app.services.translation_alignment.urlopen", fake_urlopen)

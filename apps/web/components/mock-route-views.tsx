@@ -218,10 +218,11 @@ export function MockImportSurfaceView() {
   const [wikipediaLanguageCode, setWikipediaLanguageCode] = useState("zh");
   const data = {
     default_language: "zh",
-    supported_inputs: ["pdf", "epub", "txt", "paste", "wikipedia-random"],
+    supported_inputs: ["pdf", "epub", "txt", "photo-pages", "paste", "wikipedia-random"],
     can_upload_pdf: true,
     can_upload_epub: true,
     can_upload_txt: true,
+    can_upload_images: true,
     can_paste_text: true,
     can_import_random_wikipedia: true,
     recent_books: demoLibraryBooks.map((book) => ({
@@ -236,6 +237,8 @@ export function MockImportSurfaceView() {
 
   return (
     <RoutePage
+      className="import-route-hero"
+      inventoryId="import.route-hero"
       eyebrow="Import"
       title="Paste text or upload a book"
       description="Demo import metadata for the packaged sample book."
@@ -245,7 +248,7 @@ export function MockImportSurfaceView() {
         { href: "/progress", label: "Progress" },
       ]}
       metrics={[
-        { label: "Inputs", value: data.supported_inputs.join(", ") },
+        { label: "Inputs", value: `${data.supported_inputs.length} formats` },
         { label: "Uploads", value: data.can_upload_pdf || data.can_upload_epub || data.can_upload_txt ? "Enabled" : "Disabled" },
         { label: "Paste", value: data.can_paste_text ? "Enabled" : "Disabled" },
       ]}
@@ -649,7 +652,7 @@ export function MockSettingsSurfaceView() {
             <div className="settings-inspector-row" data-inventory-id="settings.build-footer-toggle">
               <div>
                 <strong>Build details</strong>
-                <p className="small-copy">The current build is always shown in the footer; optionally include the last reboot/rebuild time.</p>
+            <p className="small-copy">The build card always shows the version, build timestamp, and time since build; this toggle adds a local diagnostic note.</p>
               </div>
               <BuildFooterToggle />
             </div>

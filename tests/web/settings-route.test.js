@@ -13,6 +13,7 @@ const themeToggleSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "co
 const globalThemePickerSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "global-theme-picker.tsx"), "utf8");
 const appShellSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "app-shell.tsx"), "utf8");
 const stylesheetSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "app", "globals.css"), "utf8");
+const themeShopPageSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "app", "themes", "page.tsx"), "utf8");
 
 test("Settings menu cards use the shared route card spacing", () => {
   assert.match(surfaceSource, /settings-preferences-card[\s\S]*settings-developer-tools-card/);
@@ -58,18 +59,33 @@ test("Settings menu cards use the shared route card spacing", () => {
   assert.match(layoutSource, /meta\[name="color-scheme"\]/);
   assert.match(themeSource, /querySelectorAll<HTMLMetaElement>\('meta\[name="theme-color"\]'\)/);
   assert.match(appShellSource, /shell\.back-button/);
-  assert.match(appShellSource, /shell\.theme-settings/);
+  assert.match(appShellSource, /shell\.menu-notifications/);
   assert.match(appShellSource, /theme-toggle-button shell-icon-button app-shell-back-button/);
-  assert.match(appShellSource, /theme-toggle-button shell-icon-button app-shell-theme-settings/);
-  assert.match(appShellSource, /href="\/profile\/themes"/);
-  assert.match(appShellSource, /Open theme settings/);
+  assert.match(appShellSource, /href="\/themes"/);
+  assert.match(appShellSource, /Theme Shop/);
+  assert.match(appShellSource, /label="Markets"/);
+  assert.match(appShellSource, /Book Shop/);
+  assert.match(appShellSource, /Course Shop/);
+  assert.match(appShellSource, /Translation Shop/);
   assert.match(appShellSource, /Go back/);
   assert.match(appShellSource, /className="button button-secondary nav-link nav-link-home" href=\{HOME_PATH\}/);
   assert.match(appShellSource, /className="button button-secondary nav-link nav-link-home"/);
+  assert.match(appShellSource, /current === "more" \? null : "more"/);
+  assert.match(stylesheetSource, /\.app-shell-menu-chevron-trigger\s*\{[^}]*border: 0;/);
+  assert.match(stylesheetSource, /\.app-shell-menu-link-row > \.app-shell-menu-chevron-trigger\s*\{[^}]*width: 2\.8rem;[^}]*margin-left: auto;/);
+  assert.doesNotMatch(stylesheetSource, /\.app-shell-menu-chevron-trigger\s*\{[^}]*border-left:/);
   assert.match(stylesheetSource, /\.app-shell\s*\{[\s\S]*display: grid;[\s\S]*gap: 1rem;/);
   assert.match(stylesheetSource, /\.shell-icon-button,\s*\.button\.theme-toggle-button\s*\{[\s\S]*width: 2\.4rem;/);
   assert.match(stylesheetSource, /\.app-shell-back-button\s*\{[\s\S]*left: 0\.35rem;/);
+  assert.match(stylesheetSource, /@media \(max-width: 640px\)[\s\S]*\.app-shell-actions\s*\{[\s\S]*left: 0\.35rem;[\s\S]*right: 0\.35rem;[\s\S]*pointer-events: none;[\s\S]*\.app-shell-actions > \.app-shell-menu\s*\{[\s\S]*pointer-events: auto;[\s\S]*\.app-shell-menu\s*\{[\s\S]*position: static;[\s\S]*\.app-shell-actions \.app-shell-menu-panel\.card\s*\{[\s\S]*position: absolute;[\s\S]*left: 50%;[\s\S]*transform: translateX\(-50%\);[\s\S]*width: min\(22rem, calc\(100vw - 1rem\)\);/);
   assert.match(surfaceSource, /ThemeSettingsSurfaceView/);
+  assert.match(surfaceSource, /ThemeShopSurfaceView/);
+  assert.match(themeShopPageSource, /ThemeShopSurfaceView/);
+  assert.doesNotMatch(themeShopPageSource, /ThemeSettingsSurfaceView/);
+  assert.match(surfaceSource, /Find your next reading atmosphere/);
+  assert.match(surfaceSource, /theme-shop\.storefront-intro/);
+  assert.match(surfaceSource, /theme-shop\.category-grid/);
+  assert.match(surfaceSource, /catalogHref="\/themes#theme-catalog"/);
   assert.match(surfaceSource, /theme-settings\.app-theme-card/);
   assert.match(surfaceSource, /theme-settings\.behavior-card/);
   assert.match(surfaceSource, /id="theme-catalog"/);
