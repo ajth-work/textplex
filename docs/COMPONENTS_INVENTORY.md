@@ -285,6 +285,7 @@ Source: `apps/web/components/reader-view.tsx` (`ReaderView`)
 | `reader.custom-vocabulary-list-menu` | region | Custom vocabulary list menu | Local-first picker for creating or choosing custom vocabulary lists in the token inspector. |
 | `reader.sentence-hsk-chart` | card | Sentence HSK chart | HSK level plotted across the readable tokens in the selected sentence. |
 | `reader.tools-card` | region | Reader tools | Reader utility section nested inside the options dialog for sentence chart, page image control, book frequency, dictionary wiring, reading profile, and page navigation. |
+| `reader.page-jump-control` | control | Page jump | Page-number input that navigates directly to a target page while the API prepares the target and nearby buffer pages. |
 | `reader.book-frequency-card` | card | Book frequency | Nested book-wide frequency panel inside the collapsed reader tools drawer. |
 | `reader.dictionary-card` | card | Dictionary wiring | Nested dictionary/lexical-entry lookup status and source details inside the collapsed reader tools drawer. |
 | `reader.reading-profile-card` | card | Reading profile | Nested learner exposure, progress, and remembered/missed token feedback details inside the collapsed reader tools drawer. |
@@ -414,7 +415,7 @@ Live source: `apps/web/components/surface-views.tsx` (`ImportSurfaceView`); demo
 | ID | Type | Visible name | Purpose |
 | --- | --- | --- | --- |
 | `import.route-hero` | region | Import hero | Supported-input, upload, and paste capability summary. |
-| `import.form` | card | Import form | Switches between paste-text and PDF/EPUB/TXT-upload flows, uses a fixed target-language dropdown, explains the bounded reader translation buffer, and submits real API imports. |
+| `import.form` | card | Import form | Switches between paste-text and PDF/EPUB/TXT-upload flows, uses a fixed target-language dropdown, explains the bounded reader translation buffer and progressive PDF page extraction, and submits real API imports. |
 | `import.photo-pages-card` | card | Photo page batch | Adds up to 12 JPG/PNG page photos one at a time, shows ordered previews, and supports reordering/removing pages before import. |
 | `import.wikipedia-random-card` | region | Random Wikipedia import | Target-language action that asks the API to select and import a random article from the selected-language Wikipedia. |
 | `import.wikipedia-random-button` | button | Import random Wikipedia article | Starts a random target-language Wikipedia import and retains the returned book in the normal import-progress flow. |

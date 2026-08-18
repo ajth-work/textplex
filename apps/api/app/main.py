@@ -146,6 +146,7 @@ from app.services.book_registry import (
     import_book_from_path,
     load_registry,
     save_registry,
+    split_source_into_page_images,
 )
 from app.services.commerce import (
     apply_sandbox_event,
@@ -269,6 +270,10 @@ OPTIONAL_PAGE_COUNT = Form(default=None)
 OPTIONAL_OCR_PROVIDER = Form(default=None)
 TRANSLATION_MODE = Form(default="off")
 logger = logging.getLogger("textplex.api")
+_progressive_extraction_lock = threading.Lock()
+_progressive_extraction_book_ids: set[str] = set()
+_progressive_extraction_active_windows: dict[str, tuple[int, int]] = {}
+_progressive_extraction_pending_windows: dict[str, list[tuple[int, int]]] = {}
 cors_origins = [
     origin.strip()
     for origin in os.getenv(
@@ -593,11 +598,8 @@ def _extract_and_persist_book(
 
 
 def _initialize_book_extraction(book: BookRecord, *, page_count: int | None) -> None:
-    total_pages = page_count if page_count is not None else book.page_image_count or book.total_pages
     book.extraction_status = "processing"
-    book.extraction_total_pages = total_pages
-    book.extraction_pages_processed = 0
-    book.extraction_current_page = None
+    book.extraction_total_pages = book.total_pages
     book.extraction_started_at = book.extraction_started_at or _utc_now()
     book.extraction_updated_at = _utc_now()
     if book.status not in {"archived"}:
@@ -606,8 +608,8 @@ def _initialize_book_extraction(book: BookRecord, *, page_count: int | None) -> 
 
 
 def _update_book_extraction_progress(book: BookRecord, *, current_page: int, pages_processed: int, total_pages: int) -> None:
-    book.extraction_total_pages = total_pages
-    book.extraction_pages_processed = pages_processed
+    book.extraction_total_pages = book.total_pages
+    book.extraction_pages_processed = max(book.extraction_pages_processed, current_page)
     book.extraction_current_page = current_page
     book.extraction_started_at = book.extraction_started_at or _utc_now()
     book.extraction_updated_at = _utc_now()
@@ -617,15 +619,27 @@ def _update_book_extraction_progress(book: BookRecord, *, current_page: int, pag
     _persist_book(book)
 
 
-def _complete_book_extraction(book: BookRecord, *, extraction_path: Path, extracted_page_count: int) -> None:
-    book.extraction_status = "complete"
-    book.extraction_total_pages = extracted_page_count
-    book.extraction_pages_processed = extracted_page_count
-    book.extracted_page_count = extracted_page_count
-    book.extraction_current_page = book.page_image_count or book.total_pages
+def _extracted_page_numbers(book: BookRecord) -> set[int]:
+    page_artifact_root = _books_root() / book.id / "extractions" / "pages"
+    page_numbers: set[int] = set()
+    for artifact_path in page_artifact_root.glob("page-*.json"):
+        try:
+            page_numbers.add(int(artifact_path.stem.removeprefix("page-")))
+        except ValueError:
+            continue
+    return page_numbers
+
+
+def _complete_book_extraction(book: BookRecord, *, extraction_path: Path, extracted_page_count: int, page_start: int) -> None:
+    extracted_pages = _extracted_page_numbers(book)
+    book.extraction_status = "complete" if len(extracted_pages) >= book.total_pages else "processing"
+    book.extraction_total_pages = book.total_pages
+    book.extraction_pages_processed = len(extracted_pages)
+    book.extracted_page_count = len(extracted_pages)
+    book.extraction_current_page = max(extracted_pages) if extracted_pages else None
     book.extraction_updated_at = _utc_now()
     book.extraction_path = str(extraction_path)
-    book.status = "extracted"
+    book.status = "extracted" if len(extracted_pages) >= book.total_pages else "processing"
     _persist_book(book)
 
 
@@ -644,34 +658,77 @@ def _start_background_extraction(
     page_count: int | None,
     force: bool = True,
 ) -> None:
-    _initialize_book_extraction(book, page_count=page_count)
-    _persist_book(book)
-
-    def progress_callback(current_page: int, pages_processed: int, total_pages: int) -> None:
-        _update_book_extraction_progress(
-            book,
-            current_page=current_page,
-            pages_processed=pages_processed,
-            total_pages=total_pages,
-        )
+    page_start = max(1, page_start)
+    if page_start > book.total_pages:
+        return
+    page_count = min(page_count or 2, book.total_pages - page_start + 1)
+    with _progressive_extraction_lock:
+        if book.id in _progressive_extraction_book_ids:
+            requested_end = page_start + page_count - 1
+            active_window = _progressive_extraction_active_windows.get(book.id)
+            pending_windows = _progressive_extraction_pending_windows.setdefault(book.id, [])
+            window = (page_start, page_count)
+            known_windows = ([active_window] if active_window else []) + pending_windows
+            if any(start <= page_start and start + count - 1 >= requested_end for start, count in known_windows):
+                return
+            if window not in pending_windows:
+                pending_windows.append(window)
+            return
+        _progressive_extraction_book_ids.add(book.id)
+        _progressive_extraction_active_windows[book.id] = (page_start, page_count)
 
     def worker() -> None:
+        window: tuple[int, int] | None = (page_start, page_count)
         try:
-            extraction_path, extracted_page_count = extract_book_text(
-                book=book,
-                page_start=page_start,
-                page_count=page_count,
-                force=force,
-                ocr_provider=book.ocr_provider,
-                data_root=_books_root(),
-                owner_id=book.owner_id,
-                progress_callback=progress_callback,
-            )
+            while window is not None:
+                window_start, window_count = window
+                _initialize_book_extraction(book, page_count=window_count)
+                _persist_book(book)
+
+                def progress_callback(current_page: int, pages_processed: int, total_pages: int) -> None:
+                    _update_book_extraction_progress(book, current_page=current_page, pages_processed=pages_processed, total_pages=total_pages)
+
+                manifest = split_source_into_page_images(
+                    book.source_path,
+                    book_id=book.id,
+                    total_pages=book.total_pages,
+                    page_start=window_start,
+                    page_count=window_count,
+                    display_title=book.title,
+                    data_root=_books_root(),
+                )
+                book.page_image_count = manifest.page_count
+                book.page_split_status = "partial" if manifest.page_count < book.total_pages else "complete"
+                _persist_book(book)
+                extraction_path, extracted_page_count = extract_book_text(
+                    book=book,
+                    page_start=window_start,
+                    page_count=window_count,
+                    force=force,
+                    ocr_provider=book.ocr_provider,
+                    data_root=_books_root(),
+                    owner_id=book.owner_id,
+                    progress_callback=progress_callback,
+                )
+                _complete_book_extraction(book, extraction_path=extraction_path, extracted_page_count=extracted_page_count, page_start=window_start)
+                with _progressive_extraction_lock:
+                    pending_windows = _progressive_extraction_pending_windows.get(book.id, [])
+                    window = pending_windows.pop(0) if pending_windows else None
+                    if window is not None:
+                        _progressive_extraction_active_windows[book.id] = window
+                    else:
+                        _progressive_extraction_active_windows.pop(book.id, None)
+                    if not pending_windows:
+                        _progressive_extraction_pending_windows.pop(book.id, None)
         except Exception:
             logger.exception("Background book extraction failed for %s", book.id)
             _fail_book_extraction(book)
-            return
-        _complete_book_extraction(book, extraction_path=extraction_path, extracted_page_count=extracted_page_count)
+
+        finally:
+            with _progressive_extraction_lock:
+                _progressive_extraction_book_ids.discard(book.id)
+                _progressive_extraction_active_windows.pop(book.id, None)
+                _progressive_extraction_pending_windows.pop(book.id, None)
 
     thread = threading.Thread(target=worker, name=f"textplex-extract-{book.id}", daemon=True)
     thread.start()
@@ -1137,6 +1194,7 @@ def import_book(
             environment_name="TEXTPLEX_IMPORT_ROOTS",
             defaults=[get_repo_root() / "tests" / "fixtures", app.state.data_root / "uploads"],
         )
+        progressive_pdf = source_path.suffix.lower() == ".pdf"
         book = import_book_from_path(
             source_path,
             language_code=payload.language_code,
@@ -1145,14 +1203,24 @@ def import_book(
             author=payload.author,
             page_start=payload.page_start,
             page_count=payload.page_count,
+            initial_page_count=1 if progressive_pdf else None,
             data_root=_books_root(),
             owner_id=context.user.id if context else None,
         )
-        return _extract_and_persist_book(
-            book,
+        if not progressive_pdf:
+            return _extract_and_persist_book(book, page_start=payload.page_start, page_count=payload.page_count)
+        extraction_path, extracted_page_count = extract_book_text(
+            book=book,
             page_start=payload.page_start,
-            page_count=payload.page_count,
+            page_count=1,
+            force=True,
+            ocr_provider=book.ocr_provider,
+            data_root=_books_root(),
+            owner_id=book.owner_id,
         )
+        _complete_book_extraction(book, extraction_path=extraction_path, extracted_page_count=extracted_page_count, page_start=payload.page_start)
+        _start_background_extraction(book, page_start=payload.page_start + 1, page_count=2)
+        return book
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -1190,6 +1258,7 @@ async def upload_book(
                 if total_bytes > _max_upload_bytes():
                     raise HTTPException(status_code=413, detail="Uploaded file exceeds the configured size limit.")
                 destination.write(chunk)
+        progressive_pdf = Path(filename).suffix.lower() == ".pdf"
         book = import_book_from_path(
             upload_path,
             language_code=language_code,
@@ -1199,10 +1268,24 @@ async def upload_book(
             source_filename=filename,
             page_start=page_start,
             page_count=page_count,
+            initial_page_count=1 if progressive_pdf else None,
             data_root=_books_root(),
             owner_id=context.user.id if context else None,
         )
-        _start_background_extraction(book, page_start=page_start, page_count=page_count)
+        if progressive_pdf:
+            extraction_path, extracted_page_count = extract_book_text(
+                book=book,
+                page_start=page_start,
+                page_count=1,
+                force=True,
+                ocr_provider=book.ocr_provider,
+                data_root=_books_root(),
+                owner_id=book.owner_id,
+            )
+            _complete_book_extraction(book, extraction_path=extraction_path, extracted_page_count=extracted_page_count, page_start=page_start)
+            _start_background_extraction(book, page_start=page_start + 1, page_count=2)
+        else:
+            _start_background_extraction(book, page_start=page_start, page_count=page_count)
         succeeded = True
         return book
     except FileNotFoundError as exc:
@@ -1310,17 +1393,61 @@ def get_book_page(
 ) -> BookReaderPageResponse:
     book = _book_exists(book_id, context)
 
+    if page_number < 1 or page_number > book.total_pages:
+        raise HTTPException(status_code=404, detail=f"Page not found: {page_number}")
+
     pages_path = _books_root() / book_id / "pages" / "manifest.json"
     if not pages_path.exists():
         raise HTTPException(status_code=404, detail=f"Page manifest not found for book: {book_id}")
 
     manifest = BookPageManifest.model_validate_json(pages_path.read_text(encoding="utf-8"))
+    if not any(page.page_number == page_number for page in manifest.pages):
+        manifest = split_source_into_page_images(
+            book.source_path,
+            book_id=book.id,
+            total_pages=book.total_pages,
+            page_start=page_number,
+            page_count=1,
+            display_title=book.title,
+            data_root=_books_root(),
+        )
+        book.page_image_count = manifest.page_count
+        book.page_split_status = "partial" if manifest.page_count < book.total_pages else "complete"
+        extraction_path, extracted_page_count = extract_book_text(
+            book=book,
+            page_start=page_number,
+            page_count=1,
+            force=True,
+            ocr_provider=book.ocr_provider,
+            data_root=_books_root(),
+            owner_id=book.owner_id,
+        )
+        _complete_book_extraction(book, extraction_path=extraction_path, extracted_page_count=extracted_page_count, page_start=page_number)
     try:
         page = next(page for page in manifest.pages if page.page_number == page_number)
     except StopIteration as exc:
         raise HTTPException(status_code=404, detail=f"Page not found: {page_number}") from exc
 
     extraction = load_page_artifact(book_id=book_id, page_number=page_number, data_root=_books_root(), owner_id=book.owner_id)
+    if extraction is None:
+        extraction_path, extracted_page_count = extract_book_text(
+            book=book,
+            page_start=page_number,
+            page_count=1,
+            force=True,
+            ocr_provider=book.ocr_provider,
+            data_root=_books_root(),
+            owner_id=book.owner_id,
+        )
+        _complete_book_extraction(book, extraction_path=extraction_path, extracted_page_count=extracted_page_count, page_start=page_number)
+        extraction = load_page_artifact(book_id=book_id, page_number=page_number, data_root=_books_root(), owner_id=book.owner_id)
+
+    previous_extraction = load_page_artifact(book_id=book_id, page_number=page_number - 1, data_root=_books_root(), owner_id=book.owner_id) if page_number > 1 else None
+    if page_number > 1 and previous_extraction is None:
+        _start_background_extraction(book, page_start=page_number - 1, page_count=1)
+    next_extraction = load_page_artifact(book_id=book_id, page_number=page_number + 1, data_root=_books_root(), owner_id=book.owner_id) if page_number < book.total_pages else None
+    if page_number < book.total_pages and next_extraction is None:
+        _start_background_extraction(book, page_start=page_number + 1, page_count=1)
     image_url = f"/books/{book_id}/pages/{page_number}/image"
     return BookReaderPageResponse(
         book=book,
@@ -1505,6 +1632,7 @@ def extract_book(
         book,
         extraction_path=extraction_path,
         extracted_page_count=extracted_page_count,
+        page_start=payload.page_start,
     )
     return {"status": "complete", "extraction_path": str(extraction_path)}
 

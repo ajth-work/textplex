@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import fitz
 import pytest
 from app.main import app
 from app.schemas.books import BookRecord
@@ -58,6 +59,47 @@ def test_import_book_endpoint_registers_alice_mini_fixture(
     assert data["extracted_page_count"] == 3
     assert (data_root / "books" / data["id"] / "book.json").exists()
     assert (data_root / "books" / data["id"] / "extractions" / "book-extraction.json").exists()
+
+
+def test_import_book_endpoint_extracts_only_the_first_page_before_background_work(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_pdf = tmp_path / "progressive-reader.pdf"
+    document = fitz.open()
+    for page_number in range(1, 6):
+        page = document.new_page()
+        page.insert_text((72, 72), f"Page {page_number}. A readable sentence.")
+    document.save(source_pdf)
+    document.close()
+    app.state.data_root = tmp_path
+    monkeypatch.setenv("TEXTPLEX_IMPORT_ROOTS", str(tmp_path))
+    scheduled_windows: list[tuple[int, int | None]] = []
+
+    def schedule_window(*_args, page_start: int, page_count: int | None) -> None:
+        scheduled_windows.append((page_start, page_count))
+
+    monkeypatch.setattr("app.main._start_background_extraction", schedule_window)
+    client = TestClient(app)
+
+    response = client.post(
+        "/books/import",
+        json={"source_path": str(source_pdf), "language_code": "en"},
+    )
+
+    assert response.status_code == 200
+    book = response.json()
+    assert book["total_pages"] == 5
+    assert book["page_image_count"] == 1
+    assert book["extracted_page_count"] == 1
+    assert book["extraction_status"] == "processing"
+    assert scheduled_windows == [(2, 2)]
+
+    scheduled_windows.clear()
+    page_response = client.get(f"/books/{book['id']}/pages/3")
+    assert page_response.status_code == 200
+    assert page_response.json()["extraction"]["page"]["page_number"] == 3
+    assert scheduled_windows == [(2, 1), (4, 1)]
 
 
 def test_get_book_pages_returns_manifest_after_import(imported_real_scan: tuple[Path, BookRecord]) -> None:

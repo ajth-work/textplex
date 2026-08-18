@@ -270,6 +270,7 @@ def import_book_from_path(
     source_filename: str | None = None,
     page_start: int = 1,
     page_count: int | None = None,
+    initial_page_count: int | None = None,
     data_root: Path | None = None,
     owner_id: str | None = None,
 ) -> BookRecord:
@@ -315,8 +316,11 @@ def import_book_from_path(
         source_author = None
         source_filename = resolved_source_path.name
     else:
-        source_bytes = resolved_source_path.read_bytes()
-        source_sha256 = hashlib.sha256(source_bytes).hexdigest()
+        source_digest = hashlib.sha256()
+        with resolved_source_path.open("rb") as source_file:
+            for chunk in iter(lambda: source_file.read(1024 * 1024), b""):
+                source_digest.update(chunk)
+        source_sha256 = source_digest.hexdigest()
         reader = PdfReader(str(resolved_source_path))
         source_title = reader.metadata.title if reader.metadata else None
         source_author = reader.metadata.author if reader.metadata else None
@@ -356,16 +360,17 @@ def import_book_from_path(
         encoding="utf-8",
     )
 
+    initial_count = initial_page_count if initial_page_count is not None else page_count
     page_manifest = split_source_into_page_images(
         resolved_source_path,
         book_id=book_id,
         total_pages=record.total_pages,
         page_start=page_start,
-        page_count=page_count,
+        page_count=initial_count,
         display_title=record.title,
         data_root=data_root,
     )
-    record.page_split_status = "complete"
+    record.page_split_status = "complete" if page_manifest.page_count >= record.total_pages else "partial"
     record.page_image_count = page_manifest.page_count
     record.status = "pages_split"
     record.processed_at = _utc_now()
