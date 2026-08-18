@@ -10,6 +10,8 @@
 
 - Enlarged the feedback-dialog close control to a 48px target with a legible icon and stable responsive sizing; added focused contract coverage for `shell.feedback-close-button` (#124).
 
+- Added five confirmed tester-feedback issues to the TextPlex Feature Board in Todo and linked the matching local records: hosted-profile 502 (#123), feedback close control (#124), Japanese `五分` reading (#125), mobile notification clipping (#126), and Activity graph proportions (#127).
+
 ## 2026-08-12
 
 - Prepared the React 19 dependency upgrades with JSX compatibility fixes; deferred TypeScript 7.0.2 because the current Next ESLint toolchain does not support it yet.
