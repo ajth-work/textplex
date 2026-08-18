@@ -34,6 +34,11 @@ test("beta onboarding is required before protected routes render", () => {
   assert.match(onboarding, /onboarding\.learning-track-question/);
   assert.doesNotMatch(onboarding, /profile\/hosted/);
   assert.match(onboarding, /onboarding\.learning_track/);
+  assert.match(onboarding, /onboarding\.account_type/);
+  assert.match(onboarding, /onboarding\.account-type-question/);
+  assert.match(onboarding, /\/auth\/account-role/);
+  assert.match(onboarding, /tester_role_verification/);
+  assert.match(onboarding, /refreshSession/);
   assert.match(onboarding, /onboarding\.beta_acknowledged_at/);
   assert.match(onboarding, /Only import books and text you are allowed to use/);
   assert.match(onboarding, /Use the feedback button/);

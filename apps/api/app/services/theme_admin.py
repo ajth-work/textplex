@@ -19,10 +19,11 @@ from app.services.auth import (
     require_permission,
     supabase_is_configured,
 )
+from app.services.openai_config import get_openai_api_key, get_openai_api_key_env
 from fastapi import HTTPException
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
-DEFAULT_THEME_MODEL = "gpt-5.4-mini"
+DEFAULT_THEME_MODEL = "gpt-5.6-luna"
 MAX_THEME_IMAGE_BYTES = 6 * 1024 * 1024
 
 THEME_TOKEN_KEYS = (
@@ -166,9 +167,12 @@ def _theme_json_schema() -> dict[str, Any]:
 
 def suggest_theme_with_ai(context: AuthenticatedUserContext, payload: ThemeAiSuggestRequest) -> ThemeAiSuggestResponse:
     _require_theme_admin(context)
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    api_key = get_openai_api_key("theme_generation")
     if not api_key:
-        raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured on the API.")
+        raise HTTPException(
+            status_code=503,
+            detail=f"{get_openai_api_key_env('theme_generation')} is not configured on the API.",
+        )
     if payload.image_data_url and len(payload.image_data_url.encode("utf-8")) > MAX_THEME_IMAGE_BYTES * 4 / 3:
         raise HTTPException(status_code=413, detail="The reference image is too large.")
 

@@ -40,9 +40,11 @@ Both scripts create the local data directories and copy `.env.example` to `.env`
 
 The live web app reads `NEXT_PUBLIC_SUPABASE_URL` and
 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from `apps/web/.env.local`. The API reads
-`SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` from the API environment. These
-values identify the Supabase project; never put a Supabase secret/service key in
-browser-exposed variables.
+  `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` from the API environment. Tester
+  onboarding also requires `SUPABASE_SERVICE_ROLE_KEY` in the API environment so
+  the server can update the selected non-privileged Auth role and refresh the
+  session claim. These values identify the Supabase project; never put a Supabase
+  secret/service key in browser-exposed variables.
 
 If you want the reader's Google translation fallback for missing lexicon entries,
 configure Application Default Credentials with a Google service account JSON key.

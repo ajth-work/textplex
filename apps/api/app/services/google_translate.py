@@ -7,24 +7,29 @@ import urllib.error
 import urllib.request
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 try:
     from google.auth import default as google_auth_default
     from google.auth import exceptions as google_auth_exceptions
+    from google.auth import load_credentials_from_file as google_auth_load_credentials_from_file
 except ImportError:  # pragma: no cover - exercised only when the dependency is missing locally.
     google_auth_default = None
+    google_auth_load_credentials_from_file = None
     class _GoogleAuthExceptions:
         class GoogleAuthError(Exception):
             pass
 
     google_auth_exceptions = _GoogleAuthExceptions()
 
+GOOGLE_TRANSLATION_CREDENTIALS_ENV = "GOOGLE_TEXTPLEX_PROD_TRANSLATION"
+GOOGLE_ROMANIZATION_CREDENTIALS_ENV = "GOOGLE_TEXTPLEX_PROD_ROMANIZATION"
 GOOGLE_APPLICATION_CREDENTIALS_ENV = "GOOGLE_APPLICATION_CREDENTIALS"
 GOOGLE_TRANSLATE_ENDPOINT = "https://translation.googleapis.com/language/translate/v2"
 GOOGLE_TRANSLATE_ROMANIZE_ENDPOINT = "https://translation.googleapis.com/v3/projects/{project_id}/locations/global:romanizeText"
 GOOGLE_TRANSLATE_SCOPE = "https://www.googleapis.com/auth/cloud-translation"
 GOOGLE_TRANSLATE_TARGET_LANGUAGE = "en"
+GoogleTranslateFeature = Literal["translation", "romanization"]
 
 
 class _UrlLibResponse:
@@ -60,18 +65,53 @@ class _UrlLibRequest:
             )
 
 
-def _google_credentials_path() -> Path | None:
-    raw_path = os.getenv(GOOGLE_APPLICATION_CREDENTIALS_ENV, "").strip()
+def _google_feature_credentials_env(feature: GoogleTranslateFeature) -> str:
+    return (
+        GOOGLE_TRANSLATION_CREDENTIALS_ENV
+        if feature == "translation"
+        else GOOGLE_ROMANIZATION_CREDENTIALS_ENV
+    )
+
+
+def _google_credentials_path(feature: GoogleTranslateFeature = "translation") -> Path | None:
+    for env_name in (_google_feature_credentials_env(feature), GOOGLE_APPLICATION_CREDENTIALS_ENV):
+        raw_path = os.getenv(env_name, "").strip()
+        if not raw_path:
+            continue
+        path = Path(raw_path).expanduser()
+        if path.is_file():
+            return path
+    return None
+
+
+def _google_feature_credentials_path(feature: GoogleTranslateFeature) -> Path | None:
+    raw_path = os.getenv(_google_feature_credentials_env(feature), "").strip()
     if not raw_path:
         return None
     path = Path(raw_path).expanduser()
     return path if path.is_file() else None
 
 
-@lru_cache(maxsize=1)
-def _load_google_credentials() -> Any | None:
-    credentials_path = _google_credentials_path()
-    if credentials_path is None or google_auth_default is None:
+@lru_cache(maxsize=2)
+def _load_google_credentials(feature: GoogleTranslateFeature = "translation") -> Any | None:
+    credentials_path = _google_credentials_path(feature)
+    if credentials_path is None:
+        return None
+
+    feature_credentials_path = _google_feature_credentials_path(feature)
+    if feature_credentials_path is not None:
+        if google_auth_load_credentials_from_file is None:
+            return None
+        try:
+            credentials, _ = google_auth_load_credentials_from_file(
+                str(feature_credentials_path),
+                scopes=[GOOGLE_TRANSLATE_SCOPE],
+            )
+        except (google_auth_exceptions.GoogleAuthError, OSError, ValueError):
+            return None
+        return credentials
+
+    if google_auth_default is None:
         return None
 
     try:
@@ -81,9 +121,9 @@ def _load_google_credentials() -> Any | None:
     return credentials
 
 
-@lru_cache(maxsize=1)
-def _load_google_project_id() -> str | None:
-    credentials_path = _google_credentials_path()
+@lru_cache(maxsize=2)
+def _load_google_project_id(feature: GoogleTranslateFeature = "translation") -> str | None:
+    credentials_path = _google_credentials_path(feature)
     if credentials_path is not None:
         try:
             payload = json.loads(credentials_path.read_text(encoding="utf-8"))
@@ -105,8 +145,8 @@ def _load_google_project_id() -> str | None:
     return project_id.strip() if isinstance(project_id, str) and project_id.strip() else None
 
 
-def is_google_translate_configured() -> bool:
-    return _google_credentials_path() is not None
+def is_google_translate_configured(feature: GoogleTranslateFeature = "translation") -> bool:
+    return _google_credentials_path(feature) is not None
 
 
 def translate_text(
@@ -119,7 +159,7 @@ def translate_text(
     if not source_text:
         return None
 
-    credentials = _load_google_credentials()
+    credentials = _load_google_credentials("translation")
     if credentials is None:
         return None
 
@@ -185,8 +225,8 @@ def romanize_texts(
     if not normalized_texts:
         return []
 
-    credentials = _load_google_credentials()
-    project_id = _load_google_project_id()
+    credentials = _load_google_credentials("romanization")
+    project_id = _load_google_project_id("romanization")
     if credentials is None or project_id is None:
         return [None] * len(normalized_texts)
 

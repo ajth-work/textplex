@@ -7,6 +7,13 @@ from pydantic import BaseModel, Field, model_validator
 FeedbackStatus = Literal["needs_review", "in_progress", "ready_for_testing", "completed", "acknowledged", "dismissed"]
 FeedbackEventType = Literal["status_changed", "github_linked", "tester_response"]
 FeedbackTesterResponse = Literal["verified", "still_unresolved", "partially_improved"]
+AutomatedFeedbackCheck = Literal["tester_role_verification"]
+FeedbackReason = Literal[
+    "missing_pronunciation",
+    "incorrect_pronunciation",
+    "incorrect_meaning",
+    "incorrect_segmentation",
+]
 
 
 class FeedbackContext(BaseModel):
@@ -24,6 +31,8 @@ class FeedbackContext(BaseModel):
     feedback_target: Literal["sentence", "word"] | None = None
     feedback_target_text: str | None = Field(default=None, max_length=5000)
     feedback_target_order: int | None = Field(default=None, ge=1, le=100000)
+    feedback_reason: FeedbackReason | None = None
+    automated_check: AutomatedFeedbackCheck | None = None
 
 
 class FeedbackScreenshot(BaseModel):
@@ -177,6 +186,7 @@ class FeedbackRecord(BaseModel):
     verification: FeedbackVerification | None = None
     github: FeedbackGitHubLink | None = None
     user_id: str | None = None
+    account_role: Literal["member", "tester", "admin"] | None = None
     screenshots: list[FeedbackScreenshot] = Field(default_factory=list, max_length=3)
     screenshot: FeedbackScreenshot | None = None
     screenshot_analysis: FeedbackScreenshotAnalysis | None = None

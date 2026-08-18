@@ -99,6 +99,36 @@ def test_feedback_accepts_multiple_screenshot_attachments(tmp_path: Path, monkey
     assert any(path.read_bytes().startswith(b"\xff\xd8\xff") for path in attachments)
 
 
+def test_feedback_accepts_mobile_jpeg_mime_alias_and_missing_mime(tmp_path: Path, monkeypatch) -> None:
+    original_data_root = app.state.data_root
+    app.state.data_root = tmp_path
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    try:
+        alias_response = TestClient(app).post(
+            "/feedback/with-screenshot",
+            data={
+                "original_text": "The attached mobile screenshot should be saved.",
+                "context": json.dumps({"route": "/reader", "app_version": "0.1.0"}),
+            },
+            files={"screenshots": ("phone.jpg", b"\xff\xd8\xffmobile-jpeg", "image/jpg")},
+        )
+        missing_mime_response = TestClient(app).post(
+            "/feedback/with-screenshot",
+            data={
+                "original_text": "The attached mobile screenshot has no MIME type.",
+                "context": json.dumps({"route": "/reader", "app_version": "0.1.0"}),
+            },
+            files={"screenshots": ("phone.jpg", b"\xff\xd8\xffmobile-jpeg", "application/octet-stream")},
+        )
+    finally:
+        app.state.data_root = original_data_root
+
+    assert alias_response.status_code == 200
+    assert alias_response.json()["screenshots"][0]["content_type"] == "image/jpeg"
+    assert missing_mime_response.status_code == 200
+    assert missing_mime_response.json()["screenshots"][0]["content_type"] == "image/jpeg"
+
+
 def test_feedback_rejects_invalid_screenshot_attachment() -> None:
     response = TestClient(app).post(
         "/feedback/with-screenshot",
@@ -286,6 +316,54 @@ def test_authenticated_tester_feedback_reaches_admin_queue_and_returns_updates(t
     finally:
         app.dependency_overrides.clear()
         app.state.data_root = original_data_root
+
+
+def test_feedback_author_can_route_own_notification_to_github(tmp_path: Path, monkeypatch) -> None:
+    original_data_root = app.state.data_root
+    app.state.data_root = tmp_path
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    routed: dict[str, str | None] = {}
+    record = create_feedback(
+        tmp_path,
+        "The notification should offer a direct GitHub action.",
+        FeedbackContext(route="/home", app_version="beta-test"),
+        user_id="tester-route",
+    )
+
+    def fake_create_github_issue(data_root: Path, feedback_id: str, *, changed_by: str, title: str | None = None) -> FeedbackRecord:
+        routed.update(feedback_id=feedback_id, changed_by=changed_by, title=title)
+        return record
+
+    monkeypatch.setattr("app.main.create_github_issue", fake_create_github_issue)
+    client = TestClient(app)
+    try:
+        app.dependency_overrides[auth_service.get_authenticated_user_context] = lambda: _context("tester-route", "tester")
+        sent = client.post(f"/feedback/{record.id}/github-issue", json={})
+        assert sent.status_code == 200
+        assert routed == {"feedback_id": record.id, "changed_by": "tester-route", "title": None}
+
+        app.dependency_overrides[auth_service.get_authenticated_user_context] = lambda: _context("other-tester", "tester")
+        assert client.post(f"/feedback/{record.id}/github-issue", json={}).status_code == 403
+    finally:
+        app.dependency_overrides.clear()
+        app.state.data_root = original_data_root
+
+
+def test_tester_role_verification_feedback_is_idempotent_and_carries_role(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    context = FeedbackContext(
+        route="/onboarding",
+        page_title="Tester role verification",
+        app_version="beta-test",
+        automated_check="tester_role_verification",
+    )
+
+    first = create_feedback(tmp_path, "Automated tester role verification.", context, user_id="tester-role", account_role="tester")
+    second = create_feedback(tmp_path, "Automated tester role verification.", context, user_id="tester-role", account_role="tester")
+
+    assert first.id == second.id
+    assert first.account_role == "tester"
+    assert len(list((tmp_path / "feedback").glob("**/*.json"))) == 1
 
 
 def test_tester_directory_counts_feedback_and_persists_nickname(tmp_path: Path, monkeypatch) -> None:

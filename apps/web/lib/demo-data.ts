@@ -515,7 +515,7 @@ export const demoGeneratedArticlePromptDetails: GeneratedReaderArticlePromptDeta
   requested_sentence_count: 10,
   actual_sentence_count: 10,
           prompt_version: "reader-article-v4",
-  model: "gpt-5.4-mini",
+  model: "gpt-5.6-luna",
   generation_source: "template",
   max_new_lemmas: 8,
   known_lemma_limit: 12,
@@ -881,10 +881,11 @@ export function getDemoFetchResponse(pathname: string): unknown | null {
   if (route === "/import") {
     return {
       default_language: "zh",
-      supported_inputs: ["pdf", "epub", "txt", "paste", "wikipedia-random"],
+      supported_inputs: ["pdf", "epub", "txt", "photo-pages", "paste", "wikipedia-random"],
       can_upload_pdf: true,
       can_upload_epub: true,
       can_upload_txt: true,
+      can_upload_images: true,
       can_paste_text: true,
       can_import_random_wikipedia: true,
       recent_books: [

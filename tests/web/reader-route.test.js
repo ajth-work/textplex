@@ -34,6 +34,9 @@ test("Next reader meaning line preserves spacing, offers a complete reveal escap
   assert.match(readerSource, /Reveal all/);
   assert.match(readerSource, /function splitAttachedTranslationPunctuation\(token: TranslationAlignmentToken\)/);
   assert.match(readerSource, /normalizeTranslationPunctuation/);
+  assert.match(readerSource, /function translationAlignmentMatchesText\(/);
+  assert.match(readerSource, /activeSentenceTranslationAlignment = translationAlignmentMatchesText\(/);
+  assert.match(readerSource, /translation_alignment: translation\.translation_alignment/);
   assert.match(readerSource, /if \(!pageData \|\| isSentencePunctuation\(token\.surface_form\)\)/);
   assert.match(readerSource, /disabled=\{isPunctuation\}/);
   assert.match(readerSource, /Punctuation \$\{token\.surface_form\}/);
@@ -43,6 +46,10 @@ test("Next reader meaning line preserves spacing, offers a complete reveal escap
   assert.match(stylesheetSource, /\.reader-translation-reveal-part\.is-space\s*\{[\s\S]*display: inline-block;/);
   assert.match(stylesheetSource, /\.reader-translation-reveal-actions \.button\s*\{[\s\S]*width: auto;/);
   assert.match(stylesheetSource, /\.token-inline\.is-punct:hover,[\s\S]*box-shadow: none;/);
+});
+
+test("Next reader keeps CJK token text at normal weight and style", () => {
+  assert.match(stylesheetSource, /\.token-inline\.is-cjk\s*\{[\s\S]*font-weight: 400;[\s\S]*font-style: normal;/);
 });
 
 test("Next reader contract keeps loading, error, extraction, lookup, and chart states", () => {
@@ -124,6 +131,15 @@ test("Next reader contract keeps loading, error, extraction, lookup, and chart s
   assert.match(readerSource, /new Set\(sentenceRevealWordSlots\)/);
 });
 
+test("Next reader prefetches adjacent lexicon terms and shares requests with token taps", () => {
+  assert.match(readerSource, /readerLexiconPrefetchLookahead = 3/);
+  assert.match(readerSource, /lexiconCacheRef = useRef\(new Map/);
+  assert.match(readerSource, /lexiconPrefetchRequestsRef = useRef\(new Map/);
+  assert.match(readerSource, /requestLexiconLookup/);
+  assert.match(readerSource, /selectedSentenceIndex \+ readerLexiconPrefetchLookahead \+ 1/);
+  assert.match(readerSource, /allowGoogleFallback \? "true" : "false"/);
+});
+
 test("Next reader defaults token audio on without overriding an explicit off choice", () => {
   assert.match(readerSource, /useState\(\(\) => readStoredReaderTokenAudioOnTap\(\)\)/);
   const textplexSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "lib", "textplex.ts"), "utf8");
@@ -191,6 +207,12 @@ test("Next reader expands the session summary into book-scoped stats", () => {
     assert.match(stylesheetSource, /\.reader-session-stats\s*\{[\s\S]*grid-column: 1 \/ -1;[\s\S]*width: 100%;/);
     assert.match(stylesheetSource, /\.reader-session-pill-rail\s*\{[\s\S]*overflow-x: auto/);
   });
+
+test("Next reader keeps completion summary fallback labels readable", () => {
+  assert.match(readerSource, /bookCoveragePercent == null \? "\\u2014"/);
+  assert.match(readerSource, /completionSaving \? "Saving\.\.\." : "Mark as read and return to library"/);
+  assert.doesNotMatch(readerSource, /bookCoveragePercent == null \? "ÃƒÆ’/);
+});
 
 test("Next reader makes the desktop session rail discoverable and draggable", () => {
   assert.match(readerSource, /formatReaderEstimatedDuration/);
@@ -306,6 +328,15 @@ test("Next reader definition card stays compact and exposes the save action", ()
   assert.match(stylesheetSource, /\.definition-segment\.is-audio-active\s*\{/);
   assert.match(stylesheetSource, /\.definition-feedback-remembered\s*\{[\s\S]*color: #117a3c;/);
   assert.match(stylesheetSource, /\.definition-feedback-missed\s*\{[\s\S]*color: #b42318;/);
+});
+
+test("Next reader keeps definition load timing admin-only", () => {
+  assert.match(readerSource, /type DefinitionLookupTiming/);
+  assert.match(readerSource, /definitionLookupTiming/);
+  assert.match(readerSource, /isAdmin && definitionLookupTiming/);
+  assert.match(readerSource, /Lexicon \{definitionLookupTiming\.lexiconMs\} ms/);
+  assert.match(readerSource, /Google Translate \{definitionLookupTiming\.googleTranslateMs\} ms/);
+  assert.match(stylesheetSource, /\.definition-load-timing\s*\{/);
 });
 
 test("Next reader romanizes Korean token readings instead of falling back to Hangul", () => {
@@ -472,15 +503,21 @@ test("Next reader illuminates translation and source tools only while their card
   assert.match(stylesheetSource, /\.reader-sentence-tool-button:not\(\.is-active\):focus-visible[\s\S]*outline-color: var\(--line\)/);
 });
 
-test("Next reader reveals quiet help hints for icon-only controls", () => {
+test("Next reader applies one bounded tooltip behavior across reader controls", () => {
   assert.match(readerSource, /reader-tooltip-target/);
   assert.match(readerSource, /data-tooltip="Back"/);
   assert.match(readerSource, /data-tooltip="Reader settings"/);
   assert.match(readerSource, /data-tooltip=\{readerPageBookmarked \? "Remove page bookmark"/);
   assert.match(readerSource, /reader-tooltip-target--compact/);
+  assert.match(readerSource, /readerTooltipTouchDismissDelayMs = 1400/);
+  assert.match(readerSource, /readerTooltipTimersRef/);
+  assert.match(readerSource, /data-tooltip-open/);
   assert.match(stylesheetSource, /\.reader-tooltip-target::after[\s\S]*content: attr\(data-tooltip\)/);
   assert.match(stylesheetSource, /\.reader-tooltip-target:hover::after,[\s\S]*\.reader-tooltip-target:focus-visible::after/);
-  assert.match(stylesheetSource, /@media \(max-width: 520px\)[\s\S]*\.reader-tooltip-target--compact:focus-visible::after/);
+  assert.match(stylesheetSource, /\.reader-tooltip-target\[data-tooltip-open="true"\]::after/);
+  assert.match(stylesheetSource, /@media \(hover: none\), \(pointer: coarse\)/);
+  assert.match(stylesheetSource, /\.reader-page\s*\{[\s\S]*overflow: visible/);
+  assert.doesNotMatch(readerSource, /aria-label="Play sentence audio"[\s\S]{0,260}title=/);
 });
 
 test("Next reader adapts long titles to a balanced two-line header", () => {

@@ -112,9 +112,36 @@ export type {
   ThemeAiSuggestResponse,
 } from "../../../packages/shared/src";
 
-export const apiBaseUrl = process.env.NEXT_PUBLIC_TEXTPLEX_API_URL ?? "/api";
+export const apiBaseUrl = process.env.NEXT_PUBLIC_TEXTPLEX_API_URL?.trim() || "/api";
 export const isDemoMode = process.env.NEXT_PUBLIC_TEXTPLEX_DEMO_MODE === "true";
 export const legacySurfaceUrl = process.env.NEXT_PUBLIC_TEXTPLEX_LEGACY_URL ?? "http://127.0.0.1:8200/legacy/index.html";
+
+function effectiveApiBaseUrl(): string {
+  if (typeof window === "undefined" || !/^https?:\/\//i.test(apiBaseUrl)) {
+    return apiBaseUrl;
+  }
+
+  try {
+    const configuredUrl = new URL(apiBaseUrl);
+    const configuredHost = configuredUrl.hostname.toLowerCase();
+    const browserHost = window.location.hostname.toLowerCase();
+    const isLoopbackApi = configuredHost === "localhost" || configuredHost === "127.0.0.1" || configuredHost === "[::1]";
+    const isLoopbackBrowser = browserHost === "localhost" || browserHost === "127.0.0.1" || browserHost === "::1";
+    if (isLoopbackApi && !isLoopbackBrowser) {
+      return "/api";
+    }
+  } catch {
+    return "/api";
+  }
+
+  return apiBaseUrl;
+}
+
+export type FeedbackReason =
+  | "missing_pronunciation"
+  | "incorrect_pronunciation"
+  | "incorrect_meaning"
+  | "incorrect_segmentation";
 
 export type FeedbackContext = {
   route: string;
@@ -131,6 +158,8 @@ export type FeedbackContext = {
   feedback_target?: "sentence" | "word" | null;
   feedback_target_text?: string | null;
   feedback_target_order?: number | null;
+  feedback_reason?: FeedbackReason | null;
+  automated_check?: "tester_role_verification" | null;
 };
 
 export type FeedbackScreenshot = {
@@ -207,6 +236,7 @@ export type FeedbackRecord = {
     last_synced_at?: string | null;
   } | null;
   user_id?: string | null;
+  account_role?: "member" | "tester" | "admin" | null;
   screenshots?: FeedbackScreenshot[];
   screenshot?: FeedbackScreenshot | null;
   screenshot_analysis?: FeedbackScreenshotAnalysis | null;
@@ -533,11 +563,11 @@ export function resolveResourceUrl(pathname: string): string {
     return pathname;
   }
 
-  return `${apiBaseUrl}${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
+  return `${effectiveApiBaseUrl()}${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
 }
 
 function joinPath(pathname: string): string {
-  return `${apiBaseUrl}${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
+  return `${effectiveApiBaseUrl()}${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
 }
 
 async function responseErrorMessage(response: Response, pathname: string): Promise<string> {
@@ -553,6 +583,17 @@ async function responseErrorMessage(response: Response, pathname: string): Promi
   return `Request failed (${response.status}) for ${pathname}`;
 }
 
+export class ApiRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
+
+async function apiRequestError(response: Response, pathname: string): Promise<ApiRequestError> {
+  return new ApiRequestError(await responseErrorMessage(response, pathname), response.status);
+}
+
 export async function fetchJson<T>(pathname: string): Promise<T> {
   if (isDemoMode) {
     const response = getDemoFetchResponse(pathname);
@@ -566,7 +607,7 @@ export async function fetchJson<T>(pathname: string): Promise<T> {
     cache: "no-store",
   });
   if (!response.ok) {
-    throw new Error(`Request failed (${response.status}) for ${pathname}`);
+    throw await apiRequestError(response, pathname);
   }
   return (await response.json()) as T;
 }
@@ -585,7 +626,7 @@ export async function postJson<T>(pathname: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   }, true);
   if (!response.ok) {
-    throw new Error(await responseErrorMessage(response, pathname));
+    throw await apiRequestError(response, pathname);
   }
   return (await response.json()) as T;
 }
@@ -615,7 +656,7 @@ export async function putJson<T>(pathname: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   }, true);
   if (!response.ok) {
-    throw new Error(`Request failed (${response.status}) for ${pathname}`);
+    throw await apiRequestError(response, pathname);
   }
   return (await response.json()) as T;
 }
@@ -630,7 +671,7 @@ export async function patchJson<T>(pathname: string, body: unknown): Promise<T> 
     body: JSON.stringify(body),
   }, true);
   if (!response.ok) {
-    throw new Error(`Request failed (${response.status}) for ${pathname}`);
+    throw await apiRequestError(response, pathname);
   }
   return (await response.json()) as T;
 }
@@ -652,7 +693,7 @@ export async function postFormData<T>(pathname: string, body: FormData): Promise
     body,
   });
   if (!response.ok) {
-    throw new Error(`Request failed (${response.status}) for ${pathname}`);
+    throw await apiRequestError(response, pathname);
   }
   return (await response.json()) as T;
 }

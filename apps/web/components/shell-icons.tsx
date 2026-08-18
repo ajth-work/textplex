@@ -186,3 +186,13 @@ export function MoreIcon(props: ShellIconProps) {
     </ShellIcon>
   );
 }
+
+export function MenuIcon(props: ShellIconProps) {
+  return (
+    <ShellIcon {...props}>
+      <path d="M4 7h16" />
+      <path d="M4 12h16" />
+      <path d="M4 17h16" />
+    </ShellIcon>
+  );
+}

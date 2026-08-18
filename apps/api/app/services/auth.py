@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -9,13 +10,19 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from app.schemas.auth import (
+    AccountRole,
     AuthMeResponse,
     HostedProfileRecord,
     HostedProfileSurfaceResponse,
     HostedProfileUpdateRequest,
     HostedSettingEntry,
+    SignupAccountRole,
 )
 from fastapi import Header, HTTPException
+
+logger = logging.getLogger(__name__)
+
+SUPABASE_RETRY_AFTER_SECONDS = "5"
 
 ACCOUNT_ROLES = {"member", "tester", "admin"}
 ACCOUNT_ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
@@ -57,6 +64,42 @@ def _supabase_publishable_key() -> str:
 
 def supabase_is_configured() -> bool:
     return bool(_supabase_url() and _supabase_publishable_key())
+
+
+def supabase_admin_is_configured() -> bool:
+    return bool(_supabase_url() and os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip())
+
+
+def _supabase_unavailable(operation: str, exc: BaseException, *, upstream_status: int | None = None) -> HTTPException:
+    """Return a retryable provider error without logging account or token data."""
+    logger.warning(
+        json.dumps(
+            {
+                "event": "supabase_request_unavailable",
+                "operation": operation,
+                "upstream_status": upstream_status,
+                "error_type": type(exc).__name__,
+            }
+        )
+    )
+    return HTTPException(
+        status_code=503,
+        detail="Hosted account storage is temporarily unavailable. Please try again shortly.",
+        headers={"Retry-After": SUPABASE_RETRY_AFTER_SECONDS},
+    )
+
+
+def _supabase_invalid_response(operation: str, exc: BaseException | None = None) -> HTTPException:
+    logger.warning(
+        json.dumps(
+            {
+                "event": "supabase_invalid_response",
+                "operation": operation,
+                "error_type": type(exc).__name__ if exc else None,
+            }
+        )
+    )
+    return HTTPException(status_code=502, detail="Supabase returned an invalid hosted account response.")
 
 
 def _bearer_token(authorization: str | None) -> str:
@@ -104,12 +147,12 @@ def _load_auth_user(token: str) -> dict[str, Any]:
                 detail="The access token is invalid or expired.",
                 headers={"WWW-Authenticate": "Bearer"},
             ) from exc
-        raise HTTPException(status_code=502, detail="Supabase authentication failed.") from exc
+        raise _supabase_unavailable("auth_user", exc, upstream_status=exc.code) from exc
     except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=502, detail="Supabase authentication is unavailable.") from exc
+        raise _supabase_unavailable("auth_user", exc) from exc
 
     if not isinstance(payload, dict) or not isinstance(payload.get("id"), str):
-        raise HTTPException(status_code=502, detail="Supabase returned an invalid user record.")
+        raise _supabase_invalid_response("auth_user")
     return payload
 
 
@@ -165,6 +208,66 @@ def get_current_user(authorization: str | None = Header(default=None)) -> AuthMe
     return get_authenticated_user_context(authorization).user
 
 
+def set_hosted_account_role(context: AuthenticatedUserContext, account_role: SignupAccountRole) -> AuthMeResponse:
+    """Persist a self-selected non-privileged role through the server-only Auth Admin API."""
+    if context.user.account_role == "admin":
+        raise HTTPException(status_code=403, detail="Administrator roles cannot be changed through onboarding.")
+
+    user_id = quote(context.user.id, safe="")
+    current_payload = _supabase_admin_request(f"auth/v1/admin/users/{user_id}")
+    current_metadata = current_payload.get("app_metadata") if isinstance(current_payload, dict) else None
+    app_metadata = dict(current_metadata) if isinstance(current_metadata, dict) else {}
+    app_metadata["textplex_role"] = account_role
+    _supabase_admin_request(
+        f"auth/v1/admin/users/{user_id}",
+        method="PUT",
+        payload={"app_metadata": app_metadata},
+    )
+    normalized_role: AccountRole = account_role
+    return context.user.model_copy(
+        update={
+            "account_role": normalized_role,
+            "permissions": list(ACCOUNT_ROLE_PERMISSIONS[normalized_role]),
+        }
+    )
+
+
+def _supabase_admin_request(
+    path: str,
+    *,
+    method: str = "GET",
+    payload: Any = None,
+) -> Any:
+    project_url = _supabase_url()
+    service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    if not project_url or not service_role_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Supabase server-side account administration is not configured on the API.",
+        )
+
+    headers = {
+        "Accept": "application/json",
+        "apikey": service_role_key,
+        "Authorization": f"Bearer {service_role_key}",
+        "Content-Type": "application/json",
+    }
+    request = Request(
+        f"{project_url}/{path.lstrip('/')}",
+        data=json.dumps(payload).encode("utf-8") if payload is not None else None,
+        headers=headers,
+        method=method,
+    )
+    try:
+        with urlopen(request, timeout=5) as response:
+            raw_payload = response.read().decode("utf-8")
+            return json.loads(raw_payload) if raw_payload else None
+    except HTTPError as exc:
+        raise _supabase_unavailable(f"supabase_admin:{method.lower()}", exc, upstream_status=exc.code) from exc
+    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        raise _supabase_unavailable(f"supabase_admin:{method.lower()}", exc) from exc
+
+
 def _supabase_rest_request(
     path: str,
     token: str,
@@ -207,9 +310,9 @@ def _supabase_rest_request(
                 detail="The access token is invalid or not authorized for hosted profile storage.",
                 headers={"WWW-Authenticate": "Bearer"},
             ) from exc
-        raise HTTPException(status_code=502, detail="Supabase hosted profile storage failed.") from exc
+        raise _supabase_unavailable(f"hosted_profile:{method.lower()}", exc, upstream_status=exc.code) from exc
     except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=502, detail="Supabase hosted profile storage is unavailable.") from exc
+        raise _supabase_unavailable(f"hosted_profile:{method.lower()}", exc) from exc
 
 
 def _supabase_rest_get(path: str, token: str) -> Any:
@@ -240,13 +343,13 @@ def get_hosted_profile(context: AuthenticatedUserContext) -> HostedProfileSurfac
 
     settings_payload = get_hosted_settings(context)
     if not isinstance(settings_payload, list):
-        raise HTTPException(status_code=502, detail="Supabase returned invalid hosted settings.")
+        raise _supabase_invalid_response("hosted_settings")
 
     try:
         profile = HostedProfileRecord.model_validate(profile_payload[0])
         settings = [HostedSettingEntry.model_validate(entry) for entry in settings_payload]
     except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=502, detail="Supabase returned an invalid hosted profile.") from exc
+        raise _supabase_invalid_response("hosted_profile", exc) from exc
 
     return HostedProfileSurfaceResponse(user=context.user, profile=profile, settings=settings)
 
@@ -258,7 +361,7 @@ def get_hosted_settings(context: AuthenticatedUserContext) -> list[dict[str, Any
         context.access_token,
     )
     if not isinstance(payload, list):
-        raise HTTPException(status_code=502, detail="Supabase returned invalid hosted settings.")
+        raise _supabase_invalid_response("hosted_settings")
     return payload
 
 

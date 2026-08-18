@@ -263,6 +263,7 @@ def import_book_from_path(
     source_path: str | Path,
     *,
     language_code: str,
+    source_type: str = "static",
     ocr_provider: str | None = None,
     title: str | None = None,
     author: str | None = None,
@@ -334,6 +335,7 @@ def import_book_from_path(
         title=_safe_text(title, _safe_text(source_title, resolved_source_path.stem)),
         author=_optional_text(author) or _optional_text(source_author),
         language_code=language_code,
+        source_type="page-by-page" if source_type == "page-by-page" else "static",
         ocr_provider=normalize_ocr_provider(ocr_provider),
         source_filename=_safe_text(source_filename, resolved_source_path.name),
         source_path=str(resolved_source_path),
@@ -381,11 +383,35 @@ def import_book_from_path(
 
 
 def load_registry(registry_path: Path) -> dict[str, BookRecord]:
-    if not registry_path.exists():
-        return {}
+    raw: dict[str, object] = {}
+    if registry_path.exists():
+        raw = json.loads(registry_path.read_text(encoding="utf-8"))
 
-    raw = json.loads(registry_path.read_text(encoding="utf-8"))
-    return {book_id: BookRecord.model_validate(payload) for book_id, payload in raw.items()}
+    registry: dict[str, BookRecord] = {}
+    recovered = False
+    for book_id, payload in raw.items():
+        if isinstance(payload, dict) and "source_type" not in payload and payload.get("source_filename") == "photo-import.pdf":
+            payload = {**payload, "source_type": "page-by-page"}
+            recovered = True
+        registry[book_id] = BookRecord.model_validate(payload)
+    for book_path in registry_path.parent.glob("book-*/book.json"):
+        try:
+            payload = json.loads(book_path.read_text(encoding="utf-8"))
+            if isinstance(payload, dict) and "source_type" not in payload and payload.get("source_filename") == "photo-import.pdf":
+                payload = {**payload, "source_type": "page-by-page"}
+                book_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+                recovered = True
+            record = BookRecord.model_validate(payload)
+        except (OSError, json.JSONDecodeError, ValueError):
+            continue
+        if record.id not in registry:
+            registry[record.id] = record
+            recovered = True
+
+    if recovered:
+        save_registry(registry_path, registry)
+
+    return registry
 
 
 def save_registry(registry_path: Path, registry: dict[str, BookRecord]) -> None:

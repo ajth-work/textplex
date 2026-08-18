@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import logging
+from io import BytesIO
 from pathlib import Path
+from urllib.error import HTTPError
 
 from app.main import app
 from app.services import auth as auth_service
@@ -90,6 +93,36 @@ def test_auth_me_rejects_removed_qa_role() -> None:
     assert response.permissions == ["account.read"]
 
 
+def test_onboarding_can_set_only_a_non_privileged_account_role(monkeypatch) -> None:
+    calls: list[tuple[str, str, object]] = []
+    context = auth_service.AuthenticatedUserContext(
+        user=auth_service.AuthMeResponse(
+            id="user-123",
+            email="reader@example.com",
+            account_role="member",
+            permissions=["account.read"],
+        ),
+        access_token="valid-token",
+    )
+
+    def fake_admin_request(path: str, *, method: str = "GET", payload=None):
+        calls.append((path, method, payload))
+        if method == "GET":
+            return {"app_metadata": {"existing_flag": True}}
+        return {"app_metadata": payload["app_metadata"]}
+
+    monkeypatch.setattr(auth_service, "_supabase_admin_request", fake_admin_request)
+
+    response = auth_service.set_hosted_account_role(context, "tester")
+
+    assert response.account_role == "tester"
+    assert "themes.preview_all" in response.permissions
+    assert calls == [
+        ("auth/v1/admin/users/user-123", "GET", None),
+        ("auth/v1/admin/users/user-123", "PUT", {"app_metadata": {"existing_flag": True, "textplex_role": "tester"}}),
+    ]
+
+
 def test_hosted_profile_reads_user_owned_supabase_rows(monkeypatch) -> None:
     monkeypatch.setenv("SUPABASE_URL", "https://project.example.supabase.co")
     monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "publishable-key")
@@ -141,3 +174,35 @@ def test_hosted_profile_reads_user_owned_supabase_rows(monkeypatch) -> None:
     assert response.json()["settings"] == [
         {"key": "theme", "value": "neutral", "updated_at": "2026-07-22T00:00:00Z"}
     ]
+
+
+def test_hosted_profile_reports_retryable_storage_failure_with_diagnostics(monkeypatch, caplog) -> None:
+    monkeypatch.setenv("SUPABASE_URL", "https://project.example.supabase.co")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "publishable-key")
+
+    class FakeResponse:
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps({"id": "user-123", "email": "reader@example.com"}).encode("utf-8")
+
+    def fake_urlopen(request: object, timeout: int) -> FakeResponse:
+        if request.full_url.endswith("/auth/v1/user"):
+            return FakeResponse()
+        raise HTTPError(request.full_url, 502, "Bad Gateway", {}, BytesIO(b"upstream unavailable"))
+
+    monkeypatch.setattr(auth_service, "urlopen", fake_urlopen)
+
+    with caplog.at_level(logging.WARNING, logger=auth_service.logger.name):
+        response = TestClient(app).get("/profile/hosted", headers={"Authorization": "Bearer valid-token"})
+
+    assert response.status_code == 503
+    assert response.headers["retry-after"] == "5"
+    assert response.json()["detail"] == "Hosted account storage is temporarily unavailable. Please try again shortly."
+    assert '"event": "supabase_request_unavailable"' in caplog.text
+    assert '"operation": "hosted_profile:get"' in caplog.text
+    assert '"upstream_status": 502' in caplog.text

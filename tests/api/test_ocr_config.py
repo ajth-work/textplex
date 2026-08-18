@@ -1,12 +1,43 @@
+import base64
+from io import BytesIO
 from pathlib import Path
+
+from PIL import Image
+import pytest
 
 from app.services.ocr import (
     OcrPageResult,
+    _extract_response_text,
+    _build_page_image_data_url,
+    get_openai_max_output_tokens,
     get_openai_ocr_model,
     get_text_source_signature,
     resolve_page_text,
     should_use_openai_ocr,
 )
+
+
+def test_openai_ocr_payload_resizes_camera_images(tmp_path: Path) -> None:
+    image_path = tmp_path / "camera-page.png"
+    Image.new("RGB", (3200, 5000), "white").save(image_path)
+
+    data_url = _build_page_image_data_url(image_path)
+    encoded = data_url.split(",", 1)[1]
+
+    with Image.open(BytesIO(base64.b64decode(encoded))) as compressed:
+        assert data_url.startswith("data:image/jpeg;base64,")
+        assert max(compressed.size) <= 2400
+
+
+def test_empty_openai_response_includes_provider_diagnostics() -> None:
+    with pytest.raises(RuntimeError, match="status='incomplete'"):
+        _extract_response_text(
+            {
+                "status": "incomplete",
+                "incomplete_details": {"reason": "max_output_tokens"},
+                "output": [{"type": "reasoning", "content": []}],
+            }
+        )
 
 
 def test_openai_ocr_requires_provider_and_key(monkeypatch) -> None:
@@ -32,8 +63,14 @@ def test_openai_ocr_requires_provider_and_key(monkeypatch) -> None:
     assert should_use_openai_ocr("openai") is True
     assert get_text_source_signature("openai") == ("openai", "openai:gpt-5.6-luna:ocr-v2")
 
-    monkeypatch.setenv("OPENAI_OCR_MODEL", "gpt-5.4-mini")
-    assert get_openai_ocr_model() == "gpt-5.4-mini"
+    monkeypatch.setenv("OPENAI_OCR_MODEL", "gpt-5.6-luna")
+    assert get_openai_ocr_model() == "gpt-5.6-luna"
+
+
+def test_openai_ocr_default_output_budget_leaves_room_for_long_page_transcriptions(monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_OCR_MAX_OUTPUT_TOKENS", raising=False)
+
+    assert get_openai_max_output_tokens() == 8192
 
 
 def test_resolve_page_text_uses_openai_route_without_network(monkeypatch) -> None:
@@ -61,7 +98,7 @@ def test_resolve_page_text_uses_openai_route_without_network(monkeypatch) -> Non
             page_ends_with_sentence_terminator=True,
             token_hints=[],
             text_source="openai",
-            text_source_signature="openai:gpt-5.4-mini:ocr-v2",
+            text_source_signature="openai:gpt-5.6-luna:ocr-v2",
         )
 
     monkeypatch.setattr("app.services.ocr.transcribe_page_image", fake_transcribe_page_image)
@@ -77,7 +114,7 @@ def test_resolve_page_text_uses_openai_route_without_network(monkeypatch) -> Non
 
     assert text == "示例句子。"
     assert source == "openai"
-    assert signature == "openai:gpt-5.4-mini:ocr-v2"
+    assert signature == "openai:gpt-5.6-luna:ocr-v2"
     assert called == {
         "page_image_path": Path("page-0001.png"),
         "book_title": "Sample Book",
@@ -107,3 +144,23 @@ def test_resolve_page_text_skips_openai_when_local_mode_is_selected(monkeypatch)
     assert text == "fallback text"
     assert source == "pypdf"
     assert signature == "pypdf-text-v1"
+
+
+def test_resolve_page_text_rejects_empty_image_only_fallback(monkeypatch) -> None:
+    monkeypatch.setenv("AI_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    def fail_transcribe_page_image(**_: object) -> OcrPageResult:
+        raise RuntimeError("OCR unavailable")
+
+    monkeypatch.setattr("app.services.ocr.transcribe_page_image", fail_transcribe_page_image)
+
+    with pytest.raises(RuntimeError, match="no embedded text fallback"):
+        resolve_page_text(
+            fallback_text="",
+            page_image_path=Path("page-0001.png"),
+            book_title="Sample Book",
+            language_code="zh",
+            page_number=1,
+            ocr_provider="openai",
+        )

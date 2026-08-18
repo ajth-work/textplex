@@ -16,7 +16,7 @@ import { ImportProgressProvider } from "../components/import-progress-provider";
 import { APP_THEME_COOKIE_KEY, appThemeBrowserColors, isDarkAppTheme, resolveAppTheme } from "../lib/theme";
 import { getThemeWallpaperThumbnailPath } from "../lib/theme-catalog";
 
-const appRebootedAt = new Date().toISOString();
+const appBuildAt = process.env.NEXT_PUBLIC_BUILD_TIMESTAMP?.trim() || new Date().toISOString();
 
 export const metadata: Metadata = {
   title: "TextPlex",
@@ -150,9 +150,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                     <AppShell />
                     <div className="app-shell-content">
                       <Suspense fallback={null}>{children}</Suspense>
-                      <FeedbackWidget />
+                      <BuildFooter buildAt={appBuildAt} version={appVersion}>
+                        <FeedbackWidget embedded />
+                      </BuildFooter>
                       <AccountFooter />
-                      <BuildFooter rebootedAt={appRebootedAt} version={appVersion} />
                     </div>
                   </AppFrame>
                 </ImportProgressProvider>

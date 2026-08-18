@@ -4,18 +4,22 @@ import base64
 import json
 import logging
 import os
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
+from app.services.openai_config import get_openai_api_key, get_openai_api_key_env
 
 logger = logging.getLogger(__name__)
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 DEFAULT_OCR_MODEL = "gpt-5.6-luna"
-DEFAULT_MAX_OUTPUT_TOKENS = 2048
+DEFAULT_MAX_OUTPUT_TOKENS = 8192
+DEFAULT_MAX_IMAGE_DIMENSION = 2400
 DEFAULT_OCR_PROVIDER = "local"
 OCR_PROMPT_VERSION = "ocr-v2"
 PYPDF_TEXT_SIGNATURE = "pypdf-text-v1"
@@ -56,7 +60,7 @@ def normalize_ocr_provider(provider: str | None = None) -> str:
 
 def should_use_openai_ocr(provider: str | None = None) -> bool:
     resolved_provider = normalize_ocr_provider(provider)
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    api_key = get_openai_api_key("ocr")
     return resolved_provider == "openai" and bool(api_key)
 
 
@@ -71,6 +75,14 @@ def get_openai_max_output_tokens() -> int:
         return max(256, int(raw_value))
     except ValueError:
         return DEFAULT_MAX_OUTPUT_TOKENS
+
+
+def get_openai_max_image_dimension() -> int:
+    raw_value = os.getenv("OPENAI_OCR_MAX_IMAGE_DIMENSION", str(DEFAULT_MAX_IMAGE_DIMENSION)).strip()
+    try:
+        return max(768, int(raw_value))
+    except ValueError:
+        return DEFAULT_MAX_IMAGE_DIMENSION
 
 
 def get_text_source_signature(provider: str | None = None) -> tuple[str, str]:
@@ -97,9 +109,17 @@ def build_ocr_prompt(*, book_title: str | None, language_code: str, page_number:
 
 
 def _build_page_image_data_url(page_image_path: Path) -> str:
-    image_bytes = page_image_path.read_bytes()
-    encoded = base64.b64encode(image_bytes).decode("ascii")
-    return f"data:image/png;base64,{encoded}"
+    with Image.open(page_image_path) as source_image:
+        image = ImageOps.exif_transpose(source_image).convert("RGB")
+        image.thumbnail(
+            (get_openai_max_image_dimension(), get_openai_max_image_dimension()),
+            Image.Resampling.LANCZOS,
+        )
+        image_buffer = BytesIO()
+        image.save(image_buffer, format="JPEG", quality=85, optimize=True)
+
+    encoded = base64.b64encode(image_buffer.getvalue()).decode("ascii")
+    return f"data:image/jpeg;base64,{encoded}"
 
 
 def _extract_response_text(payload: dict[str, object]) -> str:
@@ -125,7 +145,24 @@ def _extract_response_text(payload: dict[str, object]) -> str:
     if text:
         return text
 
-    raise RuntimeError("OpenAI OCR response did not include transcribed text.")
+    output_types: list[str] = []
+    for item in payload.get("output", []):
+        if not isinstance(item, dict):
+            continue
+        item_type = item.get("type")
+        if isinstance(item_type, str):
+            output_types.append(item_type)
+        for content in item.get("content", []):
+            if isinstance(content, dict) and isinstance(content.get("type"), str):
+                output_types.append(str(content["type"]))
+    error_payload = payload.get("error")
+    error_type = error_payload.get("type") if isinstance(error_payload, dict) else None
+    incomplete_details = payload.get("incomplete_details")
+    raise RuntimeError(
+        "OpenAI OCR response did not include transcribed text "
+        f"(status={payload.get('status')!r}, output_types={sorted(set(output_types))!r}, "
+        f"error_type={error_type!r}, incomplete_details={incomplete_details!r})."
+    )
 
 
 def _parse_json_object(value: str) -> dict[str, Any] | None:
@@ -308,9 +345,9 @@ def transcribe_page_image(
     language_code: str,
     page_number: int,
 ) -> OcrPageResult:
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    api_key = get_openai_api_key("ocr")
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured.")
+        raise RuntimeError(f"{get_openai_api_key_env('ocr')} is not configured.")
 
     model = get_openai_ocr_model()
     payload = {
@@ -354,30 +391,39 @@ def transcribe_page_image(
         ],
     }
 
-    request = Request(
-        OPENAI_RESPONSES_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
+    request_data = json.dumps(payload).encode("utf-8")
+    for attempt in range(2):
+        request = Request(
+            OPENAI_RESPONSES_URL,
+            data=request_data,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
 
-    try:
-        with urlopen(request, timeout=120) as response:
-            response_payload = json.loads(response.read().decode("utf-8"))
-    except HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"OpenAI OCR request failed with HTTP {exc.code}: {detail}") from exc
-    except URLError as exc:
-        raise RuntimeError(f"OpenAI OCR request failed: {exc.reason}") from exc
+        try:
+            with urlopen(request, timeout=120) as response:
+                response_payload = json.loads(response.read().decode("utf-8"))
+            if not isinstance(response_payload, dict):
+                raise TypeError("OpenAI OCR response was not a JSON object.")
+            response_text = _extract_response_text(response_payload)
+            return _extract_structured_ocr_result(response_text, fallback_text=response_text)
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            error = RuntimeError(f"OpenAI OCR request failed with HTTP {exc.code}: {detail}")
+        except URLError as exc:
+            error = RuntimeError(f"OpenAI OCR request failed: {exc.reason}")
+        except (RuntimeError, TypeError, json.JSONDecodeError) as exc:
+            error = exc
 
-    if not isinstance(response_payload, dict):
-        raise TypeError("OpenAI OCR response was not a JSON object.")
+        if attempt == 0:
+            logger.warning("OpenAI OCR returned no usable result for page %s; retrying once.", page_number)
+            continue
+        raise error
 
-    response_text = _extract_response_text(response_payload)
-    return _extract_structured_ocr_result(response_text, fallback_text=response_text)
+    raise RuntimeError(f"OpenAI OCR failed for page {page_number}.")
 
 
 def resolve_page_ocr(
@@ -398,14 +444,28 @@ def resolve_page_ocr(
                 language_code=language_code,
                 page_number=page_number,
             )
-            return result.model_copy(update={"transcription": result.transcription.strip() or fallback_text})
+            transcription = result.transcription.strip() or fallback_text
+            if not transcription and not result.sentence_texts:
+                raise RuntimeError(f"No OCR text was produced for page {page_number}.")
+            return result.model_copy(update={"transcription": transcription})
         except Exception:
             logger.exception("OpenAI OCR failed for page %s; falling back to embedded PDF text.", page_number)
+            if not fallback_text.strip():
+                raise RuntimeError(
+                    f"OCR failed for page {page_number}, and the page has no embedded text fallback."
+                ) from None
     elif resolved_provider == "openai":
         logger.warning(
-            "OpenAI OCR was requested for page %s but OPENAI_API_KEY is missing; falling back to embedded PDF text.",
+            "OpenAI OCR was requested for page %s but its configured API key is missing; falling back to embedded PDF text.",
             page_number,
         )
+        if not fallback_text.strip():
+            raise RuntimeError(
+                f"OCR is unavailable for page {page_number}, and the page has no embedded text fallback."
+            )
+
+    if not fallback_text.strip():
+        raise RuntimeError(f"No OCR text was produced for page {page_number}.")
 
     return OcrPageResult(
         transcription=fallback_text,

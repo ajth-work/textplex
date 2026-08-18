@@ -12,6 +12,23 @@ def test_normalize_text_collapses_whitespace() -> None:
     assert normalize_text("  Hello\r\nworld\t ") == "Hello world"
 
 
+def test_normalize_text_decodes_escaped_line_breaks() -> None:
+    assert normalize_text(r"李光头\n\n没有见过他的亲生父亲。") == "李光头 没有见过他的亲生父亲。"
+
+
+def test_build_page_extraction_result_does_not_tokenize_escaped_line_breaks() -> None:
+    result = build_page_extraction_result(
+        book_id="book-escaped-line-breaks",
+        page_number=1,
+        language_code="zh",
+        raw_text=r"李光头\n\n没有见过他的亲生父亲。",
+    )
+
+    sentence = result.sentences[0]
+    assert "\\n" not in sentence.text
+    assert all(token.surface_form != "n" for token in sentence.tokens)
+
+
 def test_split_sentences_handles_chinese_punctuation() -> None:
     sentences = split_sentences("\u7b2c\u4e00\u53e5\u3002\u7b2c\u4e8c\u53e5\uff01\u7b2c\u4e09\u53e5\uff1f")
 

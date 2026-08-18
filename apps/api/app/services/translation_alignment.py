@@ -15,11 +15,12 @@ from app.schemas.books import (
     TranslationAlignmentToken,
 )
 from processor.contracts import SentenceResult
+from app.services.openai_config import get_openai_api_key, get_openai_api_key_env
 
 logger = logging.getLogger(__name__)
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
-DEFAULT_ALIGNMENT_MODEL = "gpt-5.4-mini"
+DEFAULT_ALIGNMENT_MODEL = "gpt-5.6-luna"
 DEFAULT_MAX_OUTPUT_TOKENS = 2048
 TRANSLATION_ALIGNMENT_PROMPT_VERSION = "translation-alignment-v1"
 TOKEN_KIND = Literal["word", "punctuation", "space"]
@@ -27,7 +28,7 @@ TOKEN_SPLIT_PATTERN = re.compile(r"\s+|[^\s]+", re.UNICODE)
 
 
 def _openai_api_key() -> str:
-    return os.getenv("OPENAI_API_KEY", "").strip()
+    return get_openai_api_key("translation_alignment")
 
 
 def _openai_model() -> str:
@@ -220,6 +221,20 @@ def _target_tokens_from_translation(translation: str) -> list[TranslationAlignme
     return tokens
 
 
+def translation_alignment_matches_text(
+    alignment: SentenceTranslationAlignment | None,
+    translation: str | None,
+) -> bool:
+    if alignment is None or not isinstance(translation, str) or not translation.strip():
+        return False
+
+    def normalize(value: str) -> str:
+        return re.sub(r"\s+", "", unicodedata.normalize("NFKC", value)).casefold()
+
+    aligned_text = "".join(token.text for token in alignment.target_tokens)
+    return bool(aligned_text) and normalize(aligned_text) == normalize(translation)
+
+
 def _heuristic_alignment_segments(
     *,
     source_tokens: list[TranslationAlignmentToken],
@@ -312,7 +327,7 @@ def _build_alignment_prompt(
 def _call_openai(prompt: str) -> dict[str, Any]:
     api_key = _openai_api_key()
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured.")
+        raise RuntimeError(f"{get_openai_api_key_env('translation_alignment')} is not configured.")
 
     payload = {
         "model": _openai_model(),

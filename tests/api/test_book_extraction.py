@@ -1,4 +1,5 @@
 import json
+import shutil
 from pathlib import Path
 
 import fitz
@@ -29,6 +30,85 @@ def build_safe_sample_pdf(tmp_path: Path, *, page_count: int) -> Path:
     document.save(pdf_path)
     document.close()
     return pdf_path
+
+
+def test_page_by_page_extraction_does_not_read_appended_pages_from_source_pdf(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_pdf = build_safe_sample_pdf(tmp_path, page_count=1)
+    data_root = tmp_path / "books"
+    book = import_book_from_path(
+        source_pdf,
+        language_code="en",
+        source_type="page-by-page",
+        data_root=data_root,
+    )
+    shutil.copy2(Path(book.pages_path) / "page-0001.png", Path(book.pages_path) / "page-0002.png")
+    book.total_pages = 2
+    book.page_image_count = 2
+
+    processed_pages: list[int] = []
+
+    def fake_ocr(**kwargs: object) -> OcrPageResult:
+        processed_pages.append(int(kwargs["page_number"]))
+        return OcrPageResult(transcription=f"Page {kwargs['page_number']}.", text_source="openai", text_source_signature="openai:test")
+
+    monkeypatch.setattr(book_extraction_service, "resolve_page_ocr", fake_ocr)
+
+    extraction_path, extracted_page_count = book_extraction_service.extract_book_text(
+        book=book,
+        page_start=1,
+        page_count=book.total_pages,
+        force=True,
+        data_root=data_root,
+    )
+
+    assert processed_pages == [1, 2]
+    assert extracted_page_count == 2
+    assert Path(extraction_path).exists()
+
+
+def test_extraction_persists_page_artifact_before_progress_callback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_pdf = build_safe_sample_pdf(tmp_path, page_count=1)
+    data_root = tmp_path / "books"
+    book = import_book_from_path(
+        source_pdf,
+        language_code="en",
+        source_type="page-by-page",
+        data_root=data_root,
+    )
+
+    seen_artifacts: list[bool] = []
+
+    def fake_ocr(**kwargs: object) -> OcrPageResult:
+        return OcrPageResult(transcription=f"Page {kwargs['page_number']}.", text_source="openai", text_source_signature="openai:test")
+
+    def progress_callback(current_page: int, _pages_processed: int, _total_pages: int) -> None:
+        seen_artifacts.append(
+            book_extraction_service.load_page_artifact(
+                book_id=book.id,
+                page_number=current_page,
+                data_root=data_root,
+                owner_id=book.owner_id,
+            )
+            is not None
+        )
+
+    monkeypatch.setattr(book_extraction_service, "resolve_page_ocr", fake_ocr)
+    book_extraction_service.extract_book_text(
+        book=book,
+        page_start=1,
+        page_count=1,
+        force=True,
+        data_root=data_root,
+        progress_callback=progress_callback,
+    )
+
+    assert seen_artifacts == [True]
 
 
 def test_extract_book_text_persists_structured_page_artifacts(imported_real_scan: tuple[Path, BookRecord]) -> None:
@@ -111,7 +191,7 @@ def test_extract_book_text_records_openai_ocr_metadata(monkeypatch: pytest.Monke
 
     monkeypatch.setenv("AI_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("OPENAI_OCR_MODEL", "gpt-5.4-mini")
+    monkeypatch.setenv("OPENAI_OCR_MODEL", "gpt-5.6-luna")
     monkeypatch.setattr(
         book_extraction_service,
         "resolve_page_ocr",
@@ -123,7 +203,7 @@ def test_extract_book_text_records_openai_ocr_metadata(monkeypatch: pytest.Monke
             page_ends_with_sentence_terminator=True,
             token_hints=[],
             text_source="openai",
-            text_source_signature="openai:gpt-5.4-mini:ocr-v2",
+            text_source_signature="openai:gpt-5.6-luna:ocr-v2",
         ),
     )
 
@@ -143,7 +223,7 @@ def test_extract_book_text_records_openai_ocr_metadata(monkeypatch: pytest.Monke
     assert page_artifact.exists()
     page_json = json.loads(page_artifact.read_text(encoding="utf-8"))
     assert page_json["text_source"] == "openai"
-    assert page_json["text_source_signature"] == "openai:gpt-5.4-mini:ocr-v2"
+    assert page_json["text_source_signature"] == "openai:gpt-5.6-luna:ocr-v2"
     assert page_json["page"]["raw_text"] == "这是第一句。"
     assert page_json["page"]["sentences"][0]["text"] == "这是第一句。"
     assert page_json["page"]["page_translation"] == "This is page one."
@@ -455,7 +535,7 @@ def test_parse_text_into_page_artifact_uses_google_romanization_when_local_readi
 ) -> None:
     monkeypatch.setattr(book_extraction_service, "lookup_lexicon_entry_map", lambda **_kwargs: {})
     monkeypatch.setattr(book_extraction_service, "lookup_lexicon_pinyin_map", lambda **_kwargs: {})
-    monkeypatch.setattr(book_extraction_service, "is_google_translate_configured", lambda: True)
+    monkeypatch.setattr(book_extraction_service, "is_google_translate_configured", lambda _feature="translation": True)
     monkeypatch.setattr(
         book_extraction_service,
         "romanize_texts",
@@ -490,7 +570,7 @@ def test_parse_text_into_page_artifact_uses_google_romanization_for_hebrew_witho
 
     monkeypatch.setattr(book_extraction_service, "lookup_lexicon_entry_map", raise_missing_pack)
     monkeypatch.setattr(book_extraction_service, "lookup_lexicon_pinyin_map", raise_missing_pack)
-    monkeypatch.setattr(book_extraction_service, "is_google_translate_configured", lambda: True)
+    monkeypatch.setattr(book_extraction_service, "is_google_translate_configured", lambda _feature="translation": True)
     monkeypatch.setattr(
         book_extraction_service,
         "romanize_texts",
@@ -519,7 +599,7 @@ def test_parse_text_into_page_artifact_uses_hebrew_transliteration_when_google_i
 
     monkeypatch.setattr(book_extraction_service, "lookup_lexicon_entry_map", raise_missing_pack)
     monkeypatch.setattr(book_extraction_service, "lookup_lexicon_pinyin_map", raise_missing_pack)
-    monkeypatch.setattr(book_extraction_service, "is_google_translate_configured", lambda: False)
+    monkeypatch.setattr(book_extraction_service, "is_google_translate_configured", lambda _feature="translation": False)
 
     artifact = book_extraction_service.parse_text_into_page_artifact(
         text="\u05e9\u05dc\u05d5\u05dd \u05d0\u05e0\u05d9.",
@@ -534,6 +614,16 @@ def test_parse_text_into_page_artifact_uses_hebrew_transliteration_when_google_i
     assert artifact.page.sentences[0].tokens[0].pronunciation == "shlom"
 
 
+def test_load_page_artifact_skips_empty_interrupted_artifact(tmp_path: Path) -> None:
+    data_root = tmp_path / "books"
+    book_id = "book-empty-artifact"
+    artifact_path = data_root / book_id / "extractions" / "pages" / "page-0001.json"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text("", encoding="utf-8")
+
+    assert book_extraction_service.load_page_artifact(book_id=book_id, page_number=1, data_root=data_root) is None
+
+
 def test_load_page_artifact_recovers_malformed_jsonish_transcription(tmp_path: Path) -> None:
     data_root = tmp_path / "books"
     book_id = "book-recovery-malformed"
@@ -544,7 +634,7 @@ def test_load_page_artifact_recovers_malformed_jsonish_transcription(tmp_path: P
             {
                 "source_page_sha256": "sha",
                 "text_source": "openai",
-                "text_source_signature": "openai:gpt-5.4-mini:ocr-v2",
+                "text_source_signature": "openai:gpt-5.6-luna:ocr-v2",
                 "processor_version": "0.1.0",
                 "pipeline_version": "textplex-1",
                 "page": {
@@ -598,7 +688,7 @@ def test_load_page_artifact_recovers_jsonish_transcription(tmp_path: Path) -> No
             {
                 "source_page_sha256": "sha",
                 "text_source": "openai",
-                "text_source_signature": "openai:gpt-5.4-mini:ocr-v2",
+                "text_source_signature": "openai:gpt-5.6-luna:ocr-v2",
                 "processor_version": "0.1.0",
                 "pipeline_version": "textplex-1",
                 "page": {
@@ -671,7 +761,7 @@ def test_extract_book_text_uses_book_level_ocr_provider(monkeypatch: pytest.Monk
             page_ends_with_sentence_terminator=True,
             token_hints=[],
             text_source="openai",
-            text_source_signature="openai:gpt-5.4-mini:ocr-v2",
+            text_source_signature="openai:gpt-5.6-luna:ocr-v2",
         )
 
     monkeypatch.setattr(book_extraction_service, "resolve_page_ocr", fake_resolve_page_ocr)
@@ -691,7 +781,7 @@ def test_extract_book_text_uses_book_level_ocr_provider(monkeypatch: pytest.Monk
     page_artifact = data_root / "books" / record.id / "extractions" / "pages" / "page-0001.json"
     page_json = json.loads(page_artifact.read_text(encoding="utf-8"))
     assert page_json["text_source"] == "openai"
-    assert page_json["text_source_signature"] == "openai:gpt-5.4-mini:ocr-v2"
+    assert page_json["text_source_signature"] == "openai:gpt-5.6-luna:ocr-v2"
 
 
 def test_force_extraction_refreshes_cached_artifacts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -709,7 +799,7 @@ def test_force_extraction_refreshes_cached_artifacts(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setenv("AI_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("OPENAI_OCR_MODEL", "gpt-5.4-mini")
+    monkeypatch.setenv("OPENAI_OCR_MODEL", "gpt-5.6-luna")
 
     app.state.data_root = data_root
     client = TestClient(app)
@@ -723,7 +813,7 @@ def test_force_extraction_refreshes_cached_artifacts(monkeypatch: pytest.MonkeyP
             page_ends_with_sentence_terminator=True,
             token_hints=[],
             text_source="openai",
-            text_source_signature="openai:gpt-5.4-mini:ocr-v2",
+            text_source_signature="openai:gpt-5.6-luna:ocr-v2",
         ),
     )
     first = client.post(
@@ -744,7 +834,7 @@ def test_force_extraction_refreshes_cached_artifacts(monkeypatch: pytest.MonkeyP
             page_ends_with_sentence_terminator=True,
             token_hints=[],
             text_source="openai",
-            text_source_signature="openai:gpt-5.4-mini:ocr-v2",
+            text_source_signature="openai:gpt-5.6-luna:ocr-v2",
         ),
     )
     second = client.post(

@@ -115,7 +115,7 @@ Then open:
 - [Canonical Next app](http://127.0.0.1:3000/)
 - [API health](http://127.0.0.1:8201/health)
 
-The Next browser bundle uses `TEXTPLEX_BROWSER_API_URL` at build time; the default is `http://127.0.0.1:8201`. If the app is opened from another device, set that value to the host-reachable API URL before rebuilding.
+The Next browser bundle uses `TEXTPLEX_BROWSER_API_URL` at build time; the default is same-origin `/api`, which the Docker web service proxies to the internal API container and works from another device on the LAN. Use an absolute API URL only when the browser is intentionally connecting to a separately hosted API.
 
 ### Site shell
 

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 OcrProviderMode = Literal["local", "openai"]
 TranslationMode = Literal["off"]
 ReaderTokenDisplayMode = Literal["word", "character"]
+BookSourceType = Literal["static", "page-by-page"]
 
 
 class BookImportRequest(BaseModel):
@@ -96,6 +97,7 @@ class BookRecord(BaseModel):
     title: str
     author: str | None = None
     language_code: str
+    source_type: BookSourceType = "static"
     ocr_provider: OcrProviderMode = "local"
     source_filename: str
     source_path: str

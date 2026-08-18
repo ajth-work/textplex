@@ -25,6 +25,7 @@ import { ImportProgressCard } from "./import-progress-card";
 import { useImportProgress } from "./import-progress-provider";
 import { isImportInProgress } from "../lib/import-progress";
 import { languageDisplayLabel, languageShortCode } from "../lib/language-options";
+import { PhotoPageAppendCard } from "./photo-page-append-card";
 
 function languageLabel(languageCode: string): string {
   return languageDisplayLabel(languageCode);
@@ -299,6 +300,15 @@ export function BookDetailView({ bookId }: { bookId: string }) {
                 Back to library
               </Link>
             </div>
+            {book.source_type === "page-by-page" && !isDemoMode ? (
+              <PhotoPageAppendCard
+                bookId={book.id}
+                onAppended={(updatedBook) => {
+                  setBook(updatedBook);
+                  setRefreshNonce((value) => value + 1);
+                }}
+              />
+            ) : null}
             {isDemoMode ? (
               <p className="small-copy">The sample book is already packaged for preview mode, so extraction is not needed here.</p>
             ) : needsExtraction ? (

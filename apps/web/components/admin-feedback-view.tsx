@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 
 import {
   fetchJson,
@@ -116,6 +117,8 @@ function PlanList({ title, items }: { title: string; items: string[] }) {
 }
 
 export function AdminFeedbackView() {
+  const searchParams = useSearchParams();
+  const requestedFeedbackId = searchParams.get("feedbackId");
   const [records, setRecords] = useState<FeedbackRecord[]>([]);
   const [testers, setTesters] = useState<TesterRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -141,6 +144,8 @@ export function AdminFeedbackView() {
   const [expandedTesterId, setExpandedTesterId] = useState<string | null>(null);
   const [editingTesterId, setEditingTesterId] = useState<string | null>(null);
   const [screenshotUrls, setScreenshotUrls] = useState<Record<number, string>>({});
+  const selectedDetailRef = useRef<HTMLElement | null>(null);
+  const shouldScrollToRequestedFeedbackRef = useRef(Boolean(requestedFeedbackId));
 
   useEffect(() => {
     let active = true;
@@ -151,7 +156,7 @@ export function AdminFeedbackView() {
       .then(([feedbackResponse, testersResponse]) => {
         if (active) {
           setRecords(feedbackResponse.records);
-          setSelectedId((current) => current ?? feedbackResponse.records[0]?.id ?? null);
+          setSelectedId((current) => current ?? (requestedFeedbackId && feedbackResponse.records.some((record) => record.id === requestedFeedbackId) ? requestedFeedbackId : feedbackResponse.records[0]?.id ?? null));
           setTesters(testersResponse.testers);
           setNicknameDrafts(Object.fromEntries(testersResponse.testers.map((tester) => [tester.tester_id, tester.nickname ?? ""])));
         }
@@ -161,7 +166,7 @@ export function AdminFeedbackView() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [requestedFeedbackId]);
 
   const filterOptions = useMemo(() => {
     const unique = (values: string[]) => Array.from(new Set(values.filter(Boolean))).sort((left, right) => left.localeCompare(right));
@@ -268,6 +273,19 @@ export function AdminFeedbackView() {
     setImplementationBuildDraft(selectedRecord?.verification?.implementation_build ?? appVersion);
     setVerificationInstructionsDraft(selectedRecord?.verification?.instructions ?? "Try the original scenario again and confirm whether the issue is resolved.");
   }, [selectedRecord?.id, selectedRecord?.resolution_note, selectedRecord?.verification?.implementation_build, selectedRecord?.verification?.instructions]);
+
+  useEffect(() => {
+    shouldScrollToRequestedFeedbackRef.current = Boolean(requestedFeedbackId);
+  }, [requestedFeedbackId]);
+
+  useEffect(() => {
+    if (!requestedFeedbackId || selectedRecord?.id !== requestedFeedbackId || !selectedDetailRef.current || !shouldScrollToRequestedFeedbackRef.current) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => selectedDetailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    shouldScrollToRequestedFeedbackRef.current = false;
+    return () => window.cancelAnimationFrame(frame);
+  }, [requestedFeedbackId, selectedRecord?.id]);
 
   useEffect(() => {
     let active = true;
@@ -563,14 +581,14 @@ export function AdminFeedbackView() {
             {filteredRecords.map((record) => (
               <button type="button" className={`admin-feedback-list-item${record.id === selectedRecord?.id ? " is-selected" : ""}`} key={record.id} onClick={() => setSelectedId(record.id)}>
                 <span className="admin-feedback-list-item-title">{record.triage.title}</span>
-                <span className="admin-feedback-list-item-meta">{testerLabel(record.user_id)} · {statusLabel(record.status)} · {record.context.language_code ?? "language unknown"}</span>
+                <span className="admin-feedback-list-item-meta">{testerLabel(record.user_id)} · {record.account_role ?? "role unknown"} · {statusLabel(record.status)} · {record.context.language_code ?? "language unknown"}</span>
                 <span className="admin-feedback-list-item-route">{record.context.route}</span>
               </button>
             ))}
           </section>
 
           {selectedRecord ? (
-            <section className="card admin-feedback-detail" data-inventory-id="admin-feedback.detail">
+            <section ref={selectedDetailRef} id={`feedback-${selectedRecord.id}`} className="card admin-feedback-detail" data-inventory-id="admin-feedback.detail" tabIndex={-1}>
               <div className="admin-feedback-detail-header">
                 <div>
                   <span className="eyebrow">{selectedRecord.triage.category} · {selectedRecord.triage.severity}</span>
@@ -586,12 +604,15 @@ export function AdminFeedbackView() {
               <div className="admin-feedback-context">
                 <span>Route: <code>{selectedRecord.context.route}</code></span>
                 <span>Tester ID: <code>{selectedRecord.user_id ?? "anonymous"}</code></span>
+                <span>Account role: <code>{selectedRecord.account_role ?? "unknown"}</code></span>
+                {selectedRecord.context.automated_check ? <span>Automated check: <code>{selectedRecord.context.automated_check}</code></span> : null}
                 <span>Language: <code>{selectedRecord.context.language_code ?? "unknown"}</code></span>
                 <span>Build: <code>{selectedRecord.context.app_version}</code></span>
                 {selectedRecord.context.feedback_target ? (
                   <span>
                     Target: <code>{selectedRecord.context.feedback_target}</code>
                     {selectedRecord.context.feedback_target_text ? <> · <code>{selectedRecord.context.feedback_target_text}</code></> : null}
+                    {selectedRecord.context.feedback_reason ? <> · Reason: <code>{selectedRecord.context.feedback_reason}</code></> : null}
                   </span>
                 ) : null}
               </div>

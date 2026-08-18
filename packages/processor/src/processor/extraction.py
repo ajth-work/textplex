@@ -41,7 +41,12 @@ _japanese_tagger = _JapaneseTagger() if _JapaneseTagger is not None else None
 
 
 def normalize_text(raw_text: str) -> str:
-    text = raw_text.replace("\u3000", " ")
+    # OCR providers sometimes return escaped line breaks as two literal
+    # characters ("\\n") instead of an actual newline. Decode those before
+    # collapsing whitespace so the reader never turns the trailing "n" into a
+    # visible token.
+    text = raw_text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "\n")
+    text = text.replace("\u3000", " ")
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = _WHITESPACE_RE.sub(" ", text)
     return text.strip()
