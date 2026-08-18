@@ -41,6 +41,9 @@ test("Next reader meaning line preserves spacing, offers a complete reveal escap
   assert.match(readerSource, /disabled=\{isPunctuation\}/);
   assert.match(readerSource, /Punctuation \$\{token\.surface_form\}/);
   assert.match(readerSource, /reader-translation-reveal-heading[\s\S]*reader-translation-reveal-text[\s\S]*reader-translation-reveal-actions/);
+  assert.match(readerSource, /function translationMeaningOverlapsTarget\(/);
+  assert.match(readerSource, /alignmentLooksLikeSelectedMeaning/);
+  assert.match(readerSource, /selectedTokenMeaningForReveal/);
   assert.match(stylesheetSource, /\.reader-translation-reveal-card > summary\s*\{[\s\S]*display: flex;[\s\S]*align-items: center;/);
   assert.match(stylesheetSource, /\.reader-translation-reveal-summary-copy\s*\{[\s\S]*display: inline-flex;/);
   assert.match(stylesheetSource, /\.reader-translation-reveal-part\.is-space\s*\{[\s\S]*display: inline-block;/);

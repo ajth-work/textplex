@@ -1651,6 +1651,20 @@ function normalizeTranslationPunctuation(tokens: TranslationAlignmentToken[]): T
   return tokens.flatMap(splitAttachedTranslationPunctuation);
 }
 
+function translationMeaningOverlapsTarget(
+  meaning: string | null | undefined,
+  targetTokens: TranslationAlignmentToken[],
+): boolean {
+  const words = (value: string) =>
+    value
+      .toLocaleLowerCase()
+      .match(/[\p{L}\p{N}]+/gu)
+      ?.filter((word) => word.length > 2) ?? [];
+  const meaningWords = words(meaning?.trim() ?? "");
+  const targetWords = words(targetTokens.map((token) => token.text).join(" "));
+  return meaningWords.length > 0 && meaningWords.some((word) => targetWords.includes(word));
+}
+
 function resolveLexiconLookupTerms(token: TokenResult, languageCode: string): string[] {
   return [
     ...(languageCode.startsWith("ko") ? [splitKoreanParticleChain(token.surface_form)[0] ?? ""] : []),
@@ -2777,6 +2791,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const activeSentenceHasTranslationAlignment = Boolean(
     activeSentenceTranslationAlignment?.target_tokens.length && activeSentenceTranslationAlignment.segments.length,
   );
+  const selectedTokenMeaningForReveal = lexiconEntry?.definition?.trim() || selectedToken?.definition_short?.trim() || null;
   const sentenceTranslationLoaded = Boolean(activeSentenceTranslationText);
   const readerTokenDisplayModes: ReaderTokenMode[] = pageData?.reader_capabilities?.token_display_modes ?? ["word"];
   const readerSupportsCharacterMode = readerTokenDisplayModes.includes("character");
@@ -2902,9 +2917,28 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
     const alignedSegments = activeSentenceTranslationAlignment?.segments ?? [];
     const hasAlignment = Boolean(activeSentenceTranslationAlignment?.target_tokens.length && alignedSegments.length);
+    const latestSourceTokenOrder = sentenceRevealSourceTokenOrders[sentenceRevealSourceTokenOrders.length - 1];
 
     sentenceRevealSourceTokenOrders.forEach((sourceTokenOrder) => {
       if (hasAlignment) {
+        const matchingSegments = alignedSegments.filter((segment) => segment.source_token_ids.includes(sourceTokenOrder));
+        const alignedTargetTokens = matchingSegments.flatMap((segment) =>
+          segment.target_token_ids.flatMap((tokenId) =>
+            activeSentenceTranslationAlignment?.target_tokens.filter((token) => token.token_id === tokenId) ?? [],
+          ),
+        );
+        const alignmentLooksLikeSelectedMeaning =
+          sourceTokenOrder !== latestSourceTokenOrder ||
+          !selectedTokenMeaningForReveal ||
+          translationMeaningOverlapsTarget(selectedTokenMeaningForReveal, alignedTargetTokens);
+        if (!alignmentLooksLikeSelectedMeaning) {
+          const revealSlot = sentenceRevealSlotByTokenOrder.get(sourceTokenOrder);
+          const revealTokenId = revealSlot !== undefined ? sentenceRevealWordSlots[revealSlot - 1] : undefined;
+          if (revealTokenId !== undefined && sentenceRevealWordSlotIds.has(revealTokenId)) {
+            revealedTokenIds.add(revealTokenId);
+          }
+          return;
+        }
         alignedSegments.forEach((segment) => {
           if (segment.source_token_ids.includes(sourceTokenOrder)) {
             segment.target_token_ids.forEach((tokenId) => revealedTokenIds.add(tokenId));
@@ -2921,7 +2955,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     });
 
     return revealedTokenIds;
-  }, [activeSentenceTranslationAlignment, sentenceRevealAllActive, sentenceRevealSlotByTokenOrder, sentenceRevealSourceTokenOrders, sentenceRevealWordSlotIds, sentenceRevealWordSlots]);
+  }, [activeSentenceTranslationAlignment, selectedTokenMeaningForReveal, sentenceRevealAllActive, sentenceRevealSlotByTokenOrder, sentenceRevealSourceTokenOrders, sentenceRevealWordSlotIds, sentenceRevealWordSlots]);
   const sentenceTranslationRevealableWordCount = countTranslationRevealableWords(sentenceTranslationTokens);
   const sentenceRevealVisibleWordCount = sentenceTranslationTokens.filter(
     (token) => token.token_kind === "word" && sentenceTranslationRevealTokenIds.has(token.token_id),

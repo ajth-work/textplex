@@ -2,6 +2,8 @@
 
 ## 2026-08-18
 
+- Guarded the Reader meaning-line reveal against stale or incorrect alignment segments so a tapped word's sentence hint stays compatible with its displayed definition.
+
 - Changed PDF imports to progressive extraction: file metadata and the first readable page are ready before the upload returns, then the API maintains a two-page reader-driven extraction window instead of processing an entire book immediately (`import.form`).
 - Added direct reader page jumps with a target-first extraction path and queued previous/next page buffers for non-sequential reading (`reader.page-jump-control`).
 - Created issue #153 for the user-facing Japanese conjugation experience and linked it to the lexicon concept and tracker; project-board placement remains pending the `project` GitHub scope.
