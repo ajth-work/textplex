@@ -10,9 +10,9 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from app.services.openai_config import get_openai_api_key, get_openai_api_key_env
 from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
-from app.services.openai_config import get_openai_api_key, get_openai_api_key_env
 
 logger = logging.getLogger(__name__)
 

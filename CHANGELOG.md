@@ -2,6 +2,8 @@
 
 ## 2026-08-18
 
+- Cleared PR #150 CI failures by formatting the Python quality lane and restoring the onboarding error contract with updated Wikipedia error handling coverage.
+
 - Fixed mobile feedback screenshot uploads by accepting trusted JPEG MIME aliases or missing MIME metadata, and surfaced API validation details in the feedback dialog.
 
 - Added a billable-services inventory and provider credential-monitoring plan covering OpenAI feature costs, Google Cloud Translation, Supabase, project boundaries, and the next steps for feature-scoped keys.

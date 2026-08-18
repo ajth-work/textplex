@@ -25,7 +25,7 @@ export function AppFrame({ children }: Readonly<{ children: ReactNode }>) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { configured, loading, user } = useAuth();
-  const [onboardingState, setOnboardingState] = useState<"checking" | "complete" | "required">("checking");
+  const [onboardingState, setOnboardingState] = useState<"checking" | "complete" | "required" | "error">("checking");
   const [testerBuildState, setTesterBuildState] = useState<"checking" | "required" | "complete">("checking");
   const [testerLastBuild, setTesterLastBuild] = useState<string | null>(null);
 
@@ -71,9 +71,7 @@ export function AppFrame({ children }: Readonly<{ children: ReactNode }>) {
         router.replace(`/onboarding?returnTo=${encodeURIComponent(returnTo)}`);
       })
       .catch(() => {
-        if (!active || cachedCompletion) return;
-        setOnboardingState("required");
-        router.replace(`/onboarding?returnTo=${encodeURIComponent(returnTo)}`);
+        if (active && !cachedCompletion) setOnboardingState("error");
       });
 
     return () => {
@@ -109,6 +107,19 @@ export function AppFrame({ children }: Readonly<{ children: ReactNode }>) {
 
   if (!onboardingCheckRoute || loading || !user || pathname === "/onboarding") {
     return <>{children}</>;
+  }
+
+  if (onboardingState === "error") {
+    return (
+      <main className="onboarding-shell">
+        <section className="onboarding-card card">
+          <span className="eyebrow">TextPlex beta</span>
+          <h1>We couldn&apos;t load your setup</h1>
+          <p className="lede">Your account is safe. Try again so we can confirm the short beta introduction before opening the app.</p>
+          <button className="button button-primary" type="button" onClick={() => window.location.reload()}>Try again</button>
+        </section>
+      </main>
+    );
   }
 
   return onboardingState === "complete" && testerBuildState !== "checking" ? <>{children}</> : null;

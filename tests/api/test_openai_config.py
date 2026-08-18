@@ -1,5 +1,4 @@
 import pytest
-
 from app.services.openai_config import (
     OPENAI_DEV_API_KEY_ENV,
     OPENAI_FEATURE_API_KEY_ENVS,

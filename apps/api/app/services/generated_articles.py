@@ -21,8 +21,8 @@ from app.schemas.generated_articles import (
 from app.services.book_extraction import import_text_into_book
 from app.services.learning_profile import ensure_profile_database
 from app.services.lexicon import ensure_lexicon_database, lookup_lexicon_entry_map
-from app.services.study_programs import build_study_program_groups
 from app.services.openai_config import get_openai_api_key, get_openai_api_key_env
+from app.services.study_programs import build_study_program_groups
 
 logger = logging.getLogger(__name__)
 

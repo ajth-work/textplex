@@ -24,7 +24,6 @@ from app.services.google_translate import (
 )
 from app.services.google_translate_usage import record_google_translate_usage
 
-
 _lexicon_seed_lock = threading.Lock()
 _warmed_lexicon_keys: set[tuple[str, str]] = set()
 

@@ -190,7 +190,11 @@ from app.services.learning_profile import (
     record_word_interaction,
 )
 from app.services.learning_sync import sync_learning_events
-from app.services.lexicon import import_lexicon_from_source, lookup_lexicon_entry, warm_lexicon
+from app.services.lexicon import (
+    import_lexicon_from_source,
+    lookup_lexicon_entry,
+    warm_lexicon,
+)
 from app.services.profile_migration import (
     apply_profile_migration,
     preview_profile_migration,
@@ -1213,7 +1217,7 @@ async def upload_book(
 
 @app.post("/books/upload-images", response_model=BookRecord)
 async def upload_image_pages(
-    images: list[UploadFile] = File(...),
+    images: list[UploadFile] = File(...),  # noqa: B008
     language_code: str = REQUIRED_LANGUAGE_CODE,
     title: str | None = OPTIONAL_TITLE,
     author: str | None = OPTIONAL_AUTHOR,
@@ -1253,7 +1257,7 @@ async def upload_image_pages(
 @app.post("/books/{book_id}/append-images", response_model=BookRecord)
 async def append_image_pages(
     book_id: str,
-    images: list[UploadFile] = File(...),
+    images: list[UploadFile] = File(...),  # noqa: B008
     context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
 ) -> BookRecord:
     book = _book_exists(book_id, context)

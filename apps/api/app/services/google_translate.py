@@ -12,7 +12,9 @@ from typing import Any, Literal
 try:
     from google.auth import default as google_auth_default
     from google.auth import exceptions as google_auth_exceptions
-    from google.auth import load_credentials_from_file as google_auth_load_credentials_from_file
+    from google.auth import (
+        load_credentials_from_file as google_auth_load_credentials_from_file,
+    )
 except ImportError:  # pragma: no cover - exercised only when the dependency is missing locally.
     google_auth_default = None
     google_auth_load_credentials_from_file = None

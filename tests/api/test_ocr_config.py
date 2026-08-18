@@ -2,19 +2,18 @@ import base64
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image
 import pytest
-
 from app.services.ocr import (
     OcrPageResult,
-    _extract_response_text,
     _build_page_image_data_url,
+    _extract_response_text,
     get_openai_max_output_tokens,
     get_openai_ocr_model,
     get_text_source_signature,
     resolve_page_text,
     should_use_openai_ocr,
 )
+from PIL import Image
 
 
 def test_openai_ocr_payload_resizes_camera_images(tmp_path: Path) -> None:

@@ -10,8 +10,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from pydantic import ValidationError
-
 from app.core.paths import get_books_root
 from app.schemas.books import BookRecord, PageExtractionArtifact
 from app.services.book_registry import (
@@ -41,13 +39,15 @@ from app.services.google_translate_usage import record_google_translate_usage
 from app.services.hebrew_transliteration import transliterate_hebrew_text
 from app.services.lexicon import lookup_lexicon_entry_map, lookup_lexicon_pinyin_map
 from app.services.ocr import get_text_source_signature, resolve_page_ocr
-from app.services.translation_alignment import build_sentence_translation_alignment, translation_alignment_matches_text
+from app.services.translation_alignment import (
+    build_sentence_translation_alignment,
+    translation_alignment_matches_text,
+)
 from processor import (
     build_book_extraction_result,
     build_page_extraction_result,
     stitch_page_sentence_carryover,
 )
-
 from processor.contracts import (
     CURRENT_PIPELINE_VERSION,
     BookExtractionResult,
@@ -55,6 +55,7 @@ from processor.contracts import (
     SentenceResult,
     TokenResult,
 )
+from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 from pypdf import PdfReader

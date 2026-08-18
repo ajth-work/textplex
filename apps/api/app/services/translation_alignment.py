@@ -14,8 +14,8 @@ from app.schemas.books import (
     TranslationAlignmentSegment,
     TranslationAlignmentToken,
 )
-from processor.contracts import SentenceResult
 from app.services.openai_config import get_openai_api_key, get_openai_api_key_env
+from processor.contracts import SentenceResult
 
 logger = logging.getLogger(__name__)
 
