@@ -4,6 +4,8 @@ Status: concept and implementation plan. The source workbook is preserved, but t
 
 Related tracker item: [#78](https://github.com/ajth-work/textplex/issues/78).
 
+Related implementation ticket: [#153](https://github.com/ajth-work/textplex/issues/153).
+
 ## Goal
 
 Turn the Afterlife Japanese workbook and the related Memrise Non-WK kanji source into a reproducible Japanese curriculum pack for TextPlex. The workbook should remain provenance material; the application should consume a normalized source pack rather than read `.xlsx` files at runtime.
