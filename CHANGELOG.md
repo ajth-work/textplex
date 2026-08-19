@@ -64,6 +64,8 @@
 
 ## 2026-08-18
 
+- Added derived Japanese conjugation grids to the Reader token inspector and Study practice cards, with stable inventory IDs linked to #153 and lexical override/source-rule annotations.
+
 - Guarded the Reader meaning-line reveal against stale or incorrect alignment segments so a tapped word's sentence hint stays compatible with its displayed definition.
 
 - Changed PDF imports to progressive extraction: file metadata and the first readable page are ready before the upload returns, then the API maintains a two-page reader-driven extraction window instead of processing an entire book immediately (`import.form`).

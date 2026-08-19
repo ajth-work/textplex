@@ -29,6 +29,7 @@ import {
   type GoogleTranslateUsageSummary,
   type LexiconEntryRecord,
   type LexiconLookupResponse,
+  type JapaneseConjugationResponse,
   type PageReadRecord,
   type ProgressBookSummary,
   type ProgressSurfaceResponse,
@@ -72,6 +73,7 @@ import { LoadingSkeleton, ReaderLoadingSkeleton } from "./loading-skeleton";
 import { useAuth } from "./auth-provider";
 import { isTextPlexAdmin } from "../lib/auth-roles";
 import { PhotoPageAppendCard, type PageUploadInputMode } from "./photo-page-append-card";
+import { JapaneseConjugationGrid } from "./japanese-conjugation-grid";
 
 type ReaderTokenMode = "word" | "character";
 type ReaderMode = "sentence" | "page" | "token";
@@ -1887,6 +1889,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [readerSessionSummaryHiddenItemIds, setReaderSessionSummaryHiddenItemIds] = useState<string[]>([]);
   const [readerSessionSummaryEditing, setReaderSessionSummaryEditing] = useState(false);
   const [lexiconResult, setLexiconResult] = useState<LexiconLookupResponse | null>(null);
+  const [japaneseConjugation, setJapaneseConjugation] = useState<JapaneseConjugationResponse | null>(null);
+  const [japaneseConjugationLoading, setJapaneseConjugationLoading] = useState(false);
   const [lexiconLoading, setLexiconLoading] = useState(false);
   const [definitionLookupTiming, setDefinitionLookupTiming] = useState<DefinitionLookupTiming | null>(null);
   const [definitionLookupTrace, setDefinitionLookupTrace] = useState<string[]>([]);
@@ -2661,6 +2665,43 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       active = false;
     };
   }, [isAdmin, pageData, readerGoogleTranslateFallback, requestLexiconLookup, selectedToken]);
+
+  useEffect(() => {
+    let active = true;
+    const languageCode = selectedToken ? resolveTokenLanguageCode(selectedToken.surface_form, pageData?.book.language_code, selectedToken.language_code) : null;
+    const partOfSpeech = selectedToken?.part_of_speech?.toLowerCase() ?? "";
+    const isJapaneseVerb = Boolean(selectedToken?.lemma && languageCode?.startsWith("ja") && (partOfSpeech.includes("動詞") || partOfSpeech.includes("verb")));
+    if (!isJapaneseVerb || !selectedToken?.lemma) {
+      setJapaneseConjugation(null);
+      setJapaneseConjugationLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+    setJapaneseConjugationLoading(true);
+    void postJson<JapaneseConjugationResponse>("/lexicon/japanese/conjugate", {
+      lemma: selectedToken.lemma,
+      reading: selectedToken.pronunciation ?? selectedToken.romanization,
+    })
+      .then((result) => {
+        if (active) {
+          setJapaneseConjugation(result);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setJapaneseConjugation(null);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setJapaneseConjugationLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [pageData?.book.language_code, selectedToken]);
 
   useEffect(() => {
     setSelectedTokenSaved(false);
@@ -5921,6 +5962,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     </button>
                   </div>
                 </div>
+                {japaneseConjugationLoading ? <p className="small-copy japanese-conjugation-loading">Loading conjugation details...</p> : null}
+                {japaneseConjugation ? <JapaneseConjugationGrid conjugation={japaneseConjugation} inventoryPrefix="reader" /> : null}
                 {selectedTokenReadingDisplayParts.length > 1 ? (
                   <div
                     className="definition-segments"

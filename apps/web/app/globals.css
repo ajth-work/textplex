@@ -56,6 +56,63 @@
   gap: 1rem;
 }
 
+.japanese-conjugation-card {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 0.8rem;
+  background: var(--surface-soft);
+}
+
+.japanese-conjugation-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: start;
+}
+
+.japanese-conjugation-heading h3 {
+  margin: 0.2rem 0 0;
+}
+
+.japanese-conjugation-rule {
+  margin: 0.65rem 0;
+}
+
+.japanese-conjugation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.55rem;
+}
+
+.japanese-conjugation-cell {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.6rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 0.55rem;
+  background: var(--panel);
+}
+
+.japanese-conjugation-cell > span {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
+.japanese-conjugation-cell strong {
+  font-size: 1.05rem;
+}
+
+.japanese-conjugation-cell em {
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-style: normal;
+}
+
+.japanese-conjugation-cell.is-overridden {
+  border-color: var(--accent);
+}
+
 .study-practice-card {
   display: grid;
   gap: 1rem;

@@ -69,6 +69,9 @@ test("Study practice route exposes a one-card drill flow", () => {
   assert.match(practiceSource, /answerSimilarityRatio/);
   assert.match(practiceSource, /study\.practice-card/);
   assert.match(practiceSource, /StudyPronunciationGuide/);
+  assert.match(practiceSource, /\/lexicon\/japanese\/conjugate/);
+  assert.match(practiceSource, /study\.japanese-conjugation-card/);
+  assert.match(practiceSource, /study\.japanese-conjugation-grid/);
   assert.match(practiceSource, /showPronunciationGuide/);
   assert.match(practiceSource, /currentCard\.phase === "intro" && resolvedPronunciation/);
   assert.match(practiceSource, /currentCard\.phase === "intro"/);

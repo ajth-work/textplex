@@ -647,6 +647,36 @@ export interface LexiconLookupResponse {
   matched_term?: string | null;
 }
 
+export type JapaneseConjugationClass = "godan" | "ichidan" | "suru" | "kuru" | "irregular";
+export type JapaneseFormSlot =
+  | "plain_present"
+  | "polite_present"
+  | "plain_past"
+  | "polite_past"
+  | "plain_negative"
+  | "polite_negative"
+  | "plain_past_negative"
+  | "polite_past_negative"
+  | "te"
+  | "conditional"
+  | "volitional"
+  | "passive"
+  | "causative"
+  | "potential"
+  | "imperative";
+
+export interface JapaneseConjugationResponse {
+  verb: {
+    lemma: string;
+    reading: string | null;
+    conjugation_class: JapaneseConjugationClass;
+    final_kana: string | null;
+    rule_id: string;
+  };
+  forms: Record<JapaneseFormSlot, string>;
+  overridden_slots: JapaneseFormSlot[];
+}
+
 export interface GoogleTranslateUsageSummary {
   scope: "account" | "service";
   month_key: string;

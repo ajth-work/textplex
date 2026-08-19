@@ -70,6 +70,8 @@ export type {
   LexiconImportRequest,
   LexiconImportSummary,
   LexiconLookupResponse,
+  JapaneseConjugationResponse,
+  JapaneseFormSlot,
   ProgressBookSummary,
   ProgressSurfaceResponse,
   ProfileSurfaceResponse,

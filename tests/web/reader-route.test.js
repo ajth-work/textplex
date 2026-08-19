@@ -325,6 +325,9 @@ test("Next reader definition card stays compact and exposes the save action", ()
   assert.match(readerSource, /Mark word as remembered/);
   assert.match(readerSource, /Mark word as missed/);
   assert.match(readerSource, /definition-trace/);
+  assert.match(readerSource, /\/lexicon\/japanese\/conjugate/);
+  assert.match(readerSource, /reader\.japanese-conjugation-card/);
+  assert.match(readerSource, /reader\.japanese-conjugation-grid/);
   assert.match(readerSource, /Definition trace/);
   assert.doesNotMatch(readerSource, /<dl className="definition-grid">/);
   assert.doesNotMatch(readerSource, />\s*Clear\s*<\/button>/);
