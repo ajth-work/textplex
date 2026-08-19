@@ -75,6 +75,54 @@
   margin: 0.2rem 0 0;
 }
 
+.japanese-conjugation-type-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.japanese-conjugation-info-button {
+  display: inline-grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: 1px solid var(--surface-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.japanese-conjugation-info-button:hover,
+.japanese-conjugation-info-button:focus-visible {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.japanese-conjugation-info {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border-left: 2px solid var(--accent);
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+.japanese-conjugation-info strong {
+  color: var(--ink);
+}
+
+.japanese-conjugation-info p {
+  margin: 0.25rem 0 0.7rem;
+}
+
+.japanese-conjugation-info p:last-child {
+  margin-bottom: 0;
+}
+
 .japanese-conjugation-rule {
   margin: 0.65rem 0;
 }

@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { JapaneseConjugationResponse, JapaneseFormSlot } from "../lib/textplex";
 
 const FORM_LABELS: Record<JapaneseFormSlot, string> = {
@@ -32,15 +35,42 @@ function explainJapaneseForm(surfaceForm: string | null | undefined, lemma: stri
   return `${surface} is a derived form of ${lemma}.`;
 }
 
+function explainConjugationClass(conjugationClass: JapaneseConjugationResponse["verb"]["conjugation_class"]): string {
+  switch (conjugationClass) {
+    case "godan":
+      return "A verb whose ending changes across forms, such as 書く → 書きます. These are often called u-verbs.";
+    case "ichidan":
+      return "A verb that usually drops る before adding an ending, such as 食べる → 食べます. These are often called ru-verbs.";
+    case "suru":
+      return "A する verb. It commonly turns a noun into an action, such as 勉強する, meaning “to study.”";
+    case "kuru":
+      return "The irregular 来る verb, meaning “to come.” Its forms use き, こ, or 来 depending on the form.";
+    default:
+      return "An irregular verb whose forms need a specific lexical rule rather than a regular class pattern.";
+  }
+}
+
+function explainFormMeaning(surfaceForm: string | null | undefined, translatedMeaning: string | null | undefined): string {
+  if (surfaceForm && /^し(?:て|た|ます|ない|よう|ろ|ません|なかった)/u.test(surfaceForm)) {
+    return `${surfaceForm} uses する in a changed form; with ていた, it commonly expresses “was doing” or “had been doing.”`;
+  }
+  return translatedMeaning
+    ? `The dictionary meaning here is “${translatedMeaning}.” The selected form applies the tense, politeness, or voice shown by its label.`
+    : "The selected form applies the tense, politeness, or voice shown by its label to the verb’s core meaning.";
+}
+
 export function JapaneseConjugationGrid({
   conjugation,
   inventoryPrefix,
   surfaceForm = null,
+  translatedMeaning = null,
 }: {
   conjugation: JapaneseConjugationResponse;
   inventoryPrefix: "reader" | "study";
   surfaceForm?: string | null;
+  translatedMeaning?: string | null;
 }) {
+  const [showInfo, setShowInfo] = useState(false);
   const overridden = new Set(conjugation.overridden_slots);
   return (
     <section className="japanese-conjugation-card" data-inventory-id={`${inventoryPrefix}.japanese-conjugation-card`}>
@@ -49,8 +79,28 @@ export function JapaneseConjugationGrid({
           <span className="eyebrow">Japanese conjugation</span>
           <h3>{conjugation.verb.lemma}</h3>
         </div>
-        <span className="pill">{conjugation.verb.conjugation_class}</span>
+        <div className="japanese-conjugation-type-actions">
+          <span className="pill">{conjugation.verb.conjugation_class}</span>
+          <button
+            type="button"
+            className="japanese-conjugation-info-button"
+            aria-expanded={showInfo}
+            aria-label="Explain this conjugation type"
+            title="Explain this conjugation type"
+            onClick={() => setShowInfo((current) => !current)}
+          >
+            i
+          </button>
+        </div>
       </div>
+      {showInfo ? (
+        <div className="japanese-conjugation-info" role="note">
+          <strong>{conjugation.verb.conjugation_class} verbs in plain terms</strong>
+          <p>{explainConjugationClass(conjugation.verb.conjugation_class)}</p>
+          <strong>What this form means</strong>
+          <p>{explainFormMeaning(surfaceForm, translatedMeaning)}</p>
+        </div>
+      ) : null}
       {explainJapaneseForm(surfaceForm, conjugation.verb.lemma) ? (
         <p className="japanese-conjugation-current" lang="ja">
           <strong>{surfaceForm}</strong> · {explainJapaneseForm(surfaceForm, conjugation.verb.lemma)}

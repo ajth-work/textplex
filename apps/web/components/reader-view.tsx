@@ -5971,7 +5971,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                   </div>
                 </div>
                 {japaneseConjugationLoading ? <p className="small-copy japanese-conjugation-loading">Loading conjugation details...</p> : null}
-                {japaneseConjugation ? <JapaneseConjugationGrid conjugation={japaneseConjugation} inventoryPrefix="reader" surfaceForm={selectedToken.surface_form} /> : null}
+                {japaneseConjugation ? <JapaneseConjugationGrid conjugation={japaneseConjugation} inventoryPrefix="reader" surfaceForm={selectedToken.surface_form} translatedMeaning={selectedTokenEnglishMeaning} /> : null}
                 {selectedTokenReadingDisplayParts.length > 1 ? (
                   <div
                     className="definition-segments"
