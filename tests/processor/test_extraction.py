@@ -1,3 +1,5 @@
+import unicodedata
+
 from processor import (
     build_page_extraction_result,
     extraction,
@@ -122,6 +124,19 @@ def test_tokenize_sentence_keeps_latin_words_together() -> None:
 
     assert [token.surface_form for token in tokens] == ["OpenAI", "builds", "tools"]
     assert [token.language_code for token in tokens] == ["en", "en", "en"]
+
+
+def test_tokenize_sentence_preserves_precomposed_latin_accents() -> None:
+    tokens = tokenize_sentence("Àwọn ọmọ ń kọ́.", "yo")
+
+    assert [token.surface_form for token in tokens] == ["Àwọn", "ọmọ", "ń", "kọ́"]
+
+
+def test_tokenize_sentence_preserves_decomposed_latin_accents() -> None:
+    tokens = tokenize_sentence("A\u0300wo\u0323n ọmọ n\u0301 kọ\u0301.", "yo")
+
+    assert [token.surface_form for token in tokens] == ["A\u0300wo\u0323n", "ọmọ", "n\u0301", "kọ\u0301"]
+    assert unicodedata.normalize("NFC", tokens[0].surface_form) == unicodedata.normalize("NFC", "A\u0300wo\u0323n")
 
 
 def test_tokenize_sentence_assigns_language_per_script_for_mixed_text() -> None:
