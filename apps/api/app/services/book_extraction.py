@@ -124,6 +124,18 @@ _JAPANESE_MINUTE_READINGS = {
     8: "happun",
     9: "kyūfun",
 }
+_CHINESE_DIGIT_PINYIN = {
+    "0": "líng",
+    "1": "yī",
+    "2": "èr",
+    "3": "sān",
+    "4": "sì",
+    "5": "wǔ",
+    "6": "liù",
+    "7": "qī",
+    "8": "bā",
+    "9": "jiǔ",
+}
 _JAPANESE_COUNTER_READINGS = {
     "本": {
         1: "ippon",
@@ -253,6 +265,15 @@ def _japanese_contextual_metadata(
     if number > 10:
         return f"{number_romaji.removesuffix('jū')}{_JAPANESE_MINUTE_READINGS[number % 10]}", None
     return _JAPANESE_MINUTE_READINGS[number], "five minutes" if number == 5 else None
+
+
+def _chinese_year_romanization(tokens: list[TokenResult], token_index: int) -> str | None:
+    token = tokens[token_index]
+    if not token.surface_form.isascii() or not token.surface_form.isdigit() or not 2 <= len(token.surface_form) <= 4:
+        return None
+    if token_index + 1 >= len(tokens) or tokens[token_index + 1].surface_form != "年":
+        return None
+    return " ".join(_CHINESE_DIGIT_PINYIN[digit] for digit in token.surface_form)
 
 
 def _is_punctuation_surface(surface_form: str) -> bool:
@@ -768,7 +789,12 @@ def _enrich_page_lexicon_metadata(
             for sentence in page_result.sentences
             for token_index, _token in enumerate(sentence.tokens)
         )
-        if not has_japanese_context:
+        has_chinese_year_context = _language_root(language_code) == "zh" and any(
+            _chinese_year_romanization(sentence.tokens, token_index)
+            for sentence in page_result.sentences
+            for token_index, _token in enumerate(sentence.tokens)
+        )
+        if not has_japanese_context and not has_chinese_year_context:
             return page_result
 
     sentences = []
@@ -779,6 +805,8 @@ def _enrich_page_lexicon_metadata(
             contextual_romanization, contextual_definition = (None, None)
             if _language_root(language_code) == "ja":
                 contextual_romanization, contextual_definition = _japanese_contextual_metadata(sentence.tokens, token_index)
+            if _language_root(language_code) == "zh":
+                contextual_romanization = _chinese_year_romanization(sentence.tokens, token_index)
             romanization = (
                 contextual_romanization
                 or token.romanization
