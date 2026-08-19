@@ -720,7 +720,7 @@ def test_recover_page_result_keeps_chinese_name_before_parenthetical_gloss() -> 
     assert [token.surface_form for token in recovered.sentences[0].tokens] == ["李善中", "（", "韓語", "：", "이선중", "）", "。"]
 
 
-def test_enrich_page_metadata_romanizes_chinese_years_digit_by_digit(tmp_path: Path) -> None:
+def test_enrich_page_metadata_romanizes_all_chinese_numbers_digit_by_digit(tmp_path: Path) -> None:
     page = build_page_extraction_result(
         book_id="book-chinese-year",
         page_number=1,
@@ -729,9 +729,16 @@ def test_enrich_page_metadata_romanizes_chinese_years_digit_by_digit(tmp_path: P
     )
 
     enriched = book_extraction_service._enrich_page_lexicon_metadata(page, data_root=tmp_path)
-    year_tokens = [token for token in enriched.sentences[0].tokens if token.surface_form in {"1924", "2020"}]
+    number_tokens = [token for token in enriched.sentences[0].tokens if token.surface_form in {"1924", "1", "20", "2020", "6"}]
 
-    assert [token.romanization for token in year_tokens] == ["yī jiǔ èr sì", "èr líng èr líng"]
+    assert [token.romanization for token in number_tokens] == [
+        "yī jiǔ èr sì",
+        "yī",
+        "èr líng",
+        "èr líng èr líng",
+        "yī",
+        "liù",
+    ]
 
 
 def test_load_page_artifact_recovers_jsonish_transcription(tmp_path: Path) -> None:

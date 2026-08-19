@@ -267,11 +267,9 @@ def _japanese_contextual_metadata(
     return _JAPANESE_MINUTE_READINGS[number], "five minutes" if number == 5 else None
 
 
-def _chinese_year_romanization(tokens: list[TokenResult], token_index: int) -> str | None:
+def _chinese_number_romanization(tokens: list[TokenResult], token_index: int) -> str | None:
     token = tokens[token_index]
-    if not token.surface_form.isascii() or not token.surface_form.isdigit() or not 2 <= len(token.surface_form) <= 4:
-        return None
-    if token_index + 1 >= len(tokens) or tokens[token_index + 1].surface_form != "年":
+    if not token.surface_form.isascii() or not token.surface_form.isdigit():
         return None
     return " ".join(_CHINESE_DIGIT_PINYIN[digit] for digit in token.surface_form)
 
@@ -789,12 +787,12 @@ def _enrich_page_lexicon_metadata(
             for sentence in page_result.sentences
             for token_index, _token in enumerate(sentence.tokens)
         )
-        has_chinese_year_context = _language_root(language_code) == "zh" and any(
-            _chinese_year_romanization(sentence.tokens, token_index)
+        has_chinese_number_context = _language_root(language_code) == "zh" and any(
+            _chinese_number_romanization(sentence.tokens, token_index)
             for sentence in page_result.sentences
             for token_index, _token in enumerate(sentence.tokens)
         )
-        if not has_japanese_context and not has_chinese_year_context:
+        if not has_japanese_context and not has_chinese_number_context:
             return page_result
 
     sentences = []
@@ -806,7 +804,7 @@ def _enrich_page_lexicon_metadata(
             if _language_root(language_code) == "ja":
                 contextual_romanization, contextual_definition = _japanese_contextual_metadata(sentence.tokens, token_index)
             if _language_root(language_code) == "zh":
-                contextual_romanization = _chinese_year_romanization(sentence.tokens, token_index)
+                contextual_romanization = _chinese_number_romanization(sentence.tokens, token_index)
             romanization = (
                 contextual_romanization
                 or token.romanization

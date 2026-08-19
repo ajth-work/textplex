@@ -2,6 +2,8 @@
 
 ## 2026-08-19
 
+- Expanded Chinese digit-by-digit romanization to all numeric Reader tokens, including months and days (#142).
+
 - Preserved precomposed and combining Latin accents during processor tokenization, including automatic recovery of stale Yoruba page artifacts (#147).
 - Preserved Chinese personal-name runs before parenthetical glosses, including the reported `李善中` Reader case (#141).
 
