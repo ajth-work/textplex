@@ -21,8 +21,13 @@ const FORM_LABELS: Record<JapaneseFormSlot, string> = {
   imperative: "Imperative",
 };
 
-const FORM_ORDER = Object.keys(FORM_LABELS) as JapaneseFormSlot[];
 const QUICK_FORM_SLOTS: JapaneseFormSlot[] = ["plain_present", "polite_present", "plain_past", "plain_negative", "te", "potential"];
+const FORM_GROUPS: Array<{ label: string; slots: JapaneseFormSlot[] }> = [
+  { label: "Basic", slots: ["plain_present", "polite_present", "plain_past", "polite_past"] },
+  { label: "Negative", slots: ["plain_negative", "polite_negative", "plain_past_negative", "polite_past_negative"] },
+  { label: "Connecting", slots: ["te", "conditional", "volitional"] },
+  { label: "Voice and mood", slots: ["passive", "causative", "potential", "imperative"] },
+];
 
 function explainJapaneseForm(surfaceForm: string | null | undefined, lemma: string): string | null {
   const surface = surfaceForm?.trim();
@@ -101,10 +106,12 @@ export function JapaneseConjugationGrid({
           <p>{explainFormMeaning(surfaceForm, translatedMeaning)}</p>
         </div>
       ) : null}
-      {explainJapaneseForm(surfaceForm, conjugation.verb.lemma) ? (
-        <p className="japanese-conjugation-current" lang="ja">
-          <strong>{surfaceForm}</strong> · {explainJapaneseForm(surfaceForm, conjugation.verb.lemma)}
-        </p>
+      {surfaceForm && surfaceForm !== conjugation.verb.lemma ? (
+        <div className="japanese-conjugation-current" lang="ja">
+          <span className="eyebrow">Current form</span>
+          <strong>{surfaceForm}</strong>
+          <span>{explainJapaneseForm(surfaceForm, conjugation.verb.lemma)}</span>
+        </div>
       ) : null}
       <p className="small-copy japanese-conjugation-rule">
         Derived from {conjugation.verb.rule_id}. {overridden.size ? "Lexical overrides are marked." : "No lexical overrides."}
@@ -119,13 +126,20 @@ export function JapaneseConjugationGrid({
       </div>
       <details className="japanese-conjugation-details">
         <summary>View full conjugation</summary>
-        <div className="japanese-conjugation-grid" data-inventory-id={`${inventoryPrefix}.japanese-conjugation-grid`}>
-          {FORM_ORDER.map((slot) => (
-            <div className={`japanese-conjugation-cell ${overridden.has(slot) ? "is-overridden" : ""}`} key={slot}>
-              <span>{FORM_LABELS[slot]}</span>
-              <strong lang="ja">{conjugation.forms[slot]}</strong>
-              {overridden.has(slot) ? <em>lexical override</em> : null}
-            </div>
+        <div className="japanese-conjugation-groups" data-inventory-id={`${inventoryPrefix}.japanese-conjugation-grid`}>
+          {FORM_GROUPS.map((group) => (
+            <section className="japanese-conjugation-group" key={group.label}>
+              <span className="eyebrow">{group.label}</span>
+              <div className="japanese-conjugation-grid">
+                {group.slots.map((slot) => (
+                  <div className={`japanese-conjugation-cell ${overridden.has(slot) ? "is-overridden" : ""}`} key={slot}>
+                    <span>{FORM_LABELS[slot]}</span>
+                    <strong lang="ja">{conjugation.forms[slot]}</strong>
+                    {overridden.has(slot) ? <em>lexical override</em> : null}
+                  </div>
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       </details>

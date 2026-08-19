@@ -128,18 +128,29 @@
 }
 
 .japanese-conjugation-current {
-  margin: 0.75rem 0 0;
+  display: grid;
+  gap: 0.2rem;
+  margin: 0.8rem 0;
+  padding: 0.7rem 0.8rem;
+  border-left: 3px solid var(--accent);
+  border-radius: 0.45rem;
+  background: var(--surface-soft);
   color: var(--ink-soft);
 }
 
 .japanese-conjugation-current strong {
   color: var(--ink);
-  font-size: 1.05rem;
+  font-size: 1.25rem;
+  line-height: 1.1;
+}
+
+.japanese-conjugation-current > span:last-child {
+  font-size: 0.76rem;
 }
 
 .japanese-conjugation-quick-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.45rem;
 }
 
@@ -170,6 +181,22 @@
 
 .japanese-conjugation-details .japanese-conjugation-grid {
   margin-top: 0.65rem;
+}
+
+.japanese-conjugation-groups {
+  display: grid;
+  gap: 1rem;
+  margin-top: 0.8rem;
+}
+
+.japanese-conjugation-group {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.japanese-conjugation-group .japanese-conjugation-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0;
 }
 
 .japanese-conjugation-grid {
