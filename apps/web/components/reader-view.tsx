@@ -2672,6 +2672,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     const candidateLemmas = selectedToken
       ? [selectedToken.lemma, selectedToken.surface_form].filter((value, index, values): value is string => Boolean(value?.trim()) && values.indexOf(value) === index)
       : [];
+    if (selectedToken && /^し(?:て|た|ます|ない|よう|ろ|ません|なかった)/u.test(selectedToken.surface_form)) {
+      candidateLemmas.push("する");
+    }
     if (!languageCode?.startsWith("ja") || candidateLemmas.length === 0) {
       setJapaneseConjugation(null);
       setJapaneseConjugationLoading(false);
