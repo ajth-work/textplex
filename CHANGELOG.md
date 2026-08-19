@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-19
+
+- Preserved precomposed and combining Latin accents during processor tokenization, including automatic recovery of stale Yoruba page artifacts (#147).
+
 ## 2026-08-18
 
 - Guarded the Reader meaning-line reveal against stale or incorrect alignment segments so a tapped word's sentence hint stays compatible with its displayed definition.
