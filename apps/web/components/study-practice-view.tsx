@@ -1122,7 +1122,7 @@ export function StudyPracticeView({
                     inventoryId="study.practice-pronunciation-guide"
                   />
                 ) : null}
-                {japaneseConjugation ? <JapaneseConjugationGrid conjugation={japaneseConjugation} inventoryPrefix="study" /> : null}
+                {japaneseConjugation ? <JapaneseConjugationGrid conjugation={japaneseConjugation} inventoryPrefix="study" surfaceForm={currentCard.term} /> : null}
                 {currentCard.phase === "intro" ? (
                   <p className="study-practice-intro-copy">
                     Learn this word before we move into the mixed practice directions for this chunk.

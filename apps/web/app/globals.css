@@ -79,6 +79,51 @@
   margin: 0.65rem 0;
 }
 
+.japanese-conjugation-current {
+  margin: 0.75rem 0 0;
+  color: var(--ink-soft);
+}
+
+.japanese-conjugation-current strong {
+  color: var(--ink);
+  font-size: 1.05rem;
+}
+
+.japanese-conjugation-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.japanese-conjugation-quick-grid .japanese-conjugation-cell {
+  padding: 0.48rem;
+}
+
+.japanese-conjugation-quick-grid .japanese-conjugation-cell > span {
+  font-size: 0.66rem;
+}
+
+.japanese-conjugation-quick-grid .japanese-conjugation-cell strong {
+  font-size: 0.96rem;
+}
+
+.japanese-conjugation-details {
+  margin-top: 0.7rem;
+  border-top: 1px solid var(--surface-border);
+  padding-top: 0.65rem;
+}
+
+.japanese-conjugation-details summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.japanese-conjugation-details .japanese-conjugation-grid {
+  margin-top: 0.65rem;
+}
+
 .japanese-conjugation-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
