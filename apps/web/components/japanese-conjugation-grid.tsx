@@ -74,11 +74,11 @@ function explainConjugationClass(conjugationClass: JapaneseConjugationResponse["
 
 function explainFormMeaning(surfaceForm: string | null | undefined, translatedMeaning: string | null | undefined): string {
   if (surfaceForm && /^し(?:て|た|ます|ない|よう|ろ|ません|なかった)/u.test(surfaceForm)) {
-    return `${surfaceForm} uses する in a changed form; with ていた, it commonly expresses “was doing” or “had been doing.”`;
+    return `${surfaceForm} is a changed form of する; when it ends in ていた, it commonly expresses “was doing” or “had been doing.”`;
   }
   return translatedMeaning
-    ? `The dictionary meaning here is “${translatedMeaning}.” The selected form applies the tense, politeness, or voice shown by its label.`
-    : "The selected form applies the tense, politeness, or voice shown by its label to the verb’s core meaning.";
+    ? `The dictionary meaning shown for this verb is “${translatedMeaning}.”`
+    : "This is the form used for the current verb.";
 }
 
 export function JapaneseConjugationGrid({
@@ -94,14 +94,15 @@ export function JapaneseConjugationGrid({
 }) {
   const [showInfo, setShowInfo] = useState(false);
   const [activeFormSlot, setActiveFormSlot] = useState<JapaneseFormSlot | null>(null);
+  const [showFullConjugation, setShowFullConjugation] = useState(false);
   const overridden = new Set(conjugation.overridden_slots);
   const activeFormExplanation = activeFormSlot ? FORM_EXPLANATIONS[activeFormSlot] : null;
   const activeFormValue = activeFormSlot ? conjugation.forms[activeFormSlot] : null;
   const activeFormIsCurrent = Boolean(activeFormSlot && surfaceForm && activeFormValue === surfaceForm);
   const activeFormContext = activeFormExplanation
     ? activeFormIsCurrent
-      ? `${surfaceForm} is the ${activeFormExplanation.title.toLowerCase()} form of ${conjugation.verb.lemma}. ${translatedMeaning ? `In this sentence, it means “${translatedMeaning},” with the form adding the grammar meaning above.` : "The form adds the grammar meaning above to this verb."}`
-      : `${conjugation.verb.lemma} becomes ${activeFormValue}. ${translatedMeaning ? `Starting from the current dictionary meaning “${translatedMeaning},” this form changes the tense, politeness, connection, voice, or ability as described above.` : "This form applies the grammar meaning above to the current verb."}`
+      ? `${surfaceForm} is the ${activeFormExplanation.title.toLowerCase()} form of ${conjugation.verb.lemma}.`
+      : `${conjugation.verb.lemma} becomes ${activeFormValue}.`
     : null;
   const renderFormCell = (slot: JapaneseFormSlot) => (
     <div className={`japanese-conjugation-cell ${overridden.has(slot) ? "is-overridden" : ""}`} key={slot}>
@@ -113,7 +114,10 @@ export function JapaneseConjugationGrid({
           aria-label={`Explain ${FORM_LABELS[slot]}`}
           aria-pressed={activeFormSlot === slot}
           title={`Explain ${FORM_LABELS[slot]}`}
-          onClick={() => setActiveFormSlot((current) => (current === slot ? null : slot))}
+          onClick={() => {
+            setActiveFormSlot((current) => (current === slot ? null : slot));
+            setShowFullConjugation(true);
+          }}
         >
           i
         </button>
@@ -166,19 +170,20 @@ export function JapaneseConjugationGrid({
           renderFormCell(slot)
         ))}
       </div>
-      {activeFormExplanation ? (
-        <div className="japanese-conjugation-form-info" role="note">
-          <strong>{activeFormExplanation.title}</strong>
-          <p>{activeFormExplanation.general}</p>
-          <p>{activeFormContext}</p>
-        </div>
-      ) : null}
-      <details className="japanese-conjugation-details">
+      <details className="japanese-conjugation-details" open={showFullConjugation} onToggle={(event) => setShowFullConjugation(event.currentTarget.open)}>
         <summary>View full conjugation</summary>
         <div className="japanese-conjugation-groups" data-inventory-id={`${inventoryPrefix}.japanese-conjugation-grid`}>
           {FORM_GROUPS.map((group) => (
             <section className="japanese-conjugation-group" key={group.label}>
               <span className="eyebrow">{group.label}</span>
+              {activeFormSlot && group.slots.includes(activeFormSlot) && activeFormExplanation ? (
+                <div className="japanese-conjugation-form-info" role="note">
+                  <strong>{activeFormExplanation.title}</strong>
+                  <p>{activeFormExplanation.general}</p>
+                  <p><strong>For {conjugation.verb.lemma}:</strong> {activeFormContext}</p>
+                  {activeFormIsCurrent && translatedMeaning ? <p><strong>Meaning in this sentence:</strong> “{translatedMeaning}”</p> : null}
+                </div>
+              ) : null}
               <div className="japanese-conjugation-grid">
                 {group.slots.map((slot) => renderFormCell(slot))}
               </div>
