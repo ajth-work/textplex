@@ -700,6 +700,26 @@ def test_recover_page_result_rebuilds_accented_tokens_from_stale_artifact() -> N
     assert recovered.pipeline_version == "textplex-5"
 
 
+def test_recover_page_result_keeps_chinese_name_before_parenthetical_gloss() -> None:
+    page = build_page_extraction_result(
+        book_id="book-chinese-name",
+        page_number=1,
+        language_code="zh",
+        raw_text="李善中（韓語：이선중）。",
+    )
+    stale_sentence = page.sentences[0].model_copy(update={"tokens": tokenize_sentence("李善 中（韓語：이선중）。", "zh")})
+    stale_page = page.model_copy(
+        update={
+            "pipeline_version": "textplex-4",
+            "sentences": [stale_sentence],
+        }
+    )
+
+    recovered = book_extraction_service._recover_page_result(stale_page)
+
+    assert [token.surface_form for token in recovered.sentences[0].tokens] == ["李善中", "（", "韓語", "：", "이선중", "）", "。"]
+
+
 def test_load_page_artifact_recovers_jsonish_transcription(tmp_path: Path) -> None:
     data_root = tmp_path / "books"
     book_id = "book-recovery"

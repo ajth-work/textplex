@@ -154,6 +154,18 @@ def test_tokenize_sentence_uses_chinese_segmenter_when_available(monkeypatch) ->
     assert [token.surface_form for token in tokens] == ["\u79d1\u5b66", "\u8fb9\u754c"]
 
 
+def test_tokenize_sentence_keeps_chinese_name_before_parenthetical_gloss(monkeypatch) -> None:
+    monkeypatch.setattr(
+        extraction,
+        "_jieba_lcut",
+        lambda text, cut_all=False, HMM=True: ["\u674e\u5584", "\u4e2d"] if text == "\u674e\u5584\u4e2d" else [text],
+    )
+
+    tokens = tokenize_sentence("\u674e\u5584\u4e2d\uff08\u97d3\u8a9e\uff1a\uc774\uc120\uc911\uff09\u3002", "zh")
+
+    assert [token.surface_form for token in tokens] == ["\u674e\u5584\u4e2d", "\uff08", "\u97d3\u8a9e", "\uff1a", "\uc774\uc120\uc911", "\uff09", "\u3002"]
+
+
 def test_tokenize_sentence_keeps_korean_words_together() -> None:
     tokens = tokenize_sentence("\uc544\uce68\uc5d0 \uac00\uac8c\uc5d0 \uac14\uc5b4\uc694.", "ko")
 
