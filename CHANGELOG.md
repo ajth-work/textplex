@@ -2,7 +2,7 @@
 
 ## 2026-08-19
 
-- Preserved precomposed and combining Latin accents during processor tokenization, including Yoruba sentence coverage (#147).
+- Preserved precomposed and combining Latin accents during processor tokenization, including automatic recovery of stale Yoruba page artifacts (#147).
 
 ## 2026-08-18
 
