@@ -3,6 +3,7 @@
 ## 2026-08-19
 
 - Preserved precomposed and combining Latin accents during processor tokenization, including automatic recovery of stale Yoruba page artifacts (#147).
+- Preserved Chinese personal-name runs before parenthetical glosses, including the reported `李善中` Reader case (#141).
 
 ## 2026-08-18
 

@@ -23,6 +23,7 @@ _WORDISH_RE = re.compile(
 )
 _WHITESPACE_RE = re.compile(r"\s+")
 _SENTENCE_ENDERS = set("\u3002\uff01\uff1f!?.\u061f\u06d4")
+_CHINESE_NAME_OPENERS = set("\uff08(")
 _TRAILING_SENTENCE_CLOSERS = set("\"')]}〉》」』】〗〟”’")
 _HARD_NO_SPACE_JOIN_LANGS = {"zh", "ja", "ko"}
 _PUNCTUATION_TOKENS = set("。！？!?.，、；：,;:…—“”‘’（）()[]{}《》〈〉「」『』【】،؛؟۔")
@@ -311,7 +312,22 @@ def _tokenize_chinese_sentence(sentence: str) -> list[str]:
     for match in _WORDISH_RE.finditer(sentence):
         chunk = match.group(0)
         if _CHINESE_RUN_RE.fullmatch(chunk):
-            pieces.extend(_segment_chinese_chunk(chunk))
+            previous_char = sentence[match.start() - 1] if match.start() else ""
+            next_char = sentence[match.end()] if match.end() < len(sentence) else ""
+            is_name_prefix = (
+                2 <= len(chunk) <= 4
+                and next_char in _CHINESE_NAME_OPENERS
+                and (
+                    not previous_char
+                    or previous_char.isspace()
+                    or previous_char in _SENTENCE_ENDERS
+                    or previous_char in "\u3010\u300c\u300e([{"
+                )
+            )
+            if is_name_prefix:
+                pieces.append(chunk)
+            else:
+                pieces.extend(_segment_chinese_chunk(chunk))
         else:
             pieces.append(chunk)
     return pieces
