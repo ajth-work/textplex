@@ -2669,9 +2669,10 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   useEffect(() => {
     let active = true;
     const languageCode = selectedToken ? resolveTokenLanguageCode(selectedToken.surface_form, pageData?.book.language_code, selectedToken.language_code) : null;
-    const partOfSpeech = selectedToken?.part_of_speech?.toLowerCase() ?? "";
-    const isJapaneseVerb = Boolean(selectedToken?.lemma && languageCode?.startsWith("ja") && (partOfSpeech.includes("動詞") || partOfSpeech.includes("verb")));
-    if (!isJapaneseVerb || !selectedToken?.lemma) {
+    const candidateLemmas = selectedToken
+      ? [selectedToken.lemma, selectedToken.surface_form].filter((value, index, values): value is string => Boolean(value?.trim()) && values.indexOf(value) === index)
+      : [];
+    if (!languageCode?.startsWith("ja") || candidateLemmas.length === 0) {
       setJapaneseConjugation(null);
       setJapaneseConjugationLoading(false);
       return () => {
@@ -2679,25 +2680,29 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       };
     }
     setJapaneseConjugationLoading(true);
-    void postJson<JapaneseConjugationResponse>("/lexicon/japanese/conjugate", {
-      lemma: selectedToken.lemma,
-      reading: selectedToken.pronunciation ?? selectedToken.romanization,
-    })
-      .then((result) => {
-        if (active) {
-          setJapaneseConjugation(result);
+    void (async () => {
+      for (const lemma of candidateLemmas) {
+        try {
+          const result = await postJson<JapaneseConjugationResponse>("/lexicon/japanese/conjugate", {
+            lemma,
+            reading: selectedToken?.pronunciation ?? selectedToken?.romanization,
+          });
+          if (active) {
+            setJapaneseConjugation(result);
+            setJapaneseConjugationLoading(false);
+          }
+          return;
+        } catch {
+          // Inflected or non-verb Japanese tokens can fail classification; try the next candidate.
         }
-      })
-      .catch(() => {
-        if (active) {
-          setJapaneseConjugation(null);
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setJapaneseConjugationLoading(false);
-        }
-      });
+      }
+      if (active) {
+        setJapaneseConjugation(null);
+      }
+      if (active) {
+        setJapaneseConjugationLoading(false);
+      }
+    })();
     return () => {
       active = false;
     };
