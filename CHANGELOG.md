@@ -40,6 +40,7 @@
 - Centered and enlarged revealed answers, and clarified that a Japanese reading is not a written-form answer in meaning-to-word practice (#88).
 - Added a context-aware written-form candidate button when a Japanese reading matches the current card (#88).
 - Made kana-only Japanese word-to-reading cards request the romanized reading instead of repeating the same Hiragana form (#88).
+- Added a backward-compatible lexical identity contract for processed tokens, including stable versioned keys, part-of-speech and sense separation, provenance, confidence, ambiguity status, and tokenizer version metadata. Newly tokenized words now carry an explicitly uncertain surface-fallback identity while historical learner events remain unchanged (#60).
 - Expanded Chinese digit-by-digit romanization to all numeric Reader tokens, including months and days (#142).
 - Applied Chinese cardinal-number readings outside year context, so `12月`, `20日`, and `30分` use `shí èr`, `èr shí`, and `sān shí` (#142).
 
