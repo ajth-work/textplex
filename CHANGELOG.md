@@ -26,6 +26,8 @@
 - Added per-book page/sentence pace comparisons to progress and profile book cards, including same-language averages across the learner's recorded books.
 - Formatted book reading time as compact hours/minutes/seconds values instead of raw seconds on live and demo progress/profile rows.
 
+- Strengthened the app-wide visual hierarchy after the initial density pass: shared route heroes now use an editorial content-and-metrics split with a clear primary action, the public landing hero gives Reader and Study previews distinct visual weight, and section headings are more visibly grouped while retaining the existing TextPlex type, theme, and card language.
+
 ## 2026-08-19
 
 - Added route-aware first-visit page guides for Home, Library, Reader, and Study, using a dismissible carousel with pagination dots, local visit state, and a persistent reopen trigger.
