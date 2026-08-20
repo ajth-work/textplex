@@ -26,6 +26,8 @@
 - Added per-book page/sentence pace comparisons to progress and profile book cards, including same-language averages across the learner's recorded books.
 - Formatted book reading time as compact hours/minutes/seconds values instead of raw seconds on live and demo progress/profile rows.
 
+- Added [`docs/LEXICAL_IDENTITY_AND_MULTILINGUAL_TRUST_ROADMAP.md`](docs/LEXICAL_IDENTITY_AND_MULTILINGUAL_TRUST_ROADMAP.md), documenting the lexical-identity foundation, current usability impact, explicit limitations, data-boundary rules, acceptance criteria, and the sequenced roadmap from book-truth propagation through learner-state reconciliation (#60).
+
 ## 2026-08-19
 
 - Added route-aware first-visit page guides for Home, Library, Reader, and Study, using a dismissible carousel with pagination dots, local visit state, and a persistent reopen trigger.
