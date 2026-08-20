@@ -720,6 +720,41 @@ def test_recover_page_result_keeps_chinese_name_before_parenthetical_gloss() -> 
     assert [token.surface_form for token in recovered.sentences[0].tokens] == ["李善中", "（", "韓語", "：", "이선중", "）", "。"]
 
 
+def test_enrich_page_metadata_romanizes_all_chinese_numbers_digit_by_digit(tmp_path: Path) -> None:
+    page = build_page_extraction_result(
+        book_id="book-chinese-year",
+        page_number=1,
+        language_code="zh",
+        raw_text="李善中（韓語：이선중，1924年1月20日—2020年1月6日）。",
+    )
+
+    enriched = book_extraction_service._enrich_page_lexicon_metadata(page, data_root=tmp_path)
+    number_tokens = [token for token in enriched.sentences[0].tokens if token.surface_form in {"1924", "1", "20", "2020", "6"}]
+
+    assert [token.romanization for token in number_tokens] == [
+        "yī jiǔ èr sì",
+        "yī",
+        "èr shí",
+        "èr líng èr líng",
+        "yī",
+        "liù",
+    ]
+
+
+def test_enrich_page_metadata_uses_cardinal_readings_for_non_year_numbers(tmp_path: Path) -> None:
+    page = build_page_extraction_result(
+        book_id="book-chinese-cardinal",
+        page_number=1,
+        language_code="zh",
+        raw_text="12月20日5时30分。",
+    )
+
+    enriched = book_extraction_service._enrich_page_lexicon_metadata(page, data_root=tmp_path)
+    number_tokens = [token for token in enriched.sentences[0].tokens if token.surface_form.isdigit()]
+
+    assert [token.romanization for token in number_tokens] == ["shí èr", "èr shí", "wǔ", "sān shí"]
+
+
 def test_load_page_artifact_recovers_jsonish_transcription(tmp_path: Path) -> None:
     data_root = tmp_path / "books"
     book_id = "book-recovery"

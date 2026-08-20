@@ -2,6 +2,9 @@
 
 ## 2026-08-19
 
+- Expanded Chinese digit-by-digit romanization to all numeric Reader tokens, including months and days (#142).
+- Applied Chinese cardinal-number readings outside year context, so `12月`, `20日`, and `30分` use `shí èr`, `èr shí`, and `sān shí` (#142).
+
 - Preserved precomposed and combining Latin accents during processor tokenization, including automatic recovery of stale Yoruba page artifacts (#147).
 - Preserved Chinese personal-name runs before parenthetical glosses, including the reported `李善中` Reader case (#141).
 
