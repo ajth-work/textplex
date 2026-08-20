@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import {
@@ -64,6 +65,7 @@ function detailSummary(book: BookRecord, generationDetails: GeneratedReaderArtic
 }
 
 export function BookDetailView({ bookId }: { bookId: string }) {
+  const router = useRouter();
   const { activeImport, trackImport } = useImportProgress();
   const [book, setBook] = useState<BookRecord | null>(null);
   const [manifest, setManifest] = useState<BookPageManifest | null>(null);
@@ -224,7 +226,7 @@ export function BookDetailView({ bookId }: { bookId: string }) {
     setArchiveError(null);
     try {
       await archiveBook(book.id);
-      window.location.href = "/archive";
+      router.push("/archive");
     } catch (err) {
       setArchiveError(err instanceof Error ? err.message : "Unable to archive this reading item.");
       setArchiving(false);
