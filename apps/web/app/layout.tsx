@@ -29,6 +29,9 @@ export async function generateViewport(): Promise<Viewport> {
 
   return {
     colorScheme: isDarkAppTheme(theme) ? "dark" : "light",
+    // Android Chrome uses the first theme-color it resolves for the browser
+    // chrome. Keep one theme-aware value instead of competing media variants.
+    themeColor: appThemeBrowserColors[theme],
   };
 }
 
@@ -37,7 +40,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const storedTheme = cookieStore.get(APP_THEME_COOKIE_KEY)?.value;
   const storedAuthSession = parseAuthSessionCookie(cookieStore.get(AUTH_SESSION_COOKIE_KEY)?.value);
   const requestTheme = resolveAppTheme(storedTheme);
-  const requestThemeColor = appThemeBrowserColors[requestTheme];
   const requestThemePatternImage = getThemeWallpaperThumbnailPath(requestTheme);
 
   return (
@@ -53,8 +55,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       }
     >
       <head>
-        <meta name="theme-color" media="(prefers-color-scheme: light)" content={requestThemeColor} />
-        <meta name="theme-color" media="(prefers-color-scheme: dark)" content={requestThemeColor} />
         <script
           dangerouslySetInnerHTML={{
             __html: `
