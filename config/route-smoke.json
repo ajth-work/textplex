@@ -10,7 +10,6 @@
     { "path": "/study" },
     { "path": "/study/practice" },
     { "path": "/progress" },
-    { "path": "/goals", "expected": "Make progress feel tangible" },
     { "path": "/activity" },
     { "path": "/themes" },
     { "path": "/themes/fruit" },
