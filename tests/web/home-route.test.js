@@ -50,7 +50,7 @@ test("reader entry points resume the last sentence for the selected book", () =>
   assert.match(readerSource, /rememberReaderPosition\(bookId, pageNumber, selectedSentenceOrder\)/);
   assert.match(readerSource, /resolveReaderResumePosition\(bookId, null, pageNumber\)/);
   assert.match(readerSource, /reader\.completion-summary-card/);
-  assert.match(readerSource, /Mark as read and return to library/);
+  assert.match(readerSource, /Mark as read, archive, and return/);
   assert.match(librarySource, /fetchJson<ProgressSurfaceResponse>\("\/progress"\)/);
   assert.match(librarySource, /resolveReaderResumeHref\(bookId, progress\)/);
   assert.match(librarySource, /library-read-state/);
