@@ -674,6 +674,7 @@ Source: `site/vocabulary-preview.html`
 ## Cross-cutting implementation notes
 
 - `RoutePage` owns the shared hero and metrics structure for Analysis, Activity, Import, Progress, Profile, Search, Settings, Study, and Roadmap.
+- The app-wide visual density pass keeps shared route heroes, two-value metric rows, repeated card stacks, operational consoles, and the build/feedback footer on one compact spacing rhythm. Library retains the same `library.search-hero` ownership while its Import action aligns with search controls on desktop; Settings and Profile keep their existing IDs while their controls render as bounded rows.
 - Live and demo implementations intentionally share route and card IDs. If their layouts diverge, document the divergence in the route section before adding a new ID.
 - `GlobalThemePicker` is rendered on My Themes as `theme-settings.app-theme-card`; the theme provider remains a shell-level region because it affects every route.
 - My Themes at `/profile/themes` owns appearance behavior and personal theme management. Theme Shop at `/themes` independently owns catalog discovery, collection offers, preview status, ownership, and pricing.
@@ -685,6 +686,7 @@ Use this section to move from a component ID to the issue that owns its pending 
 
 | Inventory IDs | Tracker item | Relationship |
 | --- | --- | --- |
+| `shell.chrome`, `shell.build-footer`, `shell.feedback-footer`, `shell.feedback-button`, `surface.route-hero`, `surface.metrics`, `landing.hero`, `library.search-hero`, `library.import-button`, `activity.pages-progress-chart`, `activity.sentences-progress-chart`, `settings.preferences-card`, `profile.email-change-form`, `admin.nav`, `admin.hero`, `admin-feedback.*`, `admin-theme.*`, `tester.*` | App-wide visual density pass (Local complete) | Tightens duplicated shell and hero spacing, normalizes buttons and compact card padding, gives two-value metric rows and the two Activity charts the full available width, organizes Settings/Profile controls, aligns the desktop Library import action, and compacts shared admin/tester stacks without changing route ownership or TextPlex's visual identity. |
 | `preview.home.recent-analyses`, `preview.home.recent-analysis-row`, `analysis.difficulty-card`, `analysis.estimated-level-card`, `analysis.vocabulary-distribution-card`, `analysis.average-vocabulary-level-card`, `analysis.unknown-words-card`, `analysis.estimated-comprehension-card`, `analysis.recommendation-card` | [#42](https://github.com/TextPlex/textplex/issues/42) | Define the canonical difficulty/expected-HSK metric and wire the live and preview consumers. |
 | `analysis.*`, `reader.*` analytics regions | [#31](https://github.com/TextPlex/textplex/issues/31) | Broader reader-detail analytics work; #42 owns the difficulty/HSK metric contract. |
 | `reader.beginning-action` | [#93](https://github.com/TextPlex/textplex/issues/93) | Discoverable escape hatch for opening a book at its first page when the reader starts elsewhere. |
