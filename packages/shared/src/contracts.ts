@@ -22,6 +22,7 @@ export interface BookRecord {
   extraction_updated_at: string | null;
   extracted_page_count: number;
   extraction_path: string | null;
+  archived_at?: string | null;
   created_at: string;
   processed_at: string | null;
 }
@@ -848,10 +849,15 @@ export interface StudySurfaceResponse {
 export interface ProgressBookSummary {
   book_id: string;
   title: string;
+  language_code: string;
   reading_sessions: number;
   page_reads: number;
   sentence_reads: number;
   active_seconds: number;
+  average_seconds_per_page: number | null;
+  average_seconds_per_sentence: number | null;
+  language_average_seconds_per_page: number | null;
+  language_average_seconds_per_sentence: number | null;
   total_pages: number;
   furthest_page: number;
   resume_page: number;

@@ -22,6 +22,12 @@ test("Next reader route passes dynamic book and page parameters to the live read
   assert.match(routeSource, /export const dynamic = "force-dynamic"/);
 });
 
+test("Next viewport exposes one server-rendered theme color for Android browser chrome", () => {
+  assert.match(layoutSource, /export async function generateViewport\(\): Promise<Viewport>/);
+  assert.match(layoutSource, /themeColor: appThemeBrowserColors\[theme\]/);
+  assert.doesNotMatch(layoutSource, /<meta name="theme-color" media=/);
+});
+
 test("Next reader meaning line preserves spacing, offers a complete reveal escape hatch, and handles punctuation", () => {
   assert.match(readerSource, /readerMeaningLineRevealAllStorageKey/);
   assert.match(readerSource, /reader\.meaning-line-reveal-all-section/);
@@ -213,7 +219,8 @@ test("Next reader expands the session summary into book-scoped stats", () => {
 
 test("Next reader keeps completion summary fallback labels readable", () => {
   assert.match(readerSource, /bookCoveragePercent == null \? "\\u2014"/);
-  assert.match(readerSource, /completionSaving \? "Saving\.\.\." : "Mark as read and return to library"/);
+  assert.match(readerSource, /completionSaving \? "Saving\.\.\." : "Mark as read, archive, and return"/);
+  assert.match(readerSource, /archiveBook\(bookId\)/);
   assert.doesNotMatch(readerSource, /bookCoveragePercent == null \? "ÃƒÆ’/);
 });
 

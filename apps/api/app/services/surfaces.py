@@ -54,6 +54,14 @@ def _book_artifact_path(data_root: Path, book_id: str) -> Path:
     return _books_root(data_root) / book_id / "extractions" / "book-extraction.json"
 
 
+def _normalized_language_code(language_code: str) -> str:
+    return language_code.split("-", 1)[0].strip().lower() or "unknown"
+
+
+def _average_seconds(total_seconds: int, count: int) -> float | None:
+    return round(total_seconds / count, 2) if count > 0 else None
+
+
 def _load_book_extraction(data_root: Path, book_id: str) -> BookExtractionResult | None:
     artifact_path = _book_artifact_path(data_root, book_id)
     if not artifact_path.exists():
@@ -569,10 +577,13 @@ def get_progress_surface(data_root: Path, *, owner_id: str | None = None) -> Pro
             ProgressBookSummary(
                 book_id=book_id,
                 title=title_map.get(book_id, record.title),
+                language_code=record.language_code,
                 reading_sessions=reading_sessions,
                 page_reads=page_reads,
                 sentence_reads=sentence_reads,
                 active_seconds=active_seconds,
+                average_seconds_per_page=_average_seconds(active_seconds, page_reads),
+                average_seconds_per_sentence=_average_seconds(active_seconds, sentence_reads),
                 total_pages=total_pages,
                 furthest_page=furthest_page,
                 resume_page=resume_page,
@@ -586,6 +597,29 @@ def get_progress_surface(data_root: Path, *, owner_id: str | None = None) -> Pro
             )
         )
 
+    language_totals: dict[str, dict[str, int]] = {}
+    for book in books:
+        language = _normalized_language_code(book.language_code)
+        totals = language_totals.setdefault(language, {"seconds": 0, "pages": 0, "sentences": 0})
+        totals["seconds"] += book.active_seconds
+        totals["pages"] += book.page_reads
+        totals["sentences"] += book.sentence_reads
+
+    books = [
+        book.model_copy(
+            update={
+                "language_average_seconds_per_page": _average_seconds(
+                    language_totals[_normalized_language_code(book.language_code)]["seconds"],
+                    language_totals[_normalized_language_code(book.language_code)]["pages"],
+                ),
+                "language_average_seconds_per_sentence": _average_seconds(
+                    language_totals[_normalized_language_code(book.language_code)]["seconds"],
+                    language_totals[_normalized_language_code(book.language_code)]["sentences"],
+                ),
+            }
+        )
+        for book in books
+    ]
     books = sorted(books, key=lambda item: item.title)
     books = sorted(books, key=lambda item: item.last_read_at or "", reverse=True)
     return ProgressSurfaceResponse(profile=profile, books=books, weekly_page_reads=weekly_page_reads)
