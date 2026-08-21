@@ -4,6 +4,10 @@
 
 - Added ESLint 10 compatibility handling for the Next.js flat configuration so web linting remains operational during the major-version upgrade.
 
+## 2026-08-21
+
+- Corrected Japanese Reader readings for numeric months such as `1月` and city-name `市` context while preserving valid JMdict reading alternatives.
+
 ## 2026-08-20
 
 - Simplified book detail pages for learners by replacing processing metadata with language, page, date, and reading-overview details, and shortening actions to open, restart, refresh, and library.
