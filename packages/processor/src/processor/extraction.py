@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from .contracts import (
     BookExtractionResult,
     LexicalEntryResult,
+    LexicalIdentity,
     PageExtractionResult,
     SentenceResult,
     TokenOccurrenceResult,
@@ -467,12 +468,20 @@ def tokenize_sentence(sentence: str, language_code: str) -> list[TokenResult]:
 
     tokens: list[TokenResult] = []
     for index, surface_form in enumerate(surfaces, start=1):
+        token_language_code = detect_token_language_code(surface_form, language_code)
+        lemma = None if _is_punctuation_token(surface_form) else _normalize_token_surface(surface_form, language_code)
         tokens.append(
             TokenResult(
                 order=index,
                 surface_form=surface_form,
-                language_code=detect_token_language_code(surface_form, language_code),
-                lemma=None if _is_punctuation_token(surface_form) else _normalize_token_surface(surface_form, language_code),
+                language_code=token_language_code,
+                lemma=lemma,
+                lexical_identity=LexicalIdentity(
+                    language_code=token_language_code,
+                    lemma=lemma,
+                )
+                if token_language_code and lemma
+                else None,
             )
         )
     return tokens
