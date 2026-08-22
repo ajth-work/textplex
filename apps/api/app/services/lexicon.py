@@ -19,10 +19,12 @@ from app.schemas.lexicon import (
 )
 from app.services.google_translate import (
     is_google_translate_configured,
+    is_google_translate_romanization_supported,
     romanize_text,
     translate_text,
 )
 from app.services.google_translate_usage import record_google_translate_usage
+from app.services.hebrew_transliteration import get_hebrew_pronunciation_override
 
 _lexicon_seed_lock = threading.Lock()
 _warmed_lexicon_keys: set[tuple[str, str]] = set()
@@ -63,6 +65,29 @@ def _ensure_google_translate_cache_schema(connection: sqlite3.Connection) -> Non
         connection.commit()
 
 
+def _ensure_jmdict_schema(connection: sqlite3.Connection) -> None:
+    columns = {
+        str(row[1]).strip()
+        for row in connection.execute("PRAGMA table_info(lexicon_entries)").fetchall()
+        if len(row) > 1 and row[1]
+    }
+    for column_name, column_type in (
+        ("reading", "TEXT"),
+        ("part_of_speech", "TEXT"),
+        ("external_id", "TEXT"),
+        ("source_id", "INTEGER"),
+        ("source_version", "TEXT"),
+    ):
+        if column_name not in columns:
+            connection.execute(f"ALTER TABLE lexicon_entries ADD COLUMN {column_name} {column_type}")
+    migration_path = _migration_root() / "0004_jmdict_provenance.sql"
+    connection.executescript(migration_path.read_text(encoding="utf-8"))
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_lexicon_entries_external_id ON lexicon_entries(source_id, external_id)"
+    )
+    connection.commit()
+
+
 def ensure_lexicon_database(data_root: Path) -> Path:
     db_path = get_lexicon_db_path(data_root)
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -70,11 +95,13 @@ def ensure_lexicon_database(data_root: Path) -> Path:
     if db_path.exists() and db_path.stat().st_size > 0:
         with closing(sqlite3.connect(db_path)) as connection:
             _ensure_google_translate_cache_schema(connection)
+            _ensure_jmdict_schema(connection)
         return db_path
 
     with closing(sqlite3.connect(db_path)) as connection:
         for migration_file in sorted(_migration_root().glob("*.sql")):
             connection.executescript(migration_file.read_text(encoding="utf-8"))
+        _ensure_jmdict_schema(connection)
         connection.commit()
 
     return db_path
@@ -179,6 +206,11 @@ def _upsert_rows(
                 language_code,
                 entry_type,
                 surface_form,
+                reading,
+                part_of_speech,
+                external_id,
+                source_id,
+                source_version,
                 pinyin,
                 tone,
                 definition,
@@ -191,8 +223,13 @@ def _upsert_rows(
                 source_path,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(language_code, entry_type, surface_form) DO UPDATE SET
+                reading = excluded.reading,
+                part_of_speech = excluded.part_of_speech,
+                external_id = excluded.external_id,
+                source_id = excluded.source_id,
+                source_version = excluded.source_version,
                 pinyin = excluded.pinyin,
                 tone = excluded.tone,
                 definition = excluded.definition,
@@ -208,6 +245,11 @@ def _upsert_rows(
                 language_code,
                 resolved_entry_type,
                 surface_form,
+                _safe_text(row.get("reading")),
+                _safe_text(row.get("part_of_speech")),
+                _safe_text(row.get("external_id")),
+                _safe_int(row.get("source_id")),
+                _safe_text(row.get("source_version")),
                 _safe_text(row.get("pinyin")),
                 _safe_int(row.get("tone")),
                 _safe_text(row.get("definition")) or _safe_text(row.get("english")),
@@ -374,6 +416,11 @@ def _cache_row_to_entry(row: sqlite3.Row) -> LexiconEntryRecord:
         language_code=row["language_code"],
         entry_type=row["entry_type"],
         surface_form=row["surface_form"],
+        reading=row["reading"] if "reading" in row_keys else None,
+        part_of_speech=row["part_of_speech"] if "part_of_speech" in row_keys else None,
+        external_id=row["external_id"] if "external_id" in row_keys else None,
+        source_id=row["source_id"] if "source_id" in row_keys else None,
+        source_version=row["source_version"] if "source_version" in row_keys else None,
         pronunciation=row["pronunciation"] if "pronunciation" in row_keys else None,
         pinyin=row["pinyin"],
         tone=row["tone"],
@@ -477,8 +524,12 @@ def _lookup_google_translate_entry(
     with suppress(OSError, sqlite3.Error):
         record_google_translate_usage(data_root=data_root, characters=len(term), owner_id=owner_id)
 
-    pronunciation = romanize_text(term, source_language_code=language_code)
-    if pronunciation:
+    pronunciation = get_hebrew_pronunciation_override(term) if language_code == "he" else None
+    romanization_from_google = False
+    if pronunciation is None and is_google_translate_romanization_supported(language_code):
+        pronunciation = romanize_text(term, source_language_code=language_code)
+        romanization_from_google = bool(pronunciation)
+    if romanization_from_google:
         with suppress(OSError, sqlite3.Error):
             record_google_translate_usage(data_root=data_root, characters=len(term), owner_id=owner_id)
 
@@ -781,10 +832,10 @@ def lookup_lexicon_entry(
             placeholders = ", ".join("?" for _ in candidate_surface_forms)
             rows = connection.execute(
                 f"""
-                SELECT id, language_code, entry_type, surface_form, pinyin, tone, definition, radical, stroke_count, hsk_level, frequency_rank, note, source_name, source_path
+                SELECT id, language_code, entry_type, surface_form, reading, part_of_speech, external_id, source_id, source_version, pinyin, tone, definition, radical, stroke_count, hsk_level, frequency_rank, note, source_name, source_path
                 FROM lexicon_entries
                 WHERE language_code = ? AND surface_form IN ({placeholders})
-                ORDER BY CASE entry_type WHEN 'word' THEN 0 ELSE 1 END, frequency_rank IS NULL, frequency_rank ASC, id ASC
+                ORDER BY CASE entry_type WHEN 'jmdict' THEN 0 WHEN 'word' THEN 1 ELSE 2 END, frequency_rank IS NULL, frequency_rank ASC, id ASC
                 """,
                 [normalized_language_code, *candidate_surface_forms],
             ).fetchall()
@@ -859,7 +910,7 @@ def lookup_lexicon_pinyin_map(
                 SELECT surface_form, pinyin
                 FROM lexicon_entries
                 WHERE language_code = ? AND surface_form IN ({placeholders}) AND pinyin IS NOT NULL AND pinyin != ''
-                ORDER BY CASE entry_type WHEN 'word' THEN 0 ELSE 1 END, frequency_rank IS NULL, frequency_rank ASC, id ASC
+                ORDER BY CASE entry_type WHEN 'jmdict' THEN 0 WHEN 'word' THEN 1 ELSE 2 END, frequency_rank IS NULL, frequency_rank ASC, id ASC
                 """,
                 [normalized_language_code, *candidate_terms],
             ).fetchall()
@@ -940,7 +991,7 @@ def lookup_lexicon_entry_map(
         rows = (
             connection.execute(
                 f"""
-                SELECT id, language_code, entry_type, surface_form, pinyin, tone, definition, radical, stroke_count, hsk_level, frequency_rank, note, source_name, source_path
+                SELECT id, language_code, entry_type, surface_form, reading, part_of_speech, external_id, source_id, source_version, pinyin, tone, definition, radical, stroke_count, hsk_level, frequency_rank, note, source_name, source_path
                 FROM lexicon_entries
                 WHERE language_code = ? AND surface_form IN ({placeholders})
                 ORDER BY CASE entry_type WHEN 'word' THEN 0 ELSE 1 END, frequency_rank IS NULL, frequency_rank ASC, id ASC
@@ -962,6 +1013,11 @@ def lookup_lexicon_entry_map(
             language_code=best_row["language_code"],
             entry_type=best_row["entry_type"],
             surface_form=best_row["surface_form"],
+            reading=best_row["reading"],
+            part_of_speech=best_row["part_of_speech"],
+            external_id=best_row["external_id"],
+            source_id=best_row["source_id"],
+            source_version=best_row["source_version"],
             pinyin=best_row["pinyin"],
             tone=best_row["tone"],
             definition=best_row["definition"],

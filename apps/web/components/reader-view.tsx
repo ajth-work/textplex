@@ -1028,6 +1028,13 @@ function normalizeLexiconComparisonValue(value: string | null | undefined): stri
   return normalizeDisplayReading(value).replace(/\s+/gu, "").toLocaleLowerCase();
 }
 
+function splitJapaneseReadingAlternatives(value: string | null | undefined): string[] {
+  return String(value ?? "")
+    .split(/[;,/|、，]/u)
+    .map((alternative) => alternative.trim())
+    .filter(Boolean);
+}
+
 function isJapaneseKanaOnly(value: string): boolean {
   return /^[\p{Script=Hiragana}\p{Script=Katakana}ー・]+$/u.test(value.trim());
 }
@@ -1052,7 +1059,8 @@ function selectLexiconEntryForToken(
   const readingMatches = tokenReading
     ? exactSurfaceEntries.filter((entry) => {
         const entryReading = normalizeLexiconComparisonValue(entry.pronunciation ?? entry.pinyin);
-        return !entryReading || entryReading === tokenReading;
+        const entryAlternatives = splitJapaneseReadingAlternatives(entry.pronunciation ?? entry.pinyin);
+        return !entryReading || entryAlternatives.some((alternative) => normalizeLexiconComparisonValue(alternative) === tokenReading);
       })
     : exactSurfaceEntries;
 

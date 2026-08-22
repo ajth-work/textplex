@@ -8,6 +8,7 @@ from app.services.google_translate_usage import (
     get_google_translate_usage_summary,
     record_google_translate_usage,
 )
+from app.services.jmdict import import_jmdict
 from app.services.lexicon import (
     import_lexicon_from_source,
     lookup_lexicon_entry,
@@ -152,6 +153,42 @@ def test_import_and_lookup_japanese_context_entries(tmp_path: Path) -> None:
     time_lookup = lookup_lexicon_entry(data_root=data_root, language_code="ja", term="\u4e94\u5206")
     assert time_lookup.entries[0].pinyin == "gofun"
     assert time_lookup.entries[0].definition == "five minutes"
+
+
+def test_import_jmdict_preserves_provenance_and_projects_metadata(tmp_path: Path) -> None:
+    source_path = tmp_path / "JMdict_e.xml"
+    source_path.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE JMdict [<!ENTITY n "noun">]>
+<JMdict>
+  <entry>
+    <ent_seq>1000001</ent_seq>
+    <k_ele><keb>村</keb></k_ele>
+    <r_ele><reb>むら</reb><re_pri>ichi1</re_pri></r_ele>
+    <sense><pos>&n;</pos><gloss>village</gloss></sense>
+  </entry>
+</JMdict>
+""",
+        encoding="utf-8",
+    )
+
+    summary = import_jmdict(source_path, data_root=tmp_path / "data", source_version="test-2026-08-22")
+
+    assert summary.entry_count == 1
+    assert summary.projected_rows == 2
+    lookup = lookup_lexicon_entry(data_root=tmp_path / "data", language_code="ja", term="村")
+    assert lookup.entries[0].reading == "むら"
+    assert lookup.entries[0].definition == "village"
+    assert lookup.entries[0].part_of_speech == "Noun"
+    assert lookup.entries[0].external_id == "1000001"
+    assert lookup.entries[0].source_version == "test-2026-08-22"
+
+    with closing(sqlite3.connect(tmp_path / "data" / "lexicon" / "lexicon.sqlite3")) as connection:
+        source = connection.execute("SELECT display_name, checksum_sha256 FROM lexicon_sources").fetchone()
+        payload = connection.execute("SELECT payload_json FROM jmdict_entries WHERE ent_seq = 1000001").fetchone()
+    assert source[0] == "JMdict"
+    assert source[1] == summary.checksum_sha256
+    assert "村" in payload[0]
 
 
 def test_import_and_lookup_lexicon_from_russian_pack(tmp_path: Path) -> None:
@@ -484,8 +521,8 @@ def test_lookup_lexicon_entry_uses_google_translation_fallback_and_cache(tmp_pat
 
     lookup = lookup_lexicon_entry(
         data_root=data_root,
-        language_code="ko",
-        term="가짜단어",
+        language_code="ru",
+        term="привет",
         allow_google_fallback=True,
     )
 
@@ -494,7 +531,7 @@ def test_lookup_lexicon_entry_uses_google_translation_fallback_and_cache(tmp_pat
     assert lookup.entries[0].pronunciation == "fake reading"
     assert lookup.entries[0].source_name == "Google Cloud Translation"
     assert lookup.resolution_source == "google_translate_live"
-    assert calls == [("가짜단어", "ko", "en"), ("가짜단어", "ko", "romanize")]
+    assert calls == [("привет", "ru", "en"), ("привет", "ru", "romanize")]
 
     def fail_translate_text(*args, **kwargs) -> str:
         raise AssertionError("cache should satisfy the second lookup")
@@ -502,8 +539,8 @@ def test_lookup_lexicon_entry_uses_google_translation_fallback_and_cache(tmp_pat
     monkeypatch.setattr("app.services.lexicon.translate_text", fail_translate_text)
     cached_lookup = lookup_lexicon_entry(
         data_root=data_root,
-        language_code="ko",
-        term="가짜단어",
+        language_code="ru",
+        term="привет",
         allow_google_fallback=True,
     )
 
@@ -513,8 +550,8 @@ def test_lookup_lexicon_entry_uses_google_translation_fallback_and_cache(tmp_pat
     assert cached_lookup.resolution_source == "google_translate_cache"
     usage_summary = get_google_translate_usage_summary(data_root)
     assert usage_summary.request_count == 2
-    assert usage_summary.character_count == len("가짜단어") * 2
-    assert usage_summary.free_remaining_characters == usage_summary.free_tier_limit - len("가짜단어") * 2
+    assert usage_summary.character_count == len("привет") * 2
+    assert usage_summary.free_remaining_characters == usage_summary.free_tier_limit - len("привет") * 2
 
 
 def test_google_translate_usage_is_account_scoped_without_losing_service_total(tmp_path: Path) -> None:
