@@ -1,10 +1,109 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import unicodedata
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 CURRENT_PIPELINE_VERSION = "textplex-5"
+CURRENT_TOKENIZER_VERSION = "textplex-tokenizer-1"
+LEXICAL_IDENTITY_KEY_VERSION = "v1"
+
+
+def _normalize_identity_text(value: str, *, casefold: bool = False) -> str:
+    normalized = unicodedata.normalize("NFC", value.strip())
+    return normalized.casefold() if casefold else normalized
+
+
+def _normalize_optional_identity_text(value: str | None, *, casefold: bool = False) -> str | None:
+    if value is None:
+        return None
+    normalized = _normalize_identity_text(value, casefold=casefold)
+    return normalized or None
+
+
+def build_lexical_identity_key(
+    *,
+    language_code: str,
+    lemma: str,
+    part_of_speech: str | None = None,
+    sense_id: str | None = None,
+    external_lexicon_id: str | None = None,
+) -> str:
+    """Build a stable key without collapsing distinct parts of speech or senses."""
+    normalized_language_code = _normalize_identity_text(language_code, casefold=True).replace("_", "-")
+    normalized_lemma = _normalize_identity_text(lemma, casefold=True)
+    if not normalized_language_code or not normalized_lemma:
+        raise ValueError("language_code and lemma are required to build a lexical identity key")
+    payload = {
+        "external_lexicon_id": _normalize_optional_identity_text(external_lexicon_id),
+        "language_code": normalized_language_code,
+        "lemma": normalized_lemma,
+        "part_of_speech": _normalize_optional_identity_text(part_of_speech, casefold=True),
+        "sense_id": _normalize_optional_identity_text(sense_id),
+    }
+    canonical_payload = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    digest = hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()
+    return f"lex:{LEXICAL_IDENTITY_KEY_VERSION}:{digest}"
+
+
+class LexicalIdentity(BaseModel):
+    language_code: str = Field(min_length=2, max_length=35)
+    lemma: str = Field(min_length=1)
+    part_of_speech: str | None = None
+    sense_id: str | None = None
+    external_lexicon_id: str | None = None
+    status: Literal["resolved", "ambiguous", "surface_fallback"] = "surface_fallback"
+    provenance: str = Field(default="tokenizer_surface", min_length=1)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    tokenizer_version: str = Field(default=CURRENT_TOKENIZER_VERSION, min_length=1)
+
+    @field_validator("language_code")
+    @classmethod
+    def normalize_language_code(cls, value: str) -> str:
+        normalized = _normalize_identity_text(value, casefold=True).replace("_", "-")
+        if not 2 <= len(normalized) <= 35:
+            raise ValueError("language_code must contain between 2 and 35 non-whitespace characters")
+        return normalized
+
+    @field_validator("lemma")
+    @classmethod
+    def normalize_lemma(cls, value: str) -> str:
+        normalized = _normalize_identity_text(value, casefold=True)
+        if not normalized:
+            raise ValueError("lemma must contain at least one non-whitespace character")
+        return normalized
+
+    @field_validator("part_of_speech")
+    @classmethod
+    def normalize_part_of_speech(cls, value: str | None) -> str | None:
+        return _normalize_optional_identity_text(value, casefold=True)
+
+    @field_validator("sense_id", "external_lexicon_id")
+    @classmethod
+    def normalize_optional_identifier(cls, value: str | None) -> str | None:
+        return _normalize_optional_identity_text(value)
+
+    @field_validator("provenance", "tokenizer_version")
+    @classmethod
+    def normalize_required_metadata(cls, value: str) -> str:
+        normalized = _normalize_identity_text(value)
+        if not normalized:
+            raise ValueError("identity metadata must contain at least one non-whitespace character")
+        return normalized
+
+    @computed_field(return_type=str)
+    @property
+    def identity_key(self) -> str:
+        return build_lexical_identity_key(
+            language_code=self.language_code,
+            lemma=self.lemma,
+            part_of_speech=self.part_of_speech,
+            sense_id=self.sense_id,
+            external_lexicon_id=self.external_lexicon_id,
+        )
 
 
 class BoundingBox(BaseModel):
@@ -27,6 +126,7 @@ class TokenResult(BaseModel):
     proficiency_system: str | None = None
     proficiency_level: str | None = None
     entity: str | None = None
+    lexical_identity: LexicalIdentity | None = None
     bbox: BoundingBox | None = None
 
 
