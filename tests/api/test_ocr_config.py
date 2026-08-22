@@ -6,8 +6,8 @@ import pytest
 from app.services.ocr import (
     OcrPageResult,
     _build_page_image_data_url,
-    _extract_structured_ocr_result,
     _extract_response_text,
+    _extract_structured_ocr_result,
     get_openai_max_output_tokens,
     get_openai_ocr_model,
     get_text_source_signature,
