@@ -13,7 +13,12 @@ from app.services.lexicon import import_lexicon_from_source
 from app.services.ocr import OcrPageResult
 from fastapi.testclient import TestClient
 from processor import build_page_extraction_result, tokenize_sentence
-from processor.contracts import BookExtractionResult, PageExtractionResult, SentenceResult, TokenResult
+from processor.contracts import (
+    BookExtractionResult,
+    PageExtractionResult,
+    SentenceResult,
+    TokenResult,
+)
 
 
 def build_safe_sample_pdf(tmp_path: Path, *, page_count: int) -> Path:
