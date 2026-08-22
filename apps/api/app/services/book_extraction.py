@@ -124,6 +124,20 @@ _JAPANESE_MINUTE_READINGS = {
     8: "happun",
     9: "kyūfun",
 }
+_JAPANESE_MONTH_READINGS = {
+    1: "ichigatsu",
+    2: "nigatsu",
+    3: "sangatsu",
+    4: "shigatsu",
+    5: "gogatsu",
+    6: "rokugatsu",
+    7: "shichigatsu",
+    8: "hachigatsu",
+    9: "kugatsu",
+    10: "jūgatsu",
+    11: "jūichigatsu",
+    12: "jūnigatsu",
+}
 _CHINESE_DIGIT_PINYIN = {
     "0": "líng",
     "1": "yī",
@@ -244,11 +258,35 @@ def _japanese_counter_number(
     return None
 
 
+def _japanese_numeric_month(token_surface: str) -> int | None:
+    match = re.fullmatch(r"([0-9０-９]{1,2})月", token_surface.strip())
+    if not match:
+        return None
+
+    number = int(match.group(1).translate(str.maketrans("０１２３４５６７８９", "0123456789")))
+    return number if number in _JAPANESE_MONTH_READINGS else None
+
+
+def _japanese_city_name_context(tokens: list[TokenResult], token_index: int) -> bool:
+    if tokens[token_index].surface_form.strip() != "市" or token_index == 0:
+        return False
+
+    previous_surface = tokens[token_index - 1].surface_form.strip()
+    return bool(previous_surface and re.search(r"[\u3400-\u4dbf\u4e00-\u9fff]", previous_surface))
+
+
 def _japanese_contextual_metadata(
     tokens: list[TokenResult],
     token_index: int,
 ) -> tuple[str | None, str | None]:
     """Resolve Japanese counter readings that depend on number or sense."""
+    numeric_month = _japanese_numeric_month(tokens[token_index].surface_form)
+    if numeric_month is not None:
+        return _JAPANESE_MONTH_READINGS[numeric_month], None
+
+    if _japanese_city_name_context(tokens, token_index):
+        return "shi", None
+
     counter_data = _japanese_counter_number(tokens[token_index].surface_form)
     if counter_data is None:
         return None, None

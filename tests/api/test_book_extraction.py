@@ -9,10 +9,16 @@ from app.schemas.books import BookRecord
 from app.schemas.lexicon import LexiconEntryRecord
 from app.services import book_extraction as book_extraction_service
 from app.services.book_registry import import_book_from_path
+from app.services.lexicon import import_lexicon_from_source
 from app.services.ocr import OcrPageResult
 from fastapi.testclient import TestClient
 from processor import build_page_extraction_result, tokenize_sentence
-from processor.contracts import BookExtractionResult
+from processor.contracts import (
+    BookExtractionResult,
+    PageExtractionResult,
+    SentenceResult,
+    TokenResult,
+)
 
 
 def build_safe_sample_pdf(tmp_path: Path, *, page_count: int) -> Path:
@@ -753,6 +759,76 @@ def test_enrich_page_metadata_uses_cardinal_readings_for_non_year_numbers(tmp_pa
     number_tokens = [token for token in enriched.sentences[0].tokens if token.surface_form.isdigit()]
 
     assert [token.romanization for token in number_tokens] == ["shí èr", "èr shí", "wǔ", "sān shí"]
+
+
+def test_enrich_page_metadata_resolves_numeric_japanese_month_and_city_name_readings(tmp_path: Path) -> None:
+    source_root = tmp_path / "japanese-source"
+    source_root.mkdir()
+    (source_root / "lexicon.csv").write_text(
+        "surface_form,entry_type,pinyin,tone,definition,radical,stroke_count,hsk_level,frequency_rank,note\n"
+        "市,word,ichi;shi,,city; town,,,,1,JMdict reading alternatives\n"
+        "1月,word,ichigatsu;hitotsuki,,January,,,,2,JMdict reading alternatives\n"
+        "一月,word,hitotsuki;ichigatsu,,one month; January,,,,3,JMdict reading alternatives\n",
+        encoding="utf-8",
+    )
+    data_root = tmp_path / "data"
+    import_lexicon_from_source(
+        source_root,
+        data_root=data_root,
+        language_code="ja",
+        replace_existing=True,
+    )
+
+    page = PageExtractionResult(
+        book_id="japanese-reading-context",
+        page_number=1,
+        language_code="ja",
+        raw_text="京都市は1月です。",
+        clean_text="京都市は1月です。",
+        sentences=[
+            SentenceResult(
+                order=1,
+                text="京都市は1月です。",
+                tokens=[
+                    TokenResult(order=1, surface_form="京都"),
+                    TokenResult(order=2, surface_form="市"),
+                    TokenResult(order=3, surface_form="は"),
+                    TokenResult(order=4, surface_form="1月"),
+                ],
+            )
+        ],
+    )
+
+    enriched = book_extraction_service._enrich_page_lexicon_metadata(page, data_root=data_root)
+    city_token = enriched.sentences[0].tokens[1]
+    month_token = enriched.sentences[0].tokens[3]
+
+    assert city_token.romanization == "shi"
+    assert month_token.romanization == "ichigatsu"
+
+    standalone_city = page.model_copy(
+        update={
+            "sentences": [
+                page.sentences[0].model_copy(
+                    update={"tokens": [TokenResult(order=1, surface_form="市")]}
+                )
+            ]
+        }
+    )
+    standalone_enriched = book_extraction_service._enrich_page_lexicon_metadata(standalone_city, data_root=data_root)
+    assert standalone_enriched.sentences[0].tokens[0].romanization == "ichi;shi"
+
+    kanji_month = page.model_copy(
+        update={
+            "sentences": [
+                page.sentences[0].model_copy(
+                    update={"tokens": [TokenResult(order=1, surface_form="一月")]}
+                )
+            ]
+        }
+    )
+    kanji_month_enriched = book_extraction_service._enrich_page_lexicon_metadata(kanji_month, data_root=data_root)
+    assert kanji_month_enriched.sentences[0].tokens[0].romanization == "hitotsuki;ichigatsu"
 
 
 def test_load_page_artifact_recovers_jsonish_transcription(tmp_path: Path) -> None:
