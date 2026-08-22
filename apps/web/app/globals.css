@@ -4880,6 +4880,10 @@ button.admin-feedback-summary-stat:hover,
   margin-top: 0.2rem;
 }
 
+.app-build-footer-guide {
+  flex: 0 0 auto;
+}
+
 .app-feedback-button {
   width: 50%;
   align-self: center;
@@ -15104,6 +15108,13 @@ code {
   flex-wrap: wrap;
   gap: 0.4rem;
   align-items: center;
+}
+
+.app-build-footer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .library-pill {
