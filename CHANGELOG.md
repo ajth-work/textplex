@@ -3,6 +3,7 @@
 ## 2026-08-22
 
 - Added ESLint 10 compatibility handling for the Next.js flat configuration so web linting remains operational during the major-version upgrade.
+- Added a provenance-preserving JMdict XML import path with projected Japanese readings, meanings, parts of speech, and source metadata.
 
 ## 2026-08-20
 
