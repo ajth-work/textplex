@@ -139,6 +139,19 @@ def test_tokenize_sentence_preserves_decomposed_latin_accents() -> None:
     assert unicodedata.normalize("NFC", tokens[0].surface_form) == unicodedata.normalize("NFC", "A\u0300wo\u0323n")
 
 
+def test_tokenize_sentence_keeps_nordic_latin_words_together() -> None:
+    samples = {
+        "no": "Blåbær er godt.",
+        "sv": "Sjön är vacker.",
+        "fi": "Yö on pitkä.",
+    }
+
+    for language_code, sentence in samples.items():
+        tokens = tokenize_sentence(sentence, language_code)
+        assert [token.surface_form for token in tokens] == sentence[:-1].split()
+        assert [token.language_code for token in tokens] == [language_code] * 3
+
+
 def test_tokenize_sentence_assigns_language_per_script_for_mixed_text() -> None:
     tokens = tokenize_sentence("Привет OpenAI 이선중.", "ru")
 

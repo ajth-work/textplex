@@ -6,6 +6,9 @@ export const targetLanguageOptions = [
   { code: "he", label: "Hebrew", shortCode: "he" },
   { code: "ar", label: "Arabic", shortCode: "ar" },
   { code: "yo", label: "Yoruba", shortCode: "yo" },
+  { code: "no", label: "Norwegian", shortCode: "no" },
+  { code: "sv", label: "Swedish", shortCode: "sv" },
+  { code: "fi", label: "Finnish", shortCode: "fi" },
 ] as const;
 
 export type TargetLanguageCode = (typeof targetLanguageOptions)[number]["code"];
