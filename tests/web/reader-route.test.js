@@ -9,6 +9,7 @@ const routeSource = fs.readFileSync(
   "utf8",
 );
 const readerSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "reader-view.tsx"), "utf8");
+const textplexSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "lib", "textplex.ts"), "utf8");
 const accountFooterSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "account-footer.tsx"), "utf8");
 const layoutSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "app", "layout.tsx"), "utf8");
 const appShellSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "app-shell.tsx"), "utf8");
@@ -412,7 +413,7 @@ test("Next reader detects Korean tokens inside another language and routes their
   assert.match(readerSource, /if \(isKoreanText\(surface\)\) \{\s+return "ko";/);
   assert.match(readerSource, /const tokenLanguageCode = resolveTokenLanguageCode\(token\.surface_form, languageCode, token\.language_code\)/);
   assert.match(readerSource, /return "ru";[\s\S]*return "he";[\s\S]*return "ar";/);
-  assert.match(readerSource, /return normalizedFallback === "en" \|\| normalizedFallback === "yo" \? normalizedFallback : "en";/);
+  assert.match(readerSource, /return normalizedFallback === "en" \|\| normalizedFallback === "yo" \|\| normalizedFallback === "no" \|\| normalizedFallback === "sv" \|\| normalizedFallback === "fi"/);
   assert.match(readerSource, /lang=\{tokenLanguageCode \|\| undefined\}/);
   assert.match(readerSource, /const languageCode = resolveTokenLanguageCode\([\s\S]*selectedToken\.language_code,[\s\S]*\) \?\? pageData\.book\.language_code;/);
   assert.match(readerSource, /language_code=\$\{encodeURIComponent\(languageCode\)\}/);
@@ -420,6 +421,12 @@ test("Next reader detects Korean tokens inside another language and routes their
   assert.match(playWordAudio, /resolveTokenLanguageCode\(token\.surface_form, pageData\.book\.language_code, token\.language_code\)/);
   const playDefinitionSegmentAudio = readerSource.match(/function playDefinitionSegmentAudio\(part: TokenReadingPart\): void \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function handlePlaySelectedTokenAudio/)?.[0] ?? "";
   assert.match(playDefinitionSegmentAudio, /resolveTokenLanguageCode\(selectedToken\.surface_form, pageData\.book\.language_code, selectedToken\.language_code\)/);
+});
+
+test("Next reader preserves Nordic fallback language and speech locales", () => {
+  assert.match(textplexSource, /if \(languageCode\.startsWith\("no"\)\) \{\s+return "nb-NO";/);
+  assert.match(textplexSource, /if \(languageCode\.startsWith\("sv"\)\) \{\s+return "sv-SE";/);
+  assert.match(textplexSource, /if \(languageCode\.startsWith\("fi"\)\) \{\s+return "fi-FI";/);
 });
 
 test("Next reader keeps Japanese surface, reading, lemma, and meaning aligned", () => {

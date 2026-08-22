@@ -103,7 +103,7 @@ def detect_token_language_code(surface_form: str, fallback_language_code: str) -
     if re.search(r"[\u4e00-\u9fff]", surface):
         return fallback if fallback in {"zh", "ja"} else "zh"
     if re.search(r"[A-Za-z]", surface):
-        return fallback if fallback in {"en", "yo"} else "en"
+        return fallback if fallback in {"en", "yo", "no", "sv", "fi"} else "en"
     return fallback or None
 
 

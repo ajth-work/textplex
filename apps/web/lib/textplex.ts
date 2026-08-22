@@ -376,6 +376,15 @@ export function getSpeechLanguage(languageCode?: string | null): string {
   if (languageCode.startsWith("ar")) {
     return "ar-SA";
   }
+  if (languageCode.startsWith("no")) {
+    return "nb-NO";
+  }
+  if (languageCode.startsWith("sv")) {
+    return "sv-SE";
+  }
+  if (languageCode.startsWith("fi")) {
+    return "fi-FI";
+  }
   return "en-US";
 }
 

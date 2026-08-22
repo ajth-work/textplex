@@ -3,6 +3,8 @@
 ## 2026-08-22
 
 - Added ESLint 10 compatibility handling for the Next.js flat configuration so web linting remains operational during the major-version upgrade.
+- Added Norwegian, Swedish, and Finnish Wikipedia targets with Nordic-specific article thresholds and token-language detection.
+- Preserved Nordic language fallbacks in the Reader and mapped Nordic token speech to browser locales.
 - Added reviewed Hebrew pronunciation overrides with transliteration fallback and avoided unsupported Google romanization requests.
 - Corrected stale Hebrew page-token readings so reviewed pronunciation overrides update both displayed reading fields.
 - Added a provenance-preserving JMdict XML import path with projected Japanese readings, meanings, parts of speech, and source metadata.
