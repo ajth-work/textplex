@@ -404,6 +404,7 @@ export function AppShell() {
                 onToggle={() => setOpenNavGroup((current) => current === "library" ? null : "library")}
                 items={[
                   { href: "/import", label: "Import text", icon: <ImportIcon size={14} /> },
+                  { href: "/archive", label: "Archive", icon: <LibraryIcon size={14} /> },
                   { href: searchHref, activeHref: "/search", label: "Search library", icon: <SearchIcon size={14} /> },
                 ]}
               />
@@ -429,6 +430,7 @@ export function AppShell() {
                 items={[
                   { href: "/study/practice", activeHref: "/study/practice", label: "Practice", icon: <StudyIcon size={14} /> },
                   { href: "/progress", label: "Progress", icon: <ProgressIcon size={14} /> },
+                  { href: "/goals", label: "Goals", icon: <ProgressIcon size={14} /> },
                 ]}
               />
               <div className="app-shell-menu-group" data-inventory-id="shell.markets-nav">
