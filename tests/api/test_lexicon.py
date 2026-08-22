@@ -521,8 +521,8 @@ def test_lookup_lexicon_entry_uses_google_translation_fallback_and_cache(tmp_pat
 
     lookup = lookup_lexicon_entry(
         data_root=data_root,
-        language_code="ko",
-        term="가짜단어",
+        language_code="ru",
+        term="привет",
         allow_google_fallback=True,
     )
 
@@ -531,7 +531,7 @@ def test_lookup_lexicon_entry_uses_google_translation_fallback_and_cache(tmp_pat
     assert lookup.entries[0].pronunciation == "fake reading"
     assert lookup.entries[0].source_name == "Google Cloud Translation"
     assert lookup.resolution_source == "google_translate_live"
-    assert calls == [("가짜단어", "ko", "en"), ("가짜단어", "ko", "romanize")]
+    assert calls == [("привет", "ru", "en"), ("привет", "ru", "romanize")]
 
     def fail_translate_text(*args, **kwargs) -> str:
         raise AssertionError("cache should satisfy the second lookup")
@@ -539,8 +539,8 @@ def test_lookup_lexicon_entry_uses_google_translation_fallback_and_cache(tmp_pat
     monkeypatch.setattr("app.services.lexicon.translate_text", fail_translate_text)
     cached_lookup = lookup_lexicon_entry(
         data_root=data_root,
-        language_code="ko",
-        term="가짜단어",
+        language_code="ru",
+        term="привет",
         allow_google_fallback=True,
     )
 
@@ -550,8 +550,8 @@ def test_lookup_lexicon_entry_uses_google_translation_fallback_and_cache(tmp_pat
     assert cached_lookup.resolution_source == "google_translate_cache"
     usage_summary = get_google_translate_usage_summary(data_root)
     assert usage_summary.request_count == 2
-    assert usage_summary.character_count == len("가짜단어") * 2
-    assert usage_summary.free_remaining_characters == usage_summary.free_tier_limit - len("가짜단어") * 2
+    assert usage_summary.character_count == len("привет") * 2
+    assert usage_summary.free_remaining_characters == usage_summary.free_tier_limit - len("привет") * 2
 
 
 def test_google_translate_usage_is_account_scoped_without_losing_service_total(tmp_path: Path) -> None:

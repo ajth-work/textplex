@@ -19,10 +19,12 @@ from app.schemas.lexicon import (
 )
 from app.services.google_translate import (
     is_google_translate_configured,
+    is_google_translate_romanization_supported,
     romanize_text,
     translate_text,
 )
 from app.services.google_translate_usage import record_google_translate_usage
+from app.services.hebrew_transliteration import get_hebrew_pronunciation_override
 
 _lexicon_seed_lock = threading.Lock()
 _warmed_lexicon_keys: set[tuple[str, str]] = set()
@@ -522,8 +524,12 @@ def _lookup_google_translate_entry(
     with suppress(OSError, sqlite3.Error):
         record_google_translate_usage(data_root=data_root, characters=len(term), owner_id=owner_id)
 
-    pronunciation = romanize_text(term, source_language_code=language_code)
-    if pronunciation:
+    pronunciation = get_hebrew_pronunciation_override(term) if language_code == "he" else None
+    romanization_from_google = False
+    if pronunciation is None and is_google_translate_romanization_supported(language_code):
+        pronunciation = romanize_text(term, source_language_code=language_code)
+        romanization_from_google = bool(pronunciation)
+    if romanization_from_google:
         with suppress(OSError, sqlite3.Error):
             record_google_translate_usage(data_root=data_root, characters=len(term), owner_id=owner_id)
 

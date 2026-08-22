@@ -46,6 +46,20 @@ _HEBREW_FINAL_FORMS = {
 _HEBREW_RTL_MARKS = {"\u200f", "\u200e"}
 _HEBREW_DIACRITICS = {chr(codepoint) for codepoint in range(0x0591, 0x05c8)}
 
+# Unvocalized Hebrew is ambiguous. Keep reviewed readings for words that are
+# common in the reader, and use the character fallback only for unknown terms.
+_HEBREW_PRONUNCIATION_OVERRIDES = {
+    "יש": "yesh",
+    "שאלה": "she'elah",
+    "חזרו": "khazru",
+    "הדוגמאות": "hadugmaot",
+    "בקול": "bekol",
+    "התלמידים": "hatalmidim",
+    "המורה": "hamoreh",
+    "הסביר": "hisbir",
+    "את": "at",
+}
+
 
 def _is_hebrew_letter(char: str) -> bool:
     return "\u0590" <= char <= "\u05ff" or "\uFB1D" <= char <= "\uFB4F"
@@ -120,3 +134,16 @@ def transliterate_hebrew_text(text: str) -> str | None:
 
     transliterated = "".join(pieces).strip()
     return transliterated or None
+
+
+def get_hebrew_pronunciation(text: str) -> str | None:
+    """Return a reviewed reading, falling back to character transliteration."""
+    normalized_text = unicodedata.normalize("NFKC", text or "").strip()
+    if not normalized_text:
+        return None
+    return _HEBREW_PRONUNCIATION_OVERRIDES.get(normalized_text) or transliterate_hebrew_text(normalized_text)
+
+
+def get_hebrew_pronunciation_override(text: str) -> str | None:
+    normalized_text = unicodedata.normalize("NFKC", text or "").strip()
+    return _HEBREW_PRONUNCIATION_OVERRIDES.get(normalized_text)

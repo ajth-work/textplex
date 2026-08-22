@@ -26,6 +26,7 @@ from app.schemas.learning import (
     WordInteractionRecord,
 )
 from app.services.book_registry import load_registry
+from app.services.hebrew_transliteration import get_hebrew_pronunciation_override
 from app.services.lexicon import lookup_lexicon_entry
 
 TRACK_DEFINITIONS: dict[str, dict[str, str]] = {
@@ -987,6 +988,13 @@ def record_study_vocabulary_item(
     display_form = payload.display_form.strip() or lemma
     source_surface_form = payload.source_surface_form.strip() or display_form
     source_sentence_text = payload.source_sentence_text.strip()
+    pronunciation = payload.pronunciation
+    romanization = payload.romanization
+    if language_code.split("-", 1)[0] == "he":
+        reviewed_reading = get_hebrew_pronunciation_override(source_surface_form)
+        if reviewed_reading:
+            pronunciation = reviewed_reading
+            romanization = reviewed_reading
     definition_short = (
         payload.definition_short.strip()
         if payload.definition_short and payload.definition_short.strip()
@@ -1046,8 +1054,8 @@ def record_study_vocabulary_item(
                 payload.token_order,
                 source_surface_form,
                 source_sentence_text,
-                payload.pronunciation,
-                payload.romanization,
+                pronunciation,
+                romanization,
                 definition_short,
                 payload.proficiency_level,
                 saved_at,
@@ -1091,8 +1099,8 @@ def record_study_vocabulary_item(
                 "token_order": payload.token_order,
                 "source_surface_form": source_surface_form,
                 "source_sentence_text": source_sentence_text,
-                "pronunciation": payload.pronunciation,
-                "romanization": payload.romanization,
+                "pronunciation": pronunciation,
+                "romanization": romanization,
                 "definition_short": definition_short,
                 "proficiency_level": payload.proficiency_level,
                 "first_seen_at": saved_at,

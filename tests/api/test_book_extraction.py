@@ -568,7 +568,7 @@ def test_parse_text_into_page_artifact_uses_google_romanization_when_local_readi
     assert artifact.page.sentences[0].tokens[0].pronunciation == "romanized-сегодня"
 
 
-def test_parse_text_into_page_artifact_uses_google_romanization_for_hebrew_without_local_pack(
+def test_parse_text_into_page_artifact_uses_hebrew_readings_without_google_romanization(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -581,11 +581,11 @@ def test_parse_text_into_page_artifact_uses_google_romanization_for_hebrew_witho
     monkeypatch.setattr(
         book_extraction_service,
         "romanize_texts",
-        lambda texts, **_kwargs: [f"romanized-{text}" for text in texts],
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("Hebrew must not use Google romanization")),
     )
 
     artifact = book_extraction_service.parse_text_into_page_artifact(
-        text="\u05d0\u05e0\u05d9 \u05d1\u05d1\u05d9\u05ea.",
+        text="\u05d9\u05e9 \u05d0\u05ea.",
         language_code="he",
         title="\u05e2\u05d1\u05e8\u05d9\u05ea",
         data_root=tmp_path,
@@ -593,8 +593,8 @@ def test_parse_text_into_page_artifact_uses_google_romanization_for_hebrew_witho
 
     token_readings = [token.romanization for token in artifact.page.sentences[0].tokens]
 
-    assert token_readings == ["romanized-\u05d0\u05e0\u05d9", "romanized-\u05d1\u05d1\u05d9\u05ea"]
-    assert artifact.page.sentences[0].tokens[0].pronunciation == "romanized-\u05d0\u05e0\u05d9"
+    assert token_readings == ["yesh", "at"]
+    assert artifact.page.sentences[0].tokens[0].pronunciation == "yesh"
 
 
 def test_parse_text_into_page_artifact_uses_hebrew_transliteration_when_google_is_unavailable(
@@ -619,6 +619,27 @@ def test_parse_text_into_page_artifact_uses_hebrew_transliteration_when_google_i
 
     assert token_readings == ["shlom", "ani"]
     assert artifact.page.sentences[0].tokens[0].pronunciation == "shlom"
+
+
+def test_enrich_page_metadata_replaces_stale_hebrew_token_readings(tmp_path: Path) -> None:
+    page = build_page_extraction_result(
+        book_id="book-hebrew-stale-reading",
+        page_number=1,
+        language_code="he",
+        raw_text="הדוגמאות",
+    )
+    stale_token = page.sentences[0].tokens[0].model_copy(
+        update={"pronunciation": "hdogmaot", "romanization": "hdogmaot"}
+    )
+    stale_page = page.model_copy(
+        update={"sentences": [page.sentences[0].model_copy(update={"tokens": [stale_token]})]}
+    )
+
+    enriched = book_extraction_service._enrich_page_lexicon_metadata(stale_page, data_root=tmp_path)
+    token = enriched.sentences[0].tokens[0]
+
+    assert token.pronunciation == "hadugmaot"
+    assert token.romanization == "hadugmaot"
 
 
 def test_load_page_artifact_skips_empty_interrupted_artifact(tmp_path: Path) -> None:
