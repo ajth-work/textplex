@@ -15884,3 +15884,683 @@ code {
     grid-template-columns: 1fr;
   }
 }
+
+/* App-wide visual density pass
+ *
+ * Keep the established typography, rounded surfaces, and atmospheric themes,
+ * while removing duplicated shell spacing and giving repeated controls a
+ * consistent, compact rhythm across member, tester, and admin routes.
+ */
+:root {
+  --layout-stack-gap: 0.75rem;
+  --layout-card-padding: clamp(1rem, 2vw, 1.35rem);
+  --layout-compact-padding: 0.78rem;
+}
+
+.app-frame {
+  gap: 0.7rem;
+  padding: 0.75rem 0 2.5rem;
+}
+
+.app-shell-chrome {
+  gap: 0.3rem;
+  padding: 0.55rem 0.65rem;
+}
+
+.app-shell-bar {
+  padding: 0.05rem 0.15rem;
+}
+
+.app-shell-home {
+  font-size: clamp(1.7rem, 2.4vw, 2.15rem);
+}
+
+.app-shell-content {
+  gap: var(--layout-stack-gap);
+}
+
+.app-shell-content > main.app-shell {
+  gap: var(--layout-stack-gap);
+  padding: 0 0 1.5rem;
+}
+
+.home-hero {
+  gap: 0.72rem;
+  padding: clamp(1.2rem, 2.7vw, 2.05rem);
+}
+
+.home-hero h1 {
+  font-size: clamp(2.35rem, 4.35vw, 4.2rem);
+}
+
+.home-hero > .lede {
+  margin: 0;
+}
+
+.lede {
+  line-height: 1.55;
+}
+
+.button-row {
+  gap: 0.5rem;
+}
+
+.button {
+  min-height: 2.6rem;
+  padding: 0.62rem 0.95rem;
+}
+
+.home-hero > .metric-grid {
+  gap: 0.6rem;
+  margin: 0.25rem 0 0;
+}
+
+.home-hero > .metric-grid:has(> div:nth-child(2):last-child) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metric-grid div,
+.inspector-grid div,
+.profile-metrics div {
+  padding: 0.65rem 0.75rem;
+}
+
+.metric-grid dd,
+.inspector-grid dd {
+  margin-top: 0.18rem;
+  font-size: 1.05rem;
+}
+
+.feature-grid,
+.book-grid,
+.page-grid,
+.roadmap-grid {
+  gap: var(--layout-stack-gap);
+}
+
+.feature-card,
+.book-card,
+.detail-main,
+.detail-aside,
+.page-strip,
+.reader-page,
+.inspector-card {
+  padding: 1.05rem;
+}
+
+.feature-card > p:last-child,
+.detail-main > p:last-child,
+.detail-aside > p:last-child,
+.inspector-card > p:last-child {
+  margin-bottom: 0;
+}
+
+.feature-card > label {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 42rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.surface-list {
+  gap: 0.55rem;
+}
+
+.surface-list-item {
+  padding: 0.72rem 0.8rem;
+}
+
+.activity-progress-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--layout-stack-gap);
+}
+
+.reading-progress-card {
+  padding: 1.05rem;
+}
+
+.reading-progress-svg {
+  height: 13.5rem;
+}
+
+.settings-preferences-card {
+  gap: 0.65rem;
+}
+
+.settings-inspector-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: var(--layout-compact-padding) 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+}
+
+.settings-inspector-row > div:first-child {
+  min-width: 0;
+}
+
+.settings-inspector-row .small-copy {
+  margin-top: 0.2rem;
+}
+
+.settings-inspector-row > .text-input {
+  width: min(18rem, 32vw);
+}
+
+.settings-inspector-row .voice-gender-toggle-group,
+.settings-inspector-row > .button {
+  justify-self: end;
+}
+
+.settings-preferences-card > .button,
+.settings-developer-tools-card > .button {
+  justify-self: start;
+}
+
+.profile-email-change {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.65rem;
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+.profile-email-change > h3,
+.profile-email-change > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.profile-email-change > label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.library-page,
+.library-shell {
+  gap: var(--layout-stack-gap);
+}
+
+.library-hero,
+.library-shell {
+  padding: 0.85rem;
+}
+
+.library-shelf {
+  gap: 0.65rem;
+}
+
+@media (min-width: 761px) {
+  .library-hero {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 0.75rem;
+  }
+
+  .library-hero-head {
+    grid-column: 1 / -1;
+  }
+
+  .library-controls {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .library-import-button.button {
+    grid-column: 2;
+    grid-row: 2;
+    width: auto;
+    min-width: 8.5rem;
+  }
+}
+
+.theme-shop-storefront-intro > div {
+  min-height: 8rem;
+  padding: 0.95rem;
+}
+
+.theme-shop-card,
+.theme-shop-storefront-card,
+.theme-shop-catalog,
+.theme-shop-filters {
+  gap: 0.65rem;
+}
+
+.landing-shell {
+  gap: 0.9rem;
+  padding: 0.75rem 0 1.75rem;
+}
+
+.landing-hero {
+  gap: 1rem;
+  padding: clamp(1.1rem, 2vw, 1.65rem);
+}
+
+.landing-hero-copy {
+  gap: 0.7rem;
+}
+
+.landing-hero-previews {
+  gap: 0.65rem;
+}
+
+.landing-hero-preview {
+  min-height: clamp(10.5rem, 16vw, 13.5rem);
+}
+
+.landing-section {
+  gap: 0.65rem;
+}
+
+.app-build-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.9fr);
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0;
+  padding: 0.75rem 0.9rem;
+}
+
+.app-build-footer > .app-feedback-footer {
+  margin-top: 0;
+}
+
+.app-feedback-button {
+  width: 100%;
+  margin-top: 0;
+}
+
+.admin-usage-page,
+.admin-feedback-page,
+.tester-console-page,
+.admin-theme-layout,
+.admin-theme-main {
+  gap: var(--layout-stack-gap);
+}
+
+.admin-subnav {
+  gap: 0.55rem;
+  padding: 0.3rem 0.4rem;
+}
+
+.admin-subnav-links {
+  gap: 0.25rem;
+}
+
+.admin-subnav-link {
+  padding: 0.4rem 0.62rem;
+}
+
+.admin-usage-hero,
+.tester-console-hero,
+.tester-console-state,
+.tester-console-list,
+.tester-console-detail,
+.admin-feedback-hero,
+.admin-feedback-filters,
+.admin-feedback-summary,
+.admin-feedback-metrics,
+.admin-feedback-list,
+.admin-feedback-detail,
+.admin-theme-list,
+.admin-theme-editor,
+.admin-theme-ai,
+.admin-theme-tokens {
+  padding: 1rem;
+}
+
+.admin-usage-stat-grid,
+.admin-usage-content-grid,
+.admin-analytics-overview-grid,
+.admin-analytics-detail-grid,
+.tester-console-summary,
+.tester-console-layout,
+.admin-feedback-layout,
+.admin-feedback-summary-grid,
+.admin-feedback-metric-grid,
+.admin-feedback-breakdown-grid {
+  gap: 0.65rem;
+}
+
+.admin-usage-stat-card,
+.tester-console-summary-card,
+.admin-analytics-card {
+  padding: 0.82rem;
+}
+
+@media (max-width: 760px) {
+  .app-frame {
+    padding-top: 0.5rem;
+    padding-bottom: 1.75rem;
+  }
+
+  .app-shell-content > main.app-shell {
+    padding-bottom: 1rem;
+  }
+
+  .home-hero {
+    gap: 0.65rem;
+    padding: 1rem;
+  }
+
+  .home-hero h1 {
+    font-size: clamp(2.2rem, 11vw, 3.1rem);
+  }
+
+  .activity-progress-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reading-progress-svg {
+    height: 12rem;
+  }
+
+  .settings-inspector-row,
+  .profile-email-change {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .settings-inspector-row > .text-input {
+    width: 100%;
+  }
+
+  .settings-inspector-row .voice-gender-toggle-group,
+  .settings-inspector-row > .button {
+    justify-self: start;
+  }
+
+  .settings-inspector-row .voice-gender-toggle-group {
+    width: 100%;
+  }
+
+  .profile-email-change > .button,
+  .settings-preferences-card > .button,
+  .settings-developer-tools-card > .button {
+    justify-self: stretch;
+  }
+
+  .landing-shell {
+    gap: 0.75rem;
+    padding-top: 0.5rem;
+  }
+
+  .landing-hero-preview {
+    min-height: 11rem;
+  }
+
+  .landing-hero-actions--public .button-primary {
+    order: 1;
+  }
+
+  .landing-hero-actions--public .button-secondary {
+    order: 2;
+  }
+
+  .app-build-footer {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.65rem;
+  }
+
+  .admin-subnav {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-subnav-links {
+    width: 100%;
+  }
+}
+
+/* Visual hierarchy follow-up
+ *
+ * The density pass made the pages more efficient, but its effect was easiest
+ * to miss on simple route headers. Give shared heroes and the public landing
+ * page a more deliberate editorial composition without replacing TextPlex's
+ * typography, rounded surfaces, theme colors, or wallpaper-led identity.
+ */
+.route-page-hero {
+  grid-template-columns: minmax(0, 1.25fr) minmax(18rem, 0.75fr);
+  align-items: stretch;
+  gap: clamp(1.25rem, 3vw, 2.5rem);
+  padding: clamp(1.35rem, 3vw, 2.35rem);
+  background:
+    radial-gradient(circle at 88% 8%, color-mix(in srgb, var(--accent-soft) 56%, transparent), transparent 30%),
+    linear-gradient(135deg, color-mix(in srgb, var(--panel) 96%, var(--accent-soft) 4%), var(--panel));
+}
+
+.route-page-hero:not(:has(> .route-page-hero-metrics)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.route-page-hero-main {
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  gap: 0.78rem;
+}
+
+.route-page-hero-main > .eyebrow,
+.landing-hero-copy > .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+}
+
+.route-page-hero-main > .eyebrow::after,
+.landing-hero-copy > .eyebrow::after {
+  content: "";
+  width: min(5.5rem, 16vw);
+  height: 1px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+}
+
+.route-page-hero .card-topline {
+  align-items: flex-start;
+}
+
+.route-page-hero .card-topline h1 {
+  max-width: 15ch;
+}
+
+.route-page-hero-main > .lede {
+  max-width: 58ch;
+  margin: 0;
+}
+
+.route-page-hero-actions {
+  margin-top: 0.1rem;
+}
+
+.route-page-hero-actions .button:first-child {
+  border-color: transparent;
+  color: #fff;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-strong) 84%, #ffffff 16%), var(--accent-strong));
+  box-shadow: 0 0.55rem 1.25rem color-mix(in srgb, var(--accent-strong) 20%, transparent);
+}
+
+.route-page-hero-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: stretch;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.route-page-hero-metrics > div {
+  display: grid;
+  min-height: 5.4rem;
+  align-content: center;
+  padding: 0.85rem 0.9rem;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--surface-soft) 86%, var(--accent-soft) 14%), var(--surface-soft));
+}
+
+.route-page-hero-metrics > div:nth-child(3):last-child {
+  grid-column: 1 / -1;
+}
+
+.route-page-hero-metrics dd {
+  font-size: clamp(1.08rem, 1.6vw, 1.35rem);
+}
+
+.landing-hero {
+  grid-template-columns: minmax(0, 1fr) minmax(25rem, 1fr);
+  align-items: stretch;
+  gap: clamp(1.2rem, 2.6vw, 2rem);
+  padding: clamp(1.25rem, 2.6vw, 2rem);
+}
+
+.landing-hero h1 {
+  max-width: 16ch;
+  font-size: clamp(2.75rem, 4.2vw, 4.25rem);
+}
+
+.landing-hero-copy {
+  align-content: center;
+  gap: 0.9rem;
+  padding: 0.55rem 0 0.55rem 0.25rem;
+}
+
+.landing-hero-copy > .lede {
+  max-width: 56ch;
+  margin: 0.15rem 0 0;
+}
+
+.landing-hero-actions {
+  margin-top: 0.2rem;
+}
+
+.landing-hero-actions .button-primary {
+  min-width: 9rem;
+  box-shadow: 0 0.7rem 1.5rem color-mix(in srgb, var(--accent-strong) 22%, transparent);
+}
+
+.landing-hero-previews {
+  grid-template-rows: minmax(0, 1.35fr) minmax(0, 0.75fr);
+  min-height: clamp(25rem, 35vw, 28rem);
+  gap: 0.7rem;
+}
+
+.landing-hero-preview {
+  min-height: 0;
+}
+
+.landing-hero-preview:first-child {
+  box-shadow: 0 1rem 2rem rgba(12, 18, 28, 0.16);
+}
+
+.landing-hero-preview:last-child {
+  margin-left: 12%;
+}
+
+.landing-hero-preview:first-child .landing-hero-preview-copy h3 {
+  font-size: clamp(1.55rem, 2.4vw, 2rem);
+}
+
+.landing-section-head {
+  align-items: center;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--panel) 76%, transparent);
+}
+
+.library-import-button.button {
+  box-shadow: 0 0.55rem 1.2rem color-mix(in srgb, var(--accent-strong) 18%, transparent);
+}
+
+@media (min-width: 960px) {
+  .preview-home-header {
+    padding: 1rem 1.15rem 0.25rem;
+    border: 1px solid var(--surface-border);
+    border-bottom: 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+  }
+
+  .preview-home-title {
+    font-size: clamp(2.5rem, 4vw, 3.8rem);
+  }
+
+  .preview-tagline {
+    margin-top: -1.2rem;
+    padding: 0.5rem 1.15rem 1rem;
+    border: 1px solid var(--surface-border);
+    border-top: 0;
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    background: var(--panel);
+  }
+}
+
+@media (max-width: 900px) {
+  .route-page-hero,
+  .landing-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing-hero-previews {
+    min-height: 25rem;
+  }
+}
+
+@media (max-width: 760px) {
+  .route-page-hero {
+    gap: 0.9rem;
+    padding: 1.05rem;
+  }
+
+  .route-page-hero-main {
+    gap: 0.65rem;
+  }
+
+  .route-page-hero .card-topline h1 {
+    max-width: none;
+  }
+
+  .route-page-hero-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  }
+
+  .route-page-hero-actions .button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .route-page-hero-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .route-page-hero-metrics > div {
+    min-height: 4.6rem;
+    padding: 0.7rem;
+  }
+
+  .landing-hero-copy {
+    padding: 0;
+  }
+
+  .landing-hero-previews {
+    grid-template-rows: repeat(2, minmax(10.5rem, auto));
+    min-height: 0;
+  }
+
+  .landing-hero-preview:last-child {
+    margin-left: 0;
+  }
+
+  .landing-section-head {
+    align-items: flex-start;
+    padding: 0.8rem;
+  }
+}

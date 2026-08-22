@@ -27,6 +27,8 @@
 - Added per-book page/sentence pace comparisons to progress and profile book cards, including same-language averages across the learner's recorded books.
 - Formatted book reading time as compact hours/minutes/seconds values instead of raw seconds on live and demo progress/profile rows.
 
+- Strengthened the app-wide visual hierarchy after the initial density pass: shared route heroes now use an editorial content-and-metrics split with a clear primary action, the public landing hero gives Reader and Study previews distinct visual weight, and section headings are more visibly grouped while retaining the existing TextPlex type, theme, and card language.
+
 ## 2026-08-19
 
 - Added route-aware first-visit page guides for Home, Library, Reader, and Study, using a dismissible carousel with pagination dots, local visit state, and a persistent reopen trigger.
@@ -41,6 +43,7 @@
 - Centered and enlarged revealed answers, and clarified that a Japanese reading is not a written-form answer in meaning-to-word practice (#88).
 - Added a context-aware written-form candidate button when a Japanese reading matches the current card (#88).
 - Made kana-only Japanese word-to-reading cards request the romanized reading instead of repeating the same Hiragana form (#88).
+- Tightened app-wide spacing and organization across member, tester, and admin surfaces: compact route heroes and card stacks, aligned Library actions, structured Settings/Profile controls, full-width Activity charts, and a shorter split build/feedback footer; updated dynamic route props for Next.js 16.3 production builds.
 - Expanded Chinese digit-by-digit romanization to all numeric Reader tokens, including months and days (#142).
 - Applied Chinese cardinal-number readings outside year context, so `12月`, `20日`, and `30分` use `shí èr`, `èr shí`, and `sān shí` (#142).
 
