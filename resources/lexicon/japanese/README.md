@@ -30,6 +30,19 @@ Keep source conversion scripts alongside this pack once the first generated data
 
 The planned workbook conversion and Memrise Non-WK source comparison are documented in [Japanese Lexicon Import Concept](../../../docs/JAPANESE_LEXICON_IMPORT_CONCEPT.md).
 
+## JMdict import
+
+JMdict is a separate dictionary source, not part of the starter curriculum pack.
+Import a pinned `JMdict_e.xml` or `JMdict_e.gz` snapshot with:
+
+```powershell
+apps/api/.venv/Scripts/python.exe scripts/import_jmdict.py .\JMdict_e.gz --version 2026-08-20
+```
+
+The importer preserves the upstream `ent_seq`, stores the complete source entry
+payload, creates a lookup projection with readings, English glosses, and POS,
+and records checksum and licence provenance. See [`docs/ATTRIBUTIONS.md`](../../../docs/ATTRIBUTIONS.md).
+
 ## Imported Reference Workbook
 
 `Afterlife - JLPT N1 and Jōyō Kanji (Database).xlsx` is a user-provided reference workbook imported from Google Drive on 2026-08-13. It is preserved as source material for future Japanese lexicon and kanji-pack work; the runtime importer does not consume the workbook directly yet.

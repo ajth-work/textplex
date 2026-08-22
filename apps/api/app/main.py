@@ -86,6 +86,8 @@ from app.schemas.learning import (
 from app.schemas.lexicon import (
     JapaneseConjugationRequest,
     JapaneseConjugationResponse,
+    JmdictImportRequest,
+    JmdictImportSummary,
     LexiconImportRequest,
     LexiconImportSummary,
     LexiconLookupResponse,
@@ -185,6 +187,7 @@ from app.services.generated_articles import (
     load_generated_article_prompt_details,
 )
 from app.services.google_translate_usage import get_google_translate_usage_summary
+from app.services.jmdict import import_jmdict
 from app.services.learning_profile import (
     create_reading_session,
     get_learning_profile_summary,
@@ -1844,6 +1847,25 @@ def import_lexicon(payload: LexiconImportRequest) -> LexiconImportSummary:
             source_root,
             data_root=app.state.data_root,
             language_code=payload.language_code,
+            replace_existing=payload.replace_existing,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/lexicon/japanese/jmdict/import", response_model=JmdictImportSummary)
+def import_japanese_jmdict(payload: JmdictImportRequest) -> JmdictImportSummary:
+    try:
+        source_path = _validate_import_source(
+            payload.source_path,
+            environment_name="TEXTPLEX_LEXICON_ROOTS",
+            defaults=[get_repo_root() / "resources" / "lexicon" / "japanese"],
+        )
+        return import_jmdict(
+            source_path,
+            data_root=app.state.data_root,
+            source_version=payload.source_version,
+            source_url=payload.source_url,
             replace_existing=payload.replace_existing,
         )
     except FileNotFoundError as exc:
