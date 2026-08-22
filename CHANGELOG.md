@@ -2,6 +2,7 @@
 
 ## 2026-08-22
 
+- Synchronized the local issue tracker with merged coverage for Japanese Study input, contextual Japanese readings, and trailing page extraction (#88, #138, #139, #146; PR #180), and removed the stale Todo entry for completed issue #87.
 - Added ESLint 10 compatibility handling for the Next.js flat configuration so web linting remains operational during the major-version upgrade.
 - Added Norwegian, Swedish, and Finnish Wikipedia targets with Nordic-specific article thresholds and token-language detection.
 - Preserved Nordic language fallbacks in the Reader and mapped Nordic token speech to browser locales.
