@@ -14,6 +14,7 @@ from app.services.ocr import OcrPageResult
 from fastapi.testclient import TestClient
 from processor import build_page_extraction_result, tokenize_sentence
 from processor.contracts import (
+    CURRENT_PIPELINE_VERSION,
     BookExtractionResult,
     PageExtractionResult,
     SentenceResult,
@@ -724,7 +725,7 @@ def test_recover_page_result_rebuilds_accented_tokens_from_stale_artifact() -> N
     recovered = book_extraction_service._recover_page_result(stale_page)
 
     assert [token.surface_form for token in recovered.sentences[0].tokens] == ["11853", "Runge", "jẹ́", "plánẹ́tì"]
-    assert recovered.pipeline_version == "textplex-5"
+    assert recovered.pipeline_version == CURRENT_PIPELINE_VERSION
 
 
 def test_recover_page_result_keeps_chinese_name_before_parenthetical_gloss() -> None:
@@ -745,6 +746,39 @@ def test_recover_page_result_keeps_chinese_name_before_parenthetical_gloss() -> 
     recovered = book_extraction_service._recover_page_result(stale_page)
 
     assert [token.surface_form for token in recovered.sentences[0].tokens] == ["李善中", "（", "韓語", "：", "이선중", "）", "。"]
+
+
+def test_recover_page_result_rebuilds_chinese_compounds_after_tokenizer_update() -> None:
+    page = build_page_extraction_result(
+        book_id="book-chinese-compounds",
+        page_number=4,
+        language_code="zh",
+        raw_text="我自己觉得粗糙的胖屁股。",
+    )
+    stale_tokens = [
+        TokenResult(order=index, surface_form=surface, language_code="zh", lemma=surface)
+        for index, surface in enumerate(["我", "自", "己", "觉得", "粗", "糙", "的", "胖", "屁", "股", "。"], start=1)
+    ]
+    stale_page = page.model_copy(
+        update={
+            "pipeline_version": "textplex-5",
+            "sentences": [page.sentences[0].model_copy(update={"tokens": stale_tokens})],
+        }
+    )
+
+    recovered = book_extraction_service._recover_page_result(stale_page)
+
+    assert recovered.pipeline_version == CURRENT_PIPELINE_VERSION
+    assert recovered.clean_text == "我自己觉得粗糙的胖屁股。"
+    assert [token.surface_form for token in recovered.sentences[0].tokens] == [
+        "我",
+        "自己",
+        "觉得",
+        "粗糙",
+        "的",
+        "胖屁股",
+        "。",
+    ]
 
 
 def test_enrich_page_metadata_romanizes_all_chinese_numbers_digit_by_digit(tmp_path: Path) -> None:

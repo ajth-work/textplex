@@ -198,6 +198,32 @@ def test_tokenize_sentence_uses_chinese_segmenter_when_available(monkeypatch) ->
     assert [token.surface_form for token in tokens] == ["\u79d1\u5b66", "\u8fb9\u754c"]
 
 
+def test_build_page_extraction_result_preserves_chinese_compounds_across_ocr_spacing(monkeypatch) -> None:
+    monkeypatch.setattr(
+        extraction,
+        "_jieba_lcut",
+        lambda text, cut_all=False, HMM=True: ["我", "自", "己", "觉得", "粗", "糙", "的", "胖", "屁", "股"],
+    )
+
+    result = build_page_extraction_result(
+        book_id="book-chinese-compounds",
+        page_number=4,
+        language_code="zh",
+        raw_text="我\n自 己觉得粗 糙的胖 屁 股。",
+    )
+
+    assert result.clean_text == "我自己觉得粗糙的胖屁股。"
+    assert [token.surface_form for token in result.sentences[0].tokens] == [
+        "我",
+        "自己",
+        "觉得",
+        "粗糙",
+        "的",
+        "胖屁股",
+        "。",
+    ]
+
+
 def test_tokenize_sentence_keeps_chinese_name_before_parenthetical_gloss(monkeypatch) -> None:
     monkeypatch.setattr(
         extraction,
