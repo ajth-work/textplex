@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, computed_field, field_validator
 
-CURRENT_PIPELINE_VERSION = "textplex-5"
+CURRENT_PIPELINE_VERSION = "textplex-6"
 CURRENT_TOKENIZER_VERSION = "textplex-tokenizer-1"
 LEXICAL_IDENTITY_KEY_VERSION = "v1"
 
