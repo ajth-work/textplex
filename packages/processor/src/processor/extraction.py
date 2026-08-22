@@ -136,6 +136,14 @@ def _normalize_sentence_inputs(sentence_texts: list[str] | None, clean_text: str
     if sentence_texts:
         normalized = [normalize_text(sentence) for sentence in sentence_texts if normalize_text(sentence)]
         if normalized:
+            remaining_text = clean_text
+            for sentence in normalized:
+                if not remaining_text.startswith(sentence):
+                    remaining_text = ""
+                    break
+                remaining_text = remaining_text[len(sentence) :].lstrip()
+            if remaining_text:
+                normalized.extend(split_sentences(remaining_text))
             return normalized
     return split_sentences(clean_text)
 
@@ -564,9 +572,11 @@ def build_page_extraction_result(
         if isinstance(page_translation_source, str) and page_translation_source.strip()
         else None,
         sentences=sentences,
-        page_ends_with_sentence_terminator=page_ends_with_sentence_terminator
-        if page_ends_with_sentence_terminator is not None
-        else ends_with_sentence_terminator(clean_text),
+        page_ends_with_sentence_terminator=(
+            ends_with_sentence_terminator(clean_text)
+            if page_ends_with_sentence_terminator is None
+            else page_ends_with_sentence_terminator and ends_with_sentence_terminator(clean_text)
+        ),
         token_occurrences=token_occurrences,
         lexical_entries=list(lexical_entries.values()),
     )

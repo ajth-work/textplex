@@ -70,6 +70,24 @@ def test_build_page_extraction_result_applies_translations_to_sentences() -> Non
     assert result.sentences[1].translation_source == "google_translate_cache"
 
 
+def test_build_page_extraction_result_recovers_trailing_text_after_structured_sentences() -> None:
+    result = build_page_extraction_result(
+        book_id="book-trailing-paragraph",
+        page_number=4,
+        language_code="en",
+        raw_text="The first paragraph ends here.\n\nThe final paragraph remains readable",
+        sentence_texts=["The first paragraph ends here."],
+        page_ends_with_sentence_terminator=True,
+    )
+
+    assert [sentence.text for sentence in result.sentences] == [
+        "The first paragraph ends here.",
+        "The final paragraph remains readable",
+    ]
+    assert result.sentences[-1].ends_with_sentence_terminator is False
+    assert result.page_ends_with_sentence_terminator is False
+
+
 def test_stitch_page_sentence_carryover_moves_open_sentence_to_previous_page(monkeypatch) -> None:
     monkeypatch.setattr(
         extraction,

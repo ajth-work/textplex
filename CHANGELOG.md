@@ -10,6 +10,7 @@
 - Added a provenance-preserving JMdict XML import path with projected Japanese readings, meanings, parts of speech, and source metadata.
 - Added explicit reversible completion for page-by-page reading frontiers, reset completion when new pages are appended, and return a useful 400 response for unreadable photo batches.
 - Added the 0.1.2 tester build briefing and a shared route-aware page guide with persistent first-visit walkthroughs.
+- Preserved trailing page text when structured extraction sentence lists stop before the end of the transcription, keeping page completion aligned with recovered content (#146).
 - Closed issue #153 after merged PR #175 delivered Japanese conjugation details in Reader and Study; synchronized the local issue tracker.
 
 ## 2026-08-21
