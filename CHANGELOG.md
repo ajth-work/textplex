@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-22
+
+- Added ESLint 10 compatibility handling for the Next.js flat configuration so web linting remains operational during the major-version upgrade.
+
 ## 2026-08-20
 
 - Simplified book detail pages for learners by replacing processing metadata with language, page, date, and reading-overview details, and shortening actions to open, restart, refresh, and library.
