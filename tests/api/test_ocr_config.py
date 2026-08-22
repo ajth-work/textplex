@@ -7,6 +7,7 @@ from app.services.ocr import (
     OcrPageResult,
     _build_page_image_data_url,
     _extract_response_text,
+    _extract_structured_ocr_result,
     get_openai_max_output_tokens,
     get_openai_ocr_model,
     get_text_source_signature,
@@ -37,6 +38,25 @@ def test_empty_openai_response_includes_provider_diagnostics() -> None:
                 "output": [{"type": "reasoning", "content": []}],
             }
         )
+
+
+def test_openai_ocr_extracts_transcription_from_truncated_jsonish_response() -> None:
+    response_text = (
+        '{"transcription":"The corrected sentence is exact, with punctuation.",'
+        '"sentence_texts":["The corrected sentence is exact, with punctuation."],'
+        '"page_translation":"The sentence is exact.",'
+        '"page_ends_with_sentence_terminator":true,'
+        '"correction_metadata":{"source":"transcription"'
+    )
+
+    result = _extract_structured_ocr_result(response_text, fallback_text="fallback text")
+
+    assert result.transcription == "The corrected sentence is exact, with punctuation."
+    assert result.sentence_texts == ["The corrected sentence is exact, with punctuation."]
+    assert result.page_translation == "The sentence is exact."
+    assert result.page_ends_with_sentence_terminator is True
+    assert "correction_metadata" not in result.transcription
+    assert "transcription" not in result.transcription
 
 
 def test_openai_ocr_requires_provider_and_key(monkeypatch) -> None:
