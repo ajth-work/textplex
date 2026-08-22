@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-CURRENT_PIPELINE_VERSION = "textplex-4"
+CURRENT_PIPELINE_VERSION = "textplex-5"
 
 
 class BoundingBox(BaseModel):

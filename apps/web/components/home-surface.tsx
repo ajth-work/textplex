@@ -212,7 +212,7 @@ export function HomeSurface({ books, progress }: Readonly<HomeSurfaceProps>) {
       </section>
 
       <section className="preview-section" data-inventory-id="home.goals">
-        <div className="preview-section-head"><h2>Goals</h2><Link href="/progress">See All</Link></div>
+        <div className="preview-section-head"><h2>Goals</h2><Link href="/goals">See All</Link></div>
         <div className="preview-goals">
           <article className="preview-goal-card" data-inventory-id="home.weekly-goal">
             {editingGoal ? (

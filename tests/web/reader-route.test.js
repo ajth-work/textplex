@@ -213,7 +213,8 @@ test("Next reader expands the session summary into book-scoped stats", () => {
 
 test("Next reader keeps completion summary fallback labels readable", () => {
   assert.match(readerSource, /bookCoveragePercent == null \? "\\u2014"/);
-  assert.match(readerSource, /completionSaving \? "Saving\.\.\." : "Mark as read and return to library"/);
+  assert.match(readerSource, /completionSaving \? "Saving\.\.\." : "Mark as read, archive, and return"/);
+  assert.match(readerSource, /archiveBook\(bookId\)/);
   assert.doesNotMatch(readerSource, /bookCoveragePercent == null \? "ÃƒÆ’/);
 });
 

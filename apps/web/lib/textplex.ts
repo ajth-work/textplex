@@ -1,5 +1,6 @@
 import { getDemoFetchResponse, getDemoPostResponse } from "./demo-data";
 import type {
+  BookRecord,
   BookExtractionTriggerRequest,
   BookExtractionTriggerResponse,
   GeneratedArticleTerm,
@@ -820,7 +821,43 @@ export function formatDateTime(value: string | null): string {
 
 export function formatElapsed(seconds: number): string {
   const safeSeconds = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(safeSeconds / 3600);
   const minutes = Math.floor(safeSeconds / 60);
   const remainingSeconds = safeSeconds % 60;
-  return `${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`;
+  const remainingMinutes = minutes % 60;
+  const parts: string[] = [];
+
+  if (hours > 0) {
+    parts.push(`${hours}h`);
+  }
+  if (remainingMinutes > 0) {
+    parts.push(`${remainingMinutes}m`);
+  }
+  if (remainingSeconds > 0 || parts.length === 0) {
+    parts.push(`${remainingSeconds}s`);
+  }
+
+  return parts.join(" ");
+}
+
+export function archiveBook(bookId: string): Promise<BookRecord> {
+  return postJson<BookRecord>(`/books/${encodeURIComponent(bookId)}/archive`, {});
+}
+
+export function restoreBook(bookId: string): Promise<BookRecord> {
+  return postJson<BookRecord>(`/books/${encodeURIComponent(bookId)}/restore`, {});
+}
+
+export function deleteBook(bookId: string): Promise<{ status: string; book_id: string }> {
+  const pathname = `/books/${encodeURIComponent(bookId)}`;
+  return fetchWithAuth(pathname, { method: "DELETE" }, true).then(async (response) => {
+    if (!response.ok) {
+      throw await apiRequestError(response, pathname);
+    }
+    return (await response.json()) as { status: string; book_id: string };
+  });
+}
+
+export function formatAverageElapsed(seconds: number | null): string {
+  return seconds == null || !Number.isFinite(seconds) ? "—" : formatElapsed(Math.max(0, Math.round(seconds)));
 }

@@ -1,5 +1,47 @@
 # Changelog
 
+## 2026-08-20
+
+- Simplified book detail pages for learners by replacing processing metadata with language, page, date, and reading-overview details, and shortening actions to open, restart, refresh, and library.
+- Simplified library cards around learner-facing page/update context and reading state, with labeled Details, Open, and Archive actions.
+- Changed library card headers to separate language/type pills and classify extensionless generated or Wikipedia content as Article instead of exposing slug fragments such as BAR.
+- Moved reading status into the library card header, paired authors with page counts, and reordered actions to Archive, Details, Open.
+- Renamed the library card's active reading status from In progress to Reading.
+- Library cards now show sentence counts for one-page static articles and page counts for other reading items.
+- Refined archive card action pills so Open and Restore to library remain readable and separated on narrow screens.
+- Added a horizontal Delete action to archived cards with confirmation before permanent removal.
+- Renamed the archive restore action to Restore and added language/content-type archive filters.
+- Added an active-library/archive workflow: static content can be archived at completion or from book detail, archived items can be restored, and page-by-page sources remain appendable instead of being auto-archived.
+
+## 2026-08-20
+
+- Added a configurable minimum character threshold and bounded retry behavior so random Wikipedia imports skip articles that are too short to support a useful reading session.
+- Added a dedicated editable Goals workspace with four period-based targets, progress visuals, completion framing, and a clear home “See All” destination.
+- Reframed the Progress page around a plain-language reading insight, in-page evidence jumps, and contextual Study/Activity follow-ups instead of generic hero navigation.
+- Reworked book pace comparisons into labeled, mobile-friendly reading-pace panels that explain the current-book and same-language averages.
+- Added per-book page/sentence pace comparisons to progress and profile book cards, including same-language averages across the learner's recorded books.
+- Formatted book reading time as compact hours/minutes/seconds values instead of raw seconds on live and demo progress/profile rows.
+
+## 2026-08-19
+
+- Added route-aware first-visit page guides for Home, Library, Reader, and Study, using a dismissible carousel with pagination dots, local visit state, and a persistent reopen trigger.
+- Bumped the web build to `0.1.2` and added a tester-only return briefing that shows grouped changes since the tester last acknowledged a previous build, with account-scoped local visit state.
+- Corrected the Android tablet browser-chrome investigation: TextPlex emits valid dynamic theme metadata, but Chrome's large-screen tab UI can intentionally reject page-provided colors; retained the standards-compatible metadata without the unnecessary tag-replacement workaround.
+- Reinserted the runtime `theme-color` meta tag on theme switches so Android Chrome can observe changes after the page is already open.
+- Made the Next viewport emit one active theme-aware browser color so Android Chrome tablet chrome follows the selected TextPlex theme.
+- Added spacing between Study metadata labels and values so level, chunk, frequency, saved, and confidence details remain readable (#88).
+- Centered the Study pronunciation-guide card contents to match the meaning card layout (#88).
+- Added an in-field Japanese Romaji/Hiragana pronunciation toggle (#88).
+- Removed the duplicated composed-answer text from the Japanese input helper card (#88).
+- Centered and enlarged revealed answers, and clarified that a Japanese reading is not a written-form answer in meaning-to-word practice (#88).
+- Added a context-aware written-form candidate button when a Japanese reading matches the current card (#88).
+- Made kana-only Japanese word-to-reading cards request the romanized reading instead of repeating the same Hiragana form (#88).
+- Expanded Chinese digit-by-digit romanization to all numeric Reader tokens, including months and days (#142).
+- Applied Chinese cardinal-number readings outside year context, so `12月`, `20日`, and `30分` use `shí èr`, `èr shí`, and `sān shí` (#142).
+
+- Preserved precomposed and combining Latin accents during processor tokenization, including automatic recovery of stale Yoruba page artifacts (#147).
+- Preserved Chinese personal-name runs before parenthetical glosses, including the reported `李善中` Reader case (#141).
+
 ## 2026-08-18
 
 - Guarded the Reader meaning-line reveal against stale or incorrect alignment segments so a tapped word's sentence hint stays compatible with its displayed definition.

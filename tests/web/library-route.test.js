@@ -38,3 +38,23 @@ test("Next library uses one Import action and routes it to the import flow", () 
   assert.match(stylesheetSource, /\.library-filter-menu[\s\S]*\.library-filter-panel/);
   assert.match(stylesheetSource, /\.library-import-button\.button/);
 });
+
+test("Next library cards use learner-facing actions and archive active items", () => {
+  assert.match(librarySource, /Details/);
+  assert.match(librarySource, /Open/);
+  assert.match(librarySource, /Archive/);
+  assert.match(librarySource, /archiveBook\(bookId\)/);
+  assert.match(librarySource, /data-inventory-id="library\.book-archive-button"/);
+  assert.match(librarySource, /library-language-pill/);
+  assert.match(librarySource, /library-type-pill/);
+  assert.match(librarySource, /library-status-pill/);
+  assert.match(librarySource, /return "Reading"/);
+  assert.match(librarySource, /bookAuthorSummary\(book, progress\)/);
+  assert.match(librarySource, /book\.source_type === "static" && book\.total_pages === 1/);
+  assert.match(librarySource, /progress\?\.total_sentences/);
+  assert.match(librarySource, /return `Updated/);
+  assert.match(librarySource, /return "ARTICLE"/);
+  assert.doesNotMatch(librarySource, /book\.extracted_page_count\} extracted/);
+  assert.doesNotMatch(librarySource, /bookStatusLabel\(book\)/);
+  assert.doesNotMatch(librarySource, /bookFormatLabel/);
+});

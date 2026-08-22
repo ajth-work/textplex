@@ -44,6 +44,9 @@ Unless a task explicitly calls for legacy or GitHub Pages compatibility work, im
 | `shell.secondary-nav` | region | More navigation | `apps/web/components/app-shell.tsx` | Overflow access to Activity, Roadmap, Profile, Settings, admin/tester tools when available, and the signed-in or signed-out account action. |
 | `shell.reader-nav` | region | Reader navigation behavior | `apps/web/components/app-shell.tsx` | Reader-only app shell that appears on entry, then collapses as a whole so the logo, shell controls, and primary navigation do not compete with reading. |
 | `shell.reader-nav-reveal` | button | Show app shell | `apps/web/components/app-shell.tsx` | Theme-aware reader tab anchored to the top viewport edge, restoring the full app shell after it collapses without covering reader content. |
+| `shell.page-guide-trigger` | button | Page guide trigger | `apps/web/components/page-guide.tsx`, `apps/web/components/app-shell.tsx` | Persistent help control that reopens the current route's first-visit guide. |
+| `shell.page-guide-dialog` | card | Page guide dialog | `apps/web/components/page-guide.tsx` | Route-aware first-visit carousel explaining a page's purpose, current capabilities, and likely future expansions. |
+| `shell.page-guide-close` | button | Close page guide | `apps/web/components/page-guide.tsx` | Dismisses the current page guide and records that the visitor has seen it. |
 | `shell.footer` | region | Shared footer | `apps/web/components/account-footer.tsx`, `apps/web/components/account-menu.tsx` | Shared account footer below the build card, with the authenticated account menu above the authorization/usage note and copyright mark. |
 | `shell.feedback-footer` | region | Feedback footer | `apps/web/components/feedback-widget.tsx`, `apps/web/components/build-footer.tsx` | Feedback action region embedded inside the shared build card so it remains accessible on every route. |
 | `shell.feedback-button` | button | Send feedback | `apps/web/components/feedback-widget.tsx` | Embedded build-card action that opens the feedback capture dialog from every route. |
@@ -73,6 +76,7 @@ Unless a task explicitly calls for legacy or GitHub Pages compatibility work, im
 | `privacy` | `/privacy` | `apps/web/app/privacy/page.tsx` |
 | `home` | `/home` | `apps/web/app/home/page.tsx` |
 | `library` | `/library` | `apps/web/components/library-view.tsx` |
+| `archive` | `/archive` | `apps/web/components/archive-view.tsx` |
 | `book-detail` | `/books/:bookId` | `apps/web/components/book-detail-view.tsx` |
 | `reader` | `/reader/:bookId/:pageNumber` | `apps/web/components/reader-view.tsx` |
 | `analysis` | `/analysis/:bookId` | `apps/web/components/surface-views.tsx` |
@@ -169,6 +173,20 @@ Source: `apps/web/app/home/page.tsx` (`HomePage`) rendering `apps/web/components
 | `home.exposure-goal` | card | Reading exposure | Sentence-read exposure summary card. |
 | `home.empty-state` | card | Empty state | First-text call to action when no books are available. |
 | `home.error-state` | card | Error state | Error message shown when the home data request fails. |
+### `goals` — `/goals`
+
+Source: `apps/web/app/goals/page.tsx` (`GoalsPage`) rendering `apps/web/components/goals-view.tsx` (`GoalsSurface`)
+
+| ID | Type | Visible name | Purpose |
+| --- | --- | --- | --- |
+| `goals.page` | page | Goals | Editable learner goal workspace for turning reading targets into visible, motivating progress. |
+| `goals.focus-card` | card | Your next win | Encouragement and completion summary that frames the next achievable action. |
+| `goals.list` | region | Editable reading goals | Collection of period-based reading, exposure, vocabulary, and session goals. |
+| `goals.pages-card` | card | Weekly reading | Weekly page target with inline editing and progress bar. |
+| `goals.sentences-card` | card | Daily exposure | Daily sentence-exposure target with inline editing and progress bar. |
+| `goals.words-card` | card | New vocabulary | Monthly vocabulary target with inline editing and progress bar. |
+| `goals.sessions-card` | card | Reading sessions | Weekly session target with inline editing and progress bar. |
+
 ### `library` — `/library`
 
 Source: `apps/web/components/library-view.tsx` (`LibraryView`)
@@ -183,12 +201,27 @@ Source: `apps/web/components/library-view.tsx` (`LibraryView`)
 | `library.document-count` | region | Document count | Visible count of matching books in the shelf. |
 | `library.shelf` | region | Library shelf | Book collection grid, loading card, and empty state. |
 | `library.skeleton-card` | card | Loading book | Skeleton card shown while the library loads. |
-| `library.book-card` | card | Book card | Language, format, title, subtitle, status, metrics, and info/read actions for one book. |
-| `library.book-info-button` | button | Info action | Opens the book detail route from a library card. |
-| `library.book-open-button` | button | Read action | Opens the reader route from a library card. |
+| `library.book-card` | card | Book card | Language, type, and reading-state pills, title, author/page context, update date, and archive/details/open actions for one book. |
+| `library.book-info-button` | button | Details action | Opens the book detail route from a library card. |
+| `library.book-open-button` | button | Open action | Opens the reader route from a library card. |
+| `library.book-archive-button` | button | Archive action | Moves a library item to the archive and removes it from the active shelf. |
 | `library.import-button` | button | Import action | Routes from the library to the `/import` flow for adding a text, PDF, EPUB, or random article. |
 | `library.empty-state` | card | Empty library | Guidance shown when no books are available or match the search. |
 | `library.error-state` | card | Library error | Book loading error message. |
+
+### `archive` — `/archive`
+
+Source: `apps/web/components/archive-view.tsx` (`ArchiveView`)
+
+| `archive.page` | page | Archive | Completed reading items kept out of the active library. |
+| `archive.hero` | region | Archive hero | Archive purpose, explanation, and return-to-library action. |
+| `archive.filter-menu` | region | Archive filter menu | Language and content-type filters for archived items. |
+| `archive.filter-button` | button | Archive filter toggle | Opens the archive language and content-type filters. |
+| `archive.language-filter` | region | Archive language filter | Filters archived items by language. |
+| `archive.content-type-filter` | region | Archive content type filter | Filters archived items as articles or books. |
+| `archive.shelf` | region | Archive shelf | Archived reading items and empty state. |
+| `archive.book-card` | card | Archived book card | Archived item metadata with open, restore, and delete actions. |
+| `archive.empty-state` | card | Empty archive | Guidance shown before any item is archived. |
 
 ### `book-detail` — `/books/:bookId`
 
@@ -199,11 +232,11 @@ Source: `apps/web/components/book-detail-view.tsx` (`BookDetailView`)
 | `book-detail.page-hero` | region | Book detail hero | Content-type pill, article topic or book title, concise reading summary, demo status, and page-count metadata. Generated article summaries use the saved topic and curriculum metadata; book summaries remain local metadata copy until a synopsis contract exists. |
 | `book-detail.detail-card` | card | Book detail | Book metadata, page/extraction metrics, reader link, library link, and extraction action. |
 | `surface.page-by-page-append-card` | card | Page-by-page append | Adds the next photographed pages to this existing book and sends them through the normal extraction pipeline. |
-| `book-detail.extraction-snapshot-card` | card | Extraction snapshot | Extraction source and top lexical-entry frequency summary. |
+| `book-detail.extraction-snapshot-card` | card | Reading overview | Ready-page count and top words and phrases from the selected book. |
 | `book-detail.generation-prompt-card` | card | Generated article prompt | Saved generation metadata, selected learner window, and the exact prompt text used for a generated article. |
 | `book-detail.page-hsk-chart` | card | Book page HSK chart | Ordered page-level HSK averages for the selected book. |
-| `book-detail.prepared-pages-card` | card | Prepared pages | Page manifest grid linking to individual reader pages. |
-| `book-detail.page-tile` | region | Prepared page tile | One page-manifest link showing page number and image filename. |
+| `book-detail.prepared-pages-card` | card | Pages | Page grid linking to individual reader pages. |
+| `book-detail.page-tile` | region | Page tile | One page link showing the page number and an open action. |
 | `book-detail.error-state` | card | Book detail error | Load or extraction error message. |
 
 ### `reader` — `/reader/:bookId/:pageNumber`
@@ -433,6 +466,7 @@ Live source: `apps/web/components/surface-views.tsx` (`ProgressSurfaceView`); de
 | --- | --- | --- | --- |
 | `progress.route-hero` | region | Progress hero | Session, sentence, and vocabulary-row metrics. |
 | `progress.profile-summary-card` | card | Profile summary | Unique words, characters, and reading-speed metrics. |
+| `progress.reading-insight-card` | card | Reading insight | Plain-language interpretation of the learner’s sentence, book, and vocabulary exposure progress with links to review and history. |
 | `progress.learning-track-card` | card | Learning track | Selected learning track and next step. |
 | `progress.books-card` | card | Books | Per-book page, sentence, and active-time progress. |
 | `progress.book-item` | region | Progress book item | One book’s progress row. |

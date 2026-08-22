@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 
 import {
   fetchJson,
+  archiveBook,
   formatElapsed,
   postJson,
   clearStoredReaderNavigationContext,
@@ -3395,6 +3396,9 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
     setCompletionError(null);
     try {
       await submitCurrentPageRead(1);
+      if (!isDemoMode) {
+        await archiveBook(bookId);
+      }
       setShowCompletionSummary(false);
       router.push("/library");
     } catch (error) {
@@ -6127,7 +6131,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
           {completionError ? <p className="reader-completion-error" role="alert">{completionError}</p> : null}
           <div className="button-row reader-completion-actions">
             <button type="button" className="button button-primary" onClick={() => void handleMarkCompletionAndReturnToLibrary()} disabled={completionSaving}>
-              {completionSaving ? "Saving..." : "Mark as read and return to library"}
+              {completionSaving ? "Saving..." : "Mark as read, archive, and return"}
             </button>
             <button type="button" className="button button-secondary" onClick={() => setShowCompletionSummary(false)} disabled={completionSaving}>
               Keep reading

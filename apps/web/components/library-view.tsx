@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } fro
 import {
   fetchJson,
   formatDateTime,
+  archiveBook,
   resolveReaderResumeHref,
   type BookRecord,
   type ProgressBookSummary,
@@ -43,22 +44,15 @@ const libraryProcessingFilterOptions: Array<{ value: LibraryProcessingFilter; la
   { value: "local", label: "Local" },
 ];
 
-function bookFormatLabel(book: BookRecord): string {
-  const suffix = book.source_filename.split(".").pop()?.trim();
-  return suffix ? suffix.toUpperCase() : "TXT";
-}
-
-function bookStatusLabel(book: BookRecord): string {
-  if (book.status === "ready" || book.status === "extracted" || book.extraction_status === "complete") {
-    return "Live";
+function bookTypeLabel(book: BookRecord): string {
+  const suffix = book.source_filename.split(".").pop()?.trim().toLowerCase();
+  if (suffix === "pdf" || suffix === "epub" || suffix === "txt") {
+    return suffix.toUpperCase();
   }
-  if (book.extraction_status === "processing" || book.status === "processing") {
-    return "Preparing";
+  if (book.author?.trim() === "Wikipedia" || book.author?.trim() === "TextPlex AI") {
+    return "ARTICLE";
   }
-  if (book.status === "queued" || book.extraction_status === "queued") {
-    return "Queued";
-  }
-  return "Local";
+  return "TEXT";
 }
 
 function readingStateLabel(progress: ProgressBookSummary | null): string {
@@ -68,15 +62,22 @@ function readingStateLabel(progress: ProgressBookSummary | null): string {
   if (progress.reading_state === "finished") {
     return "Finished";
   }
-  return "In progress";
+  return "Reading";
 }
 
 function bookSubtitle(book: BookRecord): string {
   return book.author?.trim() || book.source_filename.replace(/\.[^.]+$/, "") || "Unknown author";
 }
 
+function bookAuthorSummary(book: BookRecord, progress: ProgressBookSummary | null): string {
+  const isSinglePageArticle = book.source_type === "static" && book.total_pages === 1 && bookTypeLabel(book) === "ARTICLE";
+  const count = isSinglePageArticle && progress?.total_sentences ? progress.total_sentences : book.total_pages;
+  const unit = isSinglePageArticle && progress?.total_sentences ? "sentence" : "page";
+  return `${bookSubtitle(book)} (${count} ${unit}${count === 1 ? "" : "s"})`;
+}
+
 function bookMetaSummary(book: BookRecord): string {
-  return `${book.total_pages} pages · ${book.extracted_page_count} extracted · Updated ${formatDateTime(book.processed_at ?? book.created_at)}`;
+  return `Updated ${formatDateTime(book.processed_at ?? book.created_at)}`;
 }
 
 function sortBooks(books: BookRecord[]): BookRecord[] {
@@ -151,11 +152,13 @@ function LibrarySkeletonCard() {
   );
 }
 
-function LibraryCard({ book, progress, onOpenInfo, onOpenReader }: {
+function LibraryCard({ book, progress, onOpenInfo, onOpenReader, onArchive, archiving }: {
   book: BookRecord;
   progress: ProgressBookSummary | null;
   onOpenInfo: (bookId: string) => void;
   onOpenReader: (bookId: string) => void;
+  onArchive: (bookId: string) => void;
+  archiving: boolean;
 }) {
   const artClass = `home-book-art home-book-art-${book.language_code.slice(0, 2).toLowerCase()}`;
 
@@ -188,43 +191,43 @@ function LibraryCard({ book, progress, onOpenInfo, onOpenReader }: {
     >
       <div className={artClass} aria-hidden="true" />
       <div className="library-card-body">
-        <p className="library-kicker">
-          {languageShortCode(book.language_code)} · {bookFormatLabel(book)}
-        </p>
+        <div className="library-kicker-row">
+          <span className="library-pill library-language-pill">{languageShortCode(book.language_code)}</span>
+          <span className="library-pill library-type-pill">{bookTypeLabel(book)}</span>
+          <span className="library-pill library-status-pill">{readingStateLabel(progress)}</span>
+        </div>
         <h3>{book.title}</h3>
-        <p className="library-author">{bookSubtitle(book)}</p>
+        <p className="library-author">{bookAuthorSummary(book, progress)}</p>
         <p className="library-summary">{bookMetaSummary(book)}</p>
         <div className="library-actions">
-          <div className="library-tag-row">
-            <span className="library-tag library-status">{bookStatusLabel(book)}</span>
-            <span className="library-tag library-read-state">{readingStateLabel(progress)}</span>
-          </div>
           <div className="library-action-buttons">
+            <button
+              className="button button-secondary library-action-button library-action-button-archive"
+              type="button"
+              aria-label={`Archive ${book.title}`}
+              data-inventory-id="library.book-archive-button"
+              onClick={stopAndOpen(onArchive)}
+              disabled={archiving}
+            >
+              {archiving ? "Archiving..." : "Archive"}
+            </button>
             <button
               className="button button-secondary library-action-button library-action-button-info"
               type="button"
-              aria-label={`Open book info for ${book.title}`}
-              title="Info"
+              aria-label={`View details for ${book.title}`}
               data-inventory-id="library.book-info-button"
               onClick={stopAndOpen(onOpenInfo)}
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none" />
-              </svg>
+              Details
             </button>
             <button
               className="button button-primary library-action-button library-action-button-read"
               type="button"
-              aria-label={`Read ${book.title}`}
-              title="Read"
+              aria-label={`Open ${book.title}`}
               data-inventory-id="library.book-open-button"
               onClick={stopAndOpen(onOpenReader)}
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 4.5A2.5 2.5 0 0 1 8.5 2h9A2.5 2.5 0 0 1 20 4.5V19a1 1 0 0 1-1.5.86L16 18.3l-2.5 1.56a1 1 0 0 1-1 0L10 18.3l-2.5 1.56A1 1 0 0 1 6 19V4.5Z" />
-                <path d="M8 6.5h7.5" />
-                <path d="M8 10h7.5" />
-              </svg>
+              Open
             </button>
           </div>
         </div>
@@ -252,6 +255,8 @@ export function LibraryView() {
   const [languageCode, setLanguageCode] = useState("all");
   const [readingFilter, setReadingFilter] = useState<LibraryReadingFilter>("all");
   const [processingFilter, setProcessingFilter] = useState<LibraryProcessingFilter>("all");
+  const [archivingBookId, setArchivingBookId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading || (authConfigured && !user)) {
@@ -329,6 +334,19 @@ export function LibraryView() {
 
   function openReader(bookId: string) {
     router.push(resolveReaderResumeHref(bookId, progress));
+  }
+
+  async function archiveLibraryBook(bookId: string) {
+    setArchivingBookId(bookId);
+    setActionError(null);
+    try {
+      await archiveBook(bookId);
+      setBooks((current) => current.filter((book) => book.id !== bookId));
+    } catch (reason: unknown) {
+      setActionError(reason instanceof Error ? reason.message : "Unable to archive this reading item.");
+    } finally {
+      setArchivingBookId(null);
+    }
   }
 
   function retryLoad() {
@@ -467,10 +485,12 @@ export function LibraryView() {
 
         {!error && loading ? <LibraryLoadingState /> : null}
 
+        {actionError ? <p className="library-action-error" role="alert">{actionError}</p> : null}
+
         {!error && !loading && visibleBooks.length > 0 ? (
           <div className="library-shelf" aria-live="polite" data-inventory-id="library.shelf">
             {visibleBooks.map((book) => (
-              <LibraryCard key={book.id} book={book} progress={progressByBookId.get(book.id) ?? null} onOpenInfo={openInfo} onOpenReader={openReader} />
+              <LibraryCard key={book.id} book={book} progress={progressByBookId.get(book.id) ?? null} onOpenInfo={openInfo} onOpenReader={openReader} onArchive={archiveLibraryBook} archiving={archivingBookId === book.id} />
             ))}
           </div>
         ) : null}

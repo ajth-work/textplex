@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import {
   fetchJson,
+  archiveBook,
   formatDateTime,
   fetchGeneratedArticlePromptDetails,
   isDemoMode,
@@ -13,7 +15,6 @@ import {
   type BookExtractionResult,
   type BookAnalysisSurfaceResponse,
   type BookPageManifest,
-  type BookReaderPageResponse,
   type BookRecord,
   type ProgressSurfaceResponse,
   type GeneratedReaderArticlePromptDetails,
@@ -64,6 +65,7 @@ function detailSummary(book: BookRecord, generationDetails: GeneratedReaderArtic
 }
 
 export function BookDetailView({ bookId }: { bookId: string }) {
+  const router = useRouter();
   const { activeImport, trackImport } = useImportProgress();
   const [book, setBook] = useState<BookRecord | null>(null);
   const [manifest, setManifest] = useState<BookPageManifest | null>(null);
@@ -75,12 +77,13 @@ export function BookDetailView({ bookId }: { bookId: string }) {
   const [analysisLoading, setAnalysisLoading] = useState(true);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [firstPageExtractionSource, setFirstPageExtractionSource] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [archiving, setArchiving] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -92,7 +95,6 @@ export function BookDetailView({ bookId }: { bookId: string }) {
     setGenerationLoading(true);
     setSummaryLoading(true);
     setSummary(null);
-    setFirstPageExtractionSource(null);
     setProgress(null);
 
     async function loadBook() {
@@ -116,17 +118,6 @@ export function BookDetailView({ bookId }: { bookId: string }) {
           .catch(() => {
             if (active) {
               setProgress(null);
-            }
-          });
-        void fetchJson<BookReaderPageResponse>(`/books/${bookId}/pages/${manifestResult.pages[0]?.page_number ?? 1}`)
-          .then((pageResult) => {
-            if (active) {
-              setFirstPageExtractionSource(pageResult.extraction?.text_source ?? null);
-            }
-          })
-          .catch(() => {
-            if (active) {
-              setFirstPageExtractionSource(null);
             }
           });
         void fetchJson<BookAnalysisSurfaceResponse>(`/analysis/${bookId}`)
@@ -227,10 +218,24 @@ export function BookDetailView({ bookId }: { bookId: string }) {
     }
   }
 
+  async function handleArchive() {
+    if (archiving || !book || isDemoMode) {
+      return;
+    }
+    setArchiving(true);
+    setArchiveError(null);
+    try {
+      await archiveBook(book.id);
+      router.push("/archive");
+    } catch (err) {
+      setArchiveError(err instanceof Error ? err.message : "Unable to archive this reading item.");
+      setArchiving(false);
+    }
+  }
+
   const firstPageNumber = manifest?.pages[0]?.page_number ?? 1;
   const resumeReaderHref = resolveReaderResumeHref(bookId, progress, firstPageNumber);
   const needsExtraction = (book?.extracted_page_count ?? 0) <= 0;
-  const extractionSourceLabel = firstPageExtractionSource ? firstPageExtractionSource.toUpperCase() : "UNAVAILABLE";
   const typeLabel = book ? contentTypeLabel(book, generationDetails) : "Reading item";
   const heroTitle = book ? detailTitle(book, generationDetails) : null;
   const heroSummary = book ? detailSummary(book, generationDetails) : null;
@@ -255,50 +260,50 @@ export function BookDetailView({ bookId }: { bookId: string }) {
       {loading ? <LoadingSkeleton label="Loading book details" /> : null}
       {error ? <div className="card error-card">{error}</div> : null}
       {extractError ? <div className="card error-card">{extractError}</div> : null}
+      {archiveError ? <div className="card error-card">{archiveError}</div> : null}
 
       {book && manifest ? (
         <div className="detail-layout">
           <article className="card detail-main">
             <div className="card-topline">
               <span className="pill">{languageShortCode(book.language_code)}</span>
-              <span className="muted">{book.status.replaceAll("_", " ")}</span>
+              <span className="muted">{needsExtraction ? "Preparing to read" : "Ready to read"}</span>
             </div>
             <h2>{book.title}</h2>
             <p className="muted">{book.author ?? "Unknown author"}</p>
             <dl className="metric-grid">
               <div>
-                <dt>Prepared pages</dt>
-                <dd>{book.page_image_count}</dd>
+                <dt>Language</dt>
+                <dd>{languageLabel(book.language_code)}</dd>
               </div>
               <div>
-                <dt>Extracted pages</dt>
-                <dd>{book.extracted_page_count}</dd>
+                <dt>Pages</dt>
+                <dd>{book.total_pages}</dd>
               </div>
               <div>
-                <dt>Page manifest</dt>
-                <dd>{manifest.page_count}</dd>
+                <dt>Added</dt>
+                <dd>{formatDateTime(book.created_at)}</dd>
               </div>
             </dl>
-            <p className="small-copy">Imported {formatDateTime(book.created_at)}</p>
-            <p className="small-copy">
-              Extraction source: <strong>{extractionSourceLabel}</strong>
-            </p>
             {detailImport && isImportInProgress(detailImport) ? (
               <ImportProgressCard book={detailImport} inventoryId="book-detail.import-progress-card" showReaderLink={false} />
             ) : null}
             <div className="button-row">
               <Link className="button button-primary" href={resumeReaderHref}>
-                Open reader
+                open
               </Link>
               <Link className="button button-secondary" href={`/reader/${bookId}/${firstPageNumber}`}>
-                Start at beginning
+                restart
               </Link>
               <button className="button button-secondary" type="button" onClick={() => void handleExtractNow()} disabled={extracting || loading || isDemoMode}>
-                {extracting ? "Refreshing..." : isDemoMode ? "Demo sample" : needsExtraction ? "Extract pages" : "Refresh extraction"}
+                {extracting ? "refreshing..." : "refresh"}
               </button>
               <Link className="button button-secondary" href="/library">
-                Back to library
+                library
               </Link>
+              <button className="button button-secondary" type="button" onClick={() => void handleArchive()} disabled={archiving || isDemoMode}>
+                {archiving ? "archiving..." : "archive"}
+              </button>
             </div>
             {book.source_type === "page-by-page" && !isDemoMode ? (
               <PhotoPageAppendCard
@@ -320,16 +325,13 @@ export function BookDetailView({ bookId }: { bookId: string }) {
           </article>
 
           <aside className="card detail-aside">
-            <h3>Extraction snapshot</h3>
+            <h3>Reading overview</h3>
             {summaryLoading ? (
               <LoadingSkeleton label="Loading extraction snapshot" />
             ) : summary ? (
               <>
                 <p className="small-copy">
-                  Pages {summary.page_start} to {summary.page_end} with {summary.lexical_entries.length} unique lexical entries.
-                </p>
-                <p className="small-copy">
-                  Source: <strong>{extractionSourceLabel}</strong>
+                  {summary.page_end - summary.page_start + 1} pages are ready, with {summary.lexical_entries.length} words and phrases to explore.
                 </p>
                 <ul className="frequency-list">
                   {summary.lexical_entries.slice(0, 6).map((entry) => (
@@ -357,14 +359,14 @@ export function BookDetailView({ bookId }: { bookId: string }) {
       {manifest ? (
         <section className="card page-strip">
           <div className="card-topline">
-            <h3>Prepared pages</h3>
-            <span className="muted">{manifest.page_count} ready for reading</span>
+            <h3>Pages</h3>
+            <span className="muted">{manifest.page_count} available to read</span>
           </div>
           <div className="page-grid">
             {manifest.pages.map((page) => (
               <Link key={page.page_number} className="page-tile" href={`/reader/${manifest.book_id}/${page.page_number}`}>
                 <span>Page {page.page_number}</span>
-                <strong>{page.image_filename}</strong>
+                <strong>Open page</strong>
               </Link>
             ))}
           </div>

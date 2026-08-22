@@ -19,7 +19,9 @@ import {
   type AppTheme,
 } from "../lib/theme";
 import {
+  formatAverageElapsed,
   formatDateTime,
+  formatElapsed,
 } from "../lib/textplex";
 import type {
   BookAnalysisSurfaceResponse,
@@ -302,6 +304,11 @@ export function MockProgressSurfaceView() {
         reading_sessions: 1,
         sentence_reads: 2,
         active_seconds: 120,
+        language_code: demoBookRecord.language_code,
+        average_seconds_per_page: 120,
+        average_seconds_per_sentence: 60,
+        language_average_seconds_per_page: 120,
+        language_average_seconds_per_sentence: 60,
         total_pages: demoBookRecord.total_pages,
         furthest_page: 1,
         resume_page: 1,
@@ -320,11 +327,11 @@ export function MockProgressSurfaceView() {
     <RoutePage
       eyebrow="Progress"
       title="Reading and vocabulary progress"
-      description="Demo progress metrics from the packaged sample book."
+      description="See what your reading is building: more sentences completed, more language encountered, and a clearer record of the books you can return to."
       badge={`${data.profile.active_books} books`}
       links={[
-        { href: "/study", label: "Study" },
-        { href: "/activity", label: "Activity" },
+        { href: "#reading-insights", label: "See what you’re building" },
+        { href: "#book-progress", label: "See book progress" },
       ]}
       metrics={[
         { label: "Sessions", value: String(data.profile.reading_sessions) },
@@ -333,12 +340,26 @@ export function MockProgressSurfaceView() {
       ]}
     >
       <section className="feature-grid">
+        <article className="card feature-card progress-insight-card" id="reading-insights" data-inventory-id="progress.reading-insight-card">
+          <span className="eyebrow">What this means</span>
+          <h2>Your reading is adding up</h2>
+          <p>
+            You&apos;ve completed {data.profile.sentence_reads} sentence reads across {data.profile.active_books} books and encountered {data.profile.unique_words_seen} unique words.
+          </p>
+          <p className="small-copy">
+            Every sentence strengthens your exposure record. The book summaries below show where that time went and how your pace compares with your other {data.books.length === 1 ? "book" : "books"} in each language.
+          </p>
+          <div className="button-row">
+            <Link className="button button-secondary" href="/study">Review saved vocabulary</Link>
+            <Link className="button button-secondary" href="/activity">Look back at reading</Link>
+          </div>
+        </article>
         <article className="card feature-card">
           <h2>Profile summary</h2>
-          <p>Unique words: {data.profile.unique_words_seen}</p>
-          <p>Unique characters: {data.profile.unique_characters_seen}</p>
-          <p>Avg sec/word: {data.profile.average_seconds_per_word?.toFixed(2) ?? "â€”"}</p>
-          <p>Avg sec/char: {data.profile.average_seconds_per_character?.toFixed(2) ?? "â€”"}</p>
+          <p>Unique words encountered: {data.profile.unique_words_seen}</p>
+          <p>Unique characters encountered: {data.profile.unique_characters_seen}</p>
+          <p>Average sentence time: {data.profile.average_seconds_per_sentence?.toFixed(1) ?? "—"} seconds</p>
+          <p>Average session time: {data.profile.average_seconds_per_session?.toFixed(1) ?? "—"} seconds</p>
         </article>
         {data.profile.learning_tracks?.length ? (
           <article className="card feature-card">
@@ -350,18 +371,32 @@ export function MockProgressSurfaceView() {
             <p>{(data.profile.learning_tracks.find((track) => track.code === data.profile.selected_track_code) ?? data.profile.learning_tracks[0]).next_step}</p>
           </article>
         ) : null}
-        <article className="card feature-card">
+        <article className="card feature-card" id="book-progress" data-inventory-id="progress.books-card">
           <h2>Books</h2>
           <div className="surface-list">
             {data.books.map((book) => (
               <div key={book.book_id} className="surface-list-item">
                 <div className="card-topline">
                   <strong>{book.title}</strong>
-                  <span className="muted">{book.active_seconds}s</span>
+                  <span className="muted">{formatElapsed(book.active_seconds)}</span>
                 </div>
                 <p className="small-copy">
                   {book.page_reads} page reads - {book.sentence_reads} sentence reads
                 </p>
+                <div className="book-pace-comparison">
+                  <p className="book-pace-heading">Reading pace</p>
+                  <div className="book-pace-row">
+                    <span className="book-pace-label">This book</span>
+                    <span>{formatAverageElapsed(book.average_seconds_per_page)} <small>per page</small></span>
+                    <span>{formatAverageElapsed(book.average_seconds_per_sentence)} <small>per sentence</small></span>
+                  </div>
+                  <div className="book-pace-row book-pace-row-muted">
+                    <span className="book-pace-label">All {book.language_code.toUpperCase()} books</span>
+                    <span>{formatAverageElapsed(book.language_average_seconds_per_page)} <small>per page</small></span>
+                    <span>{formatAverageElapsed(book.language_average_seconds_per_sentence)} <small>per sentence</small></span>
+                  </div>
+                  <p className="book-pace-note">Based on active reading time recorded in TextPlex.</p>
+                </div>
                 <p className="small-copy">State: {book.reading_state.replaceAll("_", " ")}</p>
               </div>
             ))}
@@ -387,6 +422,11 @@ export function MockProfileSurfaceView() {
       reading_sessions: index + 1,
       sentence_reads: index + 2,
       active_seconds: 120 + index * 45,
+      language_code: book.language_code,
+      average_seconds_per_page: (120 + index * 45) / (index + 1),
+      average_seconds_per_sentence: (120 + index * 45) / (index + 2),
+      language_average_seconds_per_page: (120 + index * 45) / (index + 1),
+      language_average_seconds_per_sentence: (120 + index * 45) / (index + 2),
       total_pages: book.total_pages,
       furthest_page: Math.min(book.total_pages, index + 1),
       resume_page: Math.min(book.total_pages, index + 1),
@@ -481,11 +521,25 @@ export function MockProfileSurfaceView() {
               <div key={book.book_id} className="surface-list-item">
                 <div className="card-topline">
                   <strong>{book.title}</strong>
-                  <span className="muted">{book.active_seconds}s</span>
+                  <span className="muted">{formatElapsed(book.active_seconds)}</span>
                 </div>
                 <p className="small-copy">
                   {book.page_reads} page reads â€¢ {book.sentence_reads} sentence reads
                 </p>
+                <div className="book-pace-comparison">
+                  <p className="book-pace-heading">Reading pace</p>
+                  <div className="book-pace-row">
+                    <span className="book-pace-label">This book</span>
+                    <span>{formatAverageElapsed(book.average_seconds_per_page)} <small>per page</small></span>
+                    <span>{formatAverageElapsed(book.average_seconds_per_sentence)} <small>per sentence</small></span>
+                  </div>
+                  <div className="book-pace-row book-pace-row-muted">
+                    <span className="book-pace-label">All {book.language_code.toUpperCase()} books</span>
+                    <span>{formatAverageElapsed(book.language_average_seconds_per_page)} <small>per page</small></span>
+                    <span>{formatAverageElapsed(book.language_average_seconds_per_sentence)} <small>per sentence</small></span>
+                  </div>
+                  <p className="book-pace-note">Based on active reading time recorded in TextPlex.</p>
+                </div>
                 <p className="small-copy">State: {book.reading_state.replaceAll("_", " ")}</p>
               </div>
             ))}
