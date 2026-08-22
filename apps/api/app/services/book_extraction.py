@@ -875,14 +875,19 @@ def _enrich_page_lexicon_metadata(
                 contextual_romanization, contextual_definition = _japanese_contextual_metadata(sentence.tokens, token_index)
             if _language_root(language_code) == "zh":
                 contextual_romanization = _chinese_number_romanization(sentence.tokens, token_index)
+            reviewed_hebrew_pronunciation = (
+                hebrew_romanization_map.get(token.surface_form)
+                if _language_root(language_code) == "he"
+                else None
+            )
             romanization = (
                 contextual_romanization
+                or reviewed_hebrew_pronunciation
                 or token.romanization
                 or token.pronunciation
                 or (exact_entry.pinyin if exact_entry else None)
                 or pinyin_map.get(token.surface_form)
                 or google_romanization_map.get(token.surface_form)
-                or hebrew_romanization_map.get(token.surface_form)
             )
             definition_short = contextual_definition or token.definition_short or (exact_entry.definition if exact_entry else None)
             proficiency_level = token.proficiency_level or (exact_entry.hsk_level if exact_entry else None)
@@ -892,7 +897,7 @@ def _enrich_page_lexicon_metadata(
                     update={
                         "romanization": romanization,
                         "pronunciation": contextual_romanization
-                        or hebrew_romanization_map.get(token.surface_form)
+                        or reviewed_hebrew_pronunciation
                         or (romanization if romanization and not token.pronunciation else token.pronunciation),
                         "definition_short": definition_short,
                         "proficiency_level": proficiency_level,

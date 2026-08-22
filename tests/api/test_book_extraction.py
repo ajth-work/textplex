@@ -621,6 +621,27 @@ def test_parse_text_into_page_artifact_uses_hebrew_transliteration_when_google_i
     assert artifact.page.sentences[0].tokens[0].pronunciation == "shlom"
 
 
+def test_enrich_page_metadata_replaces_stale_hebrew_token_readings(tmp_path: Path) -> None:
+    page = build_page_extraction_result(
+        book_id="book-hebrew-stale-reading",
+        page_number=1,
+        language_code="he",
+        raw_text="הדוגמאות",
+    )
+    stale_token = page.sentences[0].tokens[0].model_copy(
+        update={"pronunciation": "hdogmaot", "romanization": "hdogmaot"}
+    )
+    stale_page = page.model_copy(
+        update={"sentences": [page.sentences[0].model_copy(update={"tokens": [stale_token]})]}
+    )
+
+    enriched = book_extraction_service._enrich_page_lexicon_metadata(stale_page, data_root=tmp_path)
+    token = enriched.sentences[0].tokens[0]
+
+    assert token.pronunciation == "hadugmaot"
+    assert token.romanization == "hadugmaot"
+
+
 def test_load_page_artifact_skips_empty_interrupted_artifact(tmp_path: Path) -> None:
     data_root = tmp_path / "books"
     book_id = "book-empty-artifact"
