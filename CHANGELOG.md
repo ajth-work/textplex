@@ -3,6 +3,7 @@
 ## 2026-08-22
 
 - Added ESLint 10 compatibility handling for the Next.js flat configuration so web linting remains operational during the major-version upgrade.
+- Added the 0.1.2 tester build briefing and a shared route-aware page guide with persistent first-visit walkthroughs.
 
 ## 2026-08-20
 
