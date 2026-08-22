@@ -191,9 +191,9 @@ from app.services.learning_profile import (
     record_page_read,
     record_sentence_read,
     record_study_vocabulary_item,
-    set_page_by_page_completion,
     record_vocabulary_assessment_review,
     record_word_interaction,
+    set_page_by_page_completion,
 )
 from app.services.learning_sync import sync_learning_events
 from app.services.lexicon import (

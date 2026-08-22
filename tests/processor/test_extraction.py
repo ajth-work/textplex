@@ -126,6 +126,19 @@ def test_tokenize_sentence_keeps_latin_words_together() -> None:
     assert [token.language_code for token in tokens] == ["en", "en", "en"]
 
 
+def test_tokenize_sentence_attaches_uncertain_surface_identity_without_inventing_confidence() -> None:
+    first = tokenize_sentence("Record", "EN_us")[0]
+    second = tokenize_sentence("record", "en-US")[0]
+
+    assert first.lexical_identity is not None
+    assert first.lexical_identity.language_code == "en"
+    assert first.lexical_identity.lemma == "record"
+    assert first.lexical_identity.status == "surface_fallback"
+    assert first.lexical_identity.provenance == "tokenizer_surface"
+    assert first.lexical_identity.confidence is None
+    assert first.lexical_identity.identity_key == second.lexical_identity.identity_key
+
+
 def test_tokenize_sentence_preserves_precomposed_latin_accents() -> None:
     tokens = tokenize_sentence("Àwọn ọmọ ń kọ́.", "yo")
 
