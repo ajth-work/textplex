@@ -3,6 +3,7 @@
     { "path": "/", "expected": "Read for free. Practice deeply. Create your own immersion." },
     { "path": "/home" },
     { "path": "/library", "expected": "Library" },
+    { "path": "/archive", "expected": "Finished reading" },
     { "path": "/analysis/demo-book", "expected": "Text analysis summary" },
     { "path": "/reader/demo-book/1" },
     { "path": "/import" },

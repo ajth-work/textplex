@@ -184,10 +184,15 @@ class StudySurfaceResponse(BaseModel):
 class ProgressBookSummary(BaseModel):
     book_id: str
     title: str
+    language_code: str
     reading_sessions: int = 0
     page_reads: int
     sentence_reads: int
     active_seconds: int
+    average_seconds_per_page: float | None = None
+    average_seconds_per_sentence: float | None = None
+    language_average_seconds_per_page: float | None = None
+    language_average_seconds_per_sentence: float | None = None
     total_pages: int = 0
     furthest_page: int = 0
     resume_page: int = 0

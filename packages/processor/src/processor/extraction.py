@@ -14,15 +14,16 @@ from .contracts import (
 )
 
 _TOKEN_RE = re.compile(
-    r"[\u4e00-\u9fff]+|[\u3041-\u309f]+|[\u30a1-\u30ff\uff66-\uff9f]+|[\uac00-\ud7a3\u3131-\u318e]+|[\u0400-\u04ff\u0500-\u052f]+|[\u0590-\u05ff\uFB1D-\uFB4F]+|[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+|[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?|[\u3002\uff01\uff1f!?.,:;\uff0c\u3001\uff1b\uff1a\u2026\u2014\u201c\u201d\u2018\u2019\uff08\uff09()\[\]{}\u300a\u300b\u3008\u3009\u300c\u300d\u300e\u300f\u3010\u3011\u30fb\u060c\u061b\u061f\u06d4]",
+    r"[\u4e00-\u9fff]+|[\u3041-\u309f]+|[\u30a1-\u30ff\uff66-\uff9f]+|[\uac00-\ud7a3\u3131-\u318e]+|[\u0400-\u04ff\u0500-\u052f]+|[\u0590-\u05ff\uFB1D-\uFB4F]+|[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+|[A-Za-z\u00c0-\u02af\u1e00-\u1eff\u0300-\u036f0-9]+(?:['’][A-Za-z\u00c0-\u02af\u1e00-\u1eff\u0300-\u036f0-9]+)?|[\u3002\uff01\uff1f!?.,:;\uff0c\u3001\uff1b\uff1a\u2026\u2014\u201c\u201d\u2018\u2019\uff08\uff09()\[\]{}\u300a\u300b\u3008\u3009\u300c\u300d\u300e\u300f\u3010\u3011\u30fb\u060c\u061b\u061f\u06d4]",
 )
 _CHINESE_RUN_RE = re.compile(r"[\u4e00-\u9fff]+")
 _KOREAN_RUN_RE = re.compile(r"[\uac00-\ud7a3\u3131-\u318e]+")
 _WORDISH_RE = re.compile(
-    r"[\u4e00-\u9fff]+|[\u3041-\u309f]+|[\u30a1-\u30ff\uff66-\uff9f]+|[\uac00-\ud7a3\u3131-\u318e]+|[\u0400-\u04ff\u0500-\u052f]+|[\u0590-\u05ff\uFB1D-\uFB4F]+|[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+|[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?|[\u3002\uff01\uff1f!?.,:;\uff0c\u3001\uff1b\uff1a\u2026\u2014\u201c\u201d\u2018\u2019\uff08\uff09()\[\]{}\u300a\u300b\u3008\u3009\u300c\u300d\u300e\u300f\u3010\u3011\u30fb\u060c\u061b\u061f\u06d4]",
+    r"[\u4e00-\u9fff]+|[\u3041-\u309f]+|[\u30a1-\u30ff\uff66-\uff9f]+|[\uac00-\ud7a3\u3131-\u318e]+|[\u0400-\u04ff\u0500-\u052f]+|[\u0590-\u05ff\uFB1D-\uFB4F]+|[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+|[A-Za-z\u00c0-\u02af\u1e00-\u1eff\u0300-\u036f0-9]+(?:['’][A-Za-z\u00c0-\u02af\u1e00-\u1eff\u0300-\u036f0-9]+)?|[\u3002\uff01\uff1f!?.,:;\uff0c\u3001\uff1b\uff1a\u2026\u2014\u201c\u201d\u2018\u2019\uff08\uff09()\[\]{}\u300a\u300b\u3008\u3009\u300c\u300d\u300e\u300f\u3010\u3011\u30fb\u060c\u061b\u061f\u06d4]",
 )
 _WHITESPACE_RE = re.compile(r"\s+")
 _SENTENCE_ENDERS = set("\u3002\uff01\uff1f!?.\u061f\u06d4")
+_CHINESE_NAME_OPENERS = set("\uff08(")
 _TRAILING_SENTENCE_CLOSERS = set("\"')]}〉》」』】〗〟”’")
 _HARD_NO_SPACE_JOIN_LANGS = {"zh", "ja", "ko"}
 _PUNCTUATION_TOKENS = set("。！？!?.，、；：,;:…—“”‘’（）()[]{}《》〈〉「」『』【】،؛؟۔")
@@ -311,7 +312,22 @@ def _tokenize_chinese_sentence(sentence: str) -> list[str]:
     for match in _WORDISH_RE.finditer(sentence):
         chunk = match.group(0)
         if _CHINESE_RUN_RE.fullmatch(chunk):
-            pieces.extend(_segment_chinese_chunk(chunk))
+            previous_char = sentence[match.start() - 1] if match.start() else ""
+            next_char = sentence[match.end()] if match.end() < len(sentence) else ""
+            is_name_prefix = (
+                2 <= len(chunk) <= 4
+                and next_char in _CHINESE_NAME_OPENERS
+                and (
+                    not previous_char
+                    or previous_char.isspace()
+                    or previous_char in _SENTENCE_ENDERS
+                    or previous_char in "\u3010\u300c\u300e([{"
+                )
+            )
+            if is_name_prefix:
+                pieces.append(chunk)
+            else:
+                pieces.extend(_segment_chinese_chunk(chunk))
         else:
             pieces.append(chunk)
     return pieces

@@ -34,6 +34,7 @@ class _FakeResponse:
 
 def test_fetch_random_article_uses_selected_wikipedia_language(monkeypatch) -> None:
     captured = {}
+    monkeypatch.setenv("TEXTPLEX_WIKIPEDIA_MIN_ARTICLE_CHARACTERS", "1")
 
     def fake_urlopen(request, timeout):
         captured["url"] = request.full_url
@@ -51,6 +52,41 @@ def test_fetch_random_article_uses_selected_wikipedia_language(monkeypatch) -> N
     assert "generator=random" in captured["url"]
     assert "grnnamespace=0" in captured["url"]
     assert captured["timeout"] == 12
+
+
+def test_fetch_random_article_retries_short_articles(monkeypatch) -> None:
+    extracts = iter(["太短。", "这是一个足够长的维基百科文章内容。"])
+    calls = 0
+
+    def fake_urlopen(_request, timeout):
+        nonlocal calls
+        calls += 1
+        response = _FakeResponse()
+        response.extract = next(extracts)
+        assert timeout == 12
+        return response
+
+    monkeypatch.setenv("TEXTPLEX_WIKIPEDIA_MIN_ARTICLE_CHARACTERS", "10")
+    monkeypatch.setattr(wikipedia, "urlopen", fake_urlopen)
+    monkeypatch.setattr(_FakeResponse, "read", lambda self, _limit: json.dumps({"query": {"pages": [{"title": "测试文章", "extract": self.extract}]}}).encode("utf-8"))
+
+    article = wikipedia.fetch_random_article("zh")
+
+    assert article.text == "这是一个足够长的维基百科文章内容。"
+    assert calls == 2
+
+
+def test_fetch_random_article_rejects_only_short_articles(monkeypatch) -> None:
+    monkeypatch.setenv("TEXTPLEX_WIKIPEDIA_MIN_ARTICLE_CHARACTERS", "100")
+    monkeypatch.setenv("TEXTPLEX_WIKIPEDIA_MAX_ARTICLE_ATTEMPTS", "2")
+    monkeypatch.setattr(wikipedia, "urlopen", lambda _request, timeout: _FakeResponse())
+
+    try:
+        wikipedia.fetch_random_article("zh")
+    except wikipedia.WikipediaImportError as exc:
+        assert "short articles" in str(exc)
+    else:
+        raise AssertionError("Expected short Wikipedia articles to be rejected")
 
 
 def test_fetch_random_article_rejects_unsupported_language() -> None:

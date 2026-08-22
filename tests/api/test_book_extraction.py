@@ -11,6 +11,7 @@ from app.services import book_extraction as book_extraction_service
 from app.services.book_registry import import_book_from_path
 from app.services.ocr import OcrPageResult
 from fastapi.testclient import TestClient
+from processor import build_page_extraction_result, tokenize_sentence
 from processor.contracts import BookExtractionResult
 
 
@@ -676,6 +677,82 @@ def test_load_page_artifact_recovers_malformed_jsonish_transcription(tmp_path: P
     assert recovered.page.page_ends_with_sentence_terminator is True
     assert recovered.page.sentences[0].text == "科学边界。"
     assert any(token.romanization for token in recovered.page.sentences[0].tokens)
+
+
+def test_recover_page_result_rebuilds_accented_tokens_from_stale_artifact() -> None:
+    page = build_page_extraction_result(
+        book_id="book-yoruba",
+        page_number=1,
+        language_code="yo",
+        raw_text="11853 Runge jẹ́ plánẹ́tì.",
+    )
+    stale_sentence = page.sentences[0].model_copy(update={"tokens": tokenize_sentence("11853 Runge j pl n t.", "yo")})
+    stale_page = page.model_copy(
+        update={
+            "pipeline_version": "textplex-4",
+            "sentences": [stale_sentence],
+        }
+    )
+
+    recovered = book_extraction_service._recover_page_result(stale_page)
+
+    assert [token.surface_form for token in recovered.sentences[0].tokens] == ["11853", "Runge", "jẹ́", "plánẹ́tì"]
+    assert recovered.pipeline_version == "textplex-5"
+
+
+def test_recover_page_result_keeps_chinese_name_before_parenthetical_gloss() -> None:
+    page = build_page_extraction_result(
+        book_id="book-chinese-name",
+        page_number=1,
+        language_code="zh",
+        raw_text="李善中（韓語：이선중）。",
+    )
+    stale_sentence = page.sentences[0].model_copy(update={"tokens": tokenize_sentence("李善 中（韓語：이선중）。", "zh")})
+    stale_page = page.model_copy(
+        update={
+            "pipeline_version": "textplex-4",
+            "sentences": [stale_sentence],
+        }
+    )
+
+    recovered = book_extraction_service._recover_page_result(stale_page)
+
+    assert [token.surface_form for token in recovered.sentences[0].tokens] == ["李善中", "（", "韓語", "：", "이선중", "）", "。"]
+
+
+def test_enrich_page_metadata_romanizes_all_chinese_numbers_digit_by_digit(tmp_path: Path) -> None:
+    page = build_page_extraction_result(
+        book_id="book-chinese-year",
+        page_number=1,
+        language_code="zh",
+        raw_text="李善中（韓語：이선중，1924年1月20日—2020年1月6日）。",
+    )
+
+    enriched = book_extraction_service._enrich_page_lexicon_metadata(page, data_root=tmp_path)
+    number_tokens = [token for token in enriched.sentences[0].tokens if token.surface_form in {"1924", "1", "20", "2020", "6"}]
+
+    assert [token.romanization for token in number_tokens] == [
+        "yī jiǔ èr sì",
+        "yī",
+        "èr shí",
+        "èr líng èr líng",
+        "yī",
+        "liù",
+    ]
+
+
+def test_enrich_page_metadata_uses_cardinal_readings_for_non_year_numbers(tmp_path: Path) -> None:
+    page = build_page_extraction_result(
+        book_id="book-chinese-cardinal",
+        page_number=1,
+        language_code="zh",
+        raw_text="12月20日5时30分。",
+    )
+
+    enriched = book_extraction_service._enrich_page_lexicon_metadata(page, data_root=tmp_path)
+    number_tokens = [token for token in enriched.sentences[0].tokens if token.surface_form.isdigit()]
+
+    assert [token.romanization for token in number_tokens] == ["shí èr", "èr shí", "wǔ", "sān shí"]
 
 
 def test_load_page_artifact_recovers_jsonish_transcription(tmp_path: Path) -> None:

@@ -1,3 +1,5 @@
+import unicodedata
+
 from processor import (
     build_page_extraction_result,
     extraction,
@@ -124,6 +126,19 @@ def test_tokenize_sentence_keeps_latin_words_together() -> None:
     assert [token.language_code for token in tokens] == ["en", "en", "en"]
 
 
+def test_tokenize_sentence_preserves_precomposed_latin_accents() -> None:
+    tokens = tokenize_sentence("Àwọn ọmọ ń kọ́.", "yo")
+
+    assert [token.surface_form for token in tokens] == ["Àwọn", "ọmọ", "ń", "kọ́"]
+
+
+def test_tokenize_sentence_preserves_decomposed_latin_accents() -> None:
+    tokens = tokenize_sentence("A\u0300wo\u0323n ọmọ n\u0301 kọ\u0301.", "yo")
+
+    assert [token.surface_form for token in tokens] == ["A\u0300wo\u0323n", "ọmọ", "n\u0301", "kọ\u0301"]
+    assert unicodedata.normalize("NFC", tokens[0].surface_form) == unicodedata.normalize("NFC", "A\u0300wo\u0323n")
+
+
 def test_tokenize_sentence_assigns_language_per_script_for_mixed_text() -> None:
     tokens = tokenize_sentence("Привет OpenAI 이선중.", "ru")
 
@@ -137,6 +152,18 @@ def test_tokenize_sentence_uses_chinese_segmenter_when_available(monkeypatch) ->
     tokens = tokenize_sentence("\u79d1\u5b66\u8fb9\u754c", "zh")
 
     assert [token.surface_form for token in tokens] == ["\u79d1\u5b66", "\u8fb9\u754c"]
+
+
+def test_tokenize_sentence_keeps_chinese_name_before_parenthetical_gloss(monkeypatch) -> None:
+    monkeypatch.setattr(
+        extraction,
+        "_jieba_lcut",
+        lambda text, cut_all=False, HMM=True: ["\u674e\u5584", "\u4e2d"] if text == "\u674e\u5584\u4e2d" else [text],
+    )
+
+    tokens = tokenize_sentence("\u674e\u5584\u4e2d\uff08\u97d3\u8a9e\uff1a\uc774\uc120\uc911\uff09\u3002", "zh")
+
+    assert [token.surface_form for token in tokens] == ["\u674e\u5584\u4e2d", "\uff08", "\u97d3\u8a9e", "\uff1a", "\uc774\uc120\uc911", "\uff09", "\u3002"]
 
 
 def test_tokenize_sentence_keeps_korean_words_together() -> None:
