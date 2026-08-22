@@ -10,6 +10,7 @@ import {
   formatDateTime,
   postJson,
   type LexiconLookupResponse,
+  type JapaneseConjugationResponse,
   type StudySurfaceResponse,
   type VocabularyAssessmentAxisKey,
   type VocabularyAssessmentStateRecord,
@@ -17,6 +18,7 @@ import {
 import { languageDisplayLabel } from "../lib/language-options";
 import { composeJapaneseRomaji, composeJapaneseRomajiInput } from "../lib/japanese-romaji";
 import { StudyPronunciationGuide } from "./study-pronunciation-guide";
+import { JapaneseConjugationGrid } from "./japanese-conjugation-grid";
 
 type PracticeMode = "program" | "review" | "glossed" | "both";
 type PracticeCardSource = "program" | "review" | "glossed";
@@ -688,6 +690,7 @@ export function StudyPracticeView({
   const [autoAdvanceRemainingMs, setAutoAdvanceRemainingMs] = useState<number | null>(null);
   const [autoAdvanceCancelledCardKey, setAutoAdvanceCancelledCardKey] = useState<string | null>(null);
   const [lookup, setLookup] = useState<LexiconLookupResponse | null>(null);
+  const [japaneseConjugation, setJapaneseConjugation] = useState<JapaneseConjugationResponse | null>(null);
   const answerInputRef = useRef<HTMLInputElement>(null);
   const pendingAnswerSelectionRef = useRef<{ start: number; end: number } | null>(null);
 
@@ -853,6 +856,38 @@ export function StudyPracticeView({
   }, [currentCard]);
 
   const currentLookupEntry = lookup?.entries[0] ?? null;
+  useEffect(() => {
+    let active = true;
+    const isJapaneseVerb = Boolean(
+      currentCard &&
+        normalizeLanguageCode(currentCard.languageCode) === "ja" &&
+        currentLookupEntry &&
+        /verb|動詞/iu.test(currentLookupEntry.entry_type),
+    );
+    if (!isJapaneseVerb || !currentCard) {
+      setJapaneseConjugation(null);
+      return () => {
+        active = false;
+      };
+    }
+    void postJson<JapaneseConjugationResponse>("/lexicon/japanese/conjugate", {
+      lemma: currentCard.lookupTerm,
+      reading: currentCard.pronunciation,
+    })
+      .then((result) => {
+        if (active) {
+          setJapaneseConjugation(result);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setJapaneseConjugation(null);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [currentCard, currentLookupEntry]);
   const resolvedMeaning = currentCard?.meaning ?? currentLookupEntry?.definition ?? null;
   const resolvedPronunciation = currentCard?.pronunciation ?? currentLookupEntry?.pronunciation ?? currentLookupEntry?.pinyin ?? null;
   const resolvedSyllableText = currentCard?.romanization ?? currentLookupEntry?.pinyin ?? currentLookupEntry?.pronunciation ?? resolvedPronunciation;
@@ -1087,6 +1122,7 @@ export function StudyPracticeView({
                     inventoryId="study.practice-pronunciation-guide"
                   />
                 ) : null}
+                {japaneseConjugation ? <JapaneseConjugationGrid conjugation={japaneseConjugation} inventoryPrefix="study" surfaceForm={currentCard.term} translatedMeaning={resolvedMeaning} /> : null}
                 {currentCard.phase === "intro" ? (
                   <p className="study-practice-intro-copy">
                     Learn this word before we move into the mixed practice directions for this chunk.

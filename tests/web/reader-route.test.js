@@ -9,6 +9,7 @@ const routeSource = fs.readFileSync(
   "utf8",
 );
 const readerSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "reader-view.tsx"), "utf8");
+const japaneseConjugationSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "japanese-conjugation-grid.tsx"), "utf8");
 const textplexSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "lib", "textplex.ts"), "utf8");
 const accountFooterSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "account-footer.tsx"), "utf8");
 const layoutSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "app", "layout.tsx"), "utf8");
@@ -325,6 +326,10 @@ test("Next reader definition card stays compact and exposes the save action", ()
   assert.match(readerSource, /Mark word as remembered/);
   assert.match(readerSource, /Mark word as missed/);
   assert.match(readerSource, /definition-trace/);
+  assert.match(readerSource, /\/lexicon\/japanese\/conjugate/);
+  assert.match(readerSource, /<JapaneseConjugationGrid/);
+  assert.match(japaneseConjugationSource, /data-inventory-id=\{`\$\{inventoryPrefix\}\.japanese-conjugation-card`\}/);
+  assert.match(japaneseConjugationSource, /data-inventory-id=\{`\$\{inventoryPrefix\}\.japanese-conjugation-grid`\}/);
   assert.match(readerSource, /Definition trace/);
   assert.doesNotMatch(readerSource, /<dl className="definition-grid">/);
   assert.doesNotMatch(readerSource, />\s*Clear\s*<\/button>/);
