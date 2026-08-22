@@ -3,6 +3,7 @@
 ## 2026-08-22
 
 - Added ESLint 10 compatibility handling for the Next.js flat configuration so web linting remains operational during the major-version upgrade.
+- Added explicit reversible completion for page-by-page reading frontiers, reset completion when new pages are appended, and return a useful 400 response for unreadable photo batches.
 
 ## 2026-08-20
 

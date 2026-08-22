@@ -844,6 +844,10 @@ export function archiveBook(bookId: string): Promise<BookRecord> {
   return postJson<BookRecord>(`/books/${encodeURIComponent(bookId)}/archive`, {});
 }
 
+export function setBookCompletion(bookId: string, finished: boolean): Promise<ProgressBookSummary> {
+  return postJson<ProgressBookSummary>(`/learning/books/${encodeURIComponent(bookId)}/completion`, { finished });
+}
+
 export function restoreBook(bookId: string): Promise<BookRecord> {
   return postJson<BookRecord>(`/books/${encodeURIComponent(bookId)}/restore`, {});
 }
