@@ -1,10 +1,12 @@
 from .contracts import (
     BookExtractionResult,
     LexicalEntryResult,
+    LexicalIdentity,
     PageExtractionResult,
     SentenceResult,
     TokenOccurrenceResult,
     TokenResult,
+    build_lexical_identity_key,
 )
 from .difficulty import (
     calculate_book_hsk_metrics,
@@ -39,11 +41,13 @@ __all__ = [
     "JapaneseFormSlot",
     "JapaneseVerbRecord",
     "LexicalEntryResult",
+    "LexicalIdentity",
     "PageExtractionResult",
     "SentenceResult",
     "TokenOccurrenceResult",
     "TokenResult",
     "build_book_extraction_result",
+    "build_lexical_identity_key",
     "build_page_extraction_result",
     "calculate_book_hsk_metrics",
     "calculate_hsk_series",

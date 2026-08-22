@@ -11,6 +11,7 @@ node_modules
 .ruff_cache
 data/books
 data/user
+data/lexicon
 **/__pycache__
 *.pyc
 *.pyo

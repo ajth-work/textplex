@@ -424,6 +424,8 @@ test("Next reader detects Korean tokens inside another language and routes their
 
 test("Next reader keeps Japanese surface, reading, lemma, and meaning aligned", () => {
   assert.match(readerSource, /function selectLexiconEntryForToken\(/);
+  assert.match(readerSource, /function splitJapaneseReadingAlternatives\(/);
+  assert.match(readerSource, /entryAlternatives\.some\(\(alternative\) => normalizeLexiconComparisonValue\(alternative\) === tokenReading\)/);
   assert.match(readerSource, /const exactSurfaceEntries = entries\.filter\(\(entry\) => entry\.surface_form\.trim\(\) === surface\)/);
   assert.match(readerSource, /A kana-only surface such as は must not inherit a kanji homograph such as 歯/);
   assert.match(readerSource, /selectedToken\.surface_form,[\s\S]*selectedToken\.lemma \?\? ""/);

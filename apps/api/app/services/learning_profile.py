@@ -300,6 +300,13 @@ def _ensure_profile_columns(connection: sqlite3.Connection) -> None:
         return
 
     connection.row_factory = sqlite3.Row
+    book_progress_table_exists = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'book_progress'",
+    ).fetchone()
+    if book_progress_table_exists is not None:
+        book_progress_columns = {str(row["name"]) for row in connection.execute("PRAGMA table_info(book_progress)").fetchall()}
+        if "completion_override" not in book_progress_columns:
+            connection.execute("ALTER TABLE book_progress ADD COLUMN completion_override INTEGER NOT NULL DEFAULT 0")
     column_names = {str(row["name"]) for row in connection.execute("PRAGMA table_info(vocabulary_progress)").fetchall()}
     if "mastery_level" not in column_names:
         connection.execute("ALTER TABLE vocabulary_progress ADD COLUMN mastery_level TEXT")
@@ -376,9 +383,10 @@ def _ensure_book_progress_row(connection: sqlite3.Connection, book_id: str) -> N
             progress_unit,
             reading_state,
             last_read_at,
-            completed_at
+            completed_at,
+            completion_override
         )
-        VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'pages', 'not_read', NULL, NULL)
+        VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'pages', 'not_read', NULL, NULL, 0)
         """,
         (book_id,),
     )
@@ -390,6 +398,7 @@ def _refresh_book_progress(
     book_id: str,
     total_pages: int,
     total_sentences: int,
+    page_by_page: bool,
     reading_sessions: int,
     page_reads: int,
     sentence_reads: int,
@@ -405,7 +414,8 @@ def _refresh_book_progress(
         """
         SELECT reading_sessions, page_reads, sentence_reads, active_seconds, furthest_page,
                resume_page, resume_sentence_order, total_pages, total_sentences,
-               progress_percent, progress_unit, reading_state, last_read_at, completed_at
+               progress_percent, progress_unit, reading_state, last_read_at, completed_at,
+               completion_override
         FROM book_progress
         WHERE book_id = ?
         """,
@@ -431,16 +441,17 @@ def _refresh_book_progress(
         numerator = sentence_reads_value
         denominator = total_sentences_value
     progress_percent = min(100, round((numerator / denominator) * 100)) if denominator > 0 else 0
-    if page_reads_value <= 0 and sentence_reads_value <= 0:
+    completion_override_value = int(row["completion_override"] or 0) if page_by_page else 0
+    if page_reads_value <= 0 and sentence_reads_value <= 0 and not completion_override_value:
         reading_state = "not_read"
-    elif progress_percent >= 100:
+    elif completion_override_value or (progress_percent >= 100 and not page_by_page):
         reading_state = "finished"
     else:
         reading_state = "in_progress"
     existing_completed_at = str(row["completed_at"]) if row["completed_at"] else None
     existing_last_read_at = str(row["last_read_at"]) if row["last_read_at"] else None
     latest_read_at = last_read_at or existing_last_read_at
-    completed_value = existing_completed_at
+    completed_value = existing_completed_at if (not page_by_page or completion_override_value) else None
     if reading_state == "finished":
         completed_value = completed_value or last_read_at or existing_last_read_at
 
@@ -461,9 +472,10 @@ def _refresh_book_progress(
             progress_unit,
             reading_state,
             last_read_at,
-            completed_at
+            completed_at,
+            completion_override
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(book_id) DO UPDATE SET
             reading_sessions = excluded.reading_sessions,
             page_reads = excluded.page_reads,
@@ -478,7 +490,8 @@ def _refresh_book_progress(
             progress_unit = excluded.progress_unit,
             reading_state = excluded.reading_state,
             last_read_at = excluded.last_read_at,
-            completed_at = excluded.completed_at
+            completed_at = excluded.completed_at,
+            completion_override = excluded.completion_override
         """,
         (
             book_id,
@@ -496,16 +509,66 @@ def _refresh_book_progress(
             reading_state,
             latest_read_at,
             completed_value,
+            completion_override_value,
         ),
     )
 
 
-def _book_progress_totals(data_root: Path, book_id: str) -> tuple[int, int]:
+def set_page_by_page_completion(
+    data_root: Path,
+    book_id: str,
+    *,
+    finished: bool,
+    owner_id: str | None = None,
+) -> None:
+    registry = load_registry(resolve_books_root(data_root) / "registry.json")
+    book = registry.get(book_id)
+    if book is None:
+        raise KeyError(f"Book not found: {book_id}")
+    if getattr(book, "source_type", "static") != "page-by-page":
+        raise ValueError("Only page-by-page books support explicit completion.")
+
+    with _connect(data_root, owner_id) as connection:
+        _ensure_book_progress_row(connection, book_id)
+        row = connection.execute(
+            "SELECT page_reads, sentence_reads FROM book_progress WHERE book_id = ?",
+            (book_id,),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError(f"Failed to load book progress row for {book_id}.")
+
+        if finished:
+            connection.execute(
+                """
+                UPDATE book_progress
+                SET reading_state = 'finished', completion_override = 1, completed_at = ?
+                WHERE book_id = ?
+                """,
+                (_utc_now(), book_id),
+            )
+        else:
+            reading_state = "in_progress" if int(row["page_reads"] or 0) > 0 or int(row["sentence_reads"] or 0) > 0 else "not_read"
+            connection.execute(
+                """
+                UPDATE book_progress
+                SET reading_state = ?, completion_override = 0, completed_at = NULL
+                WHERE book_id = ?
+                """,
+                (reading_state, book_id),
+            )
+        connection.commit()
+
+
+def _book_progress_totals(data_root: Path, book_id: str) -> tuple[int, int, bool]:
     registry = load_registry(resolve_books_root(data_root) / "registry.json")
     record = registry.get(book_id)
     if record is None:
-        return 0, 0
-    return max(0, int(getattr(record, "total_pages", 0) or 0)), max(0, int(getattr(record, "total_sentences", 0) or 0))
+        return 0, 0, False
+    return (
+        max(0, int(getattr(record, "total_pages", 0) or 0)),
+        max(0, int(getattr(record, "total_sentences", 0) or 0)),
+        getattr(record, "source_type", "static") == "page-by-page",
+    )
 
 
 def _ensure_vocabulary_assessment_axes(connection: sqlite3.Connection, language_code: str, lemma: str) -> None:
@@ -1187,7 +1250,7 @@ def create_reading_session(
 ) -> ReadingSessionRecord:
     started_at = payload.started_at or _utc_now()
     session_id = f"session-{uuid4().hex}"
-    total_pages, total_sentences = _book_progress_totals(data_root, payload.book_id)
+    total_pages, total_sentences, page_by_page = _book_progress_totals(data_root, payload.book_id)
     with _connect(data_root, owner_id) as connection:
         connection.execute(
             """
@@ -1219,6 +1282,7 @@ def create_reading_session(
             book_id=payload.book_id,
             total_pages=total_pages,
             total_sentences=total_sentences,
+            page_by_page=page_by_page,
             reading_sessions=int(reading_sessions or 0),
             page_reads=0,
             sentence_reads=0,
@@ -1247,7 +1311,7 @@ def record_page_read(
     estimated_seconds = max(payload.active_seconds, 30)
     completion_ratio = 0.0 if estimated_seconds <= 0 else min(payload.active_seconds / estimated_seconds, 1.0)
     counted_as_read = int(payload.active_seconds >= 15 or completion_ratio >= 0.75)
-    total_pages, total_sentences = _book_progress_totals(data_root, payload.book_id)
+    total_pages, total_sentences, page_by_page = _book_progress_totals(data_root, payload.book_id)
 
     with _connect(data_root, owner_id) as connection:
         session_row = connection.execute(
@@ -1326,6 +1390,7 @@ def record_page_read(
             book_id=payload.book_id,
             total_pages=total_pages,
             total_sentences=total_sentences,
+            page_by_page=page_by_page,
             reading_sessions=int(reading_sessions or 0),
             page_reads=int(page_row["page_reads"] or 0),
             sentence_reads=int(sentence_row["sentence_reads"] or 0),
@@ -1368,7 +1433,7 @@ def record_sentence_read(
     if book is None:
         raise KeyError(f"Book not found: {payload.book_id}")
     language_code = str(getattr(book, "language_code", None) or "local")
-    total_pages, total_sentences = _book_progress_totals(data_root, payload.book_id)
+    total_pages, total_sentences, page_by_page = _book_progress_totals(data_root, payload.book_id)
 
     with _connect(data_root, owner_id) as connection:
         session_row = connection.execute(
@@ -1542,6 +1607,7 @@ def record_sentence_read(
             book_id=payload.book_id,
             total_pages=total_pages,
             total_sentences=total_sentences,
+            page_by_page=page_by_page,
             reading_sessions=int(reading_sessions or 0),
             page_reads=int(page_row["page_reads"] or 0),
             sentence_reads=int(sentence_row["distinct_sentence_reads"] or 0),

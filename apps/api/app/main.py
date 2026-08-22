@@ -67,6 +67,7 @@ from app.schemas.generated_articles import (
 )
 from app.schemas.google_translate import GoogleTranslateUsageSummary
 from app.schemas.learning import (
+    BookCompletionRequest,
     LearningProfileSummary,
     LearningSyncResponse,
     PageReadCreateRequest,
@@ -85,6 +86,8 @@ from app.schemas.learning import (
 from app.schemas.lexicon import (
     JapaneseConjugationRequest,
     JapaneseConjugationResponse,
+    JmdictImportRequest,
+    JmdictImportSummary,
     LexiconImportRequest,
     LexiconImportSummary,
     LexiconLookupResponse,
@@ -96,6 +99,7 @@ from app.schemas.surfaces import (
     BookAnalysisSurfaceResponse,
     ImportSurfaceResponse,
     ProfileSurfaceResponse,
+    ProgressBookSummary,
     ProgressSurfaceResponse,
     SearchSurfaceResponse,
     SettingEntry,
@@ -183,6 +187,7 @@ from app.services.generated_articles import (
     load_generated_article_prompt_details,
 )
 from app.services.google_translate_usage import get_google_translate_usage_summary
+from app.services.jmdict import import_jmdict
 from app.services.learning_profile import (
     create_reading_session,
     get_learning_profile_summary,
@@ -191,6 +196,7 @@ from app.services.learning_profile import (
     record_study_vocabulary_item,
     record_vocabulary_assessment_review,
     record_word_interaction,
+    set_page_by_page_completion,
 )
 from app.services.learning_sync import sync_learning_events
 from app.services.lexicon import (
@@ -227,6 +233,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from processor import conjugate_japanese_verb
 from processor.contracts import BookExtractionResult
+from pypdf.errors import PdfReadError
 
 
 async def _feedback_digest_scheduler() -> None:
@@ -1333,6 +1340,11 @@ async def upload_image_pages(
         return book
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PdfReadError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded page photos could not be assembled into a readable document. Please use clear JPG or PNG images.",
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     finally:
@@ -1353,6 +1365,12 @@ async def append_image_pages(
     upload_dir.mkdir(parents=True, exist_ok=True)
     try:
         updated_book = await _append_photo_pages_to_book(book, images, upload_dir)
+        set_page_by_page_completion(
+            app.state.data_root,
+            updated_book.id,
+            finished=False,
+            owner_id=context.user.id if context else None,
+        )
         _start_background_extraction(
             updated_book,
             page_start=1,
@@ -1694,6 +1712,29 @@ def open_learning_session(
     return record
 
 
+@app.post("/learning/books/{book_id}/completion", response_model=ProgressBookSummary)
+def update_book_completion(
+    book_id: str,
+    payload: BookCompletionRequest,
+    context: AuthenticatedUserContext | None = OPTIONAL_USER_CONTEXT,
+) -> ProgressBookSummary:
+    _book_exists(book_id, context)
+    try:
+        set_page_by_page_completion(
+            app.state.data_root,
+            book_id,
+            finished=payload.finished,
+            owner_id=context.user.id if context else None,
+        )
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    progress = get_progress_surface(app.state.data_root, owner_id=context.user.id if context else None)
+    updated = next((book for book in progress.books if book.book_id == book_id), None)
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Progress not found for book: {book_id}")
+    return updated
+
+
 @app.post("/learning/page-reads", response_model=PageReadRecord)
 def create_page_read(
     payload: PageReadCreateRequest,
@@ -1806,6 +1847,25 @@ def import_lexicon(payload: LexiconImportRequest) -> LexiconImportSummary:
             source_root,
             data_root=app.state.data_root,
             language_code=payload.language_code,
+            replace_existing=payload.replace_existing,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/lexicon/japanese/jmdict/import", response_model=JmdictImportSummary)
+def import_japanese_jmdict(payload: JmdictImportRequest) -> JmdictImportSummary:
+    try:
+        source_path = _validate_import_source(
+            payload.source_path,
+            environment_name="TEXTPLEX_LEXICON_ROOTS",
+            defaults=[get_repo_root() / "resources" / "lexicon" / "japanese"],
+        )
+        return import_jmdict(
+            source_path,
+            data_root=app.state.data_root,
+            source_version=payload.source_version,
+            source_url=payload.source_url,
             replace_existing=payload.replace_existing,
         )
     except FileNotFoundError as exc:

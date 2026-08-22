@@ -620,6 +620,11 @@ export interface LexiconEntryRecord {
   language_code: string;
   entry_type: string;
   surface_form: string;
+  reading?: string | null;
+  part_of_speech?: string | null;
+  external_id?: string | null;
+  source_id?: number | null;
+  source_version?: string | null;
   pronunciation: string | null;
   pinyin: string | null;
   tone: number | null;

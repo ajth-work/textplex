@@ -13,6 +13,31 @@ export type TesterBuildChangelogEntry = {
 
 export const testerBuildChangelog: readonly TesterBuildChangelogEntry[] = [
   {
+    build: "0.1.2",
+    summary: "This build adds a clear return briefing for testers and keeps build identity visible throughout the app.",
+    sections: [
+      {
+        id: "tester-update-briefing",
+        title: "Tester update briefing",
+        summary: "Returning testers can quickly see what changed since their last visit.",
+        changes: [
+          "A new-build briefing appears when you open the app after a newer build has been released.",
+          "The briefing groups changes into major product areas instead of showing a long technical changelog.",
+          "Acknowledging the briefing is saved per tester account so switching accounts does not mix visit history.",
+        ],
+      },
+      {
+        id: "build-identity",
+        title: "Build identity",
+        summary: "The same version is used for the tester briefing, feedback context, and build footer.",
+        changes: [
+          "The current web build is now 0.1.2.",
+          "The build footer continues to show the current version and when it was built.",
+        ],
+      },
+    ],
+  },
+  {
     build: "0.1.1",
     summary: "This build makes reading, importing, and tester feedback easier to understand and try.",
     sections: [
