@@ -5,6 +5,7 @@ const { test } = require("node:test");
 
 const repoRoot = path.join(__dirname, "..", "..");
 const practiceSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "study-practice-view.tsx"), "utf8");
+const japaneseConjugationSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "japanese-conjugation-grid.tsx"), "utf8");
 const pronunciationGuideSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "study-pronunciation-guide.tsx"), "utf8");
 const practicePageSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "app", "study", "practice", "page.tsx"), "utf8");
 
@@ -70,8 +71,9 @@ test("Study practice route exposes a one-card drill flow", () => {
   assert.match(practiceSource, /study\.practice-card/);
   assert.match(practiceSource, /StudyPronunciationGuide/);
   assert.match(practiceSource, /\/lexicon\/japanese\/conjugate/);
-  assert.match(practiceSource, /study\.japanese-conjugation-card/);
-  assert.match(practiceSource, /study\.japanese-conjugation-grid/);
+  assert.match(practiceSource, /<JapaneseConjugationGrid/);
+  assert.match(japaneseConjugationSource, /data-inventory-id=\{`\$\{inventoryPrefix\}\.japanese-conjugation-card`\}/);
+  assert.match(japaneseConjugationSource, /data-inventory-id=\{`\$\{inventoryPrefix\}\.japanese-conjugation-grid`\}/);
   assert.match(practiceSource, /showPronunciationGuide/);
   assert.match(practiceSource, /currentCard\.phase === "intro" && resolvedPronunciation/);
   assert.match(practiceSource, /currentCard\.phase === "intro"/);
