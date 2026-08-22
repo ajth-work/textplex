@@ -32,6 +32,7 @@ from app.schemas.surfaces import (
 )
 from app.services.book_extraction import recover_book_extraction_result
 from app.services.book_registry import load_registry
+from app.services.hebrew_transliteration import get_hebrew_pronunciation_override
 from app.services.learning_profile import (
     ensure_profile_database,
     get_learning_profile_summary,
@@ -424,6 +425,23 @@ def get_study_surface(
                     (definition_short, row_language_code, row["lemma"]),
                 )
                 connection.commit()
+        reviewed_reading = None
+        if _normalized_language_code(str(row_language_code)) == "he":
+            reviewed_reading = get_hebrew_pronunciation_override(
+                str(row["source_surface_form"] or row["display_form"] or row["lemma"])
+            )
+            if reviewed_reading and (
+                row["pronunciation"] != reviewed_reading or row["romanization"] != reviewed_reading
+            ):
+                connection.execute(
+                    """
+                    UPDATE study_vocabulary_items
+                    SET pronunciation = ?, romanization = ?
+                    WHERE language_code = ? AND lemma = ?
+                    """,
+                    (reviewed_reading, reviewed_reading, row_language_code, row["lemma"]),
+                )
+                connection.commit()
         grouped_items[row_language_code].append(
             StudyVocabularyItem(
                 language_code=row_language_code,
@@ -437,8 +455,8 @@ def get_study_surface(
                 source_token_order=row["source_token_order"],
                 source_surface_form=row["source_surface_form"],
                 source_sentence_text=row["source_sentence_text"],
-                pronunciation=row["pronunciation"],
-                romanization=row["romanization"],
+                pronunciation=reviewed_reading or row["pronunciation"],
+                romanization=reviewed_reading or row["romanization"],
                 definition_short=definition_short,
                 proficiency_level=row["proficiency_level"],
                 click_count=row["click_count"],

@@ -32,11 +32,12 @@ from app.services.book_sources import (
 )
 from app.services.google_translate import (
     is_google_translate_configured,
+    is_google_translate_romanization_supported,
     romanize_texts,
     translate_text,
 )
 from app.services.google_translate_usage import record_google_translate_usage
-from app.services.hebrew_transliteration import transliterate_hebrew_text
+from app.services.hebrew_transliteration import get_hebrew_pronunciation
 from app.services.lexicon import lookup_lexicon_entry_map, lookup_lexicon_pinyin_map
 from app.services.ocr import get_text_source_signature, resolve_page_ocr
 from app.services.translation_alignment import (
@@ -768,8 +769,8 @@ def _enrich_page_lexicon_metadata(
         pinyin_map = {}
 
     google_romanization_map: dict[str, str] = {}
-    if is_google_translate_configured("romanization"):
-        missing_pronunciations = []
+    if is_google_translate_configured("romanization") and is_google_translate_romanization_supported(language_code):
+        pronunciation_terms = []
         for sentence in page_result.sentences:
             for token in sentence.tokens:
                 if _is_punctuation_surface(token.surface_form):
@@ -800,16 +801,16 @@ def _enrich_page_lexicon_metadata(
             for token in sentence.tokens:
                 if _is_punctuation_surface(token.surface_form):
                     continue
-                if token.romanization or token.pronunciation or not any(ord(character) > 127 for character in token.surface_form):
+                if not any(ord(character) > 127 for character in token.surface_form):
                     continue
-                missing_pronunciations.append(token.surface_form)
+                pronunciation_terms.append(token.surface_form)
 
-        unique_missing_pronunciations = list(dict.fromkeys(missing_pronunciations))
-        if unique_missing_pronunciations:
+        unique_pronunciation_terms = list(dict.fromkeys(pronunciation_terms))
+        if unique_pronunciation_terms:
             hebrew_romanization_map = {
                 term: romanized
-                for term in unique_missing_pronunciations
-                if (romanized := transliterate_hebrew_text(term))
+                for term in unique_pronunciation_terms
+                if (romanized := get_hebrew_pronunciation(term))
             }
 
     if not pinyin_map and not lexicon_entries and not google_romanization_map and not hebrew_romanization_map:
@@ -853,6 +854,7 @@ def _enrich_page_lexicon_metadata(
                     update={
                         "romanization": romanization,
                         "pronunciation": contextual_romanization
+                        or hebrew_romanization_map.get(token.surface_form)
                         or (romanization if romanization and not token.pronunciation else token.pronunciation),
                         "definition_short": definition_short,
                         "proficiency_level": proficiency_level,

@@ -44,16 +44,16 @@ def test_study_surface_backfills_missing_glossed_meaning_from_lexicon_fallback(t
             """,
             (
                 "he",
-                "חזרו",
-                "חזרו",
+                "הדוגמאות",
+                "הדוגמאות",
                 "book-he-001",
                 12,
                 3,
                 4,
-                "חזרו",
-                "חזרו אל הבית.",
-                "khazru",
-                "khazru",
+                "הדוגמאות",
+                "הדוגמאות מופיעות כאן.",
+                "hdogmaot",
+                "hdogmaot",
                 None,
                 "new",
                 1,
@@ -80,13 +80,17 @@ def test_study_surface_backfills_missing_glossed_meaning_from_lexicon_fallback(t
     study = response.json()
     hebrew_group = next(group for group in study["study_groups"] if group["language_code"] == "he")
     assert hebrew_group["items"][0]["definition_short"] == "to return"
+    assert hebrew_group["items"][0]["pronunciation"] == "hadugmaot"
+    assert hebrew_group["items"][0]["romanization"] == "hadugmaot"
 
     with sqlite3.connect(db_path) as connection:
-        stored_definition = connection.execute(
-            "SELECT definition_short FROM study_vocabulary_items WHERE language_code = ? AND lemma = ?",
-            ("he", "חזרו"),
-        ).fetchone()[0]
+        stored_definition, stored_pronunciation, stored_romanization = connection.execute(
+            "SELECT definition_short, pronunciation, romanization FROM study_vocabulary_items WHERE language_code = ? AND lemma = ?",
+            ("he", "הדוגמאות"),
+        ).fetchone()
     assert stored_definition == "to return"
+    assert stored_pronunciation == "hadugmaot"
+    assert stored_romanization == "hadugmaot"
 
 
 def test_study_save_prefers_visible_source_word_when_fallback_meaning_is_needed(tmp_path: Path, monkeypatch) -> None:
@@ -122,6 +126,28 @@ def test_study_save_prefers_visible_source_word_when_fallback_meaning_is_needed(
     record = record_study_vocabulary_item(tmp_path / "data", payload)
 
     assert record.definition_short == "meaning for visible word"
+
+
+def test_study_save_repairs_reviewed_hebrew_reading(tmp_path: Path) -> None:
+    payload = StudyVocabularyItemCreateRequest(
+        book_id="book-he-001",
+        language_code="he",
+        lemma="הדוגמאות",
+        display_form="הדוגמאות",
+        page_number=1,
+        sentence_order=1,
+        token_order=1,
+        source_surface_form="הדוגמאות",
+        source_sentence_text="הדוגמאות מופיעות כאן.",
+        pronunciation="hdogmaot",
+        romanization="hdogmaot",
+        definition_short="the examples",
+    )
+
+    record = record_study_vocabulary_item(tmp_path / "data", payload)
+
+    assert record.pronunciation == "hadugmaot"
+    assert record.romanization == "hadugmaot"
 
 
 def test_study_save_does_not_erase_existing_meaning_on_later_empty_save(tmp_path: Path, monkeypatch) -> None:

@@ -3,6 +3,7 @@
 ## 2026-08-22
 
 - Added ESLint 10 compatibility handling for the Next.js flat configuration so web linting remains operational during the major-version upgrade.
+- Added reviewed Hebrew pronunciation overrides with transliteration fallback and avoided unsupported Google romanization requests.
 
 ## 2026-08-20
 
