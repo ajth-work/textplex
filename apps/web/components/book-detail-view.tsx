@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import {
   fetchJson,
@@ -11,6 +12,7 @@ import {
   fetchGeneratedArticlePromptDetails,
   isDemoMode,
   resolveReaderResumeHref,
+  setBookCompletion,
   triggerBookExtraction,
   type BookExtractionResult,
   type BookAnalysisSurfaceResponse,
@@ -18,6 +20,7 @@ import {
   type BookRecord,
   type ProgressSurfaceResponse,
   type GeneratedReaderArticlePromptDetails,
+  type TokenResult,
 } from "../lib/textplex";
 import { GeneratedArticlePromptCard } from "./generated-article-prompt-card";
 import { LoadingSkeleton } from "./loading-skeleton";
@@ -25,7 +28,7 @@ import { HskSeriesChart } from "./hsk-series-chart";
 import { ImportProgressCard } from "./import-progress-card";
 import { useImportProgress } from "./import-progress-provider";
 import { isImportInProgress } from "../lib/import-progress";
-import { languageDisplayLabel, languageShortCode } from "../lib/language-options";
+import { languageDisplayLabel } from "../lib/language-options";
 import { PhotoPageAppendCard } from "./photo-page-append-card";
 
 function languageLabel(languageCode: string): string {
@@ -43,9 +46,9 @@ function isPdfBook(book: BookRecord): boolean {
 
 function contentTypeLabel(book: BookRecord, generationDetails: GeneratedReaderArticlePromptDetails | null): string {
   if (generationDetails) {
-    return `${generationDetails.language_label} practice article`;
+    return "Practice article";
   }
-  return isPdfBook(book) ? "Book" : `${languageLabel(book.language_code)} article`;
+  return isPdfBook(book) ? "Book" : "Article";
 }
 
 function detailTitle(book: BookRecord, generationDetails: GeneratedReaderArticlePromptDetails | null): string {
@@ -59,9 +62,24 @@ function detailSummary(book: BookRecord, generationDetails: GeneratedReaderArtic
     return `A concise ${genre} practice article about ${generationDetails.topic}. It is calibrated for ${level} with a controlled vocabulary window for focused reading practice.`;
   }
   if (!isPdfBook(book)) {
-    return `A ${languageLabel(book.language_code)} reading article prepared for your local library and reader study tools.`;
+    return "A reading article prepared for your local library and reader study tools.";
   }
   return `A local reading copy${book.author ? ` by ${book.author}` : ""}, with its source pages, prepared images, and extracted reader data kept together for reading practice.`;
+}
+
+function findLexicalEntryToken(
+  summary: BookExtractionResult,
+  entry: BookExtractionResult["lexical_entries"][number],
+): TokenResult | null {
+  for (const page of summary.pages) {
+    for (const sentence of page.sentences) {
+      const token = sentence.tokens.find((candidate) => candidate.lemma === entry.lemma || candidate.surface_form === entry.display_form);
+      if (token) {
+        return token;
+      }
+    }
+  }
+  return null;
 }
 
 export function BookDetailView({ bookId }: { bookId: string }) {
@@ -73,7 +91,6 @@ export function BookDetailView({ bookId }: { bookId: string }) {
   const [progress, setProgress] = useState<ProgressSurfaceResponse | null>(null);
   const [analysis, setAnalysis] = useState<BookAnalysisSurfaceResponse | null>(null);
   const [generationDetails, setGenerationDetails] = useState<GeneratedReaderArticlePromptDetails | null>(null);
-  const [generationLoading, setGenerationLoading] = useState(true);
   const [analysisLoading, setAnalysisLoading] = useState(true);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -81,9 +98,12 @@ export function BookDetailView({ bookId }: { bookId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
+  const [showRefreshConfirm, setShowRefreshConfirm] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [archiving, setArchiving] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [completionSaving, setCompletionSaving] = useState(false);
+  const [completionError, setCompletionError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -92,7 +112,6 @@ export function BookDetailView({ bookId }: { bookId: string }) {
     setAnalysis(null);
     setAnalysisError(null);
     setGenerationDetails(null);
-    setGenerationLoading(true);
     setSummaryLoading(true);
     setSummary(null);
     setProgress(null);
@@ -147,11 +166,6 @@ export function BookDetailView({ bookId }: { bookId: string }) {
             if (active) {
               setGenerationDetails(null);
             }
-          })
-          .finally(() => {
-            if (active) {
-              setGenerationLoading(false);
-            }
           });
         void fetchJson<BookExtractionResult>(`/books/${bookId}/extractions`)
           .then((summaryResult) => {
@@ -175,7 +189,6 @@ export function BookDetailView({ bookId }: { bookId: string }) {
         }
         setError(err instanceof Error ? err.message : "Unable to load book.");
         setAnalysisLoading(false);
-        setGenerationLoading(false);
         setSummaryLoading(false);
         setLoading(false);
       }
@@ -218,6 +231,19 @@ export function BookDetailView({ bookId }: { bookId: string }) {
     }
   }
 
+  useEffect(() => {
+    if (!showRefreshConfirm) {
+      return undefined;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowRefreshConfirm(false);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showRefreshConfirm]);
+
   async function handleArchive() {
     if (archiving || !book || isDemoMode) {
       return;
@@ -233,27 +259,68 @@ export function BookDetailView({ bookId }: { bookId: string }) {
     }
   }
 
+  async function handlePageByPageCompletion() {
+    if (!book || book.source_type !== "page-by-page" || isDemoMode || completionSaving) {
+      return;
+    }
+    const currentProgress = progress?.books.find((item) => item.book_id === book.id);
+    const finished = currentProgress?.reading_state !== "finished";
+    setCompletionSaving(true);
+    setCompletionError(null);
+    try {
+      const updatedProgress = await setBookCompletion(book.id, finished);
+      setProgress((current) => current ? {
+        ...current,
+        books: current.books.map((item) => item.book_id === updatedProgress.book_id ? updatedProgress : item),
+      } : current);
+    } catch (err) {
+      setCompletionError(err instanceof Error ? err.message : "Unable to update the reading state.");
+    } finally {
+      setCompletionSaving(false);
+    }
+  }
+
   const firstPageNumber = manifest?.pages[0]?.page_number ?? 1;
   const resumeReaderHref = resolveReaderResumeHref(bookId, progress, firstPageNumber);
   const needsExtraction = (book?.extracted_page_count ?? 0) <= 0;
   const typeLabel = book ? contentTypeLabel(book, generationDetails) : "Reading item";
   const heroTitle = book ? detailTitle(book, generationDetails) : null;
   const heroSummary = book ? detailSummary(book, generationDetails) : null;
-  const pageCountLabel = book && !isPdfBook(book) ? "Reader pages" : "Total pages in the source PDF";
   const detailImport = activeImport?.id === bookId ? activeImport : book;
+  const pageByPageProgress = progress?.books.find((item) => item.book_id === bookId) ?? null;
+  const pageByPageFinished = pageByPageProgress?.reading_state === "finished";
+  const showJapaneseReadingFields = book?.language_code.toLowerCase().startsWith("ja") ?? false;
+  const refreshDialog = showRefreshConfirm && manifest && !isDemoMode ? (
+    <div className="book-detail-refresh-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowRefreshConfirm(false); }}>
+      <section className="book-detail-refresh-dialog card" role="dialog" aria-modal="true" aria-labelledby="book-detail-refresh-title" aria-describedby="book-detail-refresh-description" data-inventory-id="book-detail.extraction-refresh-dialog">
+        <div className="book-detail-refresh-dialog-header">
+          <div>
+            <span className="eyebrow">Refresh extraction</span>
+            <h2 id="book-detail-refresh-title">Re-run extraction for this item?</h2>
+          </div>
+          <button className="button button-secondary book-detail-refresh-close" type="button" onClick={() => setShowRefreshConfirm(false)} aria-label="Close refresh confirmation" title="Close refresh confirmation">×</button>
+        </div>
+        <div className="book-detail-refresh-dialog-copy">
+          <p id="book-detail-refresh-description">TextPlex will re-run OCR or transcription across all {manifest.page_count} source {manifest.page_count === 1 ? "page" : "pages"}. This can replace the current extracted text and change sentence boundaries, word data, and reader layout.</p>
+          <p className="book-detail-refresh-warning"><strong>Risk:</strong> if the source pages are unavailable or the new pass is less accurate, the reader may show different or incomplete extracted text. Your source pages are not deleted, but the previous extraction is not preserved by this action.</p>
+        </div>
+        <div className="book-detail-refresh-dialog-actions">
+          <button className="button button-secondary" type="button" onClick={() => setShowRefreshConfirm(false)}>Cancel</button>
+          <button className="button button-primary" type="button" onClick={() => { setShowRefreshConfirm(false); void handleExtractNow(); }}>Refresh extraction</button>
+        </div>
+      </section>
+    </div>
+  ) : null;
 
   return (
-    <section className="app-shell">
+    <>
+      <section className="app-shell">
       <header className="page-hero">
         <div className="detail-hero-copy" data-inventory-id="book-detail.page-hero">
           <span className="pill detail-type-pill">{book ? typeLabel : "Reading item"}</span>
           <h1>{heroTitle ?? (loading ? <span className="skeleton-line skeleton-line-title" aria-hidden="true" /> : "Book unavailable")}</h1>
           <p className="lede detail-hero-summary">{heroSummary ?? "Open a local reading item to see its summary and page data."}</p>
           {isDemoMode ? <p className="small-copy">Demo mode is active. This is the packaged GitHub Pages reader sample.</p> : null}
-        </div>
-        <div className="hero-meta card">
-          <strong>{loading ? <span className="skeleton-line skeleton-line-short" aria-hidden="true" /> : book?.total_pages ?? 0}</strong>
-          <span>{pageCountLabel}</span>
         </div>
       </header>
 
@@ -264,12 +331,11 @@ export function BookDetailView({ bookId }: { bookId: string }) {
 
       {book && manifest ? (
         <div className="detail-layout">
+          <div className="detail-main-stack">
           <article className="card detail-main">
             <div className="card-topline">
-              <span className="pill">{languageShortCode(book.language_code)}</span>
               <span className="muted">{needsExtraction ? "Preparing to read" : "Ready to read"}</span>
             </div>
-            <h2>{book.title}</h2>
             <p className="muted">{book.author ?? "Unknown author"}</p>
             <dl className="metric-grid">
               <div>
@@ -290,39 +356,50 @@ export function BookDetailView({ bookId }: { bookId: string }) {
             ) : null}
             <div className="button-row">
               <Link className="button button-primary" href={resumeReaderHref}>
-                open
+                Open
               </Link>
               <Link className="button button-secondary" href={`/reader/${bookId}/${firstPageNumber}`}>
-                restart
+                Restart
               </Link>
-              <button className="button button-secondary" type="button" onClick={() => void handleExtractNow()} disabled={extracting || loading || isDemoMode}>
-                {extracting ? "refreshing..." : "refresh"}
+              <button className="button button-secondary" type="button" onClick={() => setShowRefreshConfirm(true)} disabled={extracting || loading || isDemoMode} aria-label="Refresh extraction" title="Refresh extraction">
+                {extracting ? "Refreshing..." : "Refresh"}
               </button>
               <Link className="button button-secondary" href="/library">
-                library
+                Library
               </Link>
               <button className="button button-secondary" type="button" onClick={() => void handleArchive()} disabled={archiving || isDemoMode}>
-                {archiving ? "archiving..." : "archive"}
+                {archiving ? "Archiving..." : "Archive"}
               </button>
             </div>
-            {book.source_type === "page-by-page" && !isDemoMode ? (
-              <PhotoPageAppendCard
-                bookId={book.id}
-                onAppended={(updatedBook) => {
-                  setBook(updatedBook);
-                  setRefreshNonce((value) => value + 1);
-                }}
-              />
+            {book.source_type === "page-by-page" ? (
+              <div className="book-detail-completion-control" data-inventory-id="book-detail.completion-control">
+                <p className="small-copy">
+                  {pageByPageFinished
+                    ? "Marked finished at the current page frontier. Adding another page will reopen this book for reading."
+                    : "Reached the end of the pages currently uploaded? You can mark this book finished and still add more pages later."}
+                </p>
+                <button className="button button-secondary" type="button" onClick={() => void handlePageByPageCompletion()} disabled={completionSaving || isDemoMode}>
+                  {completionSaving ? "Saving..." : pageByPageFinished ? "Reopen for more pages" : "Mark current pages finished"}
+                </button>
+                {completionError ? <p className="reader-completion-error" role="alert">{completionError}</p> : null}
+              </div>
             ) : null}
             {isDemoMode ? (
               <p className="small-copy">The sample book is already packaged for preview mode, so extraction is not needed here.</p>
             ) : needsExtraction ? (
               <p className="small-copy">Extraction has not run yet, so the reader will be empty until the pages are processed.</p>
             ) : null}
-            {!needsExtraction && !isDemoMode ? (
-              <p className="small-copy">You can refresh extraction any time if you want to re-run OCR on the source pages.</p>
-            ) : null}
           </article>
+          {book.source_type === "page-by-page" && !isDemoMode ? (
+            <PhotoPageAppendCard
+              bookId={book.id}
+              onAppended={(updatedBook) => {
+                setBook(updatedBook);
+                setRefreshNonce((value) => value + 1);
+              }}
+            />
+          ) : null}
+          </div>
 
           <aside className="card detail-aside">
             <h3>Reading overview</h3>
@@ -335,9 +412,44 @@ export function BookDetailView({ bookId }: { bookId: string }) {
                 </p>
                 <ul className="frequency-list">
                   {summary.lexical_entries.slice(0, 6).map((entry) => (
-                    <li key={entry.lemma}>
-                      <strong>{entry.display_form}</strong>
-                      <span>{entry.frequency_in_book}x</span>
+                    <li key={entry.lemma} className="frequency-entry">
+                      {(() => {
+                        const token = findLexicalEntryToken(summary, entry);
+                        return (
+                          <>
+                            <div className="frequency-entry-topline">
+                              <strong>{entry.display_form}</strong>
+                            </div>
+                            <dl className="frequency-entry-details">
+                              {showJapaneseReadingFields ? (
+                                <>
+                                  <div>
+                                    <dt>Hiragana</dt>
+                                    <dd>{token?.furigana ?? token?.pronunciation ?? "—"}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Romaji</dt>
+                                    <dd>{token?.romanization ?? "—"}</dd>
+                                  </div>
+                                </>
+                              ) : (
+                                <div>
+                                  <dt>Pronunciation</dt>
+                                  <dd>{token?.pronunciation ?? token?.romanization ?? "—"}</dd>
+                                </div>
+                              )}
+                              <div>
+                                <dt>Meaning</dt>
+                                <dd>{token?.definition_short ?? "—"}</dd>
+                              </div>
+                              <div>
+                                <dt>POS · Count</dt>
+                                <dd>{token?.part_of_speech ?? "—"} · {entry.frequency_in_book}×</dd>
+                              </div>
+                            </dl>
+                          </>
+                        );
+                      })()}
                     </li>
                   ))}
                 </ul>
@@ -345,13 +457,14 @@ export function BookDetailView({ bookId }: { bookId: string }) {
             ) : (
               <p className="small-copy">No extraction summary is available yet for this book.</p>
             )}
-            <GeneratedArticlePromptCard
-              inventoryId="book-detail.generation-prompt-card"
-              details={generationDetails}
-              loading={generationLoading}
-              title="Generated article prompt"
-              description="This card records the exact generation request, prompt payload, and term window used for the article."
-            />
+            {generationDetails ? (
+              <GeneratedArticlePromptCard
+                inventoryId="book-detail.generation-prompt-card"
+                details={generationDetails}
+                title="Generated article prompt"
+                description="This card records the exact generation request, prompt payload, and term window used for the article."
+              />
+            ) : null}
           </aside>
         </div>
       ) : null}
@@ -384,6 +497,8 @@ export function BookDetailView({ bookId }: { bookId: string }) {
           emptyMessage={analysis.has_extraction ? "No page-level HSK evidence is available." : "Page chart will appear after extraction completes."}
         />
       ) : null}
-    </section>
+      </section>
+      {typeof document !== "undefined" && refreshDialog ? createPortal(refreshDialog, document.body) : null}
+    </>
   );
 }
