@@ -4,6 +4,7 @@
 
 - Added ESLint 10 compatibility handling for the Next.js flat configuration so web linting remains operational during the major-version upgrade.
 - Added Norwegian, Swedish, and Finnish Wikipedia targets with Nordic-specific article thresholds and token-language detection.
+- Preserved Nordic language fallbacks in the Reader and mapped Nordic token speech to browser locales.
 
 ## 2026-08-20
 

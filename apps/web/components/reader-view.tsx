@@ -884,7 +884,9 @@ function resolveTokenLanguageCode(
 
   if (/[A-Za-z]/u.test(surface)) {
     const normalizedFallback = fallbackLanguageCode?.trim().toLowerCase().split("-", 1)[0];
-    return normalizedFallback === "en" || normalizedFallback === "yo" ? normalizedFallback : "en";
+    return normalizedFallback === "en" || normalizedFallback === "yo" || normalizedFallback === "no" || normalizedFallback === "sv" || normalizedFallback === "fi"
+      ? normalizedFallback
+      : "en";
   }
 
   const normalizedFallback = fallbackLanguageCode?.trim().toLowerCase();
