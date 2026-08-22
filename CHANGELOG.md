@@ -4,6 +4,12 @@
 
 - Added ESLint 10 compatibility handling for the Next.js flat configuration so web linting remains operational during the major-version upgrade.
 - Added a provenance-preserving JMdict XML import path with projected Japanese readings, meanings, parts of speech, and source metadata.
+- Added explicit reversible completion for page-by-page reading frontiers, reset completion when new pages are appended, and return a useful 400 response for unreadable photo batches.
+- Added the 0.1.2 tester build briefing and a shared route-aware page guide with persistent first-visit walkthroughs.
+
+## 2026-08-21
+
+- Corrected Japanese Reader readings for numeric months such as `1月` and city-name `市` context while preserving valid JMdict reading alternatives.
 
 ## 2026-08-20
 
@@ -27,6 +33,9 @@
 - Added per-book page/sentence pace comparisons to progress and profile book cards, including same-language averages across the learner's recorded books.
 - Formatted book reading time as compact hours/minutes/seconds values instead of raw seconds on live and demo progress/profile rows.
 
+- Added [`docs/LEXICAL_IDENTITY_AND_MULTILINGUAL_TRUST_ROADMAP.md`](docs/LEXICAL_IDENTITY_AND_MULTILINGUAL_TRUST_ROADMAP.md), documenting the lexical-identity foundation, current usability impact, explicit limitations, data-boundary rules, acceptance criteria, and the sequenced roadmap from book-truth propagation through learner-state reconciliation (#60).
+- Strengthened the app-wide visual hierarchy after the initial density pass: shared route heroes now use an editorial content-and-metrics split with a clear primary action, the public landing hero gives Reader and Study previews distinct visual weight, and section headings are more visibly grouped while retaining the existing TextPlex type, theme, and card language.
+
 ## 2026-08-19
 
 - Added route-aware first-visit page guides for Home, Library, Reader, and Study, using a dismissible carousel with pagination dots, local visit state, and a persistent reopen trigger.
@@ -41,6 +50,8 @@
 - Centered and enlarged revealed answers, and clarified that a Japanese reading is not a written-form answer in meaning-to-word practice (#88).
 - Added a context-aware written-form candidate button when a Japanese reading matches the current card (#88).
 - Made kana-only Japanese word-to-reading cards request the romanized reading instead of repeating the same Hiragana form (#88).
+- Added a backward-compatible lexical identity contract for processed tokens, including stable versioned keys, part-of-speech and sense separation, provenance, confidence, ambiguity status, and tokenizer version metadata. Newly tokenized words now carry an explicitly uncertain surface-fallback identity while historical learner events remain unchanged (#60).
+- Tightened app-wide spacing and organization across member, tester, and admin surfaces: compact route heroes and card stacks, aligned Library actions, structured Settings/Profile controls, full-width Activity charts, and a shorter split build/feedback footer; updated dynamic route props for Next.js 16.3 production builds.
 - Expanded Chinese digit-by-digit romanization to all numeric Reader tokens, including months and days (#142).
 - Applied Chinese cardinal-number readings outside year context, so `12月`, `20日`, and `30分` use `shí èr`, `èr shí`, and `sān shí` (#142).
 

@@ -536,7 +536,8 @@ def get_progress_surface(data_root: Path, *, owner_id: str | None = None) -> Pro
                        progress_percent,
                        progress_unit,
                        reading_state,
-                       last_read_at
+                       last_read_at,
+                       completion_override
                 FROM book_progress
                 """
             ).fetchall()
@@ -558,6 +559,7 @@ def get_progress_surface(data_root: Path, *, owner_id: str | None = None) -> Pro
         resume_page = int(progress_row["resume_page"] or 0) if progress_row else 0
         resume_sentence_order = int(progress_row["resume_sentence_order"] or 0) if progress_row else 0
         last_read_at = str(progress_row["last_read_at"]) if progress_row and progress_row["last_read_at"] else None
+        completion_override = bool(progress_row["completion_override"]) if progress_row else False
         progress_unit = "pages" if total_pages > 1 else "sentences"
         if progress_unit == "pages":
             numerator = furthest_page
@@ -566,9 +568,11 @@ def get_progress_surface(data_root: Path, *, owner_id: str | None = None) -> Pro
             numerator = sentence_reads
             denominator = total_sentences
         progress_percent = min(100, round((numerator / denominator) * 100)) if denominator > 0 else 0
-        if page_reads <= 0 and sentence_reads <= 0:
+        if completion_override and record.source_type == "page-by-page":
+            reading_state = "finished"
+        elif page_reads <= 0 and sentence_reads <= 0:
             reading_state = "not_read"
-        elif progress_percent >= 100:
+        elif progress_percent >= 100 and record.source_type != "page-by-page":
             reading_state = "finished"
         else:
             reading_state = "in_progress"
