@@ -2,6 +2,7 @@
 
 ## 2026-08-22
 
+- Reader theme settings now show the latest available wallpaper thumbnail in each theme card, while gradient swatches remain available for themes without artwork.
 - Preserved Chinese compound-word boundaries across OCR-inserted spacing, added Reader recovery for the new tokenizer pipeline, and covered `自己`, `粗糙`, and `胖屁股` with regression fixtures (#144; PR #182).
 - Synchronized issue #143 with its merged Page-by-Page upload reliability coverage and recorded the successful, invalid, unreadable, oversized, and cleanup paths in the local tracker (PR #181).
 - Synchronized the local issue tracker with merged coverage for Japanese Study input, contextual Japanese readings, and trailing page extraction (#88, #138, #139, #146; PR #180), and removed the stale Todo entry for completed issue #87.

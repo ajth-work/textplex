@@ -85,6 +85,9 @@ test("Next reader contract keeps loading, error, extraction, lookup, and chart s
   assert.match(readerSource, /readerThemeCanExpand/);
   assert.match(readerSource, /More themes/);
   assert.match(readerSource, /Show less/);
+  assert.match(readerSource, /getThemeWallpaperThumbnailPath/);
+  assert.match(readerSource, /reader-theme-option-swatch\$\{wallpaperThumbnailPath/);
+  assert.match(readerSource, /data-wallpaper=\{wallpaperThumbnailPath \? "true" : undefined\}/);
   assert.match(readerSource, /readerTokenAudioOnTap/);
   assert.match(readerSource, /readerTokenAudioIntroSeenStorageKey/);
   assert.match(readerSource, /reader\.token-audio-toast/);

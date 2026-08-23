@@ -60,6 +60,7 @@ import {
   readStoredAppThemeRecents,
   type AppTheme,
 } from "../lib/theme";
+import { getThemeWallpaperThumbnailPath } from "../lib/theme-catalog";
 import {
   formatReaderNavHideDelay,
   persistReaderNavHideDelayMs,
@@ -4858,20 +4859,30 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                 aria-label="Reader theme variations"
                 data-inventory-id="reader.theme-grid"
               >
-                {readerThemeVisibleOptions.map((theme) => (
-                  <button
-                    key={theme.value}
-                    type="button"
-                    className={`reader-theme-option ${readerTheme === theme.value ? "is-selected" : ""}`}
-                    onClick={() => handleSetReaderTheme(theme.value)}
-                    aria-pressed={readerTheme === theme.value}
-                  >
-                    <span className="reader-theme-option-swatch" data-theme={theme.value} aria-hidden="true" />
-                    <span className="reader-theme-option-body">
-                      <strong>{theme.title}</strong>
-                    </span>
-                  </button>
-                ))}
+                {readerThemeVisibleOptions.map((theme) => {
+                  const wallpaperThumbnailPath = getThemeWallpaperThumbnailPath(theme.value);
+
+                  return (
+                    <button
+                      key={theme.value}
+                      type="button"
+                      className={`reader-theme-option ${readerTheme === theme.value ? "is-selected" : ""}`}
+                      onClick={() => handleSetReaderTheme(theme.value)}
+                      aria-pressed={readerTheme === theme.value}
+                    >
+                      <span
+                        className={`reader-theme-option-swatch${wallpaperThumbnailPath ? " has-wallpaper" : ""}`}
+                        data-theme={theme.value}
+                        data-wallpaper={wallpaperThumbnailPath ? "true" : undefined}
+                        style={wallpaperThumbnailPath ? { backgroundImage: `url("${wallpaperThumbnailPath}")` } : undefined}
+                        aria-hidden="true"
+                      />
+                      <span className="reader-theme-option-body">
+                        <strong>{theme.title}</strong>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
               {readerThemeCanExpand ? (
                 <button

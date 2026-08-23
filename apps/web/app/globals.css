@@ -12110,6 +12110,12 @@ html[data-app-theme="season-fall-harvest-night"] {
   background: linear-gradient(135deg, #202c38, #c66a4d), linear-gradient(180deg, #2c3032, #0d131b);
 }
 
+.reader-theme-option-swatch.has-wallpaper {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
 .button-compact {
   min-height: 2.3rem;
   padding-inline: 0.9rem;
