@@ -10,6 +10,10 @@ class ReadingSessionCreateRequest(BaseModel):
     started_at: str | None = None
 
 
+class BookCompletionRequest(BaseModel):
+    finished: bool
+
+
 class ReadingSessionRecord(BaseModel):
     id: str
     book_id: str

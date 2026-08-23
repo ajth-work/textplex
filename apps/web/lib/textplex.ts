@@ -70,6 +70,8 @@ export type {
   LexiconImportRequest,
   LexiconImportSummary,
   LexiconLookupResponse,
+  JapaneseConjugationResponse,
+  JapaneseFormSlot,
   ProgressBookSummary,
   ProgressSurfaceResponse,
   ProfileSurfaceResponse,
@@ -375,6 +377,15 @@ export function getSpeechLanguage(languageCode?: string | null): string {
   }
   if (languageCode.startsWith("ar")) {
     return "ar-SA";
+  }
+  if (languageCode.startsWith("no")) {
+    return "nb-NO";
+  }
+  if (languageCode.startsWith("sv")) {
+    return "sv-SE";
+  }
+  if (languageCode.startsWith("fi")) {
+    return "fi-FI";
   }
   return "en-US";
 }
@@ -842,6 +853,10 @@ export function formatElapsed(seconds: number): string {
 
 export function archiveBook(bookId: string): Promise<BookRecord> {
   return postJson<BookRecord>(`/books/${encodeURIComponent(bookId)}/archive`, {});
+}
+
+export function setBookCompletion(bookId: string, finished: boolean): Promise<ProgressBookSummary> {
+  return postJson<ProgressBookSummary>(`/learning/books/${encodeURIComponent(bookId)}/completion`, { finished });
 }
 
 export function restoreBook(bookId: string): Promise<BookRecord> {

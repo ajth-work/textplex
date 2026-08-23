@@ -37,24 +37,26 @@ export function RoutePage({
 }: RoutePageProps) {
   return (
     <main className="app-shell">
-      <section className={`home-hero card${className ? ` ${className}` : ""}`} data-inventory-id={inventoryId}>
-        <span className="eyebrow">{eyebrow}</span>
-        <div className="card-topline">
-          <h1>{title}</h1>
-          {badge ? <span className="pill">{badge}</span> : null}
-        </div>
-        {description.trim().length > 0 ? <p className="lede">{description}</p> : null}
-        {links.length > 0 ? (
-          <div className="button-row">
-            {links.map((link) => (
-              <Link key={link.href} className="button button-secondary" href={link.href}>
-                {link.label}
-              </Link>
-            ))}
+      <section className={`home-hero route-page-hero card${className ? ` ${className}` : ""}`} data-inventory-id={inventoryId}>
+        <div className="route-page-hero-main">
+          <span className="eyebrow">{eyebrow}</span>
+          <div className="card-topline">
+            <h1>{title}</h1>
+            {badge ? <span className="pill">{badge}</span> : null}
           </div>
-        ) : null}
+          {description.trim().length > 0 ? <p className="lede">{description}</p> : null}
+          {links.length > 0 ? (
+            <div className="button-row route-page-hero-actions">
+              {links.map((link) => (
+                <Link key={link.href} className="button button-secondary" href={link.href}>
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+          ) : null}
+        </div>
         {metrics.length > 0 ? (
-          <section className="metric-grid" aria-label={`${title} metrics`}>
+          <section className="metric-grid route-page-hero-metrics" aria-label={`${title} metrics`}>
             {metrics.map((metric) => (
               <div key={metric.label}>
                 <dt>{metric.label}</dt>

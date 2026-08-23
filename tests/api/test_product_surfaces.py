@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from app.main import app
 from app.schemas.books import BookRecord
+from app.services.book_registry import import_book_from_path
 from app.services.lexicon import ensure_lexicon_database
 from fastapi.testclient import TestClient
 from processor.contracts import (
@@ -526,3 +527,53 @@ def test_progress_surface_tracks_unread_in_progress_and_finished_states(tmp_path
     finished = next(item for item in finished_response.json()["books"] if item["book_id"] == book["id"])
     assert finished["reading_state"] == "finished"
     assert finished["progress_percent"] == 100
+
+
+def test_page_by_page_book_stays_in_progress_when_current_pages_are_read(
+    tmp_path: Path,
+) -> None:
+    app.state.data_root = tmp_path
+    source_fixture = Path(__file__).resolve().parents[1] / "fixtures" / "books" / "alice-mini"
+    book = import_book_from_path(
+        source_fixture,
+        language_code="zh",
+        source_type="page-by-page",
+        data_root=tmp_path / "books",
+    )
+    client = TestClient(app)
+
+    session_response = client.post("/learning/sessions", json={"book_id": book.id})
+    assert session_response.status_code == 200
+    session_id = session_response.json()["id"]
+
+    for page_number in range(1, book.total_pages + 1):
+        page_response = client.post(
+            "/learning/page-reads",
+            json={
+                "session_id": session_id,
+                "book_id": book.id,
+                "page_number": page_number,
+                "active_seconds": 20,
+            },
+        )
+        assert page_response.status_code == 200
+
+    progress_response = client.get("/progress")
+    assert progress_response.status_code == 200
+    progress = next(item for item in progress_response.json()["books"] if item["book_id"] == book.id)
+    assert progress["progress_percent"] == 100
+    assert progress["reading_state"] == "in_progress"
+
+    finish_response = client.post(
+        f"/learning/books/{book.id}/completion",
+        json={"finished": True},
+    )
+    assert finish_response.status_code == 200
+    assert finish_response.json()["reading_state"] == "finished"
+
+    reopen_response = client.post(
+        f"/learning/books/{book.id}/completion",
+        json={"finished": False},
+    )
+    assert reopen_response.status_code == 200
+    assert reopen_response.json()["reading_state"] == "in_progress"

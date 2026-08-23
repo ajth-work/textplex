@@ -9,10 +9,17 @@ from app.schemas.books import BookRecord
 from app.schemas.lexicon import LexiconEntryRecord
 from app.services import book_extraction as book_extraction_service
 from app.services.book_registry import import_book_from_path
+from app.services.lexicon import import_lexicon_from_source
 from app.services.ocr import OcrPageResult
 from fastapi.testclient import TestClient
 from processor import build_page_extraction_result, tokenize_sentence
-from processor.contracts import BookExtractionResult
+from processor.contracts import (
+    CURRENT_PIPELINE_VERSION,
+    BookExtractionResult,
+    PageExtractionResult,
+    SentenceResult,
+    TokenResult,
+)
 
 
 def build_safe_sample_pdf(tmp_path: Path, *, page_count: int) -> Path:
@@ -562,7 +569,7 @@ def test_parse_text_into_page_artifact_uses_google_romanization_when_local_readi
     assert artifact.page.sentences[0].tokens[0].pronunciation == "romanized-сегодня"
 
 
-def test_parse_text_into_page_artifact_uses_google_romanization_for_hebrew_without_local_pack(
+def test_parse_text_into_page_artifact_uses_hebrew_readings_without_google_romanization(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -575,11 +582,11 @@ def test_parse_text_into_page_artifact_uses_google_romanization_for_hebrew_witho
     monkeypatch.setattr(
         book_extraction_service,
         "romanize_texts",
-        lambda texts, **_kwargs: [f"romanized-{text}" for text in texts],
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("Hebrew must not use Google romanization")),
     )
 
     artifact = book_extraction_service.parse_text_into_page_artifact(
-        text="\u05d0\u05e0\u05d9 \u05d1\u05d1\u05d9\u05ea.",
+        text="\u05d9\u05e9 \u05d0\u05ea.",
         language_code="he",
         title="\u05e2\u05d1\u05e8\u05d9\u05ea",
         data_root=tmp_path,
@@ -587,8 +594,8 @@ def test_parse_text_into_page_artifact_uses_google_romanization_for_hebrew_witho
 
     token_readings = [token.romanization for token in artifact.page.sentences[0].tokens]
 
-    assert token_readings == ["romanized-\u05d0\u05e0\u05d9", "romanized-\u05d1\u05d1\u05d9\u05ea"]
-    assert artifact.page.sentences[0].tokens[0].pronunciation == "romanized-\u05d0\u05e0\u05d9"
+    assert token_readings == ["yesh", "at"]
+    assert artifact.page.sentences[0].tokens[0].pronunciation == "yesh"
 
 
 def test_parse_text_into_page_artifact_uses_hebrew_transliteration_when_google_is_unavailable(
@@ -613,6 +620,27 @@ def test_parse_text_into_page_artifact_uses_hebrew_transliteration_when_google_i
 
     assert token_readings == ["shlom", "ani"]
     assert artifact.page.sentences[0].tokens[0].pronunciation == "shlom"
+
+
+def test_enrich_page_metadata_replaces_stale_hebrew_token_readings(tmp_path: Path) -> None:
+    page = build_page_extraction_result(
+        book_id="book-hebrew-stale-reading",
+        page_number=1,
+        language_code="he",
+        raw_text="הדוגמאות",
+    )
+    stale_token = page.sentences[0].tokens[0].model_copy(
+        update={"pronunciation": "hdogmaot", "romanization": "hdogmaot"}
+    )
+    stale_page = page.model_copy(
+        update={"sentences": [page.sentences[0].model_copy(update={"tokens": [stale_token]})]}
+    )
+
+    enriched = book_extraction_service._enrich_page_lexicon_metadata(stale_page, data_root=tmp_path)
+    token = enriched.sentences[0].tokens[0]
+
+    assert token.pronunciation == "hadugmaot"
+    assert token.romanization == "hadugmaot"
 
 
 def test_load_page_artifact_skips_empty_interrupted_artifact(tmp_path: Path) -> None:
@@ -697,7 +725,7 @@ def test_recover_page_result_rebuilds_accented_tokens_from_stale_artifact() -> N
     recovered = book_extraction_service._recover_page_result(stale_page)
 
     assert [token.surface_form for token in recovered.sentences[0].tokens] == ["11853", "Runge", "jẹ́", "plánẹ́tì"]
-    assert recovered.pipeline_version == "textplex-5"
+    assert recovered.pipeline_version == CURRENT_PIPELINE_VERSION
 
 
 def test_recover_page_result_keeps_chinese_name_before_parenthetical_gloss() -> None:
@@ -718,6 +746,39 @@ def test_recover_page_result_keeps_chinese_name_before_parenthetical_gloss() -> 
     recovered = book_extraction_service._recover_page_result(stale_page)
 
     assert [token.surface_form for token in recovered.sentences[0].tokens] == ["李善中", "（", "韓語", "：", "이선중", "）", "。"]
+
+
+def test_recover_page_result_rebuilds_chinese_compounds_after_tokenizer_update() -> None:
+    page = build_page_extraction_result(
+        book_id="book-chinese-compounds",
+        page_number=4,
+        language_code="zh",
+        raw_text="我自己觉得粗糙的胖屁股。",
+    )
+    stale_tokens = [
+        TokenResult(order=index, surface_form=surface, language_code="zh", lemma=surface)
+        for index, surface in enumerate(["我", "自", "己", "觉得", "粗", "糙", "的", "胖", "屁", "股", "。"], start=1)
+    ]
+    stale_page = page.model_copy(
+        update={
+            "pipeline_version": "textplex-5",
+            "sentences": [page.sentences[0].model_copy(update={"tokens": stale_tokens})],
+        }
+    )
+
+    recovered = book_extraction_service._recover_page_result(stale_page)
+
+    assert recovered.pipeline_version == CURRENT_PIPELINE_VERSION
+    assert recovered.clean_text == "我自己觉得粗糙的胖屁股。"
+    assert [token.surface_form for token in recovered.sentences[0].tokens] == [
+        "我",
+        "自己",
+        "觉得",
+        "粗糙",
+        "的",
+        "胖屁股",
+        "。",
+    ]
 
 
 def test_enrich_page_metadata_romanizes_all_chinese_numbers_digit_by_digit(tmp_path: Path) -> None:
@@ -753,6 +814,76 @@ def test_enrich_page_metadata_uses_cardinal_readings_for_non_year_numbers(tmp_pa
     number_tokens = [token for token in enriched.sentences[0].tokens if token.surface_form.isdigit()]
 
     assert [token.romanization for token in number_tokens] == ["shí èr", "èr shí", "wǔ", "sān shí"]
+
+
+def test_enrich_page_metadata_resolves_numeric_japanese_month_and_city_name_readings(tmp_path: Path) -> None:
+    source_root = tmp_path / "japanese-source"
+    source_root.mkdir()
+    (source_root / "lexicon.csv").write_text(
+        "surface_form,entry_type,pinyin,tone,definition,radical,stroke_count,hsk_level,frequency_rank,note\n"
+        "市,word,ichi;shi,,city; town,,,,1,JMdict reading alternatives\n"
+        "1月,word,ichigatsu;hitotsuki,,January,,,,2,JMdict reading alternatives\n"
+        "一月,word,hitotsuki;ichigatsu,,one month; January,,,,3,JMdict reading alternatives\n",
+        encoding="utf-8",
+    )
+    data_root = tmp_path / "data"
+    import_lexicon_from_source(
+        source_root,
+        data_root=data_root,
+        language_code="ja",
+        replace_existing=True,
+    )
+
+    page = PageExtractionResult(
+        book_id="japanese-reading-context",
+        page_number=1,
+        language_code="ja",
+        raw_text="京都市は1月です。",
+        clean_text="京都市は1月です。",
+        sentences=[
+            SentenceResult(
+                order=1,
+                text="京都市は1月です。",
+                tokens=[
+                    TokenResult(order=1, surface_form="京都"),
+                    TokenResult(order=2, surface_form="市"),
+                    TokenResult(order=3, surface_form="は"),
+                    TokenResult(order=4, surface_form="1月"),
+                ],
+            )
+        ],
+    )
+
+    enriched = book_extraction_service._enrich_page_lexicon_metadata(page, data_root=data_root)
+    city_token = enriched.sentences[0].tokens[1]
+    month_token = enriched.sentences[0].tokens[3]
+
+    assert city_token.romanization == "shi"
+    assert month_token.romanization == "ichigatsu"
+
+    standalone_city = page.model_copy(
+        update={
+            "sentences": [
+                page.sentences[0].model_copy(
+                    update={"tokens": [TokenResult(order=1, surface_form="市")]}
+                )
+            ]
+        }
+    )
+    standalone_enriched = book_extraction_service._enrich_page_lexicon_metadata(standalone_city, data_root=data_root)
+    assert standalone_enriched.sentences[0].tokens[0].romanization == "ichi;shi"
+
+    kanji_month = page.model_copy(
+        update={
+            "sentences": [
+                page.sentences[0].model_copy(
+                    update={"tokens": [TokenResult(order=1, surface_form="一月")]}
+                )
+            ]
+        }
+    )
+    kanji_month_enriched = book_extraction_service._enrich_page_lexicon_metadata(kanji_month, data_root=data_root)
+    assert kanji_month_enriched.sentences[0].tokens[0].romanization == "hitotsuki;ichigatsu"
 
 
 def test_load_page_artifact_recovers_jsonish_transcription(tmp_path: Path) -> None:

@@ -5,6 +5,7 @@ import pytest
 from app.main import app
 from app.schemas.books import BookRecord
 from fastapi.testclient import TestClient
+from pypdf.errors import PdfReadError
 
 
 def test_import_book_from_path_registers_alice_mini_fixture(imported_real_scan: tuple[Path, BookRecord]) -> None:
@@ -156,6 +157,15 @@ def test_upload_image_pages_creates_ordered_book(
     manifest = client.get(f"/books/{data['id']}/pages").json()
     assert [page["page_number"] for page in manifest["pages"]] == [1, 2]
 
+    session_response = client.post("/learning/sessions", json={"book_id": data["id"]})
+    assert session_response.status_code == 200
+    finish_response = client.post(
+        f"/learning/books/{data['id']}/completion",
+        json={"finished": True},
+    )
+    assert finish_response.status_code == 200
+    assert finish_response.json()["reading_state"] == "finished"
+
     append_response = client.post(
         f"/books/{data['id']}/append-images",
         files=[
@@ -170,6 +180,9 @@ def test_upload_image_pages_creates_ordered_book(
     assert appended["total_pages"] == 3
     assert appended["source_sha256"] == original_source_hash
     assert source_path.read_bytes() == original_source_bytes
+    progress = client.get("/progress").json()
+    appended_progress = next(item for item in progress["books"] if item["book_id"] == data["id"])
+    assert appended_progress["reading_state"] == "not_read"
     appended_manifest = client.get(f"/books/{data['id']}/pages").json()
     assert [page["page_number"] for page in appended_manifest["pages"]] == [1, 2, 3]
     assert (data_root / "books" / data["id"] / "pages" / "page-0003.png").exists()
@@ -192,3 +205,63 @@ def test_append_image_pages_rejects_static_books(
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Only page-by-page books can receive more photo pages."
+
+
+def test_upload_image_pages_returns_client_error_when_generated_pdf_is_unreadable(
+    imported_real_scan: tuple[Path, BookRecord],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_root, record = imported_real_scan
+    app.state.data_root = data_root
+    page_root = data_root / "books" / record.id / "pages"
+
+    def reject_generated_pdf(*_args: object, **_kwargs: object) -> BookRecord:
+        raise PdfReadError("generated PDF is unreadable")
+
+    monkeypatch.setattr("app.main.import_book_from_path", reject_generated_pdf)
+    client = TestClient(app)
+
+    response = client.post(
+        "/books/upload-images",
+        data={"language_code": "en"},
+        files=[
+            ("images", ("page.png", (page_root / "page-0001.png").read_bytes(), "image/png")),
+        ],
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "The uploaded page photos could not be assembled into a readable document. "
+        "Please use clear JPG or PNG images."
+    )
+    uploads_root = data_root / "uploads"
+    assert not any(uploads_root.iterdir()) if uploads_root.exists() else True
+
+
+def test_upload_image_pages_returns_useful_errors_for_invalid_and_oversized_files(
+    imported_real_scan: tuple[Path, BookRecord],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_root, record = imported_real_scan
+    app.state.data_root = data_root
+    page_root = data_root / "books" / record.id / "pages"
+    client = TestClient(app)
+
+    invalid_response = client.post(
+        "/books/upload-images",
+        data={"language_code": "en"},
+        files=[("images", ("page.png", b"not an image", "image/png"))],
+    )
+
+    assert invalid_response.status_code == 400
+    assert invalid_response.json()["detail"] == "Page 1 is not a readable JPG or PNG image."
+
+    monkeypatch.setenv("TEXTPLEX_MAX_UPLOAD_BYTES", "3")
+    oversized_response = client.post(
+        "/books/upload-images",
+        data={"language_code": "en"},
+        files=[("images", ("page.png", (page_root / "page-0001.png").read_bytes(), "image/png"))],
+    )
+
+    assert oversized_response.status_code == 413
+    assert oversized_response.json()["detail"] == "The photo batch exceeds the configured upload size limit."

@@ -33,6 +33,13 @@ GOOGLE_TRANSLATE_SCOPE = "https://www.googleapis.com/auth/cloud-translation"
 GOOGLE_TRANSLATE_TARGET_LANGUAGE = "en"
 GoogleTranslateFeature = Literal["translation", "romanization"]
 
+# Cloud Translation Advanced currently exposes romanization only for this
+# subset of non-Latin languages. Hebrew remains translation-supported but is
+# not supported by romanizeText.
+GOOGLE_ROMANIZATION_SUPPORTED_LANGUAGES = frozenset(
+    {"ar", "am", "bn", "be", "gu", "hi", "ja", "kn", "my", "ru", "sr", "ta", "te", "uk"}
+)
+
 
 class _UrlLibResponse:
     def __init__(self, *, status: int, data: bytes, headers: dict[str, str]) -> None:
@@ -149,6 +156,10 @@ def _load_google_project_id(feature: GoogleTranslateFeature = "translation") -> 
 
 def is_google_translate_configured(feature: GoogleTranslateFeature = "translation") -> bool:
     return _google_credentials_path(feature) is not None
+
+
+def is_google_translate_romanization_supported(language_code: str) -> bool:
+    return language_code.strip().lower().split("-", 1)[0] in GOOGLE_ROMANIZATION_SUPPORTED_LANGUAGES
 
 
 def translate_text(

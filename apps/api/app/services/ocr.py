@@ -166,13 +166,116 @@ def _extract_response_text(payload: dict[str, object]) -> str:
 
 
 def _parse_json_object(value: str) -> dict[str, Any] | None:
+    candidate = value.strip()
+    if candidate.startswith("```"):
+        candidate = candidate.strip("`")
+        if candidate.startswith("json"):
+            candidate = candidate[4:].strip()
     try:
-        parsed = json.loads(value)
+        parsed = json.loads(candidate)
     except json.JSONDecodeError:
         return None
     if isinstance(parsed, dict):
         return parsed
     return None
+
+
+def _json_string_fragment(raw_text: str, key: str) -> str | None:
+    marker = f'"{key}":'
+    start = raw_text.find(marker)
+    if start < 0:
+        return None
+    quote_start = raw_text.find('"', start + len(marker))
+    if quote_start < 0:
+        return None
+
+    buffer: list[str] = []
+    escaped = False
+    for char in raw_text[quote_start + 1 :]:
+        if escaped:
+            buffer.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            buffer.append(char)
+            escaped = True
+            continue
+        if char == '"':
+            try:
+                return json.loads('"' + "".join(buffer) + '"')
+            except json.JSONDecodeError:
+                return None
+        buffer.append(char)
+    return None
+
+
+def _json_list_fragment(raw_text: str, key: str) -> list[object] | None:
+    marker = f'"{key}":'
+    start = raw_text.find(marker)
+    if start < 0:
+        return None
+    array_start = raw_text.find("[", start + len(marker))
+    if array_start < 0:
+        return None
+
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(array_start, len(raw_text)):
+        char = raw_text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+            continue
+        if char == "[":
+            depth += 1
+            continue
+        if char == "]":
+            depth -= 1
+            if depth == 0:
+                try:
+                    value = json.loads(raw_text[array_start : index + 1])
+                except json.JSONDecodeError:
+                    return None
+                return value if isinstance(value, list) else None
+    return None
+
+
+def _json_bool_fragment(raw_text: str, key: str) -> bool | None:
+    marker = f'"{key}":'
+    start = raw_text.find(marker)
+    if start < 0:
+        return None
+    remainder = raw_text[start + len(marker) :].lstrip()
+    if remainder.startswith("true"):
+        return True
+    if remainder.startswith("false"):
+        return False
+    return None
+
+
+def _parse_jsonish_ocr_payload(raw_text: str) -> dict[str, Any] | None:
+    transcription = _json_string_fragment(raw_text, "transcription") or _json_string_fragment(raw_text, "raw_text")
+    if not transcription:
+        return None
+
+    return {
+        "transcription": transcription,
+        "sentence_texts": _json_list_fragment(raw_text, "sentence_texts") or _json_list_fragment(raw_text, "sentences"),
+        "sentence_translations": _json_list_fragment(raw_text, "sentence_translations")
+        or _json_list_fragment(raw_text, "translations"),
+        "page_translation": _json_string_fragment(raw_text, "page_translation")
+        or _json_string_fragment(raw_text, "translation"),
+        "page_ends_with_sentence_terminator": _json_bool_fragment(raw_text, "page_ends_with_sentence_terminator"),
+        "token_hints": _json_list_fragment(raw_text, "token_hints"),
+    }
 
 
 def _coerce_nested_ocr_payload(structured: dict[str, Any]) -> dict[str, Any]:
@@ -285,6 +388,8 @@ def _normalize_token_hints(values: object) -> list[OcrTokenHint]:
 
 def _extract_structured_ocr_result(response_text: str, *, fallback_text: str) -> OcrPageResult:
     structured = _parse_json_object(response_text)
+    if structured is None:
+        structured = _parse_jsonish_ocr_payload(response_text)
     if structured is None:
         transcription = response_text.strip() or fallback_text
         return OcrPageResult(

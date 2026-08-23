@@ -620,6 +620,11 @@ export interface LexiconEntryRecord {
   language_code: string;
   entry_type: string;
   surface_form: string;
+  reading?: string | null;
+  part_of_speech?: string | null;
+  external_id?: string | null;
+  source_id?: number | null;
+  source_version?: string | null;
   pronunciation: string | null;
   pinyin: string | null;
   tone: number | null;
@@ -640,6 +645,36 @@ export interface LexiconLookupResponse {
   resolution_source: "local" | "google_translate_live" | "google_translate_cache";
   match_confidence?: number | null;
   matched_term?: string | null;
+}
+
+export type JapaneseConjugationClass = "godan" | "ichidan" | "suru" | "kuru" | "irregular";
+export type JapaneseFormSlot =
+  | "plain_present"
+  | "polite_present"
+  | "plain_past"
+  | "polite_past"
+  | "plain_negative"
+  | "polite_negative"
+  | "plain_past_negative"
+  | "polite_past_negative"
+  | "te"
+  | "conditional"
+  | "volitional"
+  | "passive"
+  | "causative"
+  | "potential"
+  | "imperative";
+
+export interface JapaneseConjugationResponse {
+  verb: {
+    lemma: string;
+    reading: string | null;
+    conjugation_class: JapaneseConjugationClass;
+    final_kana: string | null;
+    rule_id: string;
+  };
+  forms: Record<JapaneseFormSlot, string>;
+  overridden_slots: JapaneseFormSlot[];
 }
 
 export interface GoogleTranslateUsageSummary {

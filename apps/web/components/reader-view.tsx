@@ -29,6 +29,7 @@ import {
   type GoogleTranslateUsageSummary,
   type LexiconEntryRecord,
   type LexiconLookupResponse,
+  type JapaneseConjugationResponse,
   type PageReadRecord,
   type ProgressBookSummary,
   type ProgressSurfaceResponse,
@@ -73,6 +74,7 @@ import { LoadingSkeleton, ReaderLoadingSkeleton } from "./loading-skeleton";
 import { useAuth } from "./auth-provider";
 import { isTextPlexAdmin } from "../lib/auth-roles";
 import { PhotoPageAppendCard, type PageUploadInputMode } from "./photo-page-append-card";
+import { JapaneseConjugationGrid } from "./japanese-conjugation-grid";
 
 type ReaderTokenMode = "word" | "character";
 type ReaderMode = "sentence" | "page" | "token";
@@ -885,7 +887,9 @@ function resolveTokenLanguageCode(
 
   if (/[A-Za-z]/u.test(surface)) {
     const normalizedFallback = fallbackLanguageCode?.trim().toLowerCase().split("-", 1)[0];
-    return normalizedFallback === "en" || normalizedFallback === "yo" ? normalizedFallback : "en";
+    return normalizedFallback === "en" || normalizedFallback === "yo" || normalizedFallback === "no" || normalizedFallback === "sv" || normalizedFallback === "fi"
+      ? normalizedFallback
+      : "en";
   }
 
   const normalizedFallback = fallbackLanguageCode?.trim().toLowerCase();
@@ -1027,6 +1031,13 @@ function normalizeLexiconComparisonValue(value: string | null | undefined): stri
   return normalizeDisplayReading(value).replace(/\s+/gu, "").toLocaleLowerCase();
 }
 
+function splitJapaneseReadingAlternatives(value: string | null | undefined): string[] {
+  return String(value ?? "")
+    .split(/[;,/|、，]/u)
+    .map((alternative) => alternative.trim())
+    .filter(Boolean);
+}
+
 function isJapaneseKanaOnly(value: string): boolean {
   return /^[\p{Script=Hiragana}\p{Script=Katakana}ー・]+$/u.test(value.trim());
 }
@@ -1051,7 +1062,8 @@ function selectLexiconEntryForToken(
   const readingMatches = tokenReading
     ? exactSurfaceEntries.filter((entry) => {
         const entryReading = normalizeLexiconComparisonValue(entry.pronunciation ?? entry.pinyin);
-        return !entryReading || entryReading === tokenReading;
+        const entryAlternatives = splitJapaneseReadingAlternatives(entry.pronunciation ?? entry.pinyin);
+        return !entryReading || entryAlternatives.some((alternative) => normalizeLexiconComparisonValue(alternative) === tokenReading);
       })
     : exactSurfaceEntries;
 
@@ -1878,6 +1890,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const [readerSessionSummaryHiddenItemIds, setReaderSessionSummaryHiddenItemIds] = useState<string[]>([]);
   const [readerSessionSummaryEditing, setReaderSessionSummaryEditing] = useState(false);
   const [lexiconResult, setLexiconResult] = useState<LexiconLookupResponse | null>(null);
+  const [japaneseConjugation, setJapaneseConjugation] = useState<JapaneseConjugationResponse | null>(null);
+  const [japaneseConjugationLoading, setJapaneseConjugationLoading] = useState(false);
   const [lexiconLoading, setLexiconLoading] = useState(false);
   const [definitionLookupTiming, setDefinitionLookupTiming] = useState<DefinitionLookupTiming | null>(null);
   const [definitionLookupTrace, setDefinitionLookupTrace] = useState<string[]>([]);
@@ -2652,6 +2666,51 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
       active = false;
     };
   }, [isAdmin, pageData, readerGoogleTranslateFallback, requestLexiconLookup, selectedToken]);
+
+  useEffect(() => {
+    let active = true;
+    const languageCode = selectedToken ? resolveTokenLanguageCode(selectedToken.surface_form, pageData?.book.language_code, selectedToken.language_code) : null;
+    const candidateLemmas = selectedToken
+      ? [selectedToken.lemma, selectedToken.surface_form].filter((value, index, values): value is string => Boolean(value?.trim()) && values.indexOf(value) === index)
+      : [];
+    if (selectedToken && /^し(?:て|た|ます|ない|よう|ろ|ません|なかった)/u.test(selectedToken.surface_form)) {
+      candidateLemmas.push("する");
+    }
+    if (!languageCode?.startsWith("ja") || candidateLemmas.length === 0) {
+      setJapaneseConjugation(null);
+      setJapaneseConjugationLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+    setJapaneseConjugationLoading(true);
+    void (async () => {
+      for (const lemma of candidateLemmas) {
+        try {
+          const result = await postJson<JapaneseConjugationResponse>("/lexicon/japanese/conjugate", {
+            lemma,
+            reading: selectedToken?.pronunciation ?? selectedToken?.romanization,
+          });
+          if (active) {
+            setJapaneseConjugation(result);
+            setJapaneseConjugationLoading(false);
+          }
+          return;
+        } catch {
+          // Inflected or non-verb Japanese tokens can fail classification; try the next candidate.
+        }
+      }
+      if (active) {
+        setJapaneseConjugation(null);
+      }
+      if (active) {
+        setJapaneseConjugationLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [pageData?.book.language_code, selectedToken]);
 
   useEffect(() => {
     setSelectedTokenSaved(false);
@@ -5922,6 +5981,8 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
                     </button>
                   </div>
                 </div>
+                {japaneseConjugationLoading ? <p className="small-copy japanese-conjugation-loading">Loading conjugation details...</p> : null}
+                {japaneseConjugation ? <JapaneseConjugationGrid conjugation={japaneseConjugation} inventoryPrefix="reader" surfaceForm={selectedToken.surface_form} translatedMeaning={selectedTokenEnglishMeaning} /> : null}
                 {selectedTokenReadingDisplayParts.length > 1 ? (
                   <div
                     className="definition-segments"

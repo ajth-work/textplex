@@ -11,11 +11,13 @@ test("tester build updates are grouped, account-scoped, and blocking", () => {
   const gate = read("apps", "web", "components", "tester-build-update-gate.tsx");
   const frame = read("apps", "web", "components", "app-frame.tsx");
   const roles = read("apps", "web", "lib", "auth-roles.ts");
+  const packageJson = read("apps", "web", "package.json");
 
   assert.match(roles, /isTextPlexTester/);
   assert.match(updates, /textplex\.tester-last-build/);
   assert.match(updates, /testerLastBuildStorageKey\(userId\)/);
   assert.match(updates, /getTesterChangelogSince/);
+  assert.match(updates, /build: "0\.1\.2"/);
   assert.match(updates, /title: "Reader and language support"/);
   assert.match(updates, /title: "Import and library"/);
   assert.match(gate, /Acknowledge and continue/);
@@ -23,4 +25,5 @@ test("tester build updates are grouped, account-scoped, and blocking", () => {
   assert.match(frame, /isTextPlexTester\(user\)/);
   assert.match(frame, /lastBuild === appVersion \? "complete" : "required"/);
   assert.match(frame, /<TesterBuildUpdateGate/);
+  assert.match(packageJson, /"version": "0\.1\.2"/);
 });

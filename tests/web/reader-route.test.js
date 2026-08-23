@@ -9,6 +9,8 @@ const routeSource = fs.readFileSync(
   "utf8",
 );
 const readerSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "reader-view.tsx"), "utf8");
+const japaneseConjugationSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "japanese-conjugation-grid.tsx"), "utf8");
+const textplexSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "lib", "textplex.ts"), "utf8");
 const accountFooterSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "account-footer.tsx"), "utf8");
 const layoutSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "app", "layout.tsx"), "utf8");
 const appShellSource = fs.readFileSync(path.join(repoRoot, "apps", "web", "components", "app-shell.tsx"), "utf8");
@@ -327,6 +329,10 @@ test("Next reader definition card stays compact and exposes the save action", ()
   assert.match(readerSource, /Mark word as remembered/);
   assert.match(readerSource, /Mark word as missed/);
   assert.match(readerSource, /definition-trace/);
+  assert.match(readerSource, /\/lexicon\/japanese\/conjugate/);
+  assert.match(readerSource, /<JapaneseConjugationGrid/);
+  assert.match(japaneseConjugationSource, /data-inventory-id=\{`\$\{inventoryPrefix\}\.japanese-conjugation-card`\}/);
+  assert.match(japaneseConjugationSource, /data-inventory-id=\{`\$\{inventoryPrefix\}\.japanese-conjugation-grid`\}/);
   assert.match(readerSource, /Definition trace/);
   assert.doesNotMatch(readerSource, /<dl className="definition-grid">/);
   assert.doesNotMatch(readerSource, />\s*Clear\s*<\/button>/);
@@ -415,7 +421,7 @@ test("Next reader detects Korean tokens inside another language and routes their
   assert.match(readerSource, /if \(isKoreanText\(surface\)\) \{\s+return "ko";/);
   assert.match(readerSource, /const tokenLanguageCode = resolveTokenLanguageCode\(token\.surface_form, languageCode, token\.language_code\)/);
   assert.match(readerSource, /return "ru";[\s\S]*return "he";[\s\S]*return "ar";/);
-  assert.match(readerSource, /return normalizedFallback === "en" \|\| normalizedFallback === "yo" \? normalizedFallback : "en";/);
+  assert.match(readerSource, /return normalizedFallback === "en" \|\| normalizedFallback === "yo" \|\| normalizedFallback === "no" \|\| normalizedFallback === "sv" \|\| normalizedFallback === "fi"/);
   assert.match(readerSource, /lang=\{tokenLanguageCode \|\| undefined\}/);
   assert.match(readerSource, /const languageCode = resolveTokenLanguageCode\([\s\S]*selectedToken\.language_code,[\s\S]*\) \?\? pageData\.book\.language_code;/);
   assert.match(readerSource, /language_code=\$\{encodeURIComponent\(languageCode\)\}/);
@@ -425,8 +431,16 @@ test("Next reader detects Korean tokens inside another language and routes their
   assert.match(playDefinitionSegmentAudio, /resolveTokenLanguageCode\(selectedToken\.surface_form, pageData\.book\.language_code, selectedToken\.language_code\)/);
 });
 
+test("Next reader preserves Nordic fallback language and speech locales", () => {
+  assert.match(textplexSource, /if \(languageCode\.startsWith\("no"\)\) \{\s+return "nb-NO";/);
+  assert.match(textplexSource, /if \(languageCode\.startsWith\("sv"\)\) \{\s+return "sv-SE";/);
+  assert.match(textplexSource, /if \(languageCode\.startsWith\("fi"\)\) \{\s+return "fi-FI";/);
+});
+
 test("Next reader keeps Japanese surface, reading, lemma, and meaning aligned", () => {
   assert.match(readerSource, /function selectLexiconEntryForToken\(/);
+  assert.match(readerSource, /function splitJapaneseReadingAlternatives\(/);
+  assert.match(readerSource, /entryAlternatives\.some\(\(alternative\) => normalizeLexiconComparisonValue\(alternative\) === tokenReading\)/);
   assert.match(readerSource, /const exactSurfaceEntries = entries\.filter\(\(entry\) => entry\.surface_form\.trim\(\) === surface\)/);
   assert.match(readerSource, /A kana-only surface such as は must not inherit a kanji homograph such as 歯/);
   assert.match(readerSource, /selectedToken\.surface_form,[\s\S]*selectedToken\.lemma \?\? ""/);

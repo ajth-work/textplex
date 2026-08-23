@@ -5,11 +5,13 @@
     "apps/web"
   ],
   "devDependencies": {
-    "eslint": "^9.39.5",
+    "@eslint/compat": "2.1.0",
+    "eslint": "^10.8.1",
     "postcss": "^8.5.23",
     "sharp": "^0.35.3",
-    "supabase": "^2.113.0",
-    "typescript": "5.4.5"
+    "supabase": "^2.114.0",
+    "typescript": "5.4.5",
+    "typescript-eslint": "8.65.0"
   },
   "overrides": {
     "postcss": "$postcss",

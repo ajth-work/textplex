@@ -105,7 +105,7 @@ export function BuildFooterToggle() {
   );
 }
 
-export function BuildFooter({ buildAt, children, version }: Readonly<{ buildAt: string; children?: ReactNode; version: string }>) {
+export function BuildFooter({ buildAt, children, guideAction, version }: Readonly<{ buildAt: string; children?: ReactNode; guideAction?: ReactNode; version: string }>) {
   const [enabled] = useBuildInfoFooterVisible();
   const [now, setNow] = useState(0);
 
@@ -118,14 +118,17 @@ export function BuildFooter({ buildAt, children, version }: Readonly<{ buildAt: 
 
   return (
     <footer className="app-build-footer card" aria-label="App build information" data-inventory-id="shell.build-footer">
-      <div className="app-build-footer-copy">
-        <span className="eyebrow">Current build</span>
-        <p className="small-copy">Build <strong>{version}</strong></p>
-        <div className="app-build-footer-meta">
-          <span>Built {formatBuildAt(buildAt)}</span>
-          <span>Time since build: {now > 0 ? formatTimeSinceBuild(buildAt, now) : "checking"}</span>
-          {enabled ? <span>Detailed build diagnostics enabled</span> : null}
+      <div className="app-build-footer-header">
+        <div className="app-build-footer-copy">
+          <span className="eyebrow">Current build</span>
+          <p className="small-copy">Build <strong>{version}</strong></p>
+          <div className="app-build-footer-meta">
+            <span>Built {formatBuildAt(buildAt)}</span>
+            <span>Time since build: {now > 0 ? formatTimeSinceBuild(buildAt, now) : "checking"}</span>
+            {enabled ? <span>Detailed build diagnostics enabled</span> : null}
+          </div>
         </div>
+        {guideAction}
       </div>
       {children}
     </footer>

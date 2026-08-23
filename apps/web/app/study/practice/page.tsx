@@ -5,14 +5,15 @@ import { StudyPracticeView } from "../../../components/study-practice-view";
 export const dynamic = "force-dynamic";
 
 type StudyPracticePageProps = {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 function firstSearchParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default function StudyPracticePage({ searchParams = {} }: StudyPracticePageProps) {
+export default async function StudyPracticePage({ searchParams: searchParamsPromise }: StudyPracticePageProps) {
+  const searchParams = (await searchParamsPromise) ?? {};
   const modeValue = firstSearchParam(searchParams.mode);
   const mode = modeValue === "review" || modeValue === "glossed" || modeValue === "both" ? modeValue : "program";
   const languageCode = firstSearchParam(searchParams.language_code) ?? firstSearchParam(searchParams.language);

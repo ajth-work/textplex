@@ -8,10 +8,12 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-SUPPORTED_WIKIPEDIA_LANGUAGE_CODES = frozenset({"zh", "ko", "ja", "ru", "he", "ar", "yo"})
+SUPPORTED_WIKIPEDIA_LANGUAGE_CODES = frozenset({"zh", "ko", "ja", "ru", "he", "ar", "yo", "no", "sv", "fi"})
+NORDIC_WIKIPEDIA_LANGUAGE_CODES = frozenset({"no", "sv", "fi"})
 _MAX_ARTICLE_CHARACTERS = 24_000
 _DEFAULT_MIN_ARTICLE_CHARACTERS = 1_000
-_DEFAULT_MAX_ARTICLE_ATTEMPTS = 3
+_DEFAULT_NORDIC_MIN_ARTICLE_CHARACTERS = 400
+_DEFAULT_MAX_ARTICLE_ATTEMPTS = 5
 _USER_AGENT = "TextPlex/0.1 (local reading app; Wikipedia import)"
 
 
@@ -63,10 +65,16 @@ def fetch_random_article(language_code: str) -> WikipediaArticle:
         supported = ", ".join(sorted(SUPPORTED_WIKIPEDIA_LANGUAGE_CODES))
         raise ValueError(f"Wikipedia random import is not available for {normalized_language!r}. Choose one of: {supported}.")
 
-    minimum_characters = _positive_int_from_env(
-        "TEXTPLEX_WIKIPEDIA_MIN_ARTICLE_CHARACTERS",
-        _DEFAULT_MIN_ARTICLE_CHARACTERS,
-    )
+    if normalized_language in NORDIC_WIKIPEDIA_LANGUAGE_CODES:
+        minimum_characters = _positive_int_from_env(
+            "TEXTPLEX_WIKIPEDIA_NORDIC_MIN_ARTICLE_CHARACTERS",
+            _DEFAULT_NORDIC_MIN_ARTICLE_CHARACTERS,
+        )
+    else:
+        minimum_characters = _positive_int_from_env(
+            "TEXTPLEX_WIKIPEDIA_MIN_ARTICLE_CHARACTERS",
+            _DEFAULT_MIN_ARTICLE_CHARACTERS,
+        )
     max_attempts = _positive_int_from_env(
         "TEXTPLEX_WIKIPEDIA_MAX_ARTICLE_ATTEMPTS",
         _DEFAULT_MAX_ARTICLE_ATTEMPTS,

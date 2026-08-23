@@ -30,6 +30,18 @@ The processor may use OCR, AI vision, local language tools, or a hybrid. All pro
           "proficiency_system": "internal",
           "proficiency_level": "beginner",
           "entity": null,
+          "lexical_identity": {
+            "language_code": "ko",
+            "lemma": "가다",
+            "part_of_speech": "verb",
+            "sense_id": null,
+            "external_lexicon_id": null,
+            "status": "resolved",
+            "provenance": "canonical_lexicon",
+            "confidence": 0.98,
+            "tokenizer_version": "textplex-tokenizer-1",
+            "identity_key": "lex:v1:<sha256>"
+          },
           "bbox": null
         }
       ],
@@ -66,6 +78,10 @@ For each extraction run, also store a book-level summary containing:
 6. A failed page must be retryable independently.
 7. Every AI response must be schema-validated before persistence.
 8. Save the normalized page artifact so processor changes can be audited.
+9. Build lexical identity keys from normalized language, lemma, part of speech, sense id, and external lexicon id. Provenance, confidence, status, and tokenizer version remain auditable metadata rather than key material.
+10. A non-punctuation token produced without lexicon or contextual evidence must use `surface_fallback` status and null confidence. Do not invent certainty from successful tokenization alone.
+
+`lexical_identity` is additive and optional so older page artifacts remain readable. Newly tokenized word records receive a `surface_fallback` identity. The learner event ledger continues to use its existing lemma identity until a separately tested migration and reconciliation slice is implemented; do not treat this first contract key as a migrated learner-state identifier.
 
 For Chinese-specific segmentation, token hints, and pinyin fallback behavior, see [Chinese Text Processing Notes](./CHINESE_TEXT_PROCESSING.md).
 

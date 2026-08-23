@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from .contracts import (
     BookExtractionResult,
     LexicalEntryResult,
+    LexicalIdentity,
     PageExtractionResult,
     SentenceResult,
     TokenOccurrenceResult,
@@ -17,6 +18,7 @@ _TOKEN_RE = re.compile(
     r"[\u4e00-\u9fff]+|[\u3041-\u309f]+|[\u30a1-\u30ff\uff66-\uff9f]+|[\uac00-\ud7a3\u3131-\u318e]+|[\u0400-\u04ff\u0500-\u052f]+|[\u0590-\u05ff\uFB1D-\uFB4F]+|[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+|[A-Za-z\u00c0-\u02af\u1e00-\u1eff\u0300-\u036f0-9]+(?:['’][A-Za-z\u00c0-\u02af\u1e00-\u1eff\u0300-\u036f0-9]+)?|[\u3002\uff01\uff1f!?.,:;\uff0c\u3001\uff1b\uff1a\u2026\u2014\u201c\u201d\u2018\u2019\uff08\uff09()\[\]{}\u300a\u300b\u3008\u3009\u300c\u300d\u300e\u300f\u3010\u3011\u30fb\u060c\u061b\u061f\u06d4]",
 )
 _CHINESE_RUN_RE = re.compile(r"[\u4e00-\u9fff]+")
+_CHINESE_INTERSTITIAL_SPACE_RE = re.compile(r"(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])")
 _KOREAN_RUN_RE = re.compile(r"[\uac00-\ud7a3\u3131-\u318e]+")
 _WORDISH_RE = re.compile(
     r"[\u4e00-\u9fff]+|[\u3041-\u309f]+|[\u30a1-\u30ff\uff66-\uff9f]+|[\uac00-\ud7a3\u3131-\u318e]+|[\u0400-\u04ff\u0500-\u052f]+|[\u0590-\u05ff\uFB1D-\uFB4F]+|[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+|[A-Za-z\u00c0-\u02af\u1e00-\u1eff\u0300-\u036f0-9]+(?:['’][A-Za-z\u00c0-\u02af\u1e00-\u1eff\u0300-\u036f0-9]+)?|[\u3002\uff01\uff1f!?.,:;\uff0c\u3001\uff1b\uff1a\u2026\u2014\u201c\u201d\u2018\u2019\uff08\uff09()\[\]{}\u300a\u300b\u3008\u3009\u300c\u300d\u300e\u300f\u3010\u3011\u30fb\u060c\u061b\u061f\u06d4]",
@@ -24,6 +26,7 @@ _WORDISH_RE = re.compile(
 _WHITESPACE_RE = re.compile(r"\s+")
 _SENTENCE_ENDERS = set("\u3002\uff01\uff1f!?.\u061f\u06d4")
 _CHINESE_NAME_OPENERS = set("\uff08(")
+_CHINESE_COMPOUND_OVERRIDES = ("胖屁股", "粗糙", "自己")
 _TRAILING_SENTENCE_CLOSERS = set("\"')]}〉》」』】〗〟”’")
 _HARD_NO_SPACE_JOIN_LANGS = {"zh", "ja", "ko"}
 _PUNCTUATION_TOKENS = set("。！？!?.，、；：,;:…—“”‘’（）()[]{}《》〈〉「」『』【】،؛؟۔")
@@ -82,6 +85,17 @@ def _language_root(language_code: str) -> str:
     return (language_code or "").strip().lower().split("-", 1)[0]
 
 
+def _collapse_chinese_interstitial_spaces(text: str) -> str:
+    return _CHINESE_INTERSTITIAL_SPACE_RE.sub("", text)
+
+
+def _normalize_extraction_text(text: str, language_code: str) -> str:
+    normalized = normalize_text(text)
+    if _language_root(language_code) == "zh":
+        return _collapse_chinese_interstitial_spaces(normalized)
+    return normalized
+
+
 def detect_token_language_code(surface_form: str, fallback_language_code: str) -> str | None:
     """Infer a token language from its writing system, falling back to the book language."""
     surface = surface_form.strip()
@@ -102,7 +116,7 @@ def detect_token_language_code(surface_form: str, fallback_language_code: str) -
     if re.search(r"[\u4e00-\u9fff]", surface):
         return fallback if fallback in {"zh", "ja"} else "zh"
     if re.search(r"[A-Za-z]", surface):
-        return fallback if fallback in {"en", "yo"} else "en"
+        return fallback if fallback in {"en", "yo", "no", "sv", "fi"} else "en"
     return fallback or None
 
 
@@ -127,14 +141,26 @@ def _is_punctuation_token(surface_form: str) -> bool:
 
 def _normalize_token_surface(surface_form: str, language_code: str) -> str:
     if language_code.lower().startswith("zh"):
-        return surface_form
+        return _collapse_chinese_interstitial_spaces(surface_form)
     return surface_form.lower()
 
 
-def _normalize_sentence_inputs(sentence_texts: list[str] | None, clean_text: str) -> list[str]:
+def _normalize_sentence_inputs(sentence_texts: list[str] | None, clean_text: str, language_code: str) -> list[str]:
     if sentence_texts:
-        normalized = [normalize_text(sentence) for sentence in sentence_texts if normalize_text(sentence)]
+        normalized = [
+            _normalize_extraction_text(sentence, language_code)
+            for sentence in sentence_texts
+            if _normalize_extraction_text(sentence, language_code)
+        ]
         if normalized:
+            remaining_text = clean_text
+            for sentence in normalized:
+                if not remaining_text.startswith(sentence):
+                    remaining_text = ""
+                    break
+                remaining_text = remaining_text[len(sentence) :].lstrip()
+            if remaining_text:
+                normalized.extend(split_sentences(remaining_text))
             return normalized
     return split_sentences(clean_text)
 
@@ -304,7 +330,34 @@ def stitch_page_sentence_carryover(pages: list[PageExtractionResult]) -> list[Pa
 def _segment_chinese_chunk(chunk: str) -> list[str]:
     if _jieba_lcut is None:
         return list(chunk)
-    return [token.strip() for token in _jieba_lcut(chunk, cut_all=False, HMM=True) if token.strip()]
+    segments = [token.strip() for token in _jieba_lcut(chunk, cut_all=False, HMM=True) if token.strip()]
+    merged: list[str] = []
+    index = 0
+    overrides = sorted(_CHINESE_COMPOUND_OVERRIDES, key=len, reverse=True)
+    while index < len(segments):
+        match: str | None = None
+        match_end = index
+        for override in overrides:
+            candidate = ""
+            end = index
+            while end < len(segments) and len(candidate) < len(override):
+                candidate += segments[end]
+                end += 1
+                if candidate == override:
+                    match = override
+                    match_end = end
+                    break
+                if not override.startswith(candidate):
+                    break
+            if match:
+                break
+        if match:
+            merged.append(match)
+            index = match_end
+        else:
+            merged.append(segments[index])
+            index += 1
+    return merged
 
 
 def _tokenize_chinese_sentence(sentence: str) -> list[str]:
@@ -453,7 +506,7 @@ def _tokenize_generic_sentence(sentence: str) -> list[str]:
 def tokenize_sentence(sentence: str, language_code: str) -> list[TokenResult]:
     language_root = _language_root(language_code)
     if language_root == "zh":
-        surfaces = _tokenize_chinese_sentence(sentence)
+        surfaces = _tokenize_chinese_sentence(_normalize_extraction_text(sentence, language_code))
     elif language_root == "ja":
         surfaces = _tokenize_japanese_sentence(sentence)
     elif language_root == "ko":
@@ -467,12 +520,20 @@ def tokenize_sentence(sentence: str, language_code: str) -> list[TokenResult]:
 
     tokens: list[TokenResult] = []
     for index, surface_form in enumerate(surfaces, start=1):
+        token_language_code = detect_token_language_code(surface_form, language_code)
+        lemma = None if _is_punctuation_token(surface_form) else _normalize_token_surface(surface_form, language_code)
         tokens.append(
             TokenResult(
                 order=index,
                 surface_form=surface_form,
-                language_code=detect_token_language_code(surface_form, language_code),
-                lemma=None if _is_punctuation_token(surface_form) else _normalize_token_surface(surface_form, language_code),
+                language_code=token_language_code,
+                lemma=lemma,
+                lexical_identity=LexicalIdentity(
+                    language_code=token_language_code,
+                    lemma=lemma,
+                )
+                if token_language_code and lemma
+                else None,
             )
         )
     return tokens
@@ -493,8 +554,8 @@ def build_page_extraction_result(
     page_ends_with_sentence_terminator: bool | None = None,
     token_hints: list[Mapping[str, object]] | None = None,
 ) -> PageExtractionResult:
-    clean_text = normalize_text(raw_text)
-    candidate_sentences = _normalize_sentence_inputs(sentence_texts, clean_text)
+    clean_text = _normalize_extraction_text(raw_text, language_code)
+    candidate_sentences = _normalize_sentence_inputs(sentence_texts, clean_text, language_code)
     hint_map = _normalize_token_hints(token_hints, language_code)
     sentence_translations = _normalize_sentence_translations(sentence_translations, len(candidate_sentences))
     sentence_translation_sources = _normalize_sentence_translations(sentence_translation_sources, len(candidate_sentences))
@@ -555,9 +616,11 @@ def build_page_extraction_result(
         if isinstance(page_translation_source, str) and page_translation_source.strip()
         else None,
         sentences=sentences,
-        page_ends_with_sentence_terminator=page_ends_with_sentence_terminator
-        if page_ends_with_sentence_terminator is not None
-        else ends_with_sentence_terminator(clean_text),
+        page_ends_with_sentence_terminator=(
+            ends_with_sentence_terminator(clean_text)
+            if page_ends_with_sentence_terminator is None
+            else page_ends_with_sentence_terminator and ends_with_sentence_terminator(clean_text)
+        ),
         token_occurrences=token_occurrences,
         lexical_entries=list(lexical_entries.values()),
     )

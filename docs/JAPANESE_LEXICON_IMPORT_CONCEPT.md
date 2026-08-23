@@ -1,6 +1,6 @@
 # Japanese Lexicon Import Concept
 
-Status: concept and implementation plan. The source workbook is preserved, but the importer described here is not implemented yet.
+Status: concept and implementation plan. The workbook importer remains planned; the separate JMdict runtime import path is implemented and documented in [`docs/ATTRIBUTIONS.md`](ATTRIBUTIONS.md).
 
 Related tracker item: [#78](https://github.com/ajth-work/textplex/issues/78).
 
@@ -100,7 +100,7 @@ The Reader can show a definition and reading first, with optional kanji mnemonic
 
 The source sets have different roles:
 
-1. JMdict/KANJIDIC2 should eventually verify dictionary identity and readings.
+1. JMdict verifies dictionary meanings, readings, and POS source identity; its snapshot provenance is stored separately from curriculum data.
 2. Afterlife supplies course units, mnemonics, ordering, and contextual notes.
 3. Memrise Non-WK supplies a separate kanji curriculum/export shape.
 4. TextPlex learner data supplies exposure and mastery state.
@@ -110,10 +110,11 @@ Do not import `AK%`, `AW%`, response counts, missed-word tabs, or test results i
 ## Delivery phases
 
 1. Add a read-only workbook importer and a validation/comparison report.
-2. Produce a normalized Japanese CSV or SQLite source pack with source IDs and metadata.
-3. Add Japanese metadata migrations and detail endpoints.
-4. Connect verb metadata to conjugation and add Reader/Study presentation.
-5. Add separate Memrise Non-WK curriculum filtering after the source comparison is reviewed.
+2. JMdict XML import is implemented through `scripts/import_jmdict.py` and `/lexicon/japanese/jmdict/import`.
+3. Produce a normalized Japanese CSV or SQLite curriculum pack with source IDs and metadata.
+4. Add Japanese metadata migrations and detail endpoints.
+5. Connect verb metadata to conjugation and add Reader/Study presentation.
+6. Add separate Memrise Non-WK curriculum filtering after the source comparison is reviewed.
 
 ## Acceptance criteria
 

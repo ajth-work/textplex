@@ -16,9 +16,8 @@ export function generateStaticParams(): Array<{ bookId: string; pageNumber: stri
 }
 
 export default async function ReaderPage(
-  props: Promise<{ params: { bookId: string; pageNumber: string } }> | { params: { bookId: string; pageNumber: string } },
+  { params }: { params: Promise<{ bookId: string; pageNumber: string }> },
 ) {
-  const { params } = await props;
   const resolvedParams = await params;
   return <ReaderView bookId={resolvedParams.bookId} pageNumber={Number(resolvedParams.pageNumber)} />;
 }

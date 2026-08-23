@@ -15,11 +15,23 @@ class LexiconImportRequest(BaseModel):
     replace_existing: bool = False
 
 
+class JmdictImportRequest(BaseModel):
+    source_path: str = Field(min_length=1)
+    source_version: str = Field(min_length=1, max_length=64)
+    source_url: str = Field(default="http://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz", min_length=1)
+    replace_existing: bool = True
+
+
 class LexiconEntryRecord(BaseModel):
     id: int
     language_code: str
     entry_type: str
     surface_form: str
+    reading: str | None = None
+    part_of_speech: str | None = None
+    external_id: str | None = None
+    source_id: int | None = None
+    source_version: str | None = None
     pronunciation: str | None = None
     pinyin: str | None = None
     tone: int | None = None
@@ -58,3 +70,13 @@ class LexiconImportSummary(BaseModel):
     vocabulary_rows: int
     character_rows: int
     imported_rows: int
+
+
+class JmdictImportSummary(BaseModel):
+    database_path: str
+    source_path: str
+    source_version: str
+    source_id: int
+    entry_count: int
+    projected_rows: int
+    checksum_sha256: str

@@ -3,6 +3,24 @@
 ## 2026-08-22
 
 - Reader theme settings now show the latest available wallpaper thumbnail in each theme card, while gradient swatches remain available for themes without artwork.
+- Preserved Chinese compound-word boundaries across OCR-inserted spacing, added Reader recovery for the new tokenizer pipeline, and covered `自己`, `粗糙`, and `胖屁股` with regression fixtures (#144; PR #182).
+- Synchronized issue #143 with its merged Page-by-Page upload reliability coverage and recorded the successful, invalid, unreadable, oversized, and cleanup paths in the local tracker (PR #181).
+- Synchronized the local issue tracker with merged coverage for Japanese Study input, contextual Japanese readings, and trailing page extraction (#88, #138, #139, #146; PR #180), and removed the stale Todo entry for completed issue #87.
+- Added ESLint 10 compatibility handling for the Next.js flat configuration so web linting remains operational during the major-version upgrade.
+- Added Norwegian, Swedish, and Finnish Wikipedia targets with Nordic-specific article thresholds and token-language detection.
+- Preserved Nordic language fallbacks in the Reader and mapped Nordic token speech to browser locales.
+- Added reviewed Hebrew pronunciation overrides with transliteration fallback and avoided unsupported Google romanization requests.
+- Corrected stale Hebrew page-token readings so reviewed pronunciation overrides update both displayed reading fields.
+- Added a provenance-preserving JMdict XML import path with projected Japanese readings, meanings, parts of speech, and source metadata.
+- Added explicit reversible completion for page-by-page reading frontiers, reset completion when new pages are appended, and return a useful 400 response for unreadable photo batches.
+- Added the 0.1.2 tester build briefing and a shared route-aware page guide with persistent first-visit walkthroughs.
+- Preserved trailing page text when structured extraction sentence lists stop before the end of the transcription, keeping page completion aligned with recovered content (#146).
+- Kept malformed JSON-like OCR metadata out of Reader sentence text by recovering the transcription field from truncated structured responses (#145).
+- Closed issue #153 after merged PR #175 delivered Japanese conjugation details in Reader and Study; synchronized the local issue tracker.
+
+## 2026-08-21
+
+- Corrected Japanese Reader readings for numeric months such as `1月` and city-name `市` context while preserving valid JMdict reading alternatives.
 
 ## 2026-08-20
 
@@ -26,6 +44,9 @@
 - Added per-book page/sentence pace comparisons to progress and profile book cards, including same-language averages across the learner's recorded books.
 - Formatted book reading time as compact hours/minutes/seconds values instead of raw seconds on live and demo progress/profile rows.
 
+- Added [`docs/LEXICAL_IDENTITY_AND_MULTILINGUAL_TRUST_ROADMAP.md`](docs/LEXICAL_IDENTITY_AND_MULTILINGUAL_TRUST_ROADMAP.md), documenting the lexical-identity foundation, current usability impact, explicit limitations, data-boundary rules, acceptance criteria, and the sequenced roadmap from book-truth propagation through learner-state reconciliation (#60).
+- Strengthened the app-wide visual hierarchy after the initial density pass: shared route heroes now use an editorial content-and-metrics split with a clear primary action, the public landing hero gives Reader and Study previews distinct visual weight, and section headings are more visibly grouped while retaining the existing TextPlex type, theme, and card language.
+
 ## 2026-08-19
 
 - Added route-aware first-visit page guides for Home, Library, Reader, and Study, using a dismissible carousel with pagination dots, local visit state, and a persistent reopen trigger.
@@ -40,13 +61,18 @@
 - Centered and enlarged revealed answers, and clarified that a Japanese reading is not a written-form answer in meaning-to-word practice (#88).
 - Added a context-aware written-form candidate button when a Japanese reading matches the current card (#88).
 - Made kana-only Japanese word-to-reading cards request the romanized reading instead of repeating the same Hiragana form (#88).
+- Added a backward-compatible lexical identity contract for processed tokens, including stable versioned keys, part-of-speech and sense separation, provenance, confidence, ambiguity status, and tokenizer version metadata. Newly tokenized words now carry an explicitly uncertain surface-fallback identity while historical learner events remain unchanged (#60).
+- Tightened app-wide spacing and organization across member, tester, and admin surfaces: compact route heroes and card stacks, aligned Library actions, structured Settings/Profile controls, full-width Activity charts, and a shorter split build/feedback footer; updated dynamic route props for Next.js 16.3 production builds.
 - Expanded Chinese digit-by-digit romanization to all numeric Reader tokens, including months and days (#142).
 - Applied Chinese cardinal-number readings outside year context, so `12月`, `20日`, and `30分` use `shí èr`, `èr shí`, and `sān shí` (#142).
 
 - Preserved precomposed and combining Latin accents during processor tokenization, including automatic recovery of stale Yoruba page artifacts (#147).
 - Preserved Chinese personal-name runs before parenthetical glosses, including the reported `李善中` Reader case (#141).
+- Closed issue #87 after verifying its Study direction-label implementation in merged PR #96; synchronized the local issue tracker.
 
 ## 2026-08-18
+
+- Added derived Japanese conjugation grids to the Reader token inspector and Study practice cards, with stable inventory IDs linked to #153 and lexical override/source-rule annotations.
 
 - Guarded the Reader meaning-line reveal against stale or incorrect alignment segments so a tapped word's sentence hint stays compatible with its displayed definition.
 

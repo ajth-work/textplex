@@ -76,6 +76,30 @@ def test_fetch_random_article_retries_short_articles(monkeypatch) -> None:
     assert calls == 2
 
 
+def test_fetch_random_article_uses_a_lower_default_for_nordic_articles(monkeypatch) -> None:
+    monkeypatch.setenv("TEXTPLEX_WIKIPEDIA_MIN_ARTICLE_CHARACTERS", "1000")
+    monkeypatch.delenv("TEXTPLEX_WIKIPEDIA_NORDIC_MIN_ARTICLE_CHARACTERS", raising=False)
+    monkeypatch.delenv("TEXTPLEX_WIKIPEDIA_MAX_ARTICLE_ATTEMPTS", raising=False)
+
+    def fake_urlopen(_request, timeout):
+        assert timeout == 12
+        response = _FakeResponse()
+        response.extract = "å" * 400
+        return response
+
+    monkeypatch.setattr(wikipedia, "urlopen", fake_urlopen)
+    monkeypatch.setattr(
+        _FakeResponse,
+        "read",
+        lambda self, _limit: json.dumps({"query": {"pages": [{"title": "Svensk artikel", "extract": self.extract}]}}).encode("utf-8"),
+    )
+
+    article = wikipedia.fetch_random_article("sv")
+
+    assert article.language_code == "sv"
+    assert len(article.text) == 400
+
+
 def test_fetch_random_article_rejects_only_short_articles(monkeypatch) -> None:
     monkeypatch.setenv("TEXTPLEX_WIKIPEDIA_MIN_ARTICLE_CHARACTERS", "100")
     monkeypatch.setenv("TEXTPLEX_WIKIPEDIA_MAX_ARTICLE_ATTEMPTS", "2")
@@ -96,6 +120,29 @@ def test_fetch_random_article_rejects_unsupported_language() -> None:
         assert "not available" in str(exc)
     else:
         raise AssertionError("Expected unsupported language to be rejected")
+
+
+def test_fetch_random_article_supports_nordic_language_codes(monkeypatch) -> None:
+    monkeypatch.setenv("TEXTPLEX_WIKIPEDIA_MIN_ARTICLE_CHARACTERS", "1")
+    monkeypatch.setenv("TEXTPLEX_WIKIPEDIA_NORDIC_MIN_ARTICLE_CHARACTERS", "1")
+    captured_hosts = []
+
+    def fake_urlopen(request, timeout):
+        captured_hosts.append(request.full_url.split("/", 3)[2])
+        assert timeout == 12
+        return _FakeResponse()
+
+    monkeypatch.setattr(wikipedia, "urlopen", fake_urlopen)
+
+    for language_code in ("no", "sv", "fi"):
+        article = wikipedia.fetch_random_article(language_code)
+        assert article.language_code == language_code
+
+    assert captured_hosts == [
+        "no.wikipedia.org",
+        "sv.wikipedia.org",
+        "fi.wikipedia.org",
+    ]
 
 
 def test_random_wikipedia_import_reuses_text_import_pipeline(tmp_path, monkeypatch) -> None:

@@ -13,5 +13,6 @@ CREATE TABLE IF NOT EXISTS book_progress (
     progress_unit TEXT NOT NULL DEFAULT 'pages',
     reading_state TEXT NOT NULL DEFAULT 'not_read',
     last_read_at TEXT,
-    completed_at TEXT
+    completed_at TEXT,
+    completion_override INTEGER NOT NULL DEFAULT 0
 );

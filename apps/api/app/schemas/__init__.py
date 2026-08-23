@@ -33,6 +33,8 @@ from .learning import (
 from .lexicon import (
     JapaneseConjugationRequest,
     JapaneseConjugationResponse,
+    JmdictImportRequest,
+    JmdictImportSummary,
     LexiconEntryRecord,
     LexiconImportRequest,
     LexiconImportSummary,
@@ -78,6 +80,8 @@ __all__ = [
     "ImportSurfaceResponse",
     "JapaneseConjugationRequest",
     "JapaneseConjugationResponse",
+    "JmdictImportRequest",
+    "JmdictImportSummary",
     "LearningProfileSummary",
     "LexiconEntryRecord",
     "LexiconImportRequest",

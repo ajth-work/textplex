@@ -70,6 +70,24 @@ def test_build_page_extraction_result_applies_translations_to_sentences() -> Non
     assert result.sentences[1].translation_source == "google_translate_cache"
 
 
+def test_build_page_extraction_result_recovers_trailing_text_after_structured_sentences() -> None:
+    result = build_page_extraction_result(
+        book_id="book-trailing-paragraph",
+        page_number=4,
+        language_code="en",
+        raw_text="The first paragraph ends here.\n\nThe final paragraph remains readable",
+        sentence_texts=["The first paragraph ends here."],
+        page_ends_with_sentence_terminator=True,
+    )
+
+    assert [sentence.text for sentence in result.sentences] == [
+        "The first paragraph ends here.",
+        "The final paragraph remains readable",
+    ]
+    assert result.sentences[-1].ends_with_sentence_terminator is False
+    assert result.page_ends_with_sentence_terminator is False
+
+
 def test_stitch_page_sentence_carryover_moves_open_sentence_to_previous_page(monkeypatch) -> None:
     monkeypatch.setattr(
         extraction,
@@ -126,6 +144,19 @@ def test_tokenize_sentence_keeps_latin_words_together() -> None:
     assert [token.language_code for token in tokens] == ["en", "en", "en"]
 
 
+def test_tokenize_sentence_attaches_uncertain_surface_identity_without_inventing_confidence() -> None:
+    first = tokenize_sentence("Record", "EN_us")[0]
+    second = tokenize_sentence("record", "en-US")[0]
+
+    assert first.lexical_identity is not None
+    assert first.lexical_identity.language_code == "en"
+    assert first.lexical_identity.lemma == "record"
+    assert first.lexical_identity.status == "surface_fallback"
+    assert first.lexical_identity.provenance == "tokenizer_surface"
+    assert first.lexical_identity.confidence is None
+    assert first.lexical_identity.identity_key == second.lexical_identity.identity_key
+
+
 def test_tokenize_sentence_preserves_precomposed_latin_accents() -> None:
     tokens = tokenize_sentence("Àwọn ọmọ ń kọ́.", "yo")
 
@@ -137,6 +168,19 @@ def test_tokenize_sentence_preserves_decomposed_latin_accents() -> None:
 
     assert [token.surface_form for token in tokens] == ["A\u0300wo\u0323n", "ọmọ", "n\u0301", "kọ\u0301"]
     assert unicodedata.normalize("NFC", tokens[0].surface_form) == unicodedata.normalize("NFC", "A\u0300wo\u0323n")
+
+
+def test_tokenize_sentence_keeps_nordic_latin_words_together() -> None:
+    samples = {
+        "no": "Blåbær er godt.",
+        "sv": "Sjön är vacker.",
+        "fi": "Yö on pitkä.",
+    }
+
+    for language_code, sentence in samples.items():
+        tokens = tokenize_sentence(sentence, language_code)
+        assert [token.surface_form for token in tokens] == sentence[:-1].split()
+        assert [token.language_code for token in tokens] == [language_code] * 3
 
 
 def test_tokenize_sentence_assigns_language_per_script_for_mixed_text() -> None:
@@ -152,6 +196,32 @@ def test_tokenize_sentence_uses_chinese_segmenter_when_available(monkeypatch) ->
     tokens = tokenize_sentence("\u79d1\u5b66\u8fb9\u754c", "zh")
 
     assert [token.surface_form for token in tokens] == ["\u79d1\u5b66", "\u8fb9\u754c"]
+
+
+def test_build_page_extraction_result_preserves_chinese_compounds_across_ocr_spacing(monkeypatch) -> None:
+    monkeypatch.setattr(
+        extraction,
+        "_jieba_lcut",
+        lambda text, cut_all=False, HMM=True: ["我", "自", "己", "觉得", "粗", "糙", "的", "胖", "屁", "股"],
+    )
+
+    result = build_page_extraction_result(
+        book_id="book-chinese-compounds",
+        page_number=4,
+        language_code="zh",
+        raw_text="我\n自 己觉得粗 糙的胖 屁 股。",
+    )
+
+    assert result.clean_text == "我自己觉得粗糙的胖屁股。"
+    assert [token.surface_form for token in result.sentences[0].tokens] == [
+        "我",
+        "自己",
+        "觉得",
+        "粗糙",
+        "的",
+        "胖屁股",
+        "。",
+    ]
 
 
 def test_tokenize_sentence_keeps_chinese_name_before_parenthetical_gloss(monkeypatch) -> None:

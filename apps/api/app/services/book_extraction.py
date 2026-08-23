@@ -32,11 +32,12 @@ from app.services.book_sources import (
 )
 from app.services.google_translate import (
     is_google_translate_configured,
+    is_google_translate_romanization_supported,
     romanize_texts,
     translate_text,
 )
 from app.services.google_translate_usage import record_google_translate_usage
-from app.services.hebrew_transliteration import transliterate_hebrew_text
+from app.services.hebrew_transliteration import get_hebrew_pronunciation
 from app.services.lexicon import lookup_lexicon_entry_map, lookup_lexicon_pinyin_map
 from app.services.ocr import get_text_source_signature, resolve_page_ocr
 from app.services.translation_alignment import (
@@ -123,6 +124,20 @@ _JAPANESE_MINUTE_READINGS = {
     7: "nanafun",
     8: "happun",
     9: "kyūfun",
+}
+_JAPANESE_MONTH_READINGS = {
+    1: "ichigatsu",
+    2: "nigatsu",
+    3: "sangatsu",
+    4: "shigatsu",
+    5: "gogatsu",
+    6: "rokugatsu",
+    7: "shichigatsu",
+    8: "hachigatsu",
+    9: "kugatsu",
+    10: "jūgatsu",
+    11: "jūichigatsu",
+    12: "jūnigatsu",
 }
 _CHINESE_DIGIT_PINYIN = {
     "0": "líng",
@@ -244,11 +259,35 @@ def _japanese_counter_number(
     return None
 
 
+def _japanese_numeric_month(token_surface: str) -> int | None:
+    match = re.fullmatch(r"([0-9０-９]{1,2})月", token_surface.strip())
+    if not match:
+        return None
+
+    number = int(match.group(1).translate(str.maketrans("０１２３４５６７８９", "0123456789")))
+    return number if number in _JAPANESE_MONTH_READINGS else None
+
+
+def _japanese_city_name_context(tokens: list[TokenResult], token_index: int) -> bool:
+    if tokens[token_index].surface_form.strip() != "市" or token_index == 0:
+        return False
+
+    previous_surface = tokens[token_index - 1].surface_form.strip()
+    return bool(previous_surface and re.search(r"[\u3400-\u4dbf\u4e00-\u9fff]", previous_surface))
+
+
 def _japanese_contextual_metadata(
     tokens: list[TokenResult],
     token_index: int,
 ) -> tuple[str | None, str | None]:
     """Resolve Japanese counter readings that depend on number or sense."""
+    numeric_month = _japanese_numeric_month(tokens[token_index].surface_form)
+    if numeric_month is not None:
+        return _JAPANESE_MONTH_READINGS[numeric_month], None
+
+    if _japanese_city_name_context(tokens, token_index):
+        return "shi", None
+
     counter_data = _japanese_counter_number(tokens[token_index].surface_form)
     if counter_data is None:
         return None, None
@@ -768,7 +807,7 @@ def _enrich_page_lexicon_metadata(
         pinyin_map = {}
 
     google_romanization_map: dict[str, str] = {}
-    if is_google_translate_configured("romanization"):
+    if is_google_translate_configured("romanization") and is_google_translate_romanization_supported(language_code):
         missing_pronunciations = []
         for sentence in page_result.sentences:
             for token in sentence.tokens:
@@ -795,21 +834,21 @@ def _enrich_page_lexicon_metadata(
 
     hebrew_romanization_map: dict[str, str] = {}
     if _language_root(language_code) == "he":
-        missing_pronunciations = []
+        pronunciation_terms = []
         for sentence in page_result.sentences:
             for token in sentence.tokens:
                 if _is_punctuation_surface(token.surface_form):
                     continue
-                if token.romanization or token.pronunciation or not any(ord(character) > 127 for character in token.surface_form):
+                if not any(ord(character) > 127 for character in token.surface_form):
                     continue
-                missing_pronunciations.append(token.surface_form)
+                pronunciation_terms.append(token.surface_form)
 
-        unique_missing_pronunciations = list(dict.fromkeys(missing_pronunciations))
-        if unique_missing_pronunciations:
+        unique_pronunciation_terms = list(dict.fromkeys(pronunciation_terms))
+        if unique_pronunciation_terms:
             hebrew_romanization_map = {
                 term: romanized
-                for term in unique_missing_pronunciations
-                if (romanized := transliterate_hebrew_text(term))
+                for term in unique_pronunciation_terms
+                if (romanized := get_hebrew_pronunciation(term))
             }
 
     if not pinyin_map and not lexicon_entries and not google_romanization_map and not hebrew_romanization_map:
@@ -836,14 +875,19 @@ def _enrich_page_lexicon_metadata(
                 contextual_romanization, contextual_definition = _japanese_contextual_metadata(sentence.tokens, token_index)
             if _language_root(language_code) == "zh":
                 contextual_romanization = _chinese_number_romanization(sentence.tokens, token_index)
+            reviewed_hebrew_pronunciation = (
+                hebrew_romanization_map.get(token.surface_form)
+                if _language_root(language_code) == "he"
+                else None
+            )
             romanization = (
                 contextual_romanization
+                or reviewed_hebrew_pronunciation
                 or token.romanization
                 or token.pronunciation
                 or (exact_entry.pinyin if exact_entry else None)
                 or pinyin_map.get(token.surface_form)
                 or google_romanization_map.get(token.surface_form)
-                or hebrew_romanization_map.get(token.surface_form)
             )
             definition_short = contextual_definition or token.definition_short or (exact_entry.definition if exact_entry else None)
             proficiency_level = token.proficiency_level or (exact_entry.hsk_level if exact_entry else None)
@@ -853,6 +897,7 @@ def _enrich_page_lexicon_metadata(
                     update={
                         "romanization": romanization,
                         "pronunciation": contextual_romanization
+                        or reviewed_hebrew_pronunciation
                         or (romanization if romanization and not token.pronunciation else token.pronunciation),
                         "definition_short": definition_short,
                         "proficiency_level": proficiency_level,
