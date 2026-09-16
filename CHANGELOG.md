@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-16
+
+- Added an operating-cost, pricing-floor, and gradual growth report for TextPlex with vendor-source rates, explicit break-even assumptions, and paid-launch gates; linked it to pricing issue #140.
+
 ## 2026-08-22
 
 - Reader theme settings now show the latest available wallpaper thumbnail in each theme card, while gradient swatches remain available for themes without artwork.
