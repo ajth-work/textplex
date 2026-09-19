@@ -49,6 +49,7 @@ import {
 import { languageShortCode } from "../lib/language-options";
 import { requestReaderFeedback } from "../lib/feedback-events";
 import { finalizeJapaneseRomaji } from "../lib/japanese-romaji";
+import { calculateReadWithoutGlossesPercent } from "../lib/reader-coverage";
 import {
   APP_THEME_RECENT_LIMIT,
   APP_THEME_RECENT_STORAGE_KEY,
@@ -3029,6 +3030,10 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
   const pageGlossedPercent = currentPageTotalMetrics.words > 0 ? Math.round((currentPageGlossedCount / currentPageTotalMetrics.words) * 100) : null;
   const pageUnglossedPercent =
     currentPageTotalMetrics.words > 0 && pageGlossedPercent != null ? Math.max(0, 100 - pageGlossedPercent) : null;
+  const readWithoutGlossesPercent = calculateReadWithoutGlossesPercent(
+    currentPageTotalMetrics.words,
+    readerSessionGlossedCount,
+  );
   const cumulativeBookSeconds = (bookProgressSummary?.active_seconds ?? 0) + activeSeconds;
   const bookGlossedCount = useMemo(
     () =>
@@ -3049,8 +3054,6 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
 
     return countReadableTokenMetrics(summary.pages.flatMap((bookPage) => bookPage.sentences));
   }, [summary]);
-  const bookCoveragePercent =
-    currentBookTotalMetrics.words > 0 ? Math.max(0, Math.round(((currentBookTotalMetrics.words - bookGlossedCount) / currentBookTotalMetrics.words) * 100)) : null;
   const languageGlossedCount = studySurface?.study_item_count ?? 0;
   const lifetimeGlossedCount = profileSummary?.glossed_vocabulary_items ?? 0;
   const selectedTokenPronunciationOverride = selectedToken ? tokenPronunciationOverrides[selectedToken.order] ?? null : null;
@@ -6197,7 +6200,7 @@ export function ReaderView({ bookId, pageNumber }: { bookId: string; pageNumber:
             </div>
               <div className="reader-completion-stat">
                 <span>Read without glosses</span>
-                <strong>{bookCoveragePercent == null ? "\u2014" : `${bookCoveragePercent}%`}</strong>
+                <strong>{readWithoutGlossesPercent == null ? "\u2014" : `${readWithoutGlossesPercent}%`}</strong>
               </div>
           </div>
           {completionError ? <p className="reader-completion-error" role="alert">{completionError}</p> : null}

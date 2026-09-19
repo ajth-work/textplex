@@ -217,10 +217,11 @@ test("Next reader expands the session summary into book-scoped stats", () => {
   });
 
 test("Next reader keeps completion summary fallback labels readable", () => {
-  assert.match(readerSource, /bookCoveragePercent == null \? "\\u2014"/);
+  assert.match(readerSource, /readWithoutGlossesPercent == null \? "\\u2014"/);
+  assert.match(readerSource, /calculateReadWithoutGlossesPercent\([\s\S]*currentPageTotalMetrics\.words,[\s\S]*readerSessionGlossedCount/);
   assert.match(readerSource, /completionSaving \? "Saving\.\.\." : "Mark as read, archive, and return"/);
   assert.match(readerSource, /archiveBook\(bookId\)/);
-  assert.doesNotMatch(readerSource, /bookCoveragePercent == null \? "ÃƒÆ’/);
+  assert.doesNotMatch(readerSource, /readWithoutGlossesPercent == null \? "ÃƒÆ’/);
 });
 
 test("Next reader makes the desktop session rail discoverable and draggable", () => {
