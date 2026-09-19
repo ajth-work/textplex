@@ -75,15 +75,19 @@ def test_analytics_event_endpoint_is_idempotent_and_requires_no_admin_role(tmp_p
 
 
 def test_analytics_overview_backfills_existing_profile_activity(tmp_path: Path) -> None:
+    now = datetime.now(timezone.utc)
+    session_started_at = now - timedelta(days=2)
+    page_completed_at = session_started_at + timedelta(minutes=5)
+    session_ended_at = session_started_at + timedelta(minutes=10)
     ensure_profile_database(tmp_path, "legacy-user")
     with sqlite3.connect(get_profile_db_path(tmp_path, "legacy-user")) as connection:
         connection.execute(
             "INSERT INTO reading_sessions (id, book_id, started_at, ended_at, active_seconds) VALUES (?, ?, ?, ?, ?)",
-            ("legacy-session", "book-1", "2026-08-10T10:00:00Z", "2026-08-10T10:10:00Z", 600),
+            ("legacy-session", "book-1", _timestamp(session_started_at), _timestamp(session_ended_at), 600),
         )
         connection.execute(
             "INSERT INTO page_reads (session_id, book_id, page_number, active_seconds, estimated_seconds, completion_ratio, counted_as_read, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            ("legacy-session", "book-1", 1, 60, 60, 1.0, 1, "2026-08-10T10:05:00Z"),
+            ("legacy-session", "book-1", 1, 60, 60, 1.0, 1, _timestamp(page_completed_at)),
         )
         connection.commit()
 
