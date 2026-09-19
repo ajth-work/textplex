@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-19
+
+- Corrected the Reader completion “Read without glosses” percentage to use the same readable-word and glossed counts displayed in the summary, with regression coverage for the reported 459-word, 36-gloss case (#128; `reader.session-summary-toggle`).
+
 ## 2026-08-22
 
 - Reader theme settings now show the latest available wallpaper thumbnail in each theme card, while gradient swatches remain available for themes without artwork.
